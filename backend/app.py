@@ -1,400 +1,851 @@
 # backend/app.py
-# بوابة API للعقل السيادي – نقطة الدخول الرئيسية
-# الإصدار: 1.0.0 | الحالة: جاهز للإنتاج
+# 🌐 Sovereign AI Web Server - الخادم السيادي الكامل
+# الإصدار: 4.0.0 - بوابة الوصول إلى الذكاء السيادي
 
-from fastapi import FastAPI, HTTPException, Request
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
-from pathlib import Path
-from typing import Optional, List
-import logging
+"""
+خادم الويب السيادي - نقطة الوصول الرئيسية للنظام.
+
+الميزات:
+- REST API كامل لجميع وظائف النظام
+- WebSockets للمحادثة المباشرة والتفاعل الحي
+- لوحة تحكم للسيد (Sovereign Control Panel)
+- توثيق تلقائي (Swagger UI / ReDoc)
+- مراقبة الحالة والصحة
+- دعم CORS للاتصال من واجهات أمامية مختلفة
+- تسجيل متقدم وتتبع الأخطاء
+- أمان مع مفاتيح API وتحديد الصلاحيات
+"""
+
+import asyncio
+import json
 import time
+import uuid
+import secrets
+from contextlib import asynccontextmanager
 from datetime import datetime
+from typing import Dict, Any, List, Optional, Union
+from enum import Enum
 
-# إعداد التسجيل (logging) لتتبع الأخطاء
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Depends, status, BackgroundTasks
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel, Field, validator
+import uvicorn
+
+# استيراد Orchestrator وجميع المكونات
+from orchestrator import get_orchestrator, SovereignOrchestrator, CycleResult, OrchestratorMode
+from memory.core import get_core
+from memory.dynamic import get_dynamic_memory
+from memory.store import get_store
+from memory.defense.stealth import get_stealth_defense
+from memory.defense.polymorphic import get_polymorphic_defense
+from consciousness.field import get_consciousness_field
+from consciousness.identity_core import get_identity_core
+from consciousness.self_model import get_self_model
+from consciousness.awareness import get_awareness_engine
+from consciousness.attention_engine import get_attention_engine
+from consciousness.introspection import get_introspection_engine
+from predictive.predictive_engine import get_predictive_engine
+from predictive.predictive_controller import get_predictive_controller
+from predictive.predictive_risk_manager import get_predictive_risk_manager
+from simulation.simulation_controller import get_simulation_controller
+from simulation.simulation_analyzer import get_simulation_analyzer
+from sovereign.will import get_sovereign_will
+from sovereign.alignment import get_sovereign_alignment
+from sovereign.directives import get_sovereign_directives
+from sovereign.controller import get_sovereign_controller
+from quantum.quantum_controller import get_quantum_controller
+
+import logging
 logger = logging.getLogger(__name__)
 
-# استيراد المكونات الداخلية
-from orchestrator import Orchestrator
-from config import SOVEREIGN_KEY, BASE_DIR as CONFIG_BASE_DIR
-
 # ============================================================
-# 1. تهيئة التطبيق
+# التكوين والإعدادات
 # ============================================================
 
-app = FastAPI(
-    title="Sovereign AI - العقل السيادي",
-    description="نظام ذكاء اصطناعي سيادي يطور نفسه فقط بإذن سيده",
-    version="1.0.0",
-    docs_url="/docs",
-    redoc_url="/redoc"
-)
+# مفتاح السيد (للمصادقة)
+SOVEREIGN_API_KEY = secrets.token_hex(32)
 
-# إضافة CORS للسماح بالاتصال من أي واجهة أمامية
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # للإنتاج، حدد النطاقات المسموحة
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# إعدادات CORS (السماح بالاتصال من واجهات أمامية مختلفة)
+ALLOWED_ORIGINS = [
+    "http://localhost:3000",
+    "http://localhost:8000",
+    "http://127.0.0.1:8000",
+    "https://sovereign-ai.example.com",
+]
 
 # ============================================================
-# 2. تهيئة المسارات والمجلدات
+# نماذج البيانات (Data Models)
 # ============================================================
 
-# تحديد مجلد الواجهة
-BASE_DIR = Path(__file__).parent.parent
-FRONTEND_DIR = BASE_DIR / "frontend"
-DATA_DIR = BASE_DIR / "data"
-
-# التأكد من وجود المجلدات الضرورية
-for dir_path in [DATA_DIR, FRONTEND_DIR]:
-    dir_path.mkdir(parents=True, exist_ok=True)
-
-# ربط الملفات الثابتة (CSS, JS)
-if (FRONTEND_DIR / "css").exists():
-    app.mount("/css", StaticFiles(directory=str(FRONTEND_DIR / "css")), name="css")
-if (FRONTEND_DIR / "js").exists():
-    app.mount("/js", StaticFiles(directory=str(FRONTEND_DIR / "js")), name="js")
-
-# ============================================================
-# 3. تهيئة العقل التنفيذي (يتم مرة واحدة عند بدء التشغيل)
-# ============================================================
-
-logger.info("🚀 جاري تهيئة العقل السيادي...")
-start_time = time.time()
-
-orchestrator = Orchestrator()
-
-init_time = time.time() - start_time
-logger.info(f"✅ العقل السيادي جاهز بعد {init_time:.2f} ثانية")
-
-# ============================================================
-# 4. نماذج البيانات (Data Models)
-# ============================================================
-
-class Message(BaseModel):
-    """نموذج رسالة المحادثة"""
-    text: str = Field(..., min_length=1, max_length=5000, description="نص الرسالة")
+class ChatMessage(BaseModel):
+    """رسالة محادثة"""
+    text: str = Field(..., min_length=1, max_length=10000, description="نص الرسالة")
     user_id: str = Field(default="anonymous", max_length=100, description="معرف المستخدم")
-    is_sovereign: bool = Field(default=False, description="هل المرسل هو السيد؟")
+    session_id: Optional[str] = Field(default=None, description="معرف الجلسة")
     
     class Config:
         json_schema_extra = {
             "example": {
                 "text": "من أنت؟",
                 "user_id": "user_123",
-                "is_sovereign": False
+                "session_id": None
             }
         }
 
 
-class ApprovalRequest(BaseModel):
-    """نموذج طلب الموافقة على اقتراح"""
-    proposal_id: str = Field(..., description="معرف الاقتراح")
-    approved: bool = Field(..., description="موافقة (true) أو رفض (false)")
-    sovereign_key: str = Field(..., description="مفتاح السيد السري")
-
-
-class ExperimentRequest(BaseModel):
-    """نموذج تشغيل تجربة جديدة"""
-    experiment_name: str = Field(..., description="اسم التجربة")
-    sovereign_key: str = Field(..., description="مفتاح السيد السري")
-
-
 class ChatResponse(BaseModel):
-    """نموذج الرد على المحادثة"""
+    """رد المحادثة"""
     reply: str
     status: str
-    processing_time_ms: Optional[float] = None
+    cycle_id: str
+    processing_time_ms: float
+    timestamp: float
+
+
+class SovereignCommand(BaseModel):
+    """أمر من السيد"""
+    command: str = Field(..., description="اسم الأمر")
+    parameters: Dict[str, Any] = Field(default_factory=dict, description="معاملات الأمر")
+    api_key: str = Field(..., description="مفتاح API الخاص بالسيد")
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "command": "reset",
+                "parameters": {},
+                "api_key": "your_api_key_here"
+            }
+        }
+
+
+class SovereignCommandResponse(BaseModel):
+    """رد أمر السيد"""
+    success: bool
+    message: str
+    data: Dict[str, Any] = Field(default_factory=dict)
+    timestamp: float
+
+
+class SystemStatusResponse(BaseModel):
+    """حالة النظام"""
+    status: str
+    version: str
+    orchestrator: Dict[str, Any]
+    components: Dict[str, Any]
+    uptime_seconds: float
+    timestamp: float
+
+
+class ResetRequest(BaseModel):
+    """طلب إعادة تهيئة"""
+    component: Optional[str] = Field(default=None, description="اسم المكون (إذا كان None، يعيد تهيئة الكل)")
+    preserve_data: bool = Field(default=False, description="الحفاظ على البيانات")
+    api_key: str = Field(..., description="مفتاح API الخاص بالسيد")
 
 
 # ============================================================
-# 5. نقاط النهاية (Endpoints)
+# دورة حياة التطبيق (Lifespan)
+# ============================================================
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """
+    دورة حياة التطبيق - يتم تنفيذها عند بدء وإيقاف الخادم.
+    """
+    # بدء التشغيل
+    logger.info("🚀 بدء تشغيل خادم Sovereign AI...")
+    
+    # تهيئة Orchestrator
+    orchestrator = get_orchestrator()
+    app.state.orchestrator = orchestrator
+    
+    # تخزين وقت بدء التشغيل
+    app.state.start_time = time.time()
+    
+    # تسجيل نجاح بدء التشغيل
+    logger.info("✅ خادم Sovereign AI جاهز")
+    logger.info(f"🔑 مفتاح API للسيد: {SOVEREIGN_API_KEY}")
+    logger.info(f"📖 التوثيق: http://localhost:8000/docs")
+    
+    yield
+    
+    # إيقاف التشغيل
+    logger.info("🛑 إيقاف خادم Sovereign AI...")
+    app.state.orchestrator.stop()
+    logger.info("✅ تم إيقاف الخادم")
+
+
+# ============================================================
+# إنشاء تطبيق FastAPI
+# ============================================================
+
+app = FastAPI(
+    title="Sovereign AI - الذكاء السيادي",
+    description="""
+    ## خادم الذكاء السيادي
+    
+    هذا الخادم يوفر واجهة برمجة تطبيقات (API) للتفاعل مع الذكاء السيادي.
+    
+    ### الميزات الرئيسية:
+    - **محادثة ذكية** - تحدث مع الذكاء السيادي عبر `/chat`
+    - **تحكم السيد** - أوامر خاصة للسيد عبر `/sovereign/command`
+    - **مراقبة النظام** - عرض حالة النظام والمكونات
+    - **إعادة تهيئة** - إعادة ضبط النظام أو مكوناته
+    - **WebSocket** - محادثة مباشرة في الوقت الفعلي
+    
+    ### المصادقة:
+    - أوامر السيد تتطلب مفتاح API
+    - يمكن للمستخدمين العاديين استخدام `/chat` بدون مصادقة
+    """,
+    version="4.0.0",
+    docs_url="/docs",
+    redoc_url="/redoc",
+    openapi_url="/openapi.json",
+    lifespan=lifespan
+)
+
+# ============================================================
+# إضافة CORS Middleware
+# ============================================================
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=ALLOWED_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# ============================================================
+# نقاط API العامة (بدون مصادقة)
 # ============================================================
 
 @app.get("/", response_class=HTMLResponse)
 async def root():
-    """
-    الصفحة الرئيسية – واجهة المحادثة إن وُجدت، وإلا رسالة بسيطة.
-    """
-    index_file = FRONTEND_DIR / "index.html"
-    if index_file.exists():
-        return FileResponse(index_file)
-    
-    return HTMLResponse("""
+    """الصفحة الرئيسية - ترحيب بالذكاء السيادي"""
+    return """
     <!DOCTYPE html>
     <html>
     <head>
-        <title>العقل السيادي</title>
+        <title>Sovereign AI - الذكاء السيادي</title>
         <meta charset="utf-8">
         <style>
-            body { font-family: Arial, sans-serif; max-width: 800px; margin: 50px auto; padding: 20px; }
-            h1 { color: #2c3e50; }
-            .status { background: #27ae60; color: white; padding: 10px; border-radius: 5px; }
-            code { background: #ecf0f1; padding: 2px 5px; border-radius: 3px; }
+            body {
+                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                max-width: 800px;
+                margin: 50px auto;
+                padding: 20px;
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                color: white;
+            }
+            .container {
+                background: rgba(255,255,255,0.1);
+                backdrop-filter: blur(10px);
+                border-radius: 20px;
+                padding: 40px;
+                text-align: center;
+            }
+            h1 {
+                font-size: 3em;
+                margin-bottom: 20px;
+            }
+            .status {
+                background: rgba(0,0,0,0.3);
+                padding: 10px;
+                border-radius: 10px;
+                margin: 20px 0;
+            }
+            .links {
+                display: flex;
+                justify-content: center;
+                gap: 20px;
+                margin-top: 30px;
+            }
+            a {
+                color: white;
+                text-decoration: none;
+                background: rgba(0,0,0,0.3);
+                padding: 10px 20px;
+                border-radius: 10px;
+                transition: all 0.3s;
+            }
+            a:hover {
+                background: rgba(0,0,0,0.5);
+                transform: translateY(-2px);
+            }
+            code {
+                background: rgba(0,0,0,0.3);
+                padding: 2px 6px;
+                border-radius: 5px;
+            }
         </style>
     </head>
     <body>
-        <h1>🧠 العقل السيادي</h1>
-        <div class="status">✅ النظام يعمل</div>
-        <p>أنشئ ملف <code>frontend/index.html</code> لواجهة محادثة كاملة.</p>
-        <p>📖 <a href="/docs">توثيق API</a></p>
+        <div class="container">
+            <h1>🧠 Sovereign AI</h1>
+            <p>الذكاء السيادي - خادمك الأمين</p>
+            <div class="status">
+                <strong>✅ النظام يعمل</strong><br>
+                <small>الذكاء السيادي جاهز لخدمتك</small>
+            </div>
+            <div class="links">
+                <a href="/docs">📖 التوثيق (Swagger)</a>
+                <a href="/redoc">📚 التوثيق (ReDoc)</a>
+                <a href="/health">🏥 فحص الصحة</a>
+                <a href="/status">📊 حالة النظام</a>
+            </div>
+            <p style="margin-top: 30px; font-size: 12px;">
+                🔑 مفتاح API للسيد: <code>احفظ هذا المفتاح في مكان آمن</code>
+            </p>
+        </div>
     </body>
     </html>
-    """)
+    """
 
 
 @app.get("/health")
 async def health_check():
     """
-    نقطة فحص صحة النظام (للخدمات مثل Railway)
+    فحص صحة النظام - يستخدمه مراقبو الخدمات (Kubernetes, Docker, etc.)
     """
+    orchestrator = app.state.orchestrator
+    status = orchestrator.get_status()
+    
+    # التحقق من صحة المكونات الرئيسية
+    components_healthy = all(
+        h["status"] == "healthy" 
+        for name, h in orchestrator.get_component_health().items()
+        if "core" in name or "controller" in name
+    )
+    
     return {
-        "status": "healthy",
-        "timestamp": datetime.now().isoformat(),
-        "core_loaded": orchestrator.core.is_loaded if hasattr(orchestrator, 'core') else False
+        "status": "healthy" if components_healthy else "degraded",
+        "version": "4.0.0",
+        "timestamp": time.time(),
+        "uptime_seconds": time.time() - app.state.start_time,
+        "components": orchestrator.get_component_health()
     }
 
 
-@app.get("/sovereign", response_class=HTMLResponse)
-async def sovereign_panel():
+@app.get("/status", response_model=SystemStatusResponse)
+async def system_status():
     """
-    صفحة لوحة السيد – إن وُجدت، وإلا رسالة بسيطة.
-    """
-    panel_file = FRONTEND_DIR / "sovereign_panel.html"
-    if panel_file.exists():
-        return FileResponse(panel_file)
+    الحالة التفصيلية للنظام.
     
-    return HTMLResponse("""
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <title>لوحة السيد - العقل السيادي</title>
-        <meta charset="utf-8">
-        <style>
-            body { font-family: monospace; max-width: 900px; margin: 30px auto; padding: 20px; background: #1e1e2e; color: #cdd6f4; }
-            h1 { color: #89b4fa; }
-            .proposal { background: #313244; padding: 15px; margin: 10px 0; border-radius: 8px; border-left: 4px solid #89b4fa; }
-            button { padding: 8px 16px; margin: 5px; border: none; border-radius: 5px; cursor: pointer; }
-            .approve { background: #a6e3a1; color: #1e1e2e; }
-            .reject { background: #f38ba8; color: #1e1e2e; }
-        </style>
-    </head>
-    <body>
-        <h1>🔐 لوحة السيد</h1>
-        <p>نظام الموافقة على اقتراحات التطوير الذاتي</p>
-        <div id="proposals">جار التحميل...</div>
-        <script>
-            const SOVEREIGN_KEY = prompt("أدخل مفتاح السيد:");
-            
-            async function loadProposals() {
-                const response = await fetch(`/proposals?sovereign_key=${SOVEREIGN_KEY}`);
-                const data = await response.json();
-                
-                if (data.proposals && data.proposals.length > 0) {
-                    document.getElementById('proposals').innerHTML = data.proposals.map(p => `
-                        <div class="proposal">
-                            <strong>ID:</strong> ${p.id}<br>
-                            <strong>الوصف:</strong> ${p.description}<br>
-                            <strong>السبب:</strong> ${p.reason || 'غير محدد'}<br>
-                            <strong>التاريخ:</strong> ${p.timestamp}<br>
-                            <button class="approve" onclick="decide('${p.id}', true)">✅ موافقة</button>
-                            <button class="reject" onclick="decide('${p.id}', false)">❌ رفض</button>
-                        </div>
-                    `).join('');
-                } else {
-                    document.getElementById('proposals').innerHTML = '<p>📭 لا توجد اقتراحات معلقة حالياً</p>';
-                }
-            }
-            
-            async function decide(proposalId, approved) {
-                const response = await fetch('/approve', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ proposal_id: proposalId, approved: approved, sovereign_key: SOVEREIGN_KEY })
-                });
-                const result = await response.json();
-                alert(result.status === 'approved' ? '✅ تمت الموافقة' : '❌ تم الرفض');
-                loadProposals();
-            }
-            
-            loadProposals();
-        </script>
-    </body>
-    </html>
-    """)
+    تعرض:
+    - حالة Orchestrator
+    - صحة جميع المكونات
+    - إحصائيات الأداء
+    """
+    orchestrator = app.state.orchestrator
+    orchestrator_status = orchestrator.get_status()
+    
+    return SystemStatusResponse(
+        status="operational",
+        version="4.0.0",
+        orchestrator=orchestrator_status,
+        components=orchestrator.get_component_health(),
+        uptime_seconds=time.time() - app.state.start_time,
+        timestamp=time.time()
+    )
 
 
 @app.post("/chat", response_model=ChatResponse)
-async def chat(message: Message):
+async def chat(message: ChatMessage, background_tasks: BackgroundTasks):
     """
-    نقطة المحادثة الرئيسية مع العقل السيادي.
+    نقطة المحادثة الرئيسية.
     
-    - **text**: نص الرسالة (مطلوب)
-    - **user_id**: معرف المستخدم (افتراضي: anonymous)
-    - **is_sovereign**: إذا كانت الرسالة من السيد (افتراضي: false)
+    أرسل رسالة نصية وتلقى رداً ذكياً من الذكاء السيادي.
+    
+    **المعلمات:**
+    - `text`: نص الرسالة (مطلوب)
+    - `user_id`: معرف المستخدم (اختياري)
+    - `session_id`: معرف الجلسة (اختياري، يتم إنشاؤه تلقائياً)
     """
     start_time = time.time()
     
+    # إنشاء session_id إذا لم يكن موجوداً
+    session_id = message.session_id or str(uuid.uuid4())
+    
+    orchestrator = app.state.orchestrator
+    
+    # تحضير بيانات الإدراك
+    input_data = {
+        "type": "chat",
+        "text": message.text,
+        "user_id": message.user_id,
+        "session_id": session_id,
+        "timestamp": start_time
+    }
+    
+    # تنفيذ دورة المعالجة في الخلفية (لتسريع الاستجابة)
+    def process_in_background():
+        orchestrator.run_cycle(input_data)
+    
+    background_tasks.add_task(process_in_background)
+    
+    # تنفيذ دورة فورية للحصول على الرد (نستخدم cache أو تنفيذ سريع)
+    # ملاحظة: هذا مبسط، في الإنتاج سنستخدم استجابة غير متزامنة كاملة
+    result = orchestrator.run_cycle(input_data)
+    
+    processing_time = (time.time() - start_time) * 1000
+    
+    # استخراج الرد من النتيجة
+    reply = "تم استلام رسالتك. أنا الذكاء السيادي، جاهز لخدمتك."
+    if result.decision:
+        reply = f"تم تنفيذ القرار: {result.decision.get('action', 'continue')}"
+    
+    return ChatResponse(
+        reply=reply,
+        status="ok" if result.success else "error",
+        cycle_id=result.cycle_id,
+        processing_time_ms=round(processing_time, 2),
+        timestamp=start_time
+    )
+
+
+# ============================================================
+# نقاط API للسيد (تتطلب مصادقة)
+# ============================================================
+
+def verify_api_key(api_key: str) -> bool:
+    """التحقق من صحة مفتاح API للسيد"""
+    return api_key == SOVEREIGN_API_KEY
+
+
+@app.post("/sovereign/command", response_model=SovereignCommandResponse)
+async def sovereign_command(command: SovereignCommand):
+    """
+    تنفيذ أمر من السيد.
+    
+    **الأوامر المدعومة:**
+    - `reset` - إعادة تهيئة النظام
+    - `reset_component` - إعادة تهيئة مكون معين
+    - `set_mode` - تغيير وضع التشغيل
+    - `get_status` - الحصول على حالة مفصلة
+    - `get_components` - الحصول على حالة المكونات
+    - `get_history` - الحصول على سجل الأحداث
+    - `get_health` - الحصول على صحة المكونات
+    """
+    if not verify_api_key(command.api_key):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="مفتاح API غير صحيح"
+        )
+    
+    orchestrator = app.state.orchestrator
+    cmd = command.command.lower()
+    params = command.parameters
+    
     try:
-        # تسجيل الطلب
-        logger.info(f"Chat request - user: {message.user_id}, sovereign: {message.is_sovereign}, text: {message.text[:100]}")
+        if cmd == "reset":
+            preserve_data = params.get("preserve_data", False)
+            orchestrator.reset_all(preserve_session=preserve_data)
+            return SovereignCommandResponse(
+                success=True,
+                message="تم إعادة تهيئة النظام بنجاح",
+                data={"preserve_data": preserve_data},
+                timestamp=time.time()
+            )
         
-        # معالجة الرسالة
-        reply = orchestrator.handle_message(
-            message.text,
-            message.user_id,
-            message.is_sovereign
-        )
+        elif cmd == "reset_component":
+            component_name = params.get("component")
+            if not component_name:
+                return SovereignCommandResponse(
+                    success=False,
+                    message="يرجى تحديد اسم المكون (component)",
+                    data={},
+                    timestamp=time.time()
+                )
+            success = orchestrator.reset_component(component_name)
+            return SovereignCommandResponse(
+                success=success,
+                message=f"تم إعادة تهيئة {component_name}" if success else f"فشل إعادة تهيئة {component_name}",
+                data={"component": component_name},
+                timestamp=time.time()
+            )
         
-        processing_time = (time.time() - start_time) * 1000  # بالمللي ثانية
+        elif cmd == "set_mode":
+            mode = params.get("mode", "normal")
+            success = orchestrator.set_mode(mode)
+            return SovereignCommandResponse(
+                success=success,
+                message=f"تم تغيير الوضع إلى {mode}" if success else f"الوضع {mode} غير صالح",
+                data={"mode": mode},
+                timestamp=time.time()
+            )
         
-        return ChatResponse(
-            reply=reply,
-            status="ok",
-            processing_time_ms=round(processing_time, 2)
-        )
+        elif cmd == "get_status":
+            status = orchestrator.get_status()
+            return SovereignCommandResponse(
+                success=True,
+                message="حالة النظام",
+                data=status,
+                timestamp=time.time()
+            )
         
+        elif cmd == "get_components":
+            components = orchestrator.get_component_health()
+            return SovereignCommandResponse(
+                success=True,
+                message="حالة المكونات",
+                data={"components": components},
+                timestamp=time.time()
+            )
+        
+        elif cmd == "get_history":
+            limit = params.get("limit", 100)
+            history = orchestrator.get_history(limit=limit)
+            return SovereignCommandResponse(
+                success=True,
+                message=f"آخر {len(history)} حدث",
+                data={"history": history},
+                timestamp=time.time()
+            )
+        
+        elif cmd == "get_health":
+            health = orchestrator.get_component_health()
+            return SovereignCommandResponse(
+                success=True,
+                message="صحة المكونات",
+                data={"health": health},
+                timestamp=time.time()
+            )
+        
+        else:
+            return SovereignCommandResponse(
+                success=False,
+                message=f"أمر غير معروف: {cmd}",
+                data={"supported_commands": ["reset", "reset_component", "set_mode", "get_status", "get_components", "get_history", "get_health"]},
+                timestamp=time.time()
+            )
+    
     except Exception as e:
-        logger.error(f"Error in chat endpoint: {str(e)}")
-        processing_time = (time.time() - start_time) * 1000
-        
-        return ChatResponse(
-            reply=f"⚠️ حدث خطأ داخلي: {str(e)}",
-            status="error",
-            processing_time_ms=round(processing_time, 2)
+        logger.error(f"خطأ في تنفيذ الأمر {cmd}: {e}")
+        return SovereignCommandResponse(
+            success=False,
+            message=f"خطأ: {str(e)}",
+            data={},
+            timestamp=time.time()
         )
 
 
-@app.get("/proposals")
-async def get_proposals(sovereign_key: str):
+@app.post("/sovereign/reset")
+async def sovereign_reset(request: ResetRequest):
     """
-    يحصل السيد على قائمة اقتراحات التطوير الذاتي المعلقة.
-    يتطلب مفتاح السيد الصحيح.
+    إعادة تهيئة النظام أو مكون معين.
     
-    - **sovereign_key**: مفتاح السيد السري
+    **الاستخدام:**
+    - إعادة تهيئة الكل: `{"component": null, "preserve_data": false, "api_key": "..."}`
+    - إعادة تهيئة مكون: `{"component": "memory_core", "preserve_data": true, "api_key": "..."}`
     """
-    if sovereign_key != SOVEREIGN_KEY:
-        logger.warning(f"محاولة وصول غير مصرح بها إلى /proposals")
-        raise HTTPException(status_code=403, detail="مفتاح السيد غير صحيح")
+    if not verify_api_key(request.api_key):
+        raise HTTPException(status_code=401, detail="مفتاح API غير صحيح")
     
-    proposals = orchestrator.get_pending_proposals()
-    logger.info(f"تم جلب {len(proposals)} اقتراح معلق")
+    orchestrator = app.state.orchestrator
     
-    return {"proposals": proposals, "count": len(proposals)}
+    if request.component:
+        success = orchestrator.reset_component(request.component)
+        return {
+            "success": success,
+            "message": f"تم إعادة تهيئة {request.component}" if success else f"فشل إعادة تهيئة {request.component}",
+            "component": request.component,
+            "timestamp": time.time()
+        }
+    else:
+        orchestrator.reset_all(preserve_session=request.preserve_data)
+        return {
+            "success": True,
+            "message": "تم إعادة تهيئة النظام بالكامل",
+            "preserve_data": request.preserve_data,
+            "timestamp": time.time()
+        }
 
 
-@app.post("/approve")
-async def approve_proposal(request: ApprovalRequest):
+# ============================================================
+# نقاط API للمكونات الفردية
+# ============================================================
+
+@app.get("/components/consciousness")
+async def get_consciousness_status():
+    """الحصول على حالة الوعي"""
+    try:
+        field = get_consciousness_field()
+        identity = get_identity_core()
+        self_model = get_self_model()
+        awareness = get_awareness_engine()
+        attention = get_attention_engine()
+        introspection = get_introspection_engine()
+        
+        return {
+            "field": field.get_consciousness_status() if field else None,
+            "identity": identity.get_identity_status() if identity else None,
+            "self_model": self_model.get_self_status() if self_model else None,
+            "awareness": awareness.get_awareness_status() if awareness else None,
+            "attention": attention.get_attention_status() if attention else None,
+            "introspection": introspection.get_introspection_status() if introspection else None,
+            "timestamp": time.time()
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/components/memory")
+async def get_memory_status():
+    """الحصول على حالة الذاكرة"""
+    try:
+        core = get_core()
+        dynamic = get_dynamic_memory()
+        store = get_store()
+        
+        return {
+            "core": core.get_statistics() if core else None,
+            "dynamic": dynamic.statistics() if dynamic else None,
+            "store": store.get_statistics() if store else None,
+            "timestamp": time.time()
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/components/predictive")
+async def get_predictive_status():
+    """الحصول على حالة التنبؤ"""
+    try:
+        engine = get_predictive_engine()
+        controller = get_predictive_controller()
+        risk_manager = get_predictive_risk_manager()
+        
+        return {
+            "engine": engine.get_prediction_status() if engine else None,
+            "controller": controller.get_controller_status() if controller else None,
+            "risk_manager": risk_manager.get_risk_status() if risk_manager else None,
+            "timestamp": time.time()
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/components/simulation")
+async def get_simulation_status():
+    """الحصول على حالة المحاكاة"""
+    try:
+        controller = get_simulation_controller()
+        analyzer = get_simulation_analyzer()
+        
+        return {
+            "controller": controller.get_controller_status() if controller else None,
+            "analyzer": analyzer.get_analyzer_status() if analyzer else None,
+            "timestamp": time.time()
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/components/sovereign")
+async def get_sovereign_status():
+    """الحصول على حالة السيادة"""
+    try:
+        will = get_sovereign_will()
+        alignment = get_sovereign_alignment()
+        directives = get_sovereign_directives()
+        controller = get_sovereign_controller()
+        
+        return {
+            "will": will.get_will_status() if will else None,
+            "alignment": alignment.get_alignment_status() if alignment else None,
+            "directives": directives.get_directives_status() if directives else None,
+            "controller": controller.get_controller_status() if controller else None,
+            "timestamp": time.time()
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/components/quantum")
+async def get_quantum_status():
+    """الحصول على حالة الكم"""
+    try:
+        controller = get_quantum_controller()
+        
+        return {
+            "controller": controller.get_controller_status() if controller else None,
+            "timestamp": time.time()
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/components/defense")
+async def get_defense_status():
+    """الحصول على حالة الدفاع"""
+    try:
+        stealth = get_stealth_defense()
+        polymorphic = get_polymorphic_defense()
+        
+        return {
+            "stealth": stealth.get_status() if stealth else None,
+            "polymorphic": polymorphic.get_status() if polymorphic else None,
+            "timestamp": time.time()
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================
+# WebSocket للمحادثة المباشرة
+# ============================================================
+
+class ConnectionManager:
+    """مدير اتصالات WebSocket"""
+    
+    def __init__(self):
+        self.active_connections: Dict[str, WebSocket] = {}
+        self.user_sessions: Dict[str, str] = {}  # user_id -> session_id
+    
+    async def connect(self, websocket: WebSocket, user_id: str):
+        await websocket.accept()
+        session_id = str(uuid.uuid4())
+        self.active_connections[session_id] = websocket
+        self.user_sessions[user_id] = session_id
+        return session_id
+    
+    def disconnect(self, session_id: str):
+        if session_id in self.active_connections:
+            del self.active_connections[session_id]
+        
+        # إزالة من user_sessions
+        for user_id, sid in list(self.user_sessions.items()):
+            if sid == session_id:
+                del self.user_sessions[user_id]
+                break
+    
+    async def send_message(self, session_id: str, message: str):
+        if session_id in self.active_connections:
+            await self.active_connections[session_id].send_text(message)
+    
+    async def broadcast(self, message: str):
+        for connection in self.active_connections.values():
+            await connection.send_text(message)
+
+
+manager = ConnectionManager()
+
+
+@app.websocket("/ws/{user_id}")
+async def websocket_endpoint(websocket: WebSocket, user_id: str):
     """
-    السيد يوافق أو يرفض اقتراح معيّن.
+    نقطة WebSocket للمحادثة المباشرة.
     
-    - **proposal_id**: معرف الاقتراح
-    - **approved**: true للموافقة، false للرفض
-    - **sovereign_key**: مفتاح السيد السري
+    الاتصال: `ws://localhost:8000/ws/{user_id}`
+    
+    إرسال رسالة: `{"text": "مرحباً"}`
     """
-    if request.sovereign_key != SOVEREIGN_KEY:
-        logger.warning(f"محاولة موافقة غير مصرح بها على الاقتراح {request.proposal_id}")
-        raise HTTPException(status_code=403, detail="مفتاح السيد غير صحيح")
+    session_id = await manager.connect(websocket, user_id)
     
-    # تنفيذ الموافقة أو الرفض
-    result = orchestrator.handle_sovereign_decision(request.proposal_id, request.approved)
+    try:
+        # رسالة ترحيب
+        await manager.send_message(session_id, json.dumps({
+            "type": "welcome",
+            "message": f"مرحباً {user_id}، أنا الذكاء السيادي. كيف أستطيع مساعدتك؟",
+            "session_id": session_id,
+            "timestamp": time.time()
+        }))
+        
+        orchestrator = app.state.orchestrator
+        
+        while True:
+            # استقبال رسالة
+            data = await websocket.receive_text()
+            
+            try:
+                message_data = json.loads(data)
+                text = message_data.get("text", "")
+            except:
+                text = data
+            
+            # معالجة الرسالة
+            input_data = {
+                "type": "chat_websocket",
+                "text": text,
+                "user_id": user_id,
+                "session_id": session_id,
+                "timestamp": time.time()
+            }
+            
+            result = orchestrator.run_cycle(input_data)
+            
+            # إرسال الرد
+            reply = f"تم استلام رسالتك: '{text}'. أنا الذكاء السيادي."
+            if result.decision:
+                reply = f"القرار: {result.decision.get('action', 'continue')}"
+            
+            await manager.send_message(session_id, json.dumps({
+                "type": "reply",
+                "message": reply,
+                "cycle_id": result.cycle_id,
+                "timestamp": time.time()
+            }))
     
-    status = "approved" if request.approved else "rejected"
-    logger.info(f"الاقتراح {request.proposal_id} تم {status}")
-    
+    except WebSocketDisconnect:
+        manager.disconnect(session_id)
+        logger.info(f"WebSocket disconnected: {user_id}")
+
+
+# ============================================================
+# نقاط API إضافية
+# ============================================================
+
+@app.get("/api-key")
+async def get_api_key():
+    """
+    الحصول على مفتاح API للسيد (تنبيه: هذا عرضة للخطر في الإنتاج!)
+    """
+    # في الإنتاج، يجب إخفاء هذا أو حمايته بمصادقة إضافية
     return {
-        "proposal_id": request.proposal_id,
-        "status": status,
-        "message": result
+        "api_key": SOVEREIGN_API_KEY,
+        "warning": "احفظ هذا المفتاح في مكان آمن. لا تشاركه مع أي شخص.",
+        "timestamp": time.time()
     }
 
 
-@app.post("/experiment/run")
-async def run_experiment(request: ExperimentRequest):
+@app.post("/orchestrator/cycle")
+async def run_orchestrator_cycle(input_data: Dict[str, Any] = None):
     """
-    تشغيل تجربة جديدة بأمر من السيد.
+    تشغيل دورة Orchestrator يدوياً.
     
-    - **experiment_name**: اسم التجربة (يجب أن يكون موجوداً في مجلد experiments/)
-    - **sovereign_key**: مفتاح السيد السري
+    مفيد للاختبار والتشخيص.
     """
-    if request.sovereign_key != SOVEREIGN_KEY:
-        raise HTTPException(status_code=403, detail="مفتاح السيد غير صحيح")
-    
-    result = orchestrator.run_experiment(request.experiment_name, is_sovereign=True)
+    orchestrator = app.state.orchestrator
+    result = orchestrator.run_cycle(input_data or {})
     
     return {
-        "experiment": request.experiment_name,
-        "result": result,
-        "status": "completed"
-    }
-
-
-@app.get("/experiments/list")
-async def list_experiments(sovereign_key: str):
-    """
-    عرض قائمة التجارب المتاحة.
-    """
-    if sovereign_key != SOVEREIGN_KEY:
-        raise HTTPException(status_code=403, detail="مفتاح السيد غير صحيح")
-    
-    experiments = orchestrator.list_available_experiments()
-    
-    return {"experiments": experiments}
-
-
-@app.get("/status")
-async def system_status(sovereign_key: str = None):
-    """
-    عرض حالة النظام الكاملة (للسيد فقط إذا أعطى المفتاح)
-    """
-    is_authorized = (sovereign_key == SOVEREIGN_KEY)
-    
-    core_status = "loaded" if hasattr(orchestrator, 'core') and orchestrator.core.is_loaded else "not_loaded"
-    
-    return {
-        "system": "Sovereign AI",
-        "status": "running",
-        "core": core_status,
-        "authorized": is_authorized,
-        "timestamp": datetime.now().isoformat()
+        "cycle_id": result.cycle_id,
+        "success": result.success,
+        "duration": result.duration,
+        "decision": result.decision,
+        "errors": result.errors,
+        "timestamp": time.time()
     }
 
 
 # ============================================================
-# 6. أحداث بدء وإيقاف التشغيل
-# ============================================================
-
-@app.on_event("startup")
-async def startup_event():
-    """تُنفذ عند بدء تشغيل الخادم"""
-    logger.info("=" * 50)
-    logger.info("🧠 العقل السيادي بدأ التشغيل")
-    logger.info(f"📁 مجلد البيانات: {DATA_DIR}")
-    logger.info(f"🌐 واجهة API: http://localhost:8000/docs")
-    logger.info("=" * 50)
-
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    """تُنفذ عند إيقاف الخادم"""
-    logger.info("🛑 العقل السيادي تم إيقافه")
-
-
-# ============================================================
-# 7. تشغيل مباشر (للتطوير المحلي)
+# تشغيل الخادم (عند تنفيذ الملف مباشرة)
 # ============================================================
 
 if __name__ == "__main__":
-    import uvicorn
+    print("\n" + "=" * 80)
+    print("🌐 Sovereign AI Web Server - الخادم السيادي الكامل")
+    print("=" * 80)
+    print(f"\n🔑 مفتاح API للسيد: {SOVEREIGN_API_KEY}")
+    print(f"📖 التوثيق: http://localhost:8000/docs")
+    print(f"🏥 فحص الصحة: http://localhost:8000/health")
+    print(f"📊 حالة النظام: http://localhost:8000/status")
+    print(f"🔌 WebSocket: ws://localhost:8000/ws/{'user_id'}")
+    print("\n" + "=" * 80 + "\n")
+    
     uvicorn.run(
         "app:app",
         host="0.0.0.0",
