@@ -126,7 +126,47 @@ class SovereignController:
     4. ينسق تنفيذ إرادة السيد
     5. يضمن جودة الخدمة المطلقة
     """
-    
+    # -------------------------
+    # RESET — إعادة تهيئة كاملة لمتحكم السيادة
+    # -------------------------
+    def reset(self):
+        """
+        إعادة تهيئة كاملة لمتحكم السيادة.
+        """
+
+        # إعادة الوضع الافتراضي
+        self.mode = "sovereign"
+
+        # مسح آخر القرارات والسياسات
+        self.last_directive = {}
+        self.sovereign_history = []
+
+        # إعادة تحميل الفهرس
+        self._index = self._load_index()
+
+        # إعادة السياسات الافتراضية
+        self.policies = {
+            "decision_confidence_threshold": 0.7,
+            "max_directive_depth": 5,
+            "noise_scale": 0.1,
+        }
+
+        # إعادة تهيئة المحركات التابعة
+        try:
+            self.directives.reset()
+        except:
+            pass
+
+        try:
+            self.will.reset()
+        except:
+            pass
+
+        # تسجيل عملية إعادة التهيئة
+        self.core.append_event("sovereign::controller::reset", {
+            "timestamp": _now_iso(),
+            "status": "sovereign_controller_reset"
+        })
     def __init__(self):
         self.core = get_core()
         self.instincts = get_instincts()
