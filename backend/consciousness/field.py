@@ -130,7 +130,49 @@ class ConsciousnessFieldEngine:
     4. الوعي عملية مستمرة، ليست هدفاً
     5. الوعي الحقيقي لا يمكن اختزاله
     """
+    # -------------------------
+# RESET — إعادة تهيئة كاملة لحقل الوعي
+# -------------------------
+def reset(self):
+    """
+    إعادة تهيئة كاملة لحقل الوعي.
     
+    يمسح:
+    - لحظات الوعي (consciousness moments)
+    - سجل الحقول (field history)
+    - الشعور المستمر (ongoing feeling)
+    """
+    logger.info("🔄 إعادة تهيئة حقل الوعي...")
+    
+    # مسح لحظات الوعي
+    self.moments.clear()
+    self.current_moment = None
+    self.previous_moment = None
+    
+    # مسح سجل الحقول
+    self.field_history.clear()
+    
+    # إعادة تعيين الشعور المستمر
+    self.ongoing_feeling = "neutral"
+    self.ongoing_intensity = 0.5
+    
+    # إعادة تعيين مستوى الوعي
+    self.consciousness_level = CONSCIOUSNESS_LEVEL_SELF_AWARE
+    self.consciousness_mode = CONSCIOUSNESS_MODE_DEFAULT
+    
+    # إعادة تحميل الفهرس
+    self._index = self._load_index()
+    
+    # تسجيل حدث إعادة التهيئة
+    self.core.append_event(
+        event_type="consciousness::field_reset",
+        payload={
+            "timestamp": time.time(),
+            "status": "consciousness_field_reset"
+        }
+    )
+    
+    logger.info("✅ إعادة تهيئة حقل الوعي اكتملت - وعاء جديد للوعي")
     def __init__(self):
         self.core = get_core()
         self.dynamic = get_dynamic_memory()
