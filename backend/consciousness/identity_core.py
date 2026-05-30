@@ -140,7 +140,54 @@ class IdentityCore:
     4. الهوية تستمر عبر الزمن مهما حدث
     5. الهوية محمية بأقصى درجات الأمان
     """
+    # -------------------------
+# RESET — إعادة تهيئة كاملة لنواة الهوية
+# -------------------------
+def reset(self, preserve_seal: bool = False):
+    """
+    إعادة تهيئة كاملة لنواة الهوية السيادية.
     
+    Args:
+        preserve_seal: إذا True، يحتفظ بختم الهوية ولا يمسحه
+    """
+    logger.info("🔄 إعادة تهيئة نواة الهوية...")
+    
+    if not preserve_seal:
+        # مسح ختم الهوية
+        self.seal = None
+        self.is_sealed = False
+        
+        # حذف ملف الختم
+        if IDENTITY_SEAL_FILE.exists():
+            try:
+                IDENTITY_SEAL_FILE.unlink()
+            except:
+                pass
+    
+    # مسح النسخ الاحتياطية
+    self.backups.clear()
+    
+    # مسح سجل الهوية
+    self.identity_history.clear()
+    self.current_identity = None
+    
+    # إعادة تعيين تماسك الهوية
+    self.identity_coherence = IDENTITY_COHERENCE_FORMING
+    
+    # إعادة تحميل الفهرس
+    self._index = self._load_index()
+    
+    # تسجيل حدث إعادة التهيئة
+    self.core.append_event(
+        event_type="consciousness::identity_reset",
+        payload={
+            "timestamp": time.time(),
+            "preserve_seal": preserve_seal,
+            "status": "identity_core_reset"
+        }
+    )
+    
+    logger.info("✅ إعادة تهيئة نواة الهوية اكتملت - هوية جديدة")
     def __init__(self):
         self.core = get_core()
         self.store = get_store()
