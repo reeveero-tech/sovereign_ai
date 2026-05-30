@@ -143,7 +143,33 @@ class SimulationEnvironmentManager:
     4. التوليد التلقائي للتكوينات يوفر الوقت
     5. التحقق من الصلاحية يمنع الأخطاء
     """
-    
+    # -------------------------
+    # RESET — إعادة تهيئة كاملة لبيئة المحاكاة
+    # -------------------------
+    def reset(self):
+        """
+        إعادة تهيئة كاملة لبيئة المحاكاة.
+        """
+
+        # مسح حالة البيئة
+        self.environment_state = {}
+        self.environment_history = []
+
+        # إعادة تحميل الفهرس
+        self._index = self._load_index()
+
+        # إعادة السياسات الافتراضية
+        self.policies = {
+            "environment_noise": 0.1,
+            "max_environment_changes": 10,
+            "stability_threshold": 0.5,
+        }
+
+        # تسجيل عملية إعادة التهيئة
+        self.core.append_event("simulation::environment::reset", {
+            "timestamp": _now_iso(),
+            "status": "simulation_environment_reset"
+        })
     def __init__(self):
         self.core = get_core()
         
