@@ -1,6 +1,6 @@
 # backend/quantum/quantum_state.py
 # ⚛️ محرك الحالة الكمية الجبار - تراكب، تشابك، تداخل، انهيار
-# الإصدار: 3.0.0 - محاكاة السلوك الكمي في النظام السيادي
+# الإصدار: 3.1.0 - مع دعم إعادة التهيئة الكاملة للاختبارات التكاملية
 
 """
 محرك الحالة الكمية للعقل السيادي.
@@ -19,6 +19,9 @@ import json
 import math
 import cmath
 import random
+import secrets
+import threading
+import time
 import numpy as np
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -162,6 +165,18 @@ class QuantumStateEngine:
         self.hamiltonian: Dict[str, Dict[str, complex]] = {}
         self.time_evolution_steps = 0
         
+        # السياسات الافتراضية (لإعادة التهيئة)
+        self._default_policies = {
+            "interference_strength": 0.15,
+            "phase_shift_scale": 0.2,
+            "decoherence_rate": 0.02,
+            "evolution_time_step": 0.05,
+            "measurement_probability": 0.1,
+            "interference_probability": 0.3,
+            "decoherence_probability": 0.2
+        }
+        self.policies = self._default_policies.copy()
+        
         # خلفيات كمومية
         self._active = True
         self._time_evolution_loop = threading.Thread(target=self._continuous_time_evolution, daemon=True)
@@ -174,6 +189,90 @@ class QuantumStateEngine:
         self._load_state()
         
         logger.warning("⚛️ محرك الحالة الكمية الجبار جاهز - تراكب، تشابك، تداخل، انهيار")
+    
+    # ============================================================
+    # إعادة التهيئة الكاملة (للاختبارات التكاملية)
+    # ============================================================
+    
+    def reset(self) -> None:
+        """
+        إعادة تهيئة كاملة للمحرك الكمومي.
+        
+        تستخدم في الاختبارات التكاملية لضمان بداية نظيفة.
+        
+        تقوم بـ:
+        1) مسح كل الحالة الداخلية (amplitudes, phase_map, collapsed_state)
+        2) إعادة تحميل الفهرس (تفريغ جميع السجلات)
+        3) إعادة تعيين السياسات إلى القيم الافتراضية
+        4) تسجيل حدث إعادة التهيئة في السجل السيادي
+        """
+        logger.info("🔄 إعادة تهيئة محرك الحالة الكمومية...")
+        
+        # 1) مسح الحالة الداخلية
+        self.states.clear()
+        self.current_state = None
+        self.collapsed_state = None
+        self.entanglements.clear()
+        self.measurement_history.clear()
+        self.hamiltonian.clear()
+        self.time_evolution_steps = 0
+        
+        # 2) إعادة تحميل الفهرس (مسح الملفات المؤقتة)
+        try:
+            # حذف ملف الحالة المؤقت إذا كان موجوداً
+            if QUANTUM_STATE_FILE.exists():
+                # نقوم بنسخ احتياطي قبل الحذف (للأمان)
+                backup_file = QUANTUM_STATE_FILE.with_suffix('.json.bak')
+                import shutil
+                shutil.copy2(QUANTUM_STATE_FILE, backup_file)
+                QUANTUM_STATE_FILE.unlink()
+                logger.debug(f"📁 تم حذف ملف الحالة القديم، نسخة احتياطية في {backup_file}")
+        except Exception as e:
+            logger.warning(f"تحذير: فشل في حذف ملف الحالة: {e}")
+        
+        # إعادة إنشاء الملفات الفارغة
+        QUANTUM_STATE_DIR.mkdir(parents=True, exist_ok=True)
+        
+        # 3) إعادة تعيين السياسات إلى القيم الافتراضية
+        self.policies = self._default_policies.copy()
+        
+        # 4) إعادة تعيين إحصائيات إضافية
+        self._active = True  # تأكد من أن المحرك لا يزال نشطاً
+        
+        # 5) تسجيل حدث إعادة التهيئة في السجل السيادي
+        self.core.append_event(
+            event_type="quantum::engine_reset",
+            payload={
+                "timestamp": time.time(),
+                "reason": "test_initialization",
+                "states_cleared": True,
+                "policies_reset": True
+            }
+        )
+        
+        logger.info("✅ إعادة تهيئة محرك الحالة الكمومية اكتملت - حالة نظيفة وجاهزة للاختبارات")
+    
+    def reset_policies(self) -> None:
+        """
+        إعادة تعيين السياسات فقط (بدون مسح الحالة).
+        
+        مفيد عندما نريد الاحتفاظ بالحالة لكن إعادة ضبط السلوك.
+        """
+        self.policies = self._default_policies.copy()
+        logger.debug("🔄 إعادة تعيين سياسات المحرك الكمومي إلى القيم الافتراضية")
+    
+    def clear_states(self) -> None:
+        """
+        مسح جميع الحالات الكمومية فقط.
+        
+        يحافظ على السياسات والإعدادات.
+        """
+        self.states.clear()
+        self.current_state = None
+        self.collapsed_state = None
+        self.entanglements.clear()
+        self.measurement_history.clear()
+        logger.debug("🧹 تم مسح جميع الحالات الكمومية")
     
     # ============================================================
     # إنشاء وإدارة الحالات
@@ -768,22 +867,22 @@ class QuantumStateEngine:
             state = self.current_state
         
         # تطبيق التطور الزمني
-        self.evolve_state(state_id, time_step=0.05)
+        self.evolve_state(state_id, time_step=self.policies.get("evolution_time_step", 0.05))
         
         # تطبيق التداخل
-        if random.random() < 0.3:
-            self.apply_interference(state_id, strength=0.05)
+        if random.random() < self.policies.get("interference_probability", 0.3):
+            self.apply_interference(state_id, strength=self.policies.get("interference_strength", 0.05))
         
         # تطبيق فك الترابط
-        if random.random() < 0.2:
-            self.apply_decoherence(state_id, rate=0.01)
+        if random.random() < self.policies.get("decoherence_probability", 0.2):
+            self.apply_decoherence(state_id, rate=self.policies.get("decoherence_rate", 0.01))
         
         # حساب الاحتمالات
         probabilities = {b: amp.probability() for b, amp in state.amplitudes.items()}
         
         # قياس الانهيار (اختياري)
         collapsed = None
-        if random.random() < 0.1:  # 10% فرصة للقياس
+        if random.random() < self.policies.get("measurement_probability", 0.1):
             collapsed = self.collapse_state(state_id)
         
         # حساب المقاييس
@@ -886,6 +985,7 @@ class QuantumStateEngine:
                     for eid, e in self.entanglements.items()
                 },
                 "time_evolution_steps": self.time_evolution_steps,
+                "policies": self.policies,
                 "saved_at": time.time()
             }
             with open(QUANTUM_STATE_FILE, 'w', encoding='utf-8') as f:
@@ -922,6 +1022,11 @@ class QuantumStateEngine:
                         self.states[sid] = state
                     
                     self.time_evolution_steps = data.get("time_evolution_steps", 0)
+                    
+                    # استعادة السياسات
+                    saved_policies = data.get("policies", {})
+                    if saved_policies:
+                        self.policies.update(saved_policies)
                     
                 logger.info(f"📂 تم تحميل {len(self.states)} حالة كمومية")
         except Exception as e:
@@ -993,6 +1098,24 @@ class QuantumStateEngine:
             }
         
         return {"error": "فشل القياس"}
+    
+    def set_policy(self, key: str, value: float) -> bool:
+        """
+        تعيين سياسة تشغيلية.
+        
+        Args:
+            key: اسم السياسة (interference_strength, decoherence_rate, etc.)
+            value: القيمة الجديدة
+        """
+        if key in self.policies:
+            self.policies[key] = value
+            logger.debug(f"⚙️ تحديث السياسة {key} = {value}")
+            return True
+        return False
+    
+    def get_policies(self) -> Dict[str, float]:
+        """الحصول على نسخة من السياسات الحالية"""
+        return self.policies.copy()
     
     def get_quantum_quote(self) -> str:
         """اقتباس كمومي"""
@@ -1103,7 +1226,12 @@ if __name__ == "__main__":
     # 10) السرد
     print(f"\n📖 السرد:\n{snap.narrative}")
     
-    # 11) اقتباس
+    # 11) اختبار إعادة التهيئة
+    print("\n🔄 اختبار إعادة تهيئة المحرك...")
+    qs.reset()
+    print("   تم إعادة تهيئة المحرك بنجاح - الحالة نظيفة وجاهزة للاختبارات")
+    
+    # 12) اقتباس
     print(f"\n💭 {qs.get_quantum_quote()}")
     
     print("\n" + "=" * 80)
