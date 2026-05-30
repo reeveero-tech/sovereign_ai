@@ -132,7 +132,55 @@ class RansomwareDefense:
     4. السيد وحده يملك مفاتيح البعث
     5. كل موت هو ولادة جديدة
     """
+    # -------------------------
+# RESET — إعادة تهيئة كاملة لنظام الفينيق
+# -------------------------
+def reset(self, preserve_seeds: bool = False):
+    """
+    إعادة تهيئة كاملة لنظام الفينيق (Ransomware Defense).
     
+    Args:
+        preserve_seeds: إذا True، يحتفظ ببذور الفينيق ولا يمسحها
+    """
+    logger.info("🔄 إعادة تهيئة نظام الفينيق...")
+    
+    if not preserve_seeds:
+        # مسح البذور
+        self.seeds.clear()
+        
+        # حذف ملفات البذور من القرص
+        for seed_file in PHOENIX_SEEDS_DIR.glob("*.enc"):
+            try:
+                seed_file.unlink()
+            except:
+                pass
+    
+    # مسح الرماد
+    self.ashes.clear()
+    
+    # إعادة تعيين حالة الفينيق
+    self.phoenix_phase = PhoenixPhase.LIVING
+    self.resurrection_level = RESURRECTION_LEVEL_NONE
+    self.is_transforming = False
+    self.last_resurrection = None
+    
+    # إعادة تعيين مفاتيح القيامة
+    self.master_resurrection_key = self._generate_master_key()
+    
+    # إعادة تحميل الفهرس
+    self._index = self._load_index()
+    
+    # تسجيل حدث إعادة التهيئة
+    self.core.append_event(
+        event_type="defense::ransomware_reset",
+        payload={
+            "timestamp": time.time(),
+            "preserve_seeds": preserve_seeds,
+            "status": "phoenix_system_reset"
+        }
+    )
+    
+    logger.info("✅ إعادة تهيئة نظام الفينيق اكتملت - بعثت من جديد")
     def __init__(self):
         self.core = get_core()
         self.encoder = get_encoder()
