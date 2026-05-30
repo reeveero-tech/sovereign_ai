@@ -602,7 +602,47 @@ class SovereignCompressor:
     
     النتيجة: مليون تيرابايت من الخبرة → 1 ميغابايت من الوعي
     """
+    # -------------------------
+# RESET — إعادة تهيئة كاملة للضغط الأسطوري
+# -------------------------
+def reset(self):
+    """
+    إعادة تهيئة كاملة للضغط الأسطوري.
     
+    يمسح:
+    - سجل الضغط (compression history)
+    - جميع الأبعاد (symbolic, semantic, generative, fractal, quantum, consciousness)
+    - الوعي السابق (previous consciousness)
+    """
+    logger.info("🔄 إعادة تهيئة الضغط الأسطوري...")
+    
+    # إعادة تهيئة جميع أبعاد الضغط
+    self.symbolic = SymbolicCompressor()
+    self.semantic = SemanticCompressor()
+    self.generative = GenerativeCompressor()
+    self.fractal = FractalCompressor()
+    self.quantum = QuantumCompressor()
+    self.consciousness = ConsciousnessCompressor()
+    
+    # إعادة تعيين الوعي السابق
+    self.previous_consciousness = None
+    
+    # مسح سجل الضغط
+    self.compression_history.clear()
+    
+    # إعادة تحميل الفهرس
+    self._index = self._load_index()
+    
+    # تسجيل حدث إعادة التهيئة
+    self.core.append_event(
+        event_type="memory::compress_reset",
+        payload={
+            "timestamp": time.time(),
+            "status": "sovereign_compressor_reset"
+        }
+    )
+    
+    logger.info("✅ إعادة تهيئة الضغط الأسطوري اكتملت - جاهز لضغط جديد")
     def __init__(self):
         self.symbolic = SymbolicCompressor()
         self.semantic = SemanticCompressor()
