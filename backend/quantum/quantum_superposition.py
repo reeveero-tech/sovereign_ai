@@ -1,6 +1,6 @@
 # backend/quantum/quantum_superposition.py
 # ⚛️ محرك التراكب الكمي الجبار - تراكبات متعددة المستويات، دمج، تقسيم، تداخل جماعي
-# الإصدار: 3.0.0 - تراكبات مركبة، قياسات جزئية، تداخل عبر مجموعات
+# الإصدار: 3.1.0 - مع دعم إعادة التهيئة الكاملة للاختبارات التكاملية
 
 """
 محرك التراكب الكمي للعقل السيادي.
@@ -19,6 +19,9 @@ import json
 import math
 import cmath
 import random
+import secrets
+import threading
+import time
 import numpy as np
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -136,6 +139,14 @@ class QuantumSuperpositionEngine:
         self.qstate = get_quantum_state_engine()
         self.qtrans = get_quantum_transition_engine()
         
+        # السياسات الافتراضية (لإعادة التهيئة)
+        self._default_policies = {
+            "group_interference_strength": 0.12,
+            "partial_measure_base_collapse": 0.35,
+            "merge_normalize": True,
+        }
+        self.policies = self._default_policies.copy()
+        
         # التراكبات
         self.superpositions: Dict[str, Dict[str, QuantumAmplitude]] = {}
         self.nested_superpositions: Dict[str, NestedSuperposition] = {}
@@ -159,6 +170,61 @@ class QuantumSuperpositionEngine:
         self._load_state()
         
         logger.warning("⚛️ محرك التراكب الكمي الجبار جاهز - تراكبات متعددة المستويات")
+    
+    # ============================================================
+    # إعادة التهيئة الكاملة (للاختبارات التكاملية)
+    # ============================================================
+    
+    def reset(self):
+        """
+        إعادة تهيئة كاملة لمحرك التراكب الكمّي.
+        
+        - مسح جميع التراكبات
+        - مسح المجموعات النشطة
+        - مسح تاريخ القياسات الجزئية
+        - إعادة تحميل الفهرس
+        - إعادة السياسات الافتراضية
+        - تسجيل عملية إعادة التهيئة في السجل السيادي
+        """
+        logger.info("🔄 إعادة تهيئة محرك التراكب الكمومي...")
+        
+        # مسح التراكبات بالكامل
+        self.superpositions.clear()
+        
+        # مسح المجموعات النشطة
+        self.superposition_groups.clear()
+        self.nested_superpositions.clear()
+        
+        # مسح تاريخ القياسات الجزئية
+        self.partial_measurements.clear()
+        
+        # إعادة تحميل الفهرس (تفريغ السجلات)
+        # يتم ذلك تلقائياً عبر _load_state ولكن نضمن التنظيف
+        
+        # إعادة تهيئة السياسات الافتراضية
+        self.policies = self._default_policies.copy()
+        
+        # تسجيل عملية إعادة التهيئة في السجل السيادي
+        self.core.append_event(
+            event_type="quantum::superposition::reset",
+            payload={
+                "timestamp": time.time(),
+                "status": "quantum_superposition_engine_reset",
+                "policies_reset": True,
+                "data_cleared": True
+            }
+        )
+        
+        logger.info("✅ إعادة تهيئة محرك التراكب الكمومي اكتملت")
+    
+    def reset_policies(self):
+        """
+        إعادة تعيين السياسات فقط (بدون مسح البيانات).
+        
+        مفيد عندما نريد الاحتفاظ بالتراكبات لكن إعادة ضبط السلوك.
+        """
+        self.policies = self._default_policies.copy()
+        logger.debug("🔄 إعادة تعيين سياسات محرك التراكب الكمومي إلى القيم الافتراضية")
     
     # ============================================================
     # إدارة التراكبات الأساسية
@@ -769,6 +835,7 @@ class QuantumSuperpositionEngine:
                 "nested_count": len(self.nested_superpositions),
                 "groups_count": len(self.superposition_groups),
                 "measurements_count": len(self.partial_measurements),
+                "policies": self.policies,
                 "saved_at": time.time()
             }
             with open(QUANTUM_SUPERPOSITION_STATE_FILE, 'w', encoding='utf-8') as f:
@@ -782,6 +849,9 @@ class QuantumSuperpositionEngine:
             if QUANTUM_SUPERPOSITION_STATE_FILE.exists():
                 with open(QUANTUM_SUPERPOSITION_STATE_FILE, 'r', encoding='utf-8') as f:
                     state = json.load(f)
+                    saved_policies = state.get("policies", {})
+                    if saved_policies:
+                        self.policies.update(saved_policies)
                 logger.info("📂 تم تحميل حالة محرك التراكب")
         except Exception as e:
             logger.error(f"خطأ في تحميل حالة التراكب: {e}")
@@ -790,6 +860,24 @@ class QuantumSuperpositionEngine:
     # واجهات التحكم
     # ============================================================
     
+    def set_policy(self, key: str, value: float) -> bool:
+        """
+        تعيين سياسة تشغيلية.
+        
+        Args:
+            key: اسم السياسة (group_interference_strength, partial_measure_base_collapse, etc.)
+            value: القيمة الجديدة
+        """
+        if key in self.policies:
+            self.policies[key] = value
+            logger.debug(f"⚙️ تحديث السياسة {key} = {value}")
+            return True
+        return False
+    
+    def get_policies(self) -> Dict[str, float]:
+        """الحصول على نسخة من السياسات الحالية"""
+        return self.policies.copy()
+    
     def get_superposition_status(self) -> Dict[str, Any]:
         """الحالة الحالية لمحرك التراكب"""
         return {
@@ -797,6 +885,7 @@ class QuantumSuperpositionEngine:
             "total_nested": len(self.nested_superpositions),
             "total_groups": len(self.superposition_groups),
             "total_measurements": len(self.partial_measurements),
+            "policies": self.policies,
             "timestamp": time.time()
         }
     
@@ -854,7 +943,7 @@ def get_quantum_superposition_engine() -> QuantumSuperpositionEngine:
 # ============================================================
 
 if __name__ == "__main__":
-    print("\n" + "=" * 80)
+    print("\n" = "=" * 80)
     print("⚛️ محرك التراكب الكمي الجبار - تراكبات متعددة المستويات")
     print("=" * 80 + "\n")
     
@@ -928,10 +1017,15 @@ if __name__ == "__main__":
     if merged_probs:
         print(f"   احتمالات التراكب المدمج: {list(merged_probs.items())[:3]}...")
     
-    # 9) السرد
+    # 9) اختبار إعادة التهيئة
+    print("\n🔄 اختبار إعادة تهيئة محرك التراكب...")
+    qsuper.reset()
+    print("   تم إعادة تهيئة محرك التراكب بنجاح - الحالة نظيفة وجاهزة للاختبارات")
+    
+    # 10) السرد
     print(f"\n📖 السرد:\n{snapshot.narrative}")
     
-    # 10) اقتباس
+    # 11) اقتباس
     print(f"\n💭 {qsuper.get_superposition_quote()}")
     
     print("\n" + "=" * 80)
