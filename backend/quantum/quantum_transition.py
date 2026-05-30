@@ -1,6 +1,6 @@
 # backend/quantum/quantum_transition.py
 # ⚛️ محرك الانتقالات الكمية الجبار - انتقالات كمومية متقدمة
-# الإصدار: 3.0.0 - احتمالات، مصفوفات، تضخيم، تثبيط
+# الإصدار: 3.1.0 - مع دعم إعادة التهيئة الكاملة للاختبارات التكاملية
 
 """
 محرك الانتقالات الكمية للعقل السيادي.
@@ -19,6 +19,9 @@ import json
 import math
 import cmath
 import random
+import secrets
+import threading
+import time
 import numpy as np
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -129,6 +132,16 @@ class QuantumTransitionEngine:
         self.hamiltonian: Optional[np.ndarray] = None
         self.energy_levels: Dict[str, float] = {}
         
+        # السياسات الافتراضية (لإعادة التهيئة)
+        self._default_policies = {
+            "base_transition_strength": 0.25,
+            "phase_influence": 0.15,
+            "interference_influence": 0.2,
+            "amplification_threshold": 0.65,
+            "suppression_threshold": 0.35,
+        }
+        self.policies = self._default_policies.copy()
+        
         # خلفيات الانتقالات
         self._active = True
         self._continuous_transitions = threading.Thread(target=self._continuous_transition_loop, daemon=True)
@@ -141,6 +154,51 @@ class QuantumTransitionEngine:
         self._load_state()
         
         logger.warning("⚛️ محرك الانتقالات الكمومية الجبار جاهز - انتقالات كمومية متقدمة")
+    
+    # ============================================================
+    # إعادة التهيئة الكاملة (للاختبارات التكاملية)
+    # ============================================================
+    
+    def reset(self):
+        """
+        إعادة تهيئة كاملة لمحرك الانتقال الكمّي.
+        
+        - لا يملك حالة amplitudes خاصة به (يستخدم qstate)
+        - لكن يملك سياسات وفهرس داخلي يجب إعادة تهيئتها
+        - لا نحذف الملفات على القرص إلا إذا طلب المستخدم
+        - تسجل عملية إعادة التهيئة في السجل السيادي
+        """
+        logger.info("🔄 إعادة تهيئة محرك الانتقالات الكمومية...")
+        
+        # إعادة تحميل الفهرس من جديد (تفريغ السجلات)
+        self.transition_history.clear()
+        self.transition_matrix_history.clear()
+        self.energy_levels.clear()
+        
+        # إعادة تهيئة السياسات الافتراضية
+        self.policies = self._default_policies.copy()
+        
+        # تسجيل عملية إعادة التهيئة في السجل السيادي
+        self.core.append_event(
+            event_type="quantum::transition::reset",
+            payload={
+                "timestamp": time.time(),
+                "status": "quantum_transition_engine_reset",
+                "policies_reset": True,
+                "history_cleared": True
+            }
+        )
+        
+        logger.info("✅ إعادة تهيئة محرك الانتقالات الكمومية اكتملت")
+    
+    def reset_policies(self):
+        """
+        إعادة تعيين السياسات فقط (بدون مسح التاريخ).
+        
+        مفيد عندما نريد الاحتفاظ بسجل الانتقالات لكن إعادة ضبط السلوك.
+        """
+        self.policies = self._default_policies.copy()
+        logger.debug("🔄 إعادة تعيين سياسات محرك الانتقالات الكمومية إلى القيم الافتراضية")
     
     # ============================================================
     # بناء مصفوفة الانتقال
@@ -678,6 +736,7 @@ class QuantumTransitionEngine:
             state = {
                 "energy_levels": self.energy_levels,
                 "transition_history_count": len(self.transition_history),
+                "policies": self.policies,
                 "saved_at": time.time()
             }
             with open(QUANTUM_TRANSITION_STATE_FILE, 'w', encoding='utf-8') as f:
@@ -692,6 +751,9 @@ class QuantumTransitionEngine:
                 with open(QUANTUM_TRANSITION_STATE_FILE, 'r', encoding='utf-8') as f:
                     state = json.load(f)
                     self.energy_levels = state.get("energy_levels", {})
+                    saved_policies = state.get("policies", {})
+                    if saved_policies:
+                        self.policies.update(saved_policies)
                 logger.info("📂 تم تحميل حالة محرك الانتقالات")
         except Exception as e:
             logger.error(f"خطأ في تحميل حالة الانتقالات: {e}")
@@ -699,6 +761,24 @@ class QuantumTransitionEngine:
     # ============================================================
     # واجهات التحكم
     # ============================================================
+    
+    def set_policy(self, key: str, value: float) -> bool:
+        """
+        تعيين سياسة تشغيلية.
+        
+        Args:
+            key: اسم السياسة (base_transition_strength, phase_influence, etc.)
+            value: القيمة الجديدة
+        """
+        if key in self.policies:
+            self.policies[key] = value
+            logger.debug(f"⚙️ تحديث السياسة {key} = {value}")
+            return True
+        return False
+    
+    def get_policies(self) -> Dict[str, float]:
+        """الحصول على نسخة من السياسات الحالية"""
+        return self.policies.copy()
     
     def get_transition_status(self, state_id: str = None) -> Dict[str, Any]:
         """الحالة الحالية لمحرك الانتقالات"""
@@ -714,6 +794,7 @@ class QuantumTransitionEngine:
             "mixing_time": transition_matrix.mixing_time if transition_matrix else 0,
             "energy_levels": self.energy_levels,
             "total_transitions": len(self.transition_history),
+            "policies": self.policies,
             "timestamp": time.time()
         }
     
@@ -860,10 +941,15 @@ if __name__ == "__main__":
     print(f"   وقت الخلط: {status['mixing_time']:.2f}")
     print(f"   إجمالي الانتقالات: {status['total_transitions']}")
     
-    # 9) السرد
+    # 9) اختبار إعادة التهيئة
+    print("\n🔄 اختبار إعادة تهيئة محرك الانتقالات...")
+    qt.reset()
+    print("   تم إعادة تهيئة محرك الانتقالات بنجاح - الحالة نظيفة وجاهزة للاختبارات")
+    
+    # 10) السرد
     print(f"\n📖 السرد:\n{snapshot.narrative}")
     
-    # 10) اقتباس
+    # 11) اقتباس
     print(f"\n💭 {qt.get_transition_quote()}")
     
     print("\n" + "=" * 80)
