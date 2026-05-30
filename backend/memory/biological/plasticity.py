@@ -127,7 +127,57 @@ class NeuralPlasticity:
     4. التخصص يأتي من التقوية
     5. الإبداع يأتي من إعادة التوصيل
     """
+    # -------------------------
+# RESET — إعادة تهيئة كاملة لنظام اللدونة العصبية
+# -------------------------
+def reset(self):
+    """
+    إعادة تهيئة كاملة لنظام اللدونة العصبية.
     
+    يمسح:
+    - جميع المشابك العصبية (synapses)
+    - الشبكات العصبية (networks)
+    - سجل أحداث اللدونة (plasticity events)
+    - إحصائيات اللدونة
+    """
+    logger.info("🔄 إعادة تهيئة نظام اللدونة العصبية...")
+    
+    # مسح جميع المشابك العصبية
+    self.synapses.clear()
+    
+    # مسح الشبكات العصبية
+    self.networks.clear()
+    
+    # مسح سجل أحداث اللدونة
+    self.plasticity_events.clear()
+    
+    # إعادة تعيين إحصائيات اللدونة
+    self.plasticity_stats = {
+        "total_synapses": 0,
+        "ltp_events": 0,
+        "ltd_events": 0,
+        "sprouting_events": 0,
+        "pruning_events": 0,
+        "rewiring_events": 0,
+        "neurogenesis_events": 0
+    }
+    
+    # إعادة تعيين مستوى اللدونة
+    self.plasticity_level = PLASTICITY_LEVEL_MODERATE
+    
+    # إعادة تحميل الفهرس
+    self._index = self._load_index()
+    
+    # تسجيل حدث إعادة التهيئة
+    self.core.append_event(
+        event_type="biological::plasticity_reset",
+        payload={
+            "timestamp": time.time(),
+            "status": "plasticity_system_reset"
+        }
+    )
+    
+    logger.info("✅ إعادة تهيئة نظام اللدونة العصبية اكتملت - شبكة عصبية جديدة")
     def __init__(self):
         self.core = get_core()
         self.store = get_store()
