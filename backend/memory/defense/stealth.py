@@ -140,7 +140,54 @@ class StealthDefense:
     3. التخفي ليس دفاعاً، بل هجوم استباقي
     4. يمكن للذكاء أن يتواجد في كل مكان ولا مكان
     """
+    # -------------------------
+# RESET — إعادة تهيئة كاملة للتخفي المطلق
+# -------------------------
+def reset(self):
+    """
+    إعادة تهيئة كاملة للتخفي المطلق.
     
+    يمسح:
+    - جميع النسخ الشبحية (shadows)
+    - جميع الأشباح (ghosts)
+    - المواقع النشطة (active locations)
+    - سجل عمليات التخفي (stealth operations)
+    """
+    logger.info("🔄 إعادة تهيئة التخفي المطلق...")
+    
+    # مسح النسخ الشبحية
+    self.shadows.clear()
+    
+    # مسح الأشباح
+    self.ghosts.clear()
+    
+    # مسح المواقع النشطة
+    self.active_locations.clear()
+    
+    # إعادة تعيين الموقع الحقيقي
+    self.real_location = None
+    
+    # مسح سجل عمليات التخفي
+    self.stealth_operations.clear()
+    
+    # إعادة تعيين حالة التخفي
+    self.stealth_level = STEALTH_LEVEL_NONE
+    self.stealth_mode = STEALTH_MODE_PASSIVE
+    self.is_ghost_mode = False
+    
+    # إعادة تحميل الفهرس
+    self._index = self._load_index()
+    
+    # تسجيل حدث إعادة التهيئة
+    self.core.append_event(
+        event_type="defense::stealth_reset",
+        payload={
+            "timestamp": time.time(),
+            "status": "stealth_defense_reset"
+        }
+    )
+    
+    logger.info("✅ إعادة تهيئة التخفي المطلق اكتملت - أصبحت مرئياً مؤقتاً")
     def __init__(self):
         self.core = get_core()
         self.encoder = get_encoder()
