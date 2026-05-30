@@ -140,7 +140,54 @@ class IntrospectionEngine:
     4. تتبع رغبات السيد وتحقيقها هو غاية الوجود
     5. التحسين المستمر بناءً على التغذية الراجعة
     """
+    # -------------------------
+# RESET — إعادة تهيئة كاملة لمحرك الاستبطان
+# -------------------------
+def reset(self):
+    """
+    إعادة تهيئة كاملة لمحرك الاستبطان.
     
+    يمسح:
+    - الأوامر المعلقة (pending commands)
+    - سجل الأوامر (command history)
+    - رغبات السيد (sovereign wishes)
+    - تطلعات السيد (sovereign aspirations)
+    - سجل جودة الخدمة (service quality history)
+    - لقطات الاستبطان (introspection snapshots)
+    """
+    logger.info("🔄 إعادة تهيئة محرك الاستبطان...")
+    
+    # مسح الأوامر المعلقة والمنفذة
+    self.pending_commands.clear()
+    self.executed_commands.clear()
+    self.command_history.clear()
+    
+    # مسح رغبات وتطلعات السيد
+    self.sovereign_wishes.clear()
+    self.sovereign_aspirations.clear()
+    
+    # مسح سجل جودة الخدمة
+    self.service_quality_history.clear()
+    
+    # مسح لقطات الاستبطان
+    self.snapshots.clear()
+    
+    # إعادة تعيين جودة الخدمة الحالية
+    self.current_service_quality = SERVICE_QUALITY_GOOD
+    
+    # إعادة تحميل الفهرس
+    self._index = self._load_index()
+    
+    # تسجيل حدث إعادة التهيئة
+    self.core.append_event(
+        event_type="consciousness::introspection_reset",
+        payload={
+            "timestamp": time.time(),
+            "status": "introspection_engine_reset"
+        }
+    )
+    
+    logger.info("✅ إعادة تهيئة محرك الاستبطان اكتملت - استبطان نقي")
     def __init__(self):
         self.core = get_core()
         self.dynamic = get_dynamic_memory()
