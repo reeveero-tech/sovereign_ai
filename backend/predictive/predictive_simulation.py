@@ -144,7 +144,34 @@ class PredictiveSimulation:
     4. المحاكاة تكشف عن المخفي
     5. المحاكاة الجيدة تنقذ من المفاجآت
     """
-    
+    # -------------------------
+    # RESET — إعادة تهيئة كاملة لمحرك المحاكاة التنبؤية
+    # -------------------------
+    def reset(self):
+        """
+        إعادة تهيئة كاملة لمحرك المحاكاة التنبؤية.
+        """
+
+        # مسح نتائج المحاكاة السابقة
+        self.last_simulation_result = {}
+        self.simulation_history = []
+
+        # إعادة تحميل الفهرس
+        self._index = self._load_index()
+
+        # إعادة السياسات الافتراضية
+        self.policies = {
+            "max_iterations": 12,
+            "stability_threshold": 0.45,
+            "noise_scale": 0.1,
+            "max_branches": 4,
+        }
+
+        # تسجيل عملية إعادة التهيئة
+        self.core.append_event("predictive::simulation::reset", {
+            "timestamp": _now_iso(),
+            "status": "predictive_simulation_reset"
+        })
     def __init__(self):
         self.core = get_core()
         self.instincts = get_instincts()
