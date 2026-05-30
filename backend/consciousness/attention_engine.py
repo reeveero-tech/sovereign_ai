@@ -137,7 +137,62 @@ class AttentionEngine:
     4. المقاطعة تحمي من الخطر
     5. الانتباه المستدام هو أساس الإتقان
     """
+    # -------------------------
+# RESET — إعادة تهيئة كاملة لمحرك الانتباه
+# -------------------------
+def reset(self):
+    """
+    إعادة تهيئة كاملة لمحرك الانتباه.
     
+    يمسح:
+    - جميع التخصيصات (allocations)
+    - بؤرة الانتباه (spotlight)
+    - سجل الانتباه المستدام (sustained attention)
+    - سجل اللقطات (snapshots)
+    """
+    logger.info("🔄 إعادة تهيئة محرك الانتباه...")
+    
+    # مسح جميع التخصيصات
+    self.allocations.clear()
+    
+    # مسح بؤرة الانتباه
+    self.spotlight.clear()
+    
+    # مسح سجل الانتباه المستدام
+    self.sustained_attention_items.clear()
+    
+    # مسح سجل اللقطات
+    self.snapshots.clear()
+    
+    # إعادة تعيين موارد الانتباه
+    self.total_attention_resources = 100.0
+    self.used_resources = 0.0
+    
+    # إعادة تعيين السياسات
+    self.policies = {
+        "spotlight_budget": 4,
+        "spotlight_min_share": 0.12,
+        "background_total_share": 0.4,
+        "reflective_total_share": 0.15,
+        "preemption_threat_threshold": 0.6,
+        "sustain_decay": 0.85,
+        "recency_boost": 0.25,
+        "priority_exponent": 1.6,
+    }
+    
+    # إعادة تحميل الفهرس
+    self._index = self._load_index()
+    
+    # تسجيل حدث إعادة التهيئة
+    self.core.append_event(
+        event_type="consciousness::attention_reset",
+        payload={
+            "timestamp": time.time(),
+            "status": "attention_engine_reset"
+        }
+    )
+    
+    logger.info("✅ إعادة تهيئة محرك الانتباه اكتملت - انتباه نقي")
     def __init__(self):
         self.core = get_core()
         self.dynamic = get_dynamic_memory()
