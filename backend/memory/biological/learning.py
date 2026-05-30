@@ -134,7 +134,58 @@ class AdaptiveLearning:
     4. السياق يعيد تعريف المعنى
     5. التعلم لا يتوقف أبداً
     """
+    # -------------------------
+# RESET — إعادة تهيئة كاملة لنظام التعلم التكيفي
+# -------------------------
+def reset(self):
+    """
+    إعادة تهيئة كاملة لنظام التعلم التكيفي.
     
+    يمسح:
+    - سجل الخبرات (experiences)
+    - الأنماط المتعلمة (patterns)
+    - المخططات المعرفية (schemas)
+    - إحصائيات التعلم
+    """
+    logger.info("🔄 إعادة تهيئة نظام التعلم التكيفي...")
+    
+    # مسح سجل الخبرات
+    self.experiences.clear()
+    self.experience_buffer.clear()
+    
+    # مسح الأنماط المتعلمة
+    self.patterns.clear()
+    self.pattern_discovery_counters.clear()
+    
+    # مسح المخططات المعرفية
+    self.schemas.clear()
+    
+    # إعادة تعيين إحصائيات التعلم
+    self.learning_stats = {
+        "total_experiences": 0,
+        "patterns_discovered": 0,
+        "schemas_formed": 0,
+        "associations_formed": 0,
+        "generalizations_made": 0
+    }
+    
+    # إعادة تعيين مستوى ونوع التعلم
+    self.learning_level = LEARNING_LEVEL_ACTIVE
+    self.learning_type = LEARNING_TYPE_UNSUPERVISED
+    
+    # إعادة تحميل الفهرس
+    self._index = self._load_index()
+    
+    # تسجيل حدث إعادة التهيئة
+    self.core.append_event(
+        event_type="biological::learning_reset",
+        payload={
+            "timestamp": time.time(),
+            "status": "learning_system_reset"
+        }
+    )
+    
+    logger.info("✅ إعادة تهيئة نظام التعلم التكيفي اكتملت - صفحة بيضاء جديدة")
     def __init__(self):
         self.core = get_core()
         self.store = get_store()
