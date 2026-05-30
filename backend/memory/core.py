@@ -370,7 +370,55 @@ class SovereignCore:
     هذا الملف هو هوية الذاكرة نفسها.
     لا يمكن تعديله. لا يمكن حذفه. فقط يمكن إضافة أحداث إليه.
     """
+    # -------------------------
+# RESET — إعادة تهيئة كاملة للسجل السيادي
+# -------------------------
+def reset(self, preserve_events: bool = False):
+    """
+    إعادة تهيئة كاملة للسجل السيادي.
     
+    Args:
+        preserve_events: إذا True، يحتفظ بالأحداث ولا يمسحها
+    """
+    logger.info("🔄 إعادة تهيئة السجل السيادي...")
+    
+    if not preserve_events:
+        # مسح ملف السجل
+        if self.log_file.exists():
+            # نسخ احتياطي قبل المسح
+            backup_file = self.log_file.with_suffix('.jsonl.bak')
+            import shutil
+            shutil.copy2(self.log_file, backup_file)
+            self.log_file.unlink()
+            logger.debug(f"📁 تم حذف ملف السجل، نسخة احتياطية في {backup_file}")
+        
+        # إعادة إنشاء ملف فارغ
+        self.log_file.touch()
+        
+        # إعادة تعيين الحالة الداخلية
+        self._last_hash = "GENESIS"
+        self._genesis_created = False
+        
+        # إعادة إنشاء حدث البداية
+        self._create_genesis_event()
+    
+    # إعادة تعيين الفهرس
+    self.index = self._load_index()
+    
+    # إعادة تعيين الميتا
+    self._save_meta()
+    
+    # تسجيل حدث إعادة التهيئة
+    self.core.append_event(
+        event_type="memory::core_reset",
+        payload={
+            "timestamp": time.time(),
+            "preserve_events": preserve_events,
+            "status": "sovereign_core_reset"
+        }
+    )
+    
+    logger.info("✅ إعادة تهيئة السجل السيادي اكتملت")
     def __init__(self, 
                  log_file: Path = LOG_FILE,
                  blobs_dir: Path = BLOBS_DIR,
