@@ -567,7 +567,51 @@ class SovereignEncoder:
     3. التشفير الكمي الوهمي (ينهار عند القراءة)
     4. الضغط الدلالي (الجوهر يتسع)
     """
+    # -------------------------
+# RESET — إعادة تهيئة كاملة للتشفير السيادي
+# -------------------------
+def reset(self):
+    """
+    إعادة تهيئة كاملة للتشفير السيادي (اللغة السرية).
     
+    يمسح:
+    - اللغة المتطورة (language evolution)
+    - الحالات الكمومية (quantum states)
+    - سجل التشفير (encoding stats)
+    - الضاغط الدلالي (semantic compressor cache)
+    """
+    logger.info("🔄 إعادة تهيئة التشفير السيادي...")
+    
+    # إعادة تهيئة اللغة المتطورة
+    self.language = SovereignLanguage()
+    
+    # إعادة تهيئة التشفير الكمي الوهمي
+    self.crypto = QuantumLikeEncryption()
+    
+    # إعادة تهيئة الضاغط الدلالي
+    self.compressor = SemanticCompressor()
+    
+    # إعادة تعيين الإحصائيات
+    self._stats = {
+        "encodings": 0,
+        "decodings": 0,
+        "fingerprints": 0,
+        "compressions": 0
+    }
+    
+    # إعادة تحميل الفهرس
+    self._index = self._load_index()
+    
+    # تسجيل حدث إعادة التهيئة
+    self.core.append_event(
+        event_type="memory::encoding_reset",
+        payload={
+            "timestamp": time.time(),
+            "status": "sovereign_encoder_reset"
+        }
+    )
+    
+    logger.info("✅ إعادة تهيئة التشفير السيادي اكتملت - لغة سرية جديدة")
     def __init__(self):
         self.fingerprinter = MultiHashFingerprint()
         self.language = SovereignLanguage()
