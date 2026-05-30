@@ -148,7 +148,49 @@ class CognitiveArchetypes:
     4. التعرف على النمط الحالي يساعد في التوقع
     5. التحول بين الأنماط هو تطور الوعي
     """
+    # -------------------------
+# RESET — إعادة تهيئة كاملة لنظام الأنماط الأصلية
+# -------------------------
+def reset(self):
+    """
+    إعادة تهيئة كاملة لنظام الأنماط الأصلية.
     
+    يمسح:
+    - جميع الأنماط الأصلية (archetypes)
+    - سجل التحولات (transitions)
+    - سجل اللقطات (snapshots)
+    """
+    logger.info("🔄 إعادة تهيئة نظام الأنماط الأصلية...")
+    
+    # إعادة تعيين جميع الأنماط الأصلية
+    self.archetypes.clear()
+    self._init_archetypes()
+    
+    # مسح سجل التحولات
+    self.transitions.clear()
+    
+    # مسح سجل اللقطات
+    self.snapshots.clear()
+    
+    # إعادة تعيين النمط المهيمن الحالي
+    self.current_dominant = None
+    
+    # إعادة تعيين مستوى الأنماط
+    self.archetype_level = ARCHETYPE_LEVEL_ADVANCED
+    
+    # إعادة تحميل الفهرس
+    self._index = self._load_index()
+    
+    # تسجيل حدث إعادة التهيئة
+    self.core.append_event(
+        event_type="biological::archetypes_reset",
+        payload={
+            "timestamp": time.time(),
+            "status": "archetypes_system_reset"
+        }
+    )
+    
+    logger.info("✅ إعادة تهيئة نظام الأنماط الأصلية اكتملت - أنماط جديدة جاهزة")
     def __init__(self):
         self.core = get_core()
         self.store = get_store()
