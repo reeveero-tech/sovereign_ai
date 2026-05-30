@@ -134,7 +134,33 @@ class PredictiveScenarioEngine:
     4. السعي للأفضل يحقق النمو
     5. الحكمة هي الاستعداد لكل الاحتمالات
     """
-    
+    # -------------------------
+    # RESET — إعادة تهيئة كاملة لمحرك السيناريوهات
+    # -------------------------
+    def reset(self):
+        """
+        إعادة تهيئة كاملة لمحرك السيناريوهات التنبؤية.
+        """
+
+        # مسح السيناريوهات المخزنة
+        self.last_generated = []
+        self.scenario_cache = {}
+
+        # إعادة تحميل الفهرس
+        self._index = self._load_index()
+
+        # إعادة السياسات الافتراضية
+        self.policies = {
+            "max_scenarios": 8,
+            "min_signal_strength": 0.25,
+            "scenario_noise": 0.1,
+        }
+
+        # تسجيل عملية إعادة التهيئة
+        self.core.append_event("predictive::scenarios::reset", {
+            "timestamp": _now_iso(),
+            "status": "predictive_scenarios_reset"
+        })
     def __init__(self):
         self.core = get_core()
         self.instincts = get_instincts()
