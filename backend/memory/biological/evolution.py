@@ -143,7 +143,51 @@ class MemoryEvolution:
     4. التطور موجه بالبيئة (الاستخدام)
     5. الأجيال تتحسن مع الوقت
     """
+    # -------------------------
+# RESET — إعادة تهيئة كاملة لنظام التطور الذاتي
+# -------------------------
+def reset(self):
+    """
+    إعادة تهيئة كاملة لنظام التطور الذاتي (داروين الرقمي).
     
+    يمسح:
+    - الجينوم (genome) - جميع المفاهيم
+    - سجل الطفرات (mutations)
+    - سجل الأجيال (generations)
+    """
+    logger.info("🔄 إعادة تهيئة نظام التطور الذاتي...")
+    
+    # مسح الجينوم (جميع المفاهيم)
+    self.genome.clear()
+    
+    # مسح سجل الطفرات
+    self.mutations.clear()
+    
+    # مسح سجل الأجيال
+    self.generations.clear()
+    
+    # إعادة تعيين الجيل الحالي
+    self.current_generation = 0
+    
+    # إعادة تعيين معاملات التطور
+    self.mutation_rate = 0.1
+    self.crossover_rate = 0.3
+    self.elite_percent = 0.2
+    self.extinction_threshold = 0.1
+    
+    # إعادة تحميل الفهرس
+    self._index = self._load_index()
+    
+    # تسجيل حدث إعادة التهيئة
+    self.core.append_event(
+        event_type="biological::evolution_reset",
+        payload={
+            "timestamp": time.time(),
+            "status": "evolution_system_reset"
+        }
+    )
+    
+    logger.info("✅ إعادة تهيئة نظام التطور الذاتي اكتملت - الحياة تبدأ من جديد")
     def __init__(self):
         self.core = get_core()
         self.store = get_store()
