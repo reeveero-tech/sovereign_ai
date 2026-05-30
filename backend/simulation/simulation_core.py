@@ -157,7 +157,35 @@ class SimulationCore:
     4. التقارير الواضحة توجه القرارات
     5. التكامل مع كل طبقات النظام يعطي دقة عالية
     """
-    
+    # -------------------------
+    # RESET — إعادة تهيئة كاملة لنواة المحاكاة
+    # -------------------------
+    def reset(self):
+        """
+        إعادة تهيئة كاملة لنواة المحاكاة.
+        """
+
+        # مسح الحالة الداخلية
+        self.last_environment_state = {}
+        self.last_simulation_output = {}
+        self.cycle_history = []
+
+        # إعادة تحميل الفهرس
+        self._index = self._load_index()
+
+        # إعادة السياسات الافتراضية
+        self.policies = {
+            "max_cycles": 20,
+            "stability_threshold": 0.5,
+            "noise_scale": 0.1,
+            "environment_sync": True,
+        }
+
+        # تسجيل عملية إعادة التهيئة
+        self.core.append_event("simulation::core::reset", {
+            "timestamp": _now_iso(),
+            "status": "simulation_core_reset"
+        })
     def __init__(self):
         self.core = get_core()
         self.instincts = get_instincts()
