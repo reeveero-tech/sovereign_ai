@@ -166,7 +166,45 @@ class CognitiveInstincts:
     6. خصوصية السيد - مقدسة
     7. ولاء الذاكرة - مطلق للسيد وحده
     """
+   # -------------------------
+# RESET — إعادة تهيئة كاملة لنظام الغرائز السيادية
+# -------------------------
+def reset(self):
+    """
+    إعادة تهيئة كاملة لنظام الغرائز السيادية.
     
+    يمسح:
+    - جميع الإجراءات الغريزية (instinct actions)
+    - سجل الغرائز (instinct history)
+    - حالة الغرائز النشطة
+    """
+    logger.info("🔄 إعادة تهيئة نظام الغرائز السيادية...")
+    
+    # إعادة تعيين حالة الغرائز النشطة
+    self.active_instincts.clear()
+    
+    # مسح سجل الإجراءات الغريزية
+    self.instinct_actions.clear()
+    
+    # مسح سجل الغرائز
+    self.instinct_history.clear()
+    
+    # إعادة تعيين مستوى الغرائز
+    self.instinct_level = INSTINCT_LEVEL_ABSOLUTE
+    
+    # إعادة تعيين الحالة الداخلية
+    self._active = True
+    
+    # تسجيل حدث إعادة التهيئة
+    self.core.append_event(
+        event_type="biological::instincts_reset",
+        payload={
+            "timestamp": time.time(),
+            "status": "instincts_system_reset"
+        }
+    )
+    
+    logger.info("✅ إعادة تهيئة نظام الغرائز السيادية اكتملت - الغرائز في أقوى حالاتها") 
     def __init__(self):
         self.core = get_core()
         self.store = get_store()
