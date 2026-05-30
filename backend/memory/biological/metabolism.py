@@ -133,7 +133,47 @@ class CognitiveMetabolism:
     4. الطاقة المنتجة تحسن جودة الذاكرة
     5. التوازن هو مفتاح الاستدامة
     """
+    # -------------------------
+# RESET — إعادة تهيئة كاملة لنظام الأيض المعرفي
+# -------------------------
+def reset(self):
+    """
+    إعادة تهيئة كاملة لنظام الأيض المعرفي.
     
+    يمسح:
+    - خزان الطاقة (energy reservoir)
+    - سجل الدورات الأيضية (metabolic cycles)
+    - إحصائيات الوقود والطاقة
+    """
+    logger.info("🔄 إعادة تهيئة نظام الأيض المعرفي...")
+    
+    # إعادة تعيين خزان الطاقة
+    self.energy = EnergyReservoir()
+    
+    # مسح سجل الدورات الأيضية
+    self.cycles.clear()
+    self.current_cycle = None
+    
+    # إعادة تعيين إحصائيات الوقود والطاقة
+    self.total_fuel_consumed.clear()
+    self.total_energy_produced.clear()
+    
+    # إعادة تعيين مستوى الأيض
+    self.metabolism_level = METABOLISM_LEVEL_MODERATE
+    
+    # إعادة تحميل الفهرس
+    self._index = self._load_index()
+    
+    # تسجيل حدث إعادة التهيئة
+    self.core.append_event(
+        event_type="biological::metabolism_reset",
+        payload={
+            "timestamp": time.time(),
+            "status": "metabolism_system_reset"
+        }
+    )
+    
+    logger.info("✅ إعادة تهيئة نظام الأيض المعرفي اكتملت - الطاقة أعيد ضبطها")
     def __init__(self):
         self.core = get_core()
         self.store = get_store()
