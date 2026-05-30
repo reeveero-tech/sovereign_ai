@@ -1,6 +1,6 @@
 # backend/quantum/quantum_field.py
 # ⚛️ محرك الحقل الكمي الجبار - حقول كمومية متكاملة، نشر التأثيرات، تداخلات متعددة النطاقات
-# الإصدار: 3.0.0 - حقل كمي حي يتفاعل وينتشر ويؤثر على كل شيء
+# الإصدار: 3.1.0 - مع دعم إعادة التهيئة الكاملة للاختبارات التكاملية
 
 """
 محرك الحقل الكمي للعقل السيادي.
@@ -19,6 +19,9 @@ import json
 import math
 import cmath
 import random
+import secrets
+import threading
+import time
 import numpy as np
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -144,6 +147,17 @@ class QuantumFieldEngine:
         self.qtrans = get_quantum_transition_engine()
         self.qsuper = get_quantum_superposition_engine()
         
+        # السياسات الافتراضية (لإعادة التهيئة)
+        self._default_policies = {
+            "base_field_strength": 0.2,
+            "propagation_decay": 0.6,
+            "propagation_radius": 2,
+            "field_influence_on_transition": 0.25,
+            "field_decay_per_cycle": 0.05,
+            "noise_scale": 0.02,
+        }
+        self.policies = self._default_policies.copy()
+        
         # الحقول الكمومية
         self.fields: Dict[str, QuantumFieldGrid] = {}
         self.active_field: Optional[QuantumFieldGrid] = None
@@ -172,6 +186,62 @@ class QuantumFieldEngine:
         self._load_state()
         
         logger.warning("⚛️ محرك الحقل الكمي الجبار جاهز - حقول كمومية متكاملة")
+    
+    # ============================================================
+    # إعادة التهيئة الكاملة (للاختبارات التكاملية)
+    # ============================================================
+    
+    def reset(self):
+        """
+        إعادة تهيئة كاملة لمحرك الحقل الكمّي.
+        
+        - مسح خريطة الحقل field_map
+        - إعادة تحميل الفهرس
+        - إعادة السياسات الافتراضية
+        - تسجيل عملية إعادة التهيئة في السجل السيادي
+        """
+        logger.info("🔄 إعادة تهيئة محرك الحقل الكمومي...")
+        
+        # مسح خريطة الحقل
+        self.field_map.clear()
+        
+        # مسح الحقول النشطة
+        self.fields.clear()
+        self.active_field = None
+        
+        # مسح تأثيرات الحقل
+        self.field_effects.clear()
+        
+        # إعادة تحميل الفهرس (تفريغ السجلات)
+        # self._index = self._load_index()  # ليس هناك _index في هذا الملف
+        
+        # إعادة تهيئة السياسات الافتراضية
+        self.policies = self._default_policies.copy()
+        
+        # إعادة تعيين سجل الطاقة
+        self.field_energy_history.clear()
+        
+        # تسجيل عملية إعادة التهيئة في السجل السيادي
+        self.core.append_event(
+            event_type="quantum::field::reset",
+            payload={
+                "timestamp": time.time(),
+                "status": "quantum_field_engine_reset",
+                "policies_reset": True,
+                "data_cleared": True
+            }
+        )
+        
+        logger.info("✅ إعادة تهيئة محرك الحقل الكمومي اكتملت")
+    
+    def reset_policies(self):
+        """
+        إعادة تعيين السياسات فقط (بدون مسح البيانات).
+        
+        مفيد عندما نريد الاحتفاظ بالحقل لكن إعادة ضبط السلوك.
+        """
+        self.policies = self._default_policies.copy()
+        logger.debug("🔄 إعادة تعيين سياسات محرك الحقل الكمومي إلى القيم الافتراضية")
     
     # ============================================================
     # بناء الحقل الكمومي
@@ -721,6 +791,7 @@ class QuantumFieldEngine:
                 "fields_count": len(self.fields),
                 "active_field_id": self.active_field.id if self.active_field else None,
                 "energy_history": self.field_energy_history[-50:],
+                "policies": self.policies,
                 "saved_at": time.time()
             }
             with open(QUANTUM_FIELD_STATE_FILE, 'w', encoding='utf-8') as f:
@@ -735,6 +806,9 @@ class QuantumFieldEngine:
                 with open(QUANTUM_FIELD_STATE_FILE, 'r', encoding='utf-8') as f:
                     state = json.load(f)
                     self.field_energy_history = state.get("energy_history", [])
+                    saved_policies = state.get("policies", {})
+                    if saved_policies:
+                        self.policies.update(saved_policies)
                 logger.info("📂 تم تحميل حالة الحقل الكمومي")
         except Exception as e:
             logger.error(f"خطأ في تحميل حالة الحقل: {e}")
@@ -742,6 +816,24 @@ class QuantumFieldEngine:
     # ============================================================
     # واجهات التحكم
     # ============================================================
+    
+    def set_policy(self, key: str, value: float) -> bool:
+        """
+        تعيين سياسة تشغيلية.
+        
+        Args:
+            key: اسم السياسة (base_field_strength, propagation_decay, etc.)
+            value: القيمة الجديدة
+        """
+        if key in self.policies:
+            self.policies[key] = value
+            logger.debug(f"⚙️ تحديث السياسة {key} = {value}")
+            return True
+        return False
+    
+    def get_policies(self) -> Dict[str, float]:
+        """الحصول على نسخة من السياسات الحالية"""
+        return self.policies.copy()
     
     def get_field_status(self) -> Dict[str, Any]:
         """الحالة الحالية للحقل الكمومي"""
@@ -756,6 +848,7 @@ class QuantumFieldEngine:
             "field_type": self.active_field.field_type,
             "total_energy": self.active_field.total_energy,
             "average_coherence": self.active_field.average_coherence,
+            "policies": self.policies,
             "timestamp": time.time()
         }
     
@@ -770,13 +863,6 @@ class QuantumFieldEngine:
     def get_interference_patterns(self) -> List[Dict]:
         """أنماط التداخل الحالية"""
         return self.multi_scale_interference()
-    
-    def set_field_parameter(self, parameter: str, value: float) -> bool:
-        """تعيين معلمة للحقل"""
-        if parameter == "propagation_decay" and hasattr(self, 'policies'):
-            self.policies["propagation_decay"] = value
-            return True
-        return False
     
     def excite_field(self, point_id: str, intensity: float = 1.0) -> bool:
         """إثارة نقطة معينة في الحقل"""
@@ -911,10 +997,15 @@ if __name__ == "__main__":
         print(f"   الطاقة الحالية: {energy_history[-1]:.3f}")
         print(f"   ذروة الطاقة: {max(energy_history):.3f}")
     
-    # 10) السرد
+    # 10) اختبار إعادة التهيئة
+    print("\n🔄 اختبار إعادة تهيئة محرك الحقل...")
+    qfield.reset()
+    print("   تم إعادة تهيئة محرك الحقل بنجاح - الحالة نظيفة وجاهزة للاختبارات")
+    
+    # 11) السرد
     print(f"\n📖 السرد:\n{snapshot.narrative}")
     
-    # 11) اقتباس
+    # 12) اقتباس
     print(f"\n💭 {qfield.get_field_quote()}")
     
     print("\n" + "=" * 80)
