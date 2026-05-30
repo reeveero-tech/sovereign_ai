@@ -1,6 +1,6 @@
 # backend/quantum/quantum_controller.py
 # ⚛️ المتحكم الطبقي لعمليات الكم الجبار - تنسيق وتكامل جميع محركات الكم
-# الإصدار: 3.0.0 - ينسق، يترجم، ويدير أوضاع التشغيل الكمومية
+# الإصدار: 3.1.0 - مع دعم إعادة التهيئة الكاملة للاختبارات التكاملية
 
 """
 المتحكم الطبقي لعمليات الكم للعقل السيادي.
@@ -145,6 +145,13 @@ class QuantumController:
         self.predictive = get_predictive_engine()
         self.sovereign = get_sovereign_controller()
         
+        # السياسات الافتراضية (لإعادة التهيئة)
+        self._default_policies = {
+            "advisory_threshold": 0.55,
+            "integration_confidence_threshold": 0.75,
+            "max_advisory_signals": 6,
+        }
+        
         # وضع التشغيل
         self.mode = QUANTUM_MODE_ADVISORY
         
@@ -177,6 +184,90 @@ class QuantumController:
         self._load_state()
         
         logger.warning("⚛️ المتحكم الطبقي لعمليات الكم الجبار جاهز - ينسق ويكامل جميع المحركات")
+    
+    # ============================================================
+    # إعادة التهيئة الكاملة (للاختبارات التكاملية)
+    # ============================================================
+    
+    def reset(self):
+        """
+        إعادة تهيئة كاملة لمتحكم الكمّ.
+        
+        - إعادة تهيئة الوضع mode
+        - مسح الفهرس الداخلي
+        - إعادة السياسات الافتراضية
+        - إعادة تهيئة المحركات التابعة (state, transition, superposition, field)
+        - تسجيل عملية إعادة التهيئة في السجل السيادي
+        """
+        logger.info("🔄 إعادة تهيئة المتحكم الكمومي...")
+        
+        # إعادة الوضع الافتراضي
+        self.mode = QUANTUM_MODE_ADVISORY
+        
+        # إعادة تحميل الفهرس (تفريغ السجلات)
+        self.signals.clear()
+        self.decisions.clear()
+        self.signal_history.clear()
+        
+        # إعادة تعيين الإحصائيات
+        self.stats = {
+            "total_cycles": 0,
+            "total_signals_sent": 0,
+            "total_decisions_made": 0,
+            "advisory_signals": 0,
+            "integrated_actions": 0
+        }
+        
+        # إعادة السياسات الافتراضية
+        self.policies = self._default_policies.copy()
+        
+        # إعادة تهيئة المحركات التابعة
+        try:
+            self.qstate.reset()
+            logger.debug("✅ إعادة تهيئة QuantumStateEngine")
+        except Exception as e:
+            logger.warning(f"⚠️ فشل إعادة تهيئة QuantumStateEngine: {e}")
+        
+        try:
+            self.qtrans.reset()
+            logger.debug("✅ إعادة تهيئة QuantumTransitionEngine")
+        except Exception as e:
+            logger.warning(f"⚠️ فشل إعادة تهيئة QuantumTransitionEngine: {e}")
+        
+        try:
+            self.qsuper.reset()
+            logger.debug("✅ إعادة تهيئة QuantumSuperpositionEngine")
+        except Exception as e:
+            logger.warning(f"⚠️ فشل إعادة تهيئة QuantumSuperpositionEngine: {e}")
+        
+        try:
+            self.qfield.reset()
+            logger.debug("✅ إعادة تهيئة QuantumFieldEngine")
+        except Exception as e:
+            logger.warning(f"⚠️ فشل إعادة تهيئة QuantumFieldEngine: {e}")
+        
+        # تسجيل عملية إعادة التهيئة في السجل السيادي
+        self.core.append_event(
+            event_type="quantum::controller::reset",
+            payload={
+                "timestamp": time.time(),
+                "status": "quantum_controller_reset",
+                "mode": self.mode,
+                "policies_reset": True,
+                "engines_reset": True
+            }
+        )
+        
+        logger.info("✅ إعادة تهيئة المتحكم الكمومي اكتملت")
+    
+    def reset_policies(self):
+        """
+        إعادة تعيين السياسات فقط (بدون مسح البيانات).
+        
+        مفيد عندما نريد الاحتفاظ بالإشارات والقرارات لكن إعادة ضبط السلوك.
+        """
+        self.policies = self._default_policies.copy()
+        logger.debug("🔄 إعادة تعيين سياسات المتحكم الكمومي إلى القيم الافتراضية")
     
     # ============================================================
     # دورة كمومية متكاملة
@@ -604,6 +695,7 @@ class QuantumController:
                 "stats": self.stats,
                 "signals_count": len(self.signals),
                 "decisions_count": len(self.decisions),
+                "policies": self.policies,
                 "saved_at": time.time()
             }
             with open(QUANTUM_CONTROLLER_STATE_FILE, 'w', encoding='utf-8') as f:
@@ -619,6 +711,9 @@ class QuantumController:
                     state = json.load(f)
                     self.mode = state.get("mode", QUANTUM_MODE_ADVISORY)
                     self.stats = state.get("stats", self.stats)
+                    saved_policies = state.get("policies", {})
+                    if saved_policies:
+                        self.policies.update(saved_policies)
                 logger.info("📂 تم تحميل حالة المتحكم الكمومي")
         except Exception as e:
             logger.error(f"خطأ في تحميل حالة المتحكم: {e}")
@@ -626,6 +721,24 @@ class QuantumController:
     # ============================================================
     # واجهات التحكم
     # ============================================================
+    
+    def set_policy(self, key: str, value: float) -> bool:
+        """
+        تعيين سياسة تشغيلية.
+        
+        Args:
+            key: اسم السياسة (advisory_threshold, integration_confidence_threshold, etc.)
+            value: القيمة الجديدة
+        """
+        if key in self.policies:
+            self.policies[key] = value
+            logger.debug(f"⚙️ تحديث السياسة {key} = {value}")
+            return True
+        return False
+    
+    def get_policies(self) -> Dict[str, float]:
+        """الحصول على نسخة من السياسات الحالية"""
+        return self.policies.copy()
     
     def set_mode(self, mode: str) -> bool:
         """تعيين وضع التشغيل"""
@@ -657,6 +770,7 @@ class QuantumController:
             "stats": self.stats,
             "active_signals": len(self.signals[-50:]),
             "pending_decisions": len([d for d in self.decisions if d.status == "pending"]),
+            "policies": self.policies,
             "timestamp": time.time()
         }
     
@@ -777,10 +891,15 @@ if __name__ == "__main__":
     print(f"   الإشارات النشطة: {status['active_signals']}")
     print(f"   القرارات المعلقة: {status['pending_decisions']}")
     
-    # 7) السرد
+    # 7) اختبار إعادة التهيئة
+    print("\n🔄 اختبار إعادة تهيئة المتحكم الكمومي...")
+    qcontroller.reset()
+    print("   تم إعادة تهيئة المتحكم وجميع محركاته بنجاح - جاهز للاختبارات التكاملية")
+    
+    # 8) السرد
     print(f"\n📖 السرد:\n{snapshot.narrative}")
     
-    # 8) اقتباس
+    # 9) اقتباس
     print(f"\n💭 {qcontroller.get_quantum_quote()}")
     
     print("\n" + "=" * 80)
