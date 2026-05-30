@@ -156,7 +156,53 @@ class ImmuneMemory:
     4. المناعة الجماعية مع النسخ الموزعة
     5. الاستجابة الفورية أسرع من الوقاية
     """
+    # -------------------------
+# RESET — إعادة تهيئة كاملة للجهاز المناعي
+# -------------------------
+def reset(self):
+    """
+    إعادة تهيئة كاملة للجهاز المناعي السيادي.
     
+    يمسح:
+    - جميع المستضدات (antigens)
+    - جميع الأجسام المضادة (antibodies)
+    - خلايا الذاكرة المناعية (memory cells)
+    - سجل الاستجابات المناعية (immune responses)
+    """
+    logger.info("🔄 إعادة تهيئة الجهاز المناعي...")
+    
+    # مسح المستضدات
+    self.antigens.clear()
+    
+    # مسح الأجسام المضادة
+    self.antibodies.clear()
+    
+    # مسح خلايا الذاكرة
+    self.memory_cells.clear()
+    
+    # مسح سجل الاستجابات
+    self.immune_responses.clear()
+    
+    # مسح كاش الحظر السريع
+    self._quick_block_cache.clear()
+    
+    # إعادة تعيين حالة المناعة
+    self.immune_status = ImmuneStatus.HEALTHY
+    self.immunity_level = IMMUNITY_LEVEL_ADAPTIVE
+    
+    # إعادة تحميل الفهرس
+    self._index = self._load_index()
+    
+    # تسجيل حدث إعادة التهيئة
+    self.core.append_event(
+        event_type="biological::immune_reset",
+        payload={
+            "timestamp": time.time(),
+            "status": "immune_system_reset"
+        }
+    )
+    
+    logger.info("✅ إعادة تهيئة الجهاز المناعي اكتملت - مناعة جديدة")
     def __init__(self):
         self.core = get_core()
         self.watcher = get_watcher()
