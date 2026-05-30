@@ -142,7 +142,34 @@ class SimulationAnalyzer:
     4. العلاقات بين المتغيرات تكشف السببية
     5. مؤشرات الأداء تقيس النجاح
     """
-    
+    # -------------------------
+    # RESET — إعادة تهيئة كاملة لمحلل المحاكاة
+    # -------------------------
+    def reset(self):
+        """
+        إعادة تهيئة كاملة لمحلل المحاكاة.
+        """
+
+        # مسح نتائج التحليل السابقة
+        self.last_analysis = {}
+        self.analysis_history = []
+
+        # إعادة تحميل الفهرس
+        self._index = self._load_index()
+
+        # إعادة السياسات الافتراضية
+        self.policies = {
+            "analysis_depth": 3,
+            "noise_scale": 0.1,
+            "max_patterns": 10,
+            "stability_threshold": 0.5,
+        }
+
+        # تسجيل عملية إعادة التهيئة
+        self.core.append_event("simulation::analyzer::reset", {
+            "timestamp": _now_iso(),
+            "status": "simulation_analyzer_reset"
+        })
     def __init__(self):
         self.core = get_core()
         self.sim_core = get_simulation_core()
