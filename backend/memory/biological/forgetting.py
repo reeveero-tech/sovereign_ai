@@ -138,7 +138,46 @@ class IntentionalForgetting:
     4. النسيان ليس حذفاً دائماً (يمكن الاستعادة)
     5. كل نسيان يُسجل ويتعلم منه
     """
+    # -------------------------
+# RESET — إعادة تهيئة كاملة لنظام النسيان المقصود
+# -------------------------
+def reset(self):
+    """
+    إعادة تهيئة كاملة لنظام النسيان المقصود.
     
+    يمسح:
+    - العناصر المنسية (forgotten items)
+    - الأثر الذاكري (memory traces)
+    - سجل أحداث النسيان (forgetting events)
+    """
+    logger.info("🔄 إعادة تهيئة نظام النسيان المقصود...")
+    
+    # مسح العناصر المنسية
+    self.forgotten_items.clear()
+    
+    # مسح الأثر الذاكري
+    self.memory_traces.clear()
+    
+    # مسح سجل أحداث النسيان
+    self.forgetting_events.clear()
+    
+    # إعادة تعيين مستوى النسيان
+    self.forget_level = FORGET_LEVEL_MODERATE
+    self.forgetting_strategy = ForgettingStrategy.SMART
+    
+    # إعادة تحميل الفهرس
+    self._index = self._load_index()
+    
+    # تسجيل حدث إعادة التهيئة
+    self.core.append_event(
+        event_type="biological::forgetting_reset",
+        payload={
+            "timestamp": time.time(),
+            "status": "forgetting_system_reset"
+        }
+    )
+    
+    logger.info("✅ إعادة تهيئة نظام النسيان المقصود اكتملت - تم تذكر كل شيء مؤقتاً")
     def __init__(self):
         self.core = get_core()
         self.dynamic = get_dynamic_memory()
