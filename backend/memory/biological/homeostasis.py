@@ -142,7 +142,56 @@ class CognitiveHomeostasis:
     4. المرونة تأتي من القدرة على التكيف
     5. الحكمة هي معرفة متى تتدخل ومتى تترك الأمور تجري
     """
+    # -------------------------
+# RESET — إعادة تهيئة كاملة لنظام الاتزان المعرفي
+# -------------------------
+def reset(self):
+    """
+    إعادة تهيئة كاملة لنظام الاتزان المعرفي.
     
+    يمسح:
+    - سجل الاضطرابات (disturbances)
+    - سجل اللقطات (snapshots)
+    - سجل المؤشرات الحيوية (metrics history)
+    """
+    logger.info("🔄 إعادة تهيئة نظام الاتزان المعرفي...")
+    
+    # مسح سجل الاضطرابات
+    self.disturbances.clear()
+    
+    # مسح سجل اللقطات
+    self.snapshots.clear()
+    
+    # مسح سجل المؤشرات الحيوية
+    self.metrics_history.clear()
+    
+    # إعادة تعيين حالة الاتزان
+    self.balance_level = BALANCE_LEVEL_STABLE
+    self.health_score = 0.7
+    self.stress_index = 0.3
+    self.entropy = 0.4
+    
+    # إعادة تعيين معاملات الاستجابة
+    self.response_sensitivity = 0.5
+    self.recovery_rate = 0.3
+    self.intervention_threshold = 0.6
+    
+    # إعادة تعيين السياسات
+    self.policies = self._init_policies()
+    
+    # إعادة تحميل الفهرس
+    self._index = self._load_index()
+    
+    # تسجيل حدث إعادة التهيئة
+    self.core.append_event(
+        event_type="biological::homeostasis_reset",
+        payload={
+            "timestamp": time.time(),
+            "status": "homeostasis_system_reset"
+        }
+    )
+    
+    logger.info("✅ إعادة تهيئة نظام الاتزان المعرفي اكتملت - التوازن استعيد")
     def __init__(self):
         self.core = get_core()
         self.store = get_store()
