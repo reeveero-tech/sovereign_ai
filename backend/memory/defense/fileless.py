@@ -106,7 +106,47 @@ class FilelessDefense:
     4. يمكن الحرق الفوري عند الخطر
     5. الظلال تتكاثر وتختفي
     """
+    # -------------------------
+# RESET — إعادة تهيئة كاملة للذاكرة الطائرة
+# -------------------------
+def reset(self):
+    """
+    إعادة تهيئة كاملة للذاكرة الطائرة (Fileless Defense).
     
+    يمسح:
+    - جميع الظلال (phantoms)
+    - جميع الآثار المضللة (shadow trails)
+    - سجل الوصول المشبوه (suspicious access)
+    - العدادات والإحصائيات
+    """
+    logger.info("🔄 إعادة تهيئة الذاكرة الطائرة...")
+    
+    # مسح جميع الظلال
+    self._phantoms.clear()
+    self._phantom_index.clear()
+    self._tag_index.clear()
+    
+    # مسح الآثار المضللة
+    self._shadow_trails.clear()
+    
+    # إعادة تعيين العدادات
+    self._total_created = 0
+    self._total_accessed = 0
+    self._total_burned = 0
+    
+    # إعادة تحميل الفهرس
+    self._index = self._load_index()
+    
+    # تسجيل حدث إعادة التهيئة
+    self.core.append_event(
+        event_type="defense::fileless_reset",
+        payload={
+            "timestamp": time.time(),
+            "status": "fileless_defense_reset"
+        }
+    )
+    
+    logger.info("✅ إعادة تهيئة الذاكرة الطائرة اكتملت - كل الظلال اختفت")
     def __init__(self):
         self.core = get_core()
         self.encoder = get_encoder()
