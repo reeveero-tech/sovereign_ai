@@ -155,7 +155,35 @@ class PredictiveEngine:
     4. التنبؤ العميق يتوقع المخاطر قبل وقوعها
     5. التنبؤ الاستراتيجي يخطط للمستقبل البعيد
     """
-    
+    # -------------------------
+    # RESET — إعادة تهيئة كاملة لمحرك التنبؤ
+    # -------------------------
+    def reset(self):
+        """
+        إعادة تهيئة كاملة لمحرك التنبؤ.
+        """
+
+        # مسح الحالة الداخلية
+        self.last_sensed_state = {}
+        self.last_future_map = {}
+        self.trend_cache = {}
+
+        # إعادة تحميل الفهرس
+        self._index = self._load_index()
+
+        # إعادة السياسات الافتراضية
+        self.policies = {
+            "trend_sensitivity": 0.35,
+            "noise_reduction": 0.15,
+            "max_future_horizon": 6,
+            "min_signal_strength": 0.25,
+        }
+
+        # تسجيل عملية إعادة التهيئة
+        self.core.append_event("predictive::engine::reset", {
+            "timestamp": _now_iso(),
+            "status": "predictive_engine_reset"
+        })
     # آفاق التنبؤ بالثواني
     HORIZONS = {
         FORECAST_HORIZON_IMMEDIATE: ForecastHorizon("فوري", 60, 0.1),
