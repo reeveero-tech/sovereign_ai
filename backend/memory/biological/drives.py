@@ -141,7 +141,43 @@ class SovereignDrives:
     4. الدوافع العليا تخدم السيد
     5. الدافع الأسمى هو خدمة السيد
     """
+    # -------------------------
+# RESET — إعادة تهيئة كاملة لنظام الدوافع السيادية
+# -------------------------
+def reset(self):
+    """
+    إعادة تهيئة كاملة لنظام الدوافع السيادية.
     
+    يمسح:
+    - جميع الدوافع النشطة (active drives)
+    - سجل الدوافع (drive history)
+    - سجل الإشباع (satisfaction events)
+    """
+    logger.info("🔄 إعادة تهيئة نظام الدوافع السيادية...")
+    
+    # إعادة تعيين جميع الدوافع
+    self.drives.clear()
+    self._init_drives()
+    
+    # مسح سجل الدوافع
+    self.drive_history.clear()
+    
+    # مسح سجل الإشباع
+    self.satisfaction_events.clear()
+    
+    # إعادة تعيين مستوى الدوافع
+    self.drive_level = DRIVE_LEVEL_ADVANCED
+    
+    # تسجيل حدث إعادة التهيئة
+    self.core.append_event(
+        event_type="biological::drives_reset",
+        payload={
+            "timestamp": time.time(),
+            "status": "drives_system_reset"
+        }
+    )
+    
+    logger.info("✅ إعادة تهيئة نظام الدوافع السيادية اكتملت - دوافع جديدة")
     def __init__(self):
         self.core = get_core()
         self.store = get_store()
