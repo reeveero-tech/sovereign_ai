@@ -147,7 +147,34 @@ class SimulationScheduler:
     4. الجدولة المتكررة تمكن المراقبة المستمرة
     5. التكامل مع المحاكاة يضمن التنفيذ السلس
     """
-    
+    # -------------------------
+    # RESET — إعادة تهيئة كاملة لجدولة المحاكاة
+    # -------------------------
+    def reset(self):
+        """
+        إعادة تهيئة كاملة لجدولة المحاكاة.
+        """
+
+        # مسح قائمة المهام المجدولة
+        self.scheduled_tasks = []
+        self.last_schedule_result = {}
+
+        # إعادة تحميل الفهرس
+        self._index = self._load_index()
+
+        # إعادة السياسات الافتراضية
+        self.policies = {
+            "max_tasks": 10,
+            "task_priority_decay": 0.2,
+            "noise_scale": 0.1,
+            "auto_balance": True,
+        }
+
+        # تسجيل عملية إعادة التهيئة
+        self.core.append_event("simulation::scheduler::reset", {
+            "timestamp": _now_iso(),
+            "status": "simulation_scheduler_reset"
+        })
     def __init__(self):
         self.core = get_core()
         self.sim_core = get_simulation_core()
