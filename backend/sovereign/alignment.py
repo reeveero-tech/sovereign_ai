@@ -126,7 +126,34 @@ class SovereignAlignment:
     4. الانحراف عن الاصطفاف هو انحراف عن الهدف
     5. قياس الاصطفاف هو قياس جودة الوجود
     """
-    
+    # -------------------------
+    # RESET — إعادة تهيئة كاملة لمحرك الاصطفاف السيادي
+    # -------------------------
+    def reset(self):
+        """
+        إعادة تهيئة كاملة لمحرك الاصطفاف.
+        """
+
+        # مسح آخر حالة اصطفاف
+        self.last_alignment_state = {}
+        self.alignment_history = []
+
+        # إعادة تحميل الفهرس
+        self._index = self._load_index()
+
+        # إعادة السياسات الافتراضية
+        self.policies = {
+            "alignment_depth": 3,
+            "alignment_confidence_threshold": 0.65,
+            "noise_scale": 0.05,
+            "max_alignment_layers": 4,
+        }
+
+        # تسجيل عملية إعادة التهيئة
+        self.core.append_event("sovereign::alignment::reset", {
+            "timestamp": _now_iso(),
+            "status": "sovereign_alignment_reset"
+        })
     def __init__(self):
         self.core = get_core()
         self.instincts = get_instincts()
