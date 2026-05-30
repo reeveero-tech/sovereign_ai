@@ -133,7 +133,34 @@ class SovereignWill:
     4. الإرادة القوية تتخذ قرارات حاسمة عند الحاجة
     5. الإرادة تتطور وتقوى مع كل قرار ناجح
     """
-    
+    # -------------------------
+    # RESET — إعادة تهيئة كاملة لمحرك الإرادة السيادية
+    # -------------------------
+    def reset(self):
+        """
+        إعادة تهيئة كاملة لمحرك الإرادة السيادية.
+        """
+
+        # مسح حالة الإرادة السابقة
+        self.current_will_state = {}
+        self.will_history = []
+
+        # إعادة تحميل الفهرس
+        self._index = self._load_index()
+
+        # إعادة السياسات الافتراضية
+        self.policies = {
+            "will_strength": 0.7,
+            "stability_threshold": 0.5,
+            "noise_scale": 0.05,
+            "max_will_shift": 3,
+        }
+
+        # تسجيل عملية إعادة التهيئة
+        self.core.append_event("sovereign::will::reset", {
+            "timestamp": _now_iso(),
+            "status": "sovereign_will_reset"
+        })
     def __init__(self):
         self.core = get_core()
         self.instincts = get_instincts()
