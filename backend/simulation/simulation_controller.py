@@ -118,7 +118,58 @@ class SimulationController:
     4. التكامل السلس يسرع التنفيذ
     5. المراقبة المستمرة تضمن الجودة
     """
-    
+    # -------------------------
+    # RESET — إعادة تهيئة كاملة لمتحكم المحاكاة
+    # -------------------------
+    def reset(self):
+        """
+        إعادة تهيئة كاملة لمتحكم المحاكاة.
+        """
+
+        # إعادة الوضع الافتراضي
+        self.mode = "simulation"
+
+        # مسح نتائج التكامل السابقة
+        self.last_output = {}
+        self.controller_history = []
+
+        # إعادة تحميل الفهرس
+        self._index = self._load_index()
+
+        # إعادة السياسات الافتراضية
+        self.policies = {
+            "max_controller_depth": 5,
+            "stability_threshold": 0.5,
+            "noise_scale": 0.1,
+            "auto_balance": True,
+        }
+
+        # إعادة تهيئة المحركات التابعة
+        try:
+            self.core_engine.reset()
+        except:
+            pass
+
+        try:
+            self.environment.reset()
+        except:
+            pass
+
+        try:
+            self.scheduler.reset()
+        except:
+            pass
+
+        try:
+            self.analyzer.reset()
+        except:
+            pass
+
+        # تسجيل عملية إعادة التهيئة
+        self.core.append_event("simulation::controller::reset", {
+            "timestamp": _now_iso(),
+            "status": "simulation_controller_reset"
+        })
     def __init__(self):
         self.core = get_core()
         self.sim_core = get_simulation_core()
