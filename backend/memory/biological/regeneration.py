@@ -146,7 +146,46 @@ class MemoryRegeneration:
     4. الفشل ليس نهاية، بل بداية طريقة جديدة
     5. كل تجديد يجعل النظام أقوى
     """
+    # -------------------------
+# RESET — إعادة تهيئة كاملة لنظام التجديد الذاتي
+# -------------------------
+def reset(self):
+    """
+    إعادة تهيئة كاملة لنظام التجديد الذاتي.
     
+    يمسح:
+    - الخلايا الجذعية (stem cells)
+    - أجزاء الذاكرة المستعادة (recovered fragments)
+    - سجل عمليات التجديد (regeneration operations)
+    """
+    logger.info("🔄 إعادة تهيئة نظام التجديد الذاتي...")
+    
+    # مسح الخلايا الجذعية
+    self.stem_cells.clear()
+    
+    # مسح أجزاء الذاكرة المستعادة
+    self.recovered_fragments.clear()
+    
+    # مسح سجل عمليات التجديد
+    self.operations_history.clear()
+    self.active_operations.clear()
+    
+    # إعادة تعيين مستوى التجديد
+    self.regen_level = REGEN_LEVEL_ADVANCED
+    
+    # إعادة تحميل الفهرس
+    self._index = self._load_index()
+    
+    # تسجيل حدث إعادة التهيئة
+    self.core.append_event(
+        event_type="biological::regeneration_reset",
+        payload={
+            "timestamp": time.time(),
+            "status": "regeneration_system_reset"
+        }
+    )
+    
+    logger.info("✅ إعادة تهيئة نظام التجديد الذاتي اكتملت - خلايا جذعية جديدة جاهزة")
     def __init__(self):
         self.core = get_core()
         self.store = get_store()
