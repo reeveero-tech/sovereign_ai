@@ -96,7 +96,57 @@ class PredictiveController:
     4. التكامل مع السيادة لمراجعة القرارات
     5. أوضاع تشغيل مختلفة تناسب حالات الاستخدام المختلفة
     """
-    
+    # -------------------------
+    # RESET — إعادة تهيئة كاملة لمتحكم التنبؤ
+    # -------------------------
+    def reset(self):
+        """
+        إعادة تهيئة كاملة لمتحكم التنبؤ.
+        """
+
+        # إعادة الوضع الافتراضي
+        self.mode = "analysis"
+
+        # مسح آخر نتائج التكامل
+        self.last_integrated_output = {}
+        self.integration_history = []
+
+        # إعادة تحميل الفهرس
+        self._index = self._load_index()
+
+        # إعادة السياسات الافتراضية
+        self.policies = {
+            "integration_confidence_threshold": 0.65,
+            "max_integration_depth": 4,
+            "noise_scale": 0.1,
+        }
+
+        # إعادة تهيئة المحركات التابعة
+        try:
+            self.engine.reset()
+        except:
+            pass
+
+        try:
+            self.scenarios.reset()
+        except:
+            pass
+
+        try:
+            self.simulation.reset()
+        except:
+            pass
+
+        try:
+            self.risk.reset()
+        except:
+            pass
+
+        # تسجيل عملية إعادة التهيئة
+        self.core.append_event("predictive::controller::reset", {
+            "timestamp": _now_iso(),
+            "status": "predictive_controller_reset"
+        })
     def __init__(self):
         self.core = get_core()
         
