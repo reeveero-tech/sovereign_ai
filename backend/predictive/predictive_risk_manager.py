@@ -149,7 +149,34 @@ class PredictiveRiskManager:
     4. التخفيف الاستباقي أفضل من المعالجة التفاعلية
     5. تتبع المخاطر عبر الزمن يكشف الأنماط
     """
-    
+    # -------------------------
+    # RESET — إعادة تهيئة كاملة لمحرك إدارة المخاطر التنبؤية
+    # -------------------------
+    def reset(self):
+        """
+        إعادة تهيئة كاملة لمحرك إدارة المخاطر.
+        """
+
+        # مسح بيانات المخاطر السابقة
+        self.last_risk_assessment = {}
+        self.risk_history = []
+
+        # إعادة تحميل الفهرس
+        self._index = self._load_index()
+
+        # إعادة السياسات الافتراضية
+        self.policies = {
+            "risk_sensitivity": 0.4,
+            "max_risk_levels": 5,
+            "noise_scale": 0.1,
+            "risk_decay": 0.2,
+        }
+
+        # تسجيل عملية إعادة التهيئة
+        self.core.append_event("predictive::risk_manager::reset", {
+            "timestamp": _now_iso(),
+            "status": "predictive_risk_manager_reset"
+        })
     def __init__(self):
         self.core = get_core()
         self.instincts = get_instincts()
