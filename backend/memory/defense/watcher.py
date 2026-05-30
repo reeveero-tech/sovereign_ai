@@ -215,7 +215,54 @@ class MemoryWatcher:
     5. إصدار إنذارات وتحديد درجة التهديد
     6. شفاء ذاتي عند اكتشاف التلف
     """
+    # -------------------------
+# RESET — إعادة تهيئة كاملة للمراقب الذاتي
+# -------------------------
+def reset(self):
+    """
+    إعادة تهيئة كاملة للمراقب الذاتي.
     
+    يمسح:
+    - سجل الشذوذ (anomalies)
+    - سجل الصحة (health history)
+    - الملف الطبيعي (baseline)
+    - حالة التهديد (threat level)
+    """
+    logger.info("🔄 إعادة تهيئة المراقب الذاتي...")
+    
+    # إعادة تعيين سجل الشذوذ
+    self._anomalies = []
+    self._anomaly_history.clear()
+    
+    # إعادة تعيين سجل الصحة
+    self._health_history.clear()
+    
+    # إعادة تعيين حالة التهديد
+    self._threat_level = THREAT_LEVEL_NONE
+    self._stress_mode = False
+    self._check_interval = CHECK_INTERVAL_NORMAL
+    
+    # إعادة تعيين البصمة
+    self._last_fingerprint = None
+    self._last_check = 0
+    
+    # إعادة تعيين الملف الطبيعي (baseline)
+    self._baseline = BaselineProfile()
+    self._baseline_samples.clear()
+    
+    # إعادة تحميل الفهرس
+    self._index = self._load_index()
+    
+    # تسجيل حدث إعادة التهيئة
+    self.core.append_event(
+        event_type="defense::watcher_reset",
+        payload={
+            "timestamp": time.time(),
+            "status": "memory_watcher_reset"
+        }
+    )
+    
+    logger.info("✅ إعادة تهيئة المراقب الذاتي اكتملت")
     def __init__(self):
         self.core = get_core()
         self.store = get_store()
