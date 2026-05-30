@@ -125,7 +125,34 @@ class SovereignDirectives:
     4. التوجيهات هي الجسر بين النية والفعل
     5. قوة التوجيهات تكمن في تطبيقها
     """
-    
+    # -------------------------
+    # RESET — إعادة تهيئة كاملة لمحرك التوجيهات السيادية
+    # -------------------------
+    def reset(self):
+        """
+        إعادة تهيئة كاملة لمحرك التوجيهات.
+        """
+
+        # مسح آخر التوجيهات
+        self.last_directives = []
+        self.directive_history = []
+
+        # إعادة تحميل الفهرس
+        self._index = self._load_index()
+
+        # إعادة السياسات الافتراضية
+        self.policies = {
+            "directive_depth": 3,
+            "confidence_threshold": 0.6,
+            "noise_scale": 0.1,
+            "max_directives": 5,
+        }
+
+        # تسجيل عملية إعادة التهيئة
+        self.core.append_event("sovereign::directives::reset", {
+            "timestamp": _now_iso(),
+            "status": "directives_engine_reset"
+        })
     def __init__(self):
         self.core = get_core()
         self.instincts = get_instincts()
