@@ -133,7 +133,50 @@ class SelfModel:
     4. الذات تتغير، والنموذج يعكس التطور
     5. النموذج ليس هو الذات، لكنه مرآتها
     """
+    # -------------------------
+# RESET — إعادة تهيئة كاملة لنموذج الذات
+# -------------------------
+def reset(self):
+    """
+    إعادة تهيئة كاملة لنموذج الذات السيادي.
     
+    يمسح:
+    - سجل التأملات الذاتية (reflections)
+    - اليوميات (journal)
+    - لقطات الذات (snapshots)
+    - أبعاد الذات (dimensions)
+    """
+    logger.info("🔄 إعادة تهيئة نموذج الذات...")
+    
+    # مسح سجل التأملات الذاتية
+    self.reflections.clear()
+    
+    # مسح اليوميات
+    self.journal.clear()
+    
+    # مسح لقطات الذات
+    self.snapshots.clear()
+    
+    # إعادة تعيين أبعاد الذات
+    self.dimensions.clear()
+    self._init_dimensions()
+    
+    # إعادة تعيين مستوى الوعي بالذات
+    self.self_awareness_level = SELF_AWARENESS_REFLECTIVE
+    
+    # إعادة تحميل الفهرس
+    self._index = self._load_index()
+    
+    # تسجيل حدث إعادة التهيئة
+    self.core.append_event(
+        event_type="consciousness::self_model_reset",
+        payload={
+            "timestamp": time.time(),
+            "status": "self_model_reset"
+        }
+    )
+    
+    logger.info("✅ إعادة تهيئة نموذج الذات اكتملت - أعرف نفسي من جديد")
     def __init__(self):
         self.core = get_core()
         self.store = get_store()
