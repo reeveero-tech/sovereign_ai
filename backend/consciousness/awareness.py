@@ -125,7 +125,56 @@ class AwarenessEngine:
     4. الإدراك هو عملية انتقاء، ليس تسجيلاً
     5. الوعي الحقيقي يعرف ما يستحق التركيز عليه
     """
+    # -------------------------
+# RESET — إعادة تهيئة كاملة لمحرك الوعي
+# -------------------------
+def reset(self):
+    """
+    إعادة تهيئة كاملة لمحرك الوعي.
     
+    يمسح:
+    - العناصر النشطة في الوعي (active items)
+    - لحظات الوعي (consciousness moments)
+    - سجل الحقول (field history)
+    """
+    logger.info("🔄 إعادة تهيئة محرك الوعي...")
+    
+    # مسح العناصر النشطة
+    self.active_items.clear()
+    self.current_moment = None
+    self.previous_moment = None
+    
+    # مسح لحظات الوعي
+    self.moments.clear()
+    
+    # مسح سجل الحقول
+    self.field_history.clear()
+    
+    # إعادة تعيين سعة الانتباه
+    self.attention_capacity = 10.0
+    self.current_attention_usage = 0.0
+    
+    # إعادة تعيين الشعور المستمر
+    self.ongoing_feeling = "neutral"
+    self.ongoing_intensity = 0.5
+    
+    # إعادة تعيين مستوى الوعي
+    self.consciousness_level = CONSCIOUSNESS_LEVEL_SELF_AWARE
+    self.consciousness_mode = CONSCIOUSNESS_MODE_DEFAULT
+    
+    # إعادة تحميل الفهرس
+    self._index = self._load_index()
+    
+    # تسجيل حدث إعادة التهيئة
+    self.core.append_event(
+        event_type="consciousness::awareness_reset",
+        payload={
+            "timestamp": time.time(),
+            "status": "awareness_engine_reset"
+        }
+    )
+    
+    logger.info("✅ إعادة تهيئة محرك الوعي اكتملت - وعاء نقي")
     def __init__(self):
         self.core = get_core()
         self.dynamic = get_dynamic_memory()
