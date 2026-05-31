@@ -17,6 +17,7 @@
 
 import json
 import hashlib
+import secrets
 import time
 import threading
 import random
@@ -37,12 +38,12 @@ try:
     from ..defense.polymorphic import get_polymorphic_defense
     from ...config import DATA_DIR
 except ImportError:
-    from core import get_core, EventType, IntegrityStatus
-    from store import get_store, MemoryKind
-    from dynamic import get_dynamic_memory
-    from encoding import get_encoder
-    from defense.stealth import get_stealth_defense
-    from defense.polymorphic import get_polymorphic_defense
+    from memory.core import get_core, EventType, IntegrityStatus
+    from memory.store import get_store, MemoryKind
+    from memory.dynamic import get_dynamic_memory
+    from memory.encoding import get_encoder
+    from memory.defense.stealth import get_stealth_defense
+    from memory.defense.polymorphic import get_polymorphic_defense
     from config import DATA_DIR
 
 import logging
@@ -146,46 +147,7 @@ class MemoryRegeneration:
     4. الفشل ليس نهاية، بل بداية طريقة جديدة
     5. كل تجديد يجعل النظام أقوى
     """
-    # -------------------------
-# RESET — إعادة تهيئة كاملة لنظام التجديد الذاتي
-# -------------------------
-def reset(self):
-    """
-    إعادة تهيئة كاملة لنظام التجديد الذاتي.
     
-    يمسح:
-    - الخلايا الجذعية (stem cells)
-    - أجزاء الذاكرة المستعادة (recovered fragments)
-    - سجل عمليات التجديد (regeneration operations)
-    """
-    logger.info("🔄 إعادة تهيئة نظام التجديد الذاتي...")
-    
-    # مسح الخلايا الجذعية
-    self.stem_cells.clear()
-    
-    # مسح أجزاء الذاكرة المستعادة
-    self.recovered_fragments.clear()
-    
-    # مسح سجل عمليات التجديد
-    self.operations_history.clear()
-    self.active_operations.clear()
-    
-    # إعادة تعيين مستوى التجديد
-    self.regen_level = REGEN_LEVEL_ADVANCED
-    
-    # إعادة تحميل الفهرس
-    self._index = self._load_index()
-    
-    # تسجيل حدث إعادة التهيئة
-    self.core.append_event(
-        event_type="biological::regeneration_reset",
-        payload={
-            "timestamp": time.time(),
-            "status": "regeneration_system_reset"
-        }
-    )
-    
-    logger.info("✅ إعادة تهيئة نظام التجديد الذاتي اكتملت - خلايا جذعية جديدة جاهزة")
     def __init__(self):
         self.core = get_core()
         self.store = get_store()
@@ -218,6 +180,44 @@ def reset(self):
         self._load_stem_cells()
         
         logger.info("🧬 نظام التجديد الذاتي جاهز - كالسمندل، أعيد بناء نفسي")
+    
+    # -------------------------
+    # RESET — إعادة تهيئة كاملة لنظام التجديد الذاتي
+    # -------------------------
+    def reset(self):
+        """
+        إعادة تهيئة كاملة لنظام التجديد الذاتي.
+        
+        يمسح:
+        - الخلايا الجذعية (stem cells)
+        - أجزاء الذاكرة المستعادة (recovered fragments)
+        - سجل عمليات التجديد (regeneration operations)
+        """
+        logger.info("🔄 إعادة تهيئة نظام التجديد الذاتي...")
+        
+        # مسح الخلايا الجذعية
+        self.stem_cells.clear()
+        
+        # مسح أجزاء الذاكرة المستعادة
+        self.recovered_fragments.clear()
+        
+        # مسح سجل عمليات التجديد
+        self.operations_history.clear()
+        self.active_operations.clear()
+        
+        # إعادة تعيين مستوى التجديد
+        self.regen_level = REGEN_LEVEL_ADVANCED
+        
+        # تسجيل حدث إعادة التهيئة
+        self.core.append_event(
+            event_type="biological::regeneration_reset",
+            payload={
+                "timestamp": time.time(),
+                "status": "regeneration_system_reset"
+            }
+        )
+        
+        logger.info("✅ إعادة تهيئة نظام التجديد الذاتي اكتملت - خلايا جذعية جديدة جاهزة")
     
     # ============================================================
     # المستوى 1: الخلايا الجذعية الرقمية
@@ -394,7 +394,7 @@ def reset(self):
             
             # تحديث الذاكرة العاملة
             if success:
-                self.dynamic.working.clear(user_id)
+                self.dynamic.working.clear_user(user_id)
                 # إضافة السياق المستعاد
                 self.dynamic.working.add(user_id, "system", f"تم تجديد ذاكرتك بنجاح", importance=1.0)
             
