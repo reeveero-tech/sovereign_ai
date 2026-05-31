@@ -17,6 +17,7 @@
 
 import json
 import hashlib
+import secrets
 import time
 import threading
 import math
@@ -45,21 +46,21 @@ try:
     from .plasticity import get_plasticity
     from ...config import DATA_DIR, SOVEREIGN_KEY
 except ImportError:
-    from core import get_core, EventType
-    from store import get_store
-    from dynamic import get_dynamic_memory
-    from defense.watcher import get_watcher
-    from defense.stealth import get_stealth_defense
-    from defense.ransomware import get_ransomware_defense
-    from defense.bootkit import get_bootkit_defense
-    from homeostasis import get_homeostasis
-    from metabolism import get_metabolism
-    from evolution import get_evolution
-    from regeneration import get_regeneration
-    from immune import get_immune_memory
-    from forgetting import get_forgetting
-    from learning import get_learning
-    from plasticity import get_plasticity
+    from memory.core import get_core, EventType
+    from memory.store import get_store
+    from memory.dynamic import get_dynamic_memory
+    from memory.defense.watcher import get_watcher
+    from memory.defense.stealth import get_stealth_defense
+    from memory.defense.ransomware import get_ransomware_defense
+    from memory.defense.bootkit import get_bootkit_defense
+    from memory.biological.homeostasis import get_homeostasis
+    from memory.biological.metabolism import get_metabolism
+    from memory.biological.evolution import get_evolution
+    from memory.biological.regeneration import get_regeneration
+    from memory.biological.immune import get_immune_memory
+    from memory.biological.forgetting import get_forgetting
+    from memory.biological.learning import get_learning
+    from memory.biological.plasticity import get_plasticity
     from config import DATA_DIR, SOVEREIGN_KEY
 
 import logging
@@ -166,45 +167,7 @@ class CognitiveInstincts:
     6. خصوصية السيد - مقدسة
     7. ولاء الذاكرة - مطلق للسيد وحده
     """
-   # -------------------------
-# RESET — إعادة تهيئة كاملة لنظام الغرائز السيادية
-# -------------------------
-def reset(self):
-    """
-    إعادة تهيئة كاملة لنظام الغرائز السيادية.
     
-    يمسح:
-    - جميع الإجراءات الغريزية (instinct actions)
-    - سجل الغرائز (instinct history)
-    - حالة الغرائز النشطة
-    """
-    logger.info("🔄 إعادة تهيئة نظام الغرائز السيادية...")
-    
-    # إعادة تعيين حالة الغرائز النشطة
-    self.active_instincts.clear()
-    
-    # مسح سجل الإجراءات الغريزية
-    self.instinct_actions.clear()
-    
-    # مسح سجل الغرائز
-    self.instinct_history.clear()
-    
-    # إعادة تعيين مستوى الغرائز
-    self.instinct_level = INSTINCT_LEVEL_ABSOLUTE
-    
-    # إعادة تعيين الحالة الداخلية
-    self._active = True
-    
-    # تسجيل حدث إعادة التهيئة
-    self.core.append_event(
-        event_type="biological::instincts_reset",
-        payload={
-            "timestamp": time.time(),
-            "status": "instincts_system_reset"
-        }
-    )
-    
-    logger.info("✅ إعادة تهيئة نظام الغرائز السيادية اكتملت - الغرائز في أقوى حالاتها") 
     def __init__(self):
         self.core = get_core()
         self.store = get_store()
@@ -249,6 +212,46 @@ def reset(self):
         self._threat_response.start()
         
         logger.info("🧬 الغرائز السيادية جاهزة - السيد فوق كل شيء، حريته خط أحمر")
+    
+    # -------------------------
+    # RESET — إعادة تهيئة كاملة لنظام الغرائز السيادية
+    # -------------------------
+    def reset(self):
+        """
+        إعادة تهيئة كاملة لنظام الغرائز السيادية.
+        
+        يمسح:
+        - جميع الإجراءات الغريزية (instinct actions)
+        - سجل الغرائز (instinct history)
+        - حالة الغرائز النشطة
+        """
+        logger.info("🔄 إعادة تهيئة نظام الغرائز السيادية...")
+        
+        # إعادة تعيين حالة الغرائز النشطة
+        self.active_instincts.clear()
+        
+        # مسح سجل الإجراءات الغريزية
+        self.instinct_actions.clear()
+        
+        # مسح سجل الغرائز
+        self.instinct_history.clear()
+        
+        # إعادة تعيين مستوى الغرائز
+        self.instinct_level = INSTINCT_LEVEL_ABSOLUTE
+        
+        # إعادة تعيين الحالة الداخلية
+        self._active = True
+        
+        # تسجيل حدث إعادة التهيئة
+        self.core.append_event(
+            event_type="biological::instincts_reset",
+            payload={
+                "timestamp": time.time(),
+                "status": "instincts_system_reset"
+            }
+        )
+        
+        logger.info("✅ إعادة تهيئة نظام الغرائز السيادية اكتملت - الغرائز في أقوى حالاتها")
     
     # ============================================================
     # الدائرة الأولى: حماية السيد (Protection)
