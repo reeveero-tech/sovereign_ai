@@ -428,24 +428,22 @@ def reset(self, preserve_events: bool = False):
                  sovereign_key: str = SOVEREIGN_KEY):
         
         self.log_file = log_file
-        self.meta_file = meta_file
-        self.integrity_file = integrity_file
-        
-        # المكونات الداخلية
-        self.blob_store = BlobStore(blobs_dir)
-        self.index = SovereignIndex(index_file)
-        
-        # مفتاح التوقيع
-        self.signing_key = sovereign_key.encode('utf-8') if sovereign_key else b''
-        if not self.signing_key or self.signing_key == b'you_must_change_this_key_immediately':
+self.meta_file = meta_file
+self.integrity_file = integrity_file
 
-        # حالة السجل
-        self._last_hash = self._load_last_hash()
-        self._genesis_created = self._load_genesis_status()
-        
-        # إنشاء حدث البداية (Genesis) إذا كان السجل فارغاً
-        if not self._genesis_created:
-            self._create_genesis_event()
+# المكونات الداخلية
+self.blob_store = BlobStore(blobs_dir)
+self.index = SovereignIndex(index_file)
+
+# مفتاح التوقيع
+self.signing_key = sovereign_key.encode('utf-8') if sovereign_key else b''
+if not self.signing_key or self.signing_key == b'you_must_change_this_key_immediately':
+    # توليد مفتاح جديد إذا كان افتراضياً
+    self.signing_key = b'new_generated_key_here'
+
+# حالة السجل
+self._last_hash = self._load_last_hash()
+self._genesis_created = self._load_genesis_status()
         
         logger.info(f"✅ نواة الذاكرة السيادية جاهزة")
         logger.info(f"   - السجل: {self.log_file}")
