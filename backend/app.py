@@ -217,7 +217,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
+from api import get_api_router
+app.include_router(get_api_router())
 # ============================================================
 # نقاط API العامة (بدون مصادقة)
 # ============================================================
