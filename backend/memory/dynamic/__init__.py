@@ -32,9 +32,9 @@ try:
     from ..views import get_views
     from ..store import get_store
 except ImportError:
-    from core import get_core, EventType
-    from views import get_views
-    from store import get_store
+    from memory.core import get_core, EventType
+    from memory.views import get_views
+    from memory.store import get_store
 
 import logging
 logger = logging.getLogger(__name__)
@@ -870,54 +870,7 @@ class DynamicMemory:
     - العاطفية (المشاعر اللحظية)
     - الحالمة (إعادة التنظيم)
     """
-    # -------------------------
-# RESET — إعادة تهيئة كاملة للذاكرة الحية
-# -------------------------
-def reset(self):
-    """
-    إعادة تهيئة كاملة للذاكرة الحية.
     
-    يمسح:
-    - الذاكرة الحسية (sensory)
-    - الذاكرة المؤقتة (buffer)
-    - الذاكرة العاملة (working)
-    - الذاكرة المخبئية (cache)
-    - الذاكرة العاطفية اللحظية (emotional)
-    """
-    logger.info("🔄 إعادة تهيئة الذاكرة الحية...")
-    
-    # إعادة تهيئة الذاكرة الحسية
-    self.sensory = SensoryMemory()
-    
-    # إعادة تهيئة الذاكرة المؤقتة
-    self.buffer = BufferMemory()
-    
-    # إعادة تهيئة الذاكرة العاملة
-    self.working = WorkingMemory()
-    
-    # إعادة تهيئة الذاكرة المخبئية
-    self.cache = CacheMemory()
-    
-    # إعادة تهيئة الذاكرة العاطفية اللحظية
-    self.emotional = EmotionalMemory()
-    
-    # إعادة تهيئة الذاكرة الحالمة
-    self.dreaming = DreamingMemory(self.working, self.store)
-    
-    # إعادة تعيين العدادات والإحصائيات
-    self._total_processed = 0
-    self._processing = True
-    
-    # تسجيل حدث إعادة التهيئة
-    self.core.append_event(
-        event_type="memory::dynamic_reset",
-        payload={
-            "timestamp": time.time(),
-            "status": "dynamic_memory_reset"
-        }
-    )
-    
-    logger.info("✅ إعادة تهيئة الذاكرة الحية اكتملت")
     def __init__(self):
         self.core = get_core()
         self.views = get_views()
@@ -945,6 +898,55 @@ def reset(self):
         self._dreamer_thread.start()
         
         logger.info("🌊 الذاكرة الحية المتكاملة جاهزة")
+    
+    # -------------------------
+    # RESET — إعادة تهيئة كاملة للذاكرة الحية
+    # -------------------------
+    def reset(self):
+        """
+        إعادة تهيئة كاملة للذاكرة الحية.
+        
+        يمسح:
+        - الذاكرة الحسية (sensory)
+        - الذاكرة المؤقتة (buffer)
+        - الذاكرة العاملة (working)
+        - الذاكرة المخبئية (cache)
+        - الذاكرة العاطفية اللحظية (emotional)
+        """
+        logger.info("🔄 إعادة تهيئة الذاكرة الحية...")
+        
+        # إعادة تهيئة الذاكرة الحسية
+        self.sensory = SensoryMemory()
+        
+        # إعادة تهيئة الذاكرة المؤقتة
+        self.buffer = BufferMemory()
+        
+        # إعادة تهيئة الذاكرة العاملة
+        self.working = WorkingMemory()
+        
+        # إعادة تهيئة الذاكرة المخبئية
+        self.cache = CacheMemory()
+        
+        # إعادة تهيئة الذاكرة العاطفية اللحظية
+        self.emotional = EmotionalMemory()
+        
+        # إعادة تهيئة الذاكرة الحالمة
+        self.dreaming = DreamingMemory(self.working, self.store)
+        
+        # إعادة تعيين العدادات والإحصائيات
+        self._total_processed = 0
+        self._processing = True
+        
+        # تسجيل حدث إعادة التهيئة
+        self.core.append_event(
+            event_type="memory::dynamic_reset",
+            payload={
+                "timestamp": time.time(),
+                "status": "dynamic_memory_reset"
+            }
+        )
+        
+        logger.info("✅ إعادة تهيئة الذاكرة الحية اكتملت")
     
     # ============================================================
     # الواجهات الرئيسية
