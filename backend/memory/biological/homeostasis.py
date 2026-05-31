@@ -39,15 +39,15 @@ try:
     from .forgetting import get_forgetting
     from ...config import DATA_DIR
 except ImportError:
-    from core import get_core, IntegrityStatus
-    from store import get_store, MemoryKind
-    from dynamic import get_dynamic_memory
-    from defense.watcher import get_watcher
-    from metabolism import get_metabolism
-    from evolution import get_evolution
-    from regeneration import get_regeneration
-    from immune import get_immune_memory
-    from forgetting import get_forgetting
+    from memory.core import get_core, IntegrityStatus
+    from memory.store import get_store, MemoryKind
+    from memory.dynamic import get_dynamic_memory
+    from memory.defense.watcher import get_watcher
+    from memory.biological.metabolism import get_metabolism
+    from memory.biological.evolution import get_evolution
+    from memory.biological.regeneration import get_regeneration
+    from memory.biological.immune import get_immune_memory
+    from memory.biological.forgetting import get_forgetting
     from config import DATA_DIR
 
 import logging
@@ -142,56 +142,7 @@ class CognitiveHomeostasis:
     4. المرونة تأتي من القدرة على التكيف
     5. الحكمة هي معرفة متى تتدخل ومتى تترك الأمور تجري
     """
-    # -------------------------
-# RESET — إعادة تهيئة كاملة لنظام الاتزان المعرفي
-# -------------------------
-def reset(self):
-    """
-    إعادة تهيئة كاملة لنظام الاتزان المعرفي.
     
-    يمسح:
-    - سجل الاضطرابات (disturbances)
-    - سجل اللقطات (snapshots)
-    - سجل المؤشرات الحيوية (metrics history)
-    """
-    logger.info("🔄 إعادة تهيئة نظام الاتزان المعرفي...")
-    
-    # مسح سجل الاضطرابات
-    self.disturbances.clear()
-    
-    # مسح سجل اللقطات
-    self.snapshots.clear()
-    
-    # مسح سجل المؤشرات الحيوية
-    self.metrics_history.clear()
-    
-    # إعادة تعيين حالة الاتزان
-    self.balance_level = BALANCE_LEVEL_STABLE
-    self.health_score = 0.7
-    self.stress_index = 0.3
-    self.entropy = 0.4
-    
-    # إعادة تعيين معاملات الاستجابة
-    self.response_sensitivity = 0.5
-    self.recovery_rate = 0.3
-    self.intervention_threshold = 0.6
-    
-    # إعادة تعيين السياسات
-    self.policies = self._init_policies()
-    
-    # إعادة تحميل الفهرس
-    self._index = self._load_index()
-    
-    # تسجيل حدث إعادة التهيئة
-    self.core.append_event(
-        event_type="biological::homeostasis_reset",
-        payload={
-            "timestamp": time.time(),
-            "status": "homeostasis_system_reset"
-        }
-    )
-    
-    logger.info("✅ إعادة تهيئة نظام الاتزان المعرفي اكتملت - التوازن استعيد")
     def __init__(self):
         self.core = get_core()
         self.store = get_store()
@@ -237,6 +188,54 @@ def reset(self):
         self._load_state()
         
         logger.info("⚖️ نظام الاتزان المعرفي جاهز - الحكمة في التوازن")
+    
+    # -------------------------
+    # RESET — إعادة تهيئة كاملة لنظام الاتزان المعرفي
+    # -------------------------
+    def reset(self):
+        """
+        إعادة تهيئة كاملة لنظام الاتزان المعرفي.
+        
+        يمسح:
+        - سجل الاضطرابات (disturbances)
+        - سجل اللقطات (snapshots)
+        - سجل المؤشرات الحيوية (metrics history)
+        """
+        logger.info("🔄 إعادة تهيئة نظام الاتزان المعرفي...")
+        
+        # مسح سجل الاضطرابات
+        self.disturbances.clear()
+        
+        # مسح سجل اللقطات
+        self.snapshots.clear()
+        
+        # مسح سجل المؤشرات الحيوية
+        self.metrics_history.clear()
+        
+        # إعادة تعيين حالة الاتزان
+        self.balance_level = BALANCE_LEVEL_STABLE
+        self.health_score = 0.7
+        self.stress_index = 0.3
+        self.entropy = 0.4
+        
+        # إعادة تعيين معاملات الاستجابة
+        self.response_sensitivity = 0.5
+        self.recovery_rate = 0.3
+        self.intervention_threshold = 0.6
+        
+        # إعادة تعيين السياسات
+        self.policies = self._init_policies()
+        
+        # تسجيل حدث إعادة التهيئة
+        self.core.append_event(
+            event_type="biological::homeostasis_reset",
+            payload={
+                "timestamp": time.time(),
+                "status": "homeostasis_system_reset"
+            }
+        )
+        
+        logger.info("✅ إعادة تهيئة نظام الاتزان المعرفي اكتملت - التوازن استعيد")
     
     def _init_policies(self) -> Dict[str, HomeostasisPolicy]:
         """تهيئة سياسات التوازن"""
