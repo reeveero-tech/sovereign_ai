@@ -438,6 +438,7 @@ def reset(self, preserve_events: bool = False):
         # مفتاح التوقيع
         self.signing_key = sovereign_key.encode('utf-8') if sovereign_key else b''
         if not self.signing_key or self.signing_key == b'you_must_change_this_key_immediately':
+
         # حالة السجل
         self._last_hash = self._load_last_hash()
         self._genesis_created = self._load_genesis_status()
