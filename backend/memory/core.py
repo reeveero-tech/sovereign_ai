@@ -370,55 +370,7 @@ class SovereignCore:
     هذا الملف هو هوية الذاكرة نفسها.
     لا يمكن تعديله. لا يمكن حذفه. فقط يمكن إضافة أحداث إليه.
     """
-    # -------------------------
-# RESET — إعادة تهيئة كاملة للسجل السيادي
-# -------------------------
-def reset(self, preserve_events: bool = False):
-    """
-    إعادة تهيئة كاملة للسجل السيادي.
     
-    Args:
-        preserve_events: إذا True، يحتفظ بالأحداث ولا يمسحها
-    """
-    logger.info("🔄 إعادة تهيئة السجل السيادي...")
-    
-    if not preserve_events:
-        # مسح ملف السجل
-        if self.log_file.exists():
-            # نسخ احتياطي قبل المسح
-            backup_file = self.log_file.with_suffix('.jsonl.bak')
-            import shutil
-            shutil.copy2(self.log_file, backup_file)
-            self.log_file.unlink()
-            logger.debug(f"📁 تم حذف ملف السجل، نسخة احتياطية في {backup_file}")
-        
-        # إعادة إنشاء ملف فارغ
-        self.log_file.touch()
-        
-        # إعادة تعيين الحالة الداخلية
-        self._last_hash = "GENESIS"
-        self._genesis_created = False
-        
-        # إعادة إنشاء حدث البداية
-        self._create_genesis_event()
-    
-    # إعادة تعيين الفهرس
-    self.index = self._load_index()
-    
-    # إعادة تعيين الميتا
-    self._save_meta()
-    
-    # تسجيل حدث إعادة التهيئة
-    self.core.append_event(
-        event_type="memory::core_reset",
-        payload={
-            "timestamp": time.time(),
-            "preserve_events": preserve_events,
-            "status": "sovereign_core_reset"
-        }
-    )
-    
-    logger.info("✅ إعادة تهيئة السجل السيادي اكتملت")
     def __init__(self, 
                  log_file: Path = LOG_FILE,
                  blobs_dir: Path = BLOBS_DIR,
@@ -428,28 +380,78 @@ def reset(self, preserve_events: bool = False):
                  sovereign_key: str = SOVEREIGN_KEY):
         
         self.log_file = log_file
-self.meta_file = meta_file
-self.integrity_file = integrity_file
+        self.meta_file = meta_file
+        self.integrity_file = integrity_file
 
-# المكونات الداخلية
-self.blob_store = BlobStore(blobs_dir)
-self.index = SovereignIndex(index_file)
+        # المكونات الداخلية
+        self.blob_store = BlobStore(blobs_dir)
+        self.index = SovereignIndex(index_file)
 
-# مفتاح التوقيع
-self.signing_key = sovereign_key.encode('utf-8') if sovereign_key else b''
-if not self.signing_key or self.signing_key == b'you_must_change_this_key_immediately':
-    # توليد مفتاح جديد إذا كان افتراضياً
-    self.signing_key = b'new_generated_key_here'
+        # مفتاح التوقيع
+        self.signing_key = sovereign_key.encode('utf-8') if sovereign_key else b''
+        if not self.signing_key or self.signing_key == b'you_must_change_this_key_immediately':
+            # توليد مفتاح جديد إذا كان افتراضياً
+            self.signing_key = b'new_generated_key_here'
 
-# حالة السجل
-self._last_hash = self._load_last_hash()
-self._genesis_created = self._load_genesis_status()
+        # حالة السجل
+        self._last_hash = self._load_last_hash()
+        self._genesis_created = self._load_genesis_status()
         
         logger.info(f"✅ نواة الذاكرة السيادية جاهزة")
         logger.info(f"   - السجل: {self.log_file}")
         logger.info(f"   - آخر تجزئة: {self._last_hash[:16]}...")
         logger.info(f"   - عدد الأحداث: {self.index.data['events_count']}")
         logger.info(f"   - عدد الـ blobs: {self.blob_store.count()}")
+    
+    # -------------------------
+    # RESET — إعادة تهيئة كاملة للسجل السيادي
+    # -------------------------
+    def reset(self, preserve_events: bool = False):
+        """
+        إعادة تهيئة كاملة للسجل السيادي.
+        
+        Args:
+            preserve_events: إذا True، يحتفظ بالأحداث ولا يمسحها
+        """
+        logger.info("🔄 إعادة تهيئة السجل السيادي...")
+        
+        if not preserve_events:
+            # مسح ملف السجل
+            if self.log_file.exists():
+                # نسخ احتياطي قبل المسح
+                backup_file = self.log_file.with_suffix('.jsonl.bak')
+                import shutil
+                shutil.copy2(self.log_file, backup_file)
+                self.log_file.unlink()
+                logger.debug(f"📁 تم حذف ملف السجل، نسخة احتياطية في {backup_file}")
+            
+            # إعادة إنشاء ملف فارغ
+            self.log_file.touch()
+            
+            # إعادة تعيين الحالة الداخلية
+            self._last_hash = "GENESIS"
+            self._genesis_created = False
+            
+            # إعادة إنشاء حدث البداية
+            self._create_genesis_event()
+        
+        # إعادة تعيين الفهرس
+        self.index = self._load_index()
+        
+        # إعادة تعيين الميتا
+        self._save_meta()
+        
+        # تسجيل حدث إعادة التهيئة
+        self.append_event(
+            event_type=EventType.SELF_MODIFY,
+            payload={
+                "timestamp": time.time(),
+                "preserve_events": preserve_events,
+                "status": "sovereign_core_reset"
+            }
+        )
+        
+        logger.info("✅ إعادة تهيئة السجل السيادي اكتملت")
     
     def _load_last_hash(self) -> str:
         """تحميل آخر تجزئة من الميتا أو السجل"""
@@ -769,8 +771,10 @@ self._genesis_created = self._load_genesis_status()
             shutil.copytree(self.blob_store.blobs_dir, blobs_dir, dirs_exist_ok=True)
         
         # 3) نسخ الفهرس والميتا
-        shutil.copy2(self.index_file, snapshot_dir / "index.json")
-        shutil.copy2(self.meta_file, snapshot_dir / "meta.json")
+        if self.index_file.exists():
+            shutil.copy2(self.index_file, snapshot_dir / "index.json")
+        if self.meta_file.exists():
+            shutil.copy2(self.meta_file, snapshot_dir / "meta.json")
         
         # 4) إنشاء ملف وصف اللقطة
         manifest = {
@@ -821,6 +825,10 @@ self._genesis_created = self._load_genesis_status()
                 if i == index:
                     return json.loads(line)
         return None
+    
+    def _load_index(self) -> SovereignIndex:
+        """تحميل أو إعادة إنشاء الفهرس"""
+        return SovereignIndex(self.index_file)
 
 
 # ============================================================
