@@ -17,6 +17,7 @@
 
 import json
 import hashlib
+import secrets
 import time
 import threading
 import math
@@ -34,9 +35,9 @@ try:
     from ..dynamic import get_dynamic_memory
     from ...config import DATA_DIR
 except ImportError:
-    from core import get_core, EventType
-    from store import get_store, MemoryKind
-    from dynamic import get_dynamic_memory
+    from memory.core import get_core, EventType
+    from memory.store import get_store, MemoryKind
+    from memory.dynamic import get_dynamic_memory
     from config import DATA_DIR
 
 import logging
@@ -133,47 +134,7 @@ class CognitiveMetabolism:
     4. الطاقة المنتجة تحسن جودة الذاكرة
     5. التوازن هو مفتاح الاستدامة
     """
-    # -------------------------
-# RESET — إعادة تهيئة كاملة لنظام الأيض المعرفي
-# -------------------------
-def reset(self):
-    """
-    إعادة تهيئة كاملة لنظام الأيض المعرفي.
     
-    يمسح:
-    - خزان الطاقة (energy reservoir)
-    - سجل الدورات الأيضية (metabolic cycles)
-    - إحصائيات الوقود والطاقة
-    """
-    logger.info("🔄 إعادة تهيئة نظام الأيض المعرفي...")
-    
-    # إعادة تعيين خزان الطاقة
-    self.energy = EnergyReservoir()
-    
-    # مسح سجل الدورات الأيضية
-    self.cycles.clear()
-    self.current_cycle = None
-    
-    # إعادة تعيين إحصائيات الوقود والطاقة
-    self.total_fuel_consumed.clear()
-    self.total_energy_produced.clear()
-    
-    # إعادة تعيين مستوى الأيض
-    self.metabolism_level = METABOLISM_LEVEL_MODERATE
-    
-    # إعادة تحميل الفهرس
-    self._index = self._load_index()
-    
-    # تسجيل حدث إعادة التهيئة
-    self.core.append_event(
-        event_type="biological::metabolism_reset",
-        payload={
-            "timestamp": time.time(),
-            "status": "metabolism_system_reset"
-        }
-    )
-    
-    logger.info("✅ إعادة تهيئة نظام الأيض المعرفي اكتملت - الطاقة أعيد ضبطها")
     def __init__(self):
         self.core = get_core()
         self.store = get_store()
@@ -202,6 +163,45 @@ def reset(self):
         self._load_energy()
         
         logger.info("🔥 نظام الأيض المعرفي جاهز - حرق الضوضاء، إنتاج الطاقة")
+    
+    # -------------------------
+    # RESET — إعادة تهيئة كاملة لنظام الأيض المعرفي
+    # -------------------------
+    def reset(self):
+        """
+        إعادة تهيئة كاملة لنظام الأيض المعرفي.
+        
+        يمسح:
+        - خزان الطاقة (energy reservoir)
+        - سجل الدورات الأيضية (metabolic cycles)
+        - إحصائيات الوقود والطاقة
+        """
+        logger.info("🔄 إعادة تهيئة نظام الأيض المعرفي...")
+        
+        # إعادة تعيين خزان الطاقة
+        self.energy = EnergyReservoir()
+        
+        # مسح سجل الدورات الأيضية
+        self.cycles.clear()
+        self.current_cycle = None
+        
+        # إعادة تعيين إحصائيات الوقود والطاقة
+        self.total_fuel_consumed.clear()
+        self.total_energy_produced.clear()
+        
+        # إعادة تعيين مستوى الأيض
+        self.metabolism_level = METABOLISM_LEVEL_MODERATE
+        
+        # تسجيل حدث إعادة التهيئة
+        self.core.append_event(
+            event_type="biological::metabolism_reset",
+            payload={
+                "timestamp": time.time(),
+                "status": "metabolism_system_reset"
+            }
+        )
+        
+        logger.info("✅ إعادة تهيئة نظام الأيض المعرفي اكتملت - الطاقة أعيد ضبطها")
     
     # ============================================================
     # المستوى 1: تحديد الوقود المعرفي (Fuel Detection)
@@ -712,7 +712,7 @@ def reset(self):
             }
         )
         
-        logger.info(f"✅ الدورة الأيضية اكتملت: حرق {total_fuel} وقود، "
+        logger.info(f"✅ الدورة الأيضية اكتملت: حرق {total_fuel} وقود, "
                    f"طاقة {total_energy:.1f}, كفاءة {efficiency:.1f}%")
         
         # حفظ الحالة
