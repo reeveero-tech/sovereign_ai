@@ -21,6 +21,7 @@ import uuid
 import time
 import hashlib
 import threading
+import math
 from dataclasses import dataclass, field, asdict
 from datetime import datetime
 from pathlib import Path
@@ -34,8 +35,8 @@ try:
     from ..encoding import get_encoder
     from ...config import DATA_DIR
 except ImportError:
-    from core import get_core, EventType
-    from encoding import get_encoder
+    from memory.core import get_core, EventType
+    from memory.encoding import get_encoder
     from config import DATA_DIR
 
 import logging
@@ -367,55 +368,7 @@ class SolidMemoryStore:
     
     تخزن جميع أنواع الذاكرة بشكل دائم، مشفر، ومتكامل.
     """
-    # -------------------------
-# RESET — إعادة تهيئة كاملة للتخزين الصلب
-# -------------------------
-def reset(self, preserve_data: bool = False):
-    """
-    إعادة تهيئة كاملة للتخزين الصلب.
     
-    Args:
-        preserve_data: إذا True، يحتفظ بالبيانات ولا يمسحها
-    """
-    logger.info("🔄 إعادة تهيئة التخزين الصلب...")
-    
-    if not preserve_data:
-        # مسح جميع البيانات في الذاكرة
-        for kind in self._data:
-            self._data[kind].clear()
-        
-        # حذف ملفات التخزين
-        for kind, path in FILE_MAP.items():
-            if path.exists():
-                # نسخ احتياطي قبل الحذف
-                backup_file = path.with_suffix('.json.bak')
-                import shutil
-                shutil.copy2(path, backup_file)
-                path.unlink()
-                logger.debug(f"📁 تم حذف ملف {kind}، نسخة احتياطية في {backup_file}")
-                
-                # إعادة إنشاء ملف فارغ
-                with open(path, 'w', encoding='utf-8') as f:
-                    json.dump([], f)
-    
-    # إعادة تحميل الفهرس
-    self.index = MemoryIndex(FILE_MAP["index"])
-    
-    # إعادة تحميل البيانات من الملفات (إذا كانت موجودة)
-    for kind in MemoryKind:
-        self._load_kind(kind.value)
-    
-    # تسجيل حدث إعادة التهيئة
-    self.core.append_event(
-        event_type="memory::store_reset",
-        payload={
-            "timestamp": time.time(),
-            "preserve_data": preserve_data,
-            "status": "memory_store_reset"
-        }
-    )
-    
-    logger.info("✅ إعادة تهيئة التخزين الصلب اكتملت")
     def __init__(self):
         self.core = get_core()
         self.encoder = get_encoder()
@@ -439,6 +392,56 @@ def reset(self, preserve_data: bool = False):
         
         logger.info(f"📀 الطبقات الصلبة جاهزة")
         self._log_statistics()
+    
+    # -------------------------
+    # RESET — إعادة تهيئة كاملة للتخزين الصلب
+    # -------------------------
+    def reset(self, preserve_data: bool = False):
+        """
+        إعادة تهيئة كاملة للتخزين الصلب.
+        
+        Args:
+            preserve_data: إذا True، يحتفظ بالبيانات ولا يمسحها
+        """
+        logger.info("🔄 إعادة تهيئة التخزين الصلب...")
+        
+        if not preserve_data:
+            # مسح جميع البيانات في الذاكرة
+            for kind in self._data:
+                self._data[kind].clear()
+            
+            # حذف ملفات التخزين
+            for kind, path in FILE_MAP.items():
+                if path.exists():
+                    # نسخ احتياطي قبل الحذف
+                    backup_file = path.with_suffix('.json.bak')
+                    import shutil
+                    shutil.copy2(path, backup_file)
+                    path.unlink()
+                    logger.debug(f"📁 تم حذف ملف {kind}، نسخة احتياطية في {backup_file}")
+                    
+                    # إعادة إنشاء ملف فارغ
+                    with open(path, 'w', encoding='utf-8') as f:
+                        json.dump([], f)
+        
+        # إعادة تحميل الفهرس
+        self.index = MemoryIndex(FILE_MAP["index"])
+        
+        # إعادة تحميل البيانات من الملفات (إذا كانت موجودة)
+        for kind in MemoryKind:
+            self._load_kind(kind.value)
+        
+        # تسجيل حدث إعادة التهيئة
+        self.core.append_event(
+            event_type="memory::store_reset",
+            payload={
+                "timestamp": time.time(),
+                "preserve_data": preserve_data,
+                "status": "memory_store_reset"
+            }
+        )
+        
+        logger.info("✅ إعادة تهيئة التخزين الصلب اكتملت")
     
     def _load_kind(self, kind: str):
         """تحميل نوع معين من الذاكرة من القرص"""
