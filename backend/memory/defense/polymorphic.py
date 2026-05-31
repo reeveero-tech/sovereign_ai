@@ -34,7 +34,7 @@ try:
     from ..core import get_core, EventType
     from ...config import DATA_DIR, SOVEREIGN_KEY
 except ImportError:
-    from core import get_core, EventType
+    from memory.core import get_core, EventType
     from config import DATA_DIR, SOVEREIGN_KEY
 
 import logging
@@ -64,7 +64,7 @@ MUTATION_LEVEL_IDENTITY = 5      # تغيير الهوية الظاهرية
 # ترددات التحول (بالميكروثانية)
 MUTATION_FREQUENCY_SUICIDE = 0.001    # كل 1 ميلي ثانية (انتحاري)
 MUTATION_FREQUENCY_RAPID = 0.01       # كل 10 ميلي ثانية (سريع)
-MOTATION_FREQUENCY_NORMAL = 0.1       # كل 100 ميلي ثانية (عادي)
+MUTATION_FREQUENCY_NORMAL = 0.1       # كل 100 ميلي ثانية (عادي)
 MUTATION_FREQUENCY_SLOW = 1.0         # كل ثانية (بطيء)
 
 # أنماط الهجوم المضاد
@@ -147,7 +147,7 @@ class PolymorphicDefense:
         
         # حالة التحول
         self.mutation_level = MUTATION_LEVEL_DNA
-        self.mutation_frequency = MOTATION_FREQUENCY_NORMAL
+        self.mutation_frequency = MUTATION_FREQUENCY_NORMAL
         self.counter_attack_mode = COUNTER_ATTACK_MODE_PASSIVE
         
         # سجل الهجمات المكتشفة
@@ -530,7 +530,7 @@ class PolymorphicDefense:
                 elif self.mutation_frequency == MUTATION_FREQUENCY_RAPID:
                     self.mutate(MUTATION_LEVEL_PROTEIN)
                     time.sleep(0.01)
-                elif self.mutation_frequency == MOTATION_FREQUENCY_NORMAL:
+                elif self.mutation_frequency == MUTATION_FREQUENCY_NORMAL:
                     if random.random() < 0.3:
                         self.mutate(MUTATION_LEVEL_BEHAVIOR)
                     time.sleep(0.1)
@@ -599,7 +599,7 @@ class PolymorphicDefense:
                     state = json.load(f)
                     self.stats = state.get("stats", self.stats)
                     self.mutation_level = state.get("mutation_level", MUTATION_LEVEL_DNA)
-                    self.mutation_frequency = state.get("mutation_frequency", MOTATION_FREQUENCY_NORMAL)
+                    self.mutation_frequency = state.get("mutation_frequency", MUTATION_FREQUENCY_NORMAL)
                     self.counter_attack_mode = state.get("counter_attack_mode", COUNTER_ATTACK_MODE_PASSIVE)
                 logger.info("📂 تم تحميل حالة الدفاع")
         except Exception as e:
@@ -688,7 +688,7 @@ class PolymorphicDefense:
         
         # إعادة تعيين الأوضاع إلى الافتراضية
         self.mutation_level = MUTATION_LEVEL_DNA
-        self.mutation_frequency = MOTATION_FREQUENCY_NORMAL
+        self.mutation_frequency = MUTATION_FREQUENCY_NORMAL
         self.counter_attack_mode = COUNTER_ATTACK_MODE_PASSIVE
         
         # تسجيل حدث إعادة التهيئة
