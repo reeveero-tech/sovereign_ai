@@ -415,7 +415,7 @@ class QuantumLikeEncryption:
                 # التحقق من الحالة الكمومية
                 if state_id not in self.quantum_states:
                     # الانهيار الكمي: حاولت القراءة بعد فوات الأوان
-                    return b"[QUANTUM_DECOHERED] لا يمكن القراءة - انهارت الحالة الكمومية"
+                    return "[QUANTUM_DECOHERED] لا يمكن القراءة - انهارت الحالة الكمومية".encode()
                 
                 state = self.quantum_states[state_id]
                 state["measurements"] += 1
@@ -423,7 +423,7 @@ class QuantumLikeEncryption:
                 # القياس الثالث ينهار الحالة
                 if state["measurements"] >= 3:
                     del self.quantum_states[state_id]
-                    return b"[QUANTUM_COLLAPSED] انهارت الحالة الكمومية بسبب القياس المتكرر"
+                    return "[QUANTUM_COLLAPSED] انهارت الحالة الكمومية بسبب القياس المتكرر".encode()
                 
                 noise = bytes.fromhex(state["noise"])
                 key = self.master_key
@@ -567,51 +567,7 @@ class SovereignEncoder:
     3. التشفير الكمي الوهمي (ينهار عند القراءة)
     4. الضغط الدلالي (الجوهر يتسع)
     """
-    # -------------------------
-# RESET — إعادة تهيئة كاملة للتشفير السيادي
-# -------------------------
-def reset(self):
-    """
-    إعادة تهيئة كاملة للتشفير السيادي (اللغة السرية).
     
-    يمسح:
-    - اللغة المتطورة (language evolution)
-    - الحالات الكمومية (quantum states)
-    - سجل التشفير (encoding stats)
-    - الضاغط الدلالي (semantic compressor cache)
-    """
-    logger.info("🔄 إعادة تهيئة التشفير السيادي...")
-    
-    # إعادة تهيئة اللغة المتطورة
-    self.language = SovereignLanguage()
-    
-    # إعادة تهيئة التشفير الكمي الوهمي
-    self.crypto = QuantumLikeEncryption()
-    
-    # إعادة تهيئة الضاغط الدلالي
-    self.compressor = SemanticCompressor()
-    
-    # إعادة تعيين الإحصائيات
-    self._stats = {
-        "encodings": 0,
-        "decodings": 0,
-        "fingerprints": 0,
-        "compressions": 0
-    }
-    
-    # إعادة تحميل الفهرس
-    self._index = self._load_index()
-    
-    # تسجيل حدث إعادة التهيئة
-    self.core.append_event(
-        event_type="memory::encoding_reset",
-        payload={
-            "timestamp": time.time(),
-            "status": "sovereign_encoder_reset"
-        }
-    )
-    
-    logger.info("✅ إعادة تهيئة التشفير السيادي اكتملت - لغة سرية جديدة")
     def __init__(self):
         self.fingerprinter = MultiHashFingerprint()
         self.language = SovereignLanguage()
@@ -626,6 +582,40 @@ def reset(self):
         }
         
         logger.info("🔐 التشفير السيادي جاهز - السلاح الحقيقي نشط")
+    
+    # -------------------------
+    # RESET — إعادة تهيئة كاملة للتشفير السيادي
+    # -------------------------
+    def reset(self):
+        """
+        إعادة تهيئة كاملة للتشفير السيادي (اللغة السرية).
+        
+        يمسح:
+        - اللغة المتطورة (language evolution)
+        - الحالات الكمومية (quantum states)
+        - سجل التشفير (encoding stats)
+        - الضاغط الدلالي (semantic compressor cache)
+        """
+        logger.info("🔄 إعادة تهيئة التشفير السيادي...")
+        
+        # إعادة تهيئة اللغة المتطورة
+        self.language = SovereignLanguage()
+        
+        # إعادة تهيئة التشفير الكمي الوهمي
+        self.crypto = QuantumLikeEncryption()
+        
+        # إعادة تهيئة الضاغط الدلالي
+        self.compressor = SemanticCompressor()
+        
+        # إعادة تعيين الإحصائيات
+        self._stats = {
+            "encodings": 0,
+            "decodings": 0,
+            "fingerprints": 0,
+            "compressions": 0
+        }
+        
+        logger.info("✅ إعادة تهيئة التشفير السيادي اكتملت - لغة سرية جديدة")
     
     def encode(self, data: Union[str, Dict, Any], 
                importance: float = 0.5,
