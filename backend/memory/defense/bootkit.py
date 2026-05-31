@@ -33,7 +33,7 @@ try:
     from ..core import get_core, IntegrityStatus
     from ...config import DATA_DIR, SOVEREIGN_KEY
 except ImportError:
-    from core import get_core, IntegrityStatus
+    from memory.core import get_core, IntegrityStatus
     from config import DATA_DIR, SOVEREIGN_KEY
 
 import logging
@@ -132,52 +132,7 @@ class BootkitDefense:
     4. يمكن العودة من أي موت عبر الإقلاع من نسخة احتياطية
     5. السيد وحده من يقرر متى وكيف يقلع النظام
     """
-    # -------------------------
-# RESET — إعادة تهيئة كاملة لنظام الإقلاع
-# -------------------------
-def reset(self):
-    """
-    إعادة تهيئة كاملة لنظام الإقلاع (Bootkit Defense).
     
-    يمسح:
-    - سجل الإقلاعات (boot records)
-    - النسخ الاحتياطية (backups)
-    - حالة الإقلاع الحالية
-    """
-    logger.info("🔄 إعادة تهيئة نظام الإقلاع...")
-    
-    # مسح سجل الإقلاعات
-    self.boot_records.clear()
-    
-    # مسح النسخ الاحتياطية
-    self.boot_backups.clear()
-    
-    # إعادة تعيين حالة الإقلاع
-    self.boot_mode = BOOT_MODE_NORMAL
-    self.security_level = BOOT_SECURITY_LEVEL_STRICT
-    self.boot_phase = BootPhase.POWER_ON
-    self.is_booting = False
-    
-    # حذف ملفات النسخ الاحتياطية من القرص
-    for backup_file in BOOT_BACKUP_DIR.glob("*.json"):
-        try:
-            backup_file.unlink()
-        except:
-            pass
-    
-    # إعادة تحميل الفهرس
-    self._index = self._load_index()
-    
-    # تسجيل حدث إعادة التهيئة
-    self.core.append_event(
-        event_type="defense::bootkit_reset",
-        payload={
-            "timestamp": time.time(),
-            "status": "boot_system_reset"
-        }
-    )
-    
-    logger.info("✅ إعادة تهيئة نظام الإقلاع اكتملت - جاهز للإقلاع من جديد")
     SCHEMA_VERSION = "sovereign_memory_v3"
     
     def __init__(self):
@@ -202,6 +157,50 @@ def reset(self):
         self._load_state()
         
         logger.info("🐉 نظام الإقلاع المطلق جاهز - البوابة تحرس العقل")
+    
+    # -------------------------
+    # RESET — إعادة تهيئة كاملة لنظام الإقلاع
+    # -------------------------
+    def reset(self):
+        """
+        إعادة تهيئة كاملة لنظام الإقلاع (Bootkit Defense).
+        
+        يمسح:
+        - سجل الإقلاعات (boot records)
+        - النسخ الاحتياطية (backups)
+        - حالة الإقلاع الحالية
+        """
+        logger.info("🔄 إعادة تهيئة نظام الإقلاع...")
+        
+        # مسح سجل الإقلاعات
+        self.boot_records.clear()
+        
+        # مسح النسخ الاحتياطية
+        self.boot_backups.clear()
+        
+        # إعادة تعيين حالة الإقلاع
+        self.boot_mode = BOOT_MODE_NORMAL
+        self.security_level = BOOT_SECURITY_LEVEL_STRICT
+        self.boot_phase = BootPhase.POWER_ON
+        self.is_booting = False
+        
+        # حذف ملفات النسخ الاحتياطية من القرص
+        for backup_file in BOOT_BACKUP_DIR.glob("*.json"):
+            try:
+                backup_file.unlink()
+            except:
+                pass
+        
+        # تسجيل حدث إعادة التهيئة
+        self.core.append_event(
+            event_type="defense::bootkit_reset",
+            payload={
+                "timestamp": time.time(),
+                "status": "boot_system_reset"
+            }
+        )
+        
+        logger.info("✅ إعادة تهيئة نظام الإقلاع اكتملت - جاهز للإقلاع من جديد")
     
     # ============================================================
     # المستوى 1: إقلاع عادي (Normal Boot)
