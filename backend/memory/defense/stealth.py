@@ -35,8 +35,8 @@ try:
     from ..encoding import get_encoder
     from ...config import DATA_DIR, SOVEREIGN_KEY
 except ImportError:
-    from core import get_core, EventType
-    from encoding import get_encoder
+    from memory.core import get_core, EventType
+    from memory.encoding import get_encoder
     from config import DATA_DIR, SOVEREIGN_KEY
 
 import logging
@@ -140,54 +140,7 @@ class StealthDefense:
     3. التخفي ليس دفاعاً، بل هجوم استباقي
     4. يمكن للذكاء أن يتواجد في كل مكان ولا مكان
     """
-    # -------------------------
-# RESET — إعادة تهيئة كاملة للتخفي المطلق
-# -------------------------
-def reset(self):
-    """
-    إعادة تهيئة كاملة للتخفي المطلق.
     
-    يمسح:
-    - جميع النسخ الشبحية (shadows)
-    - جميع الأشباح (ghosts)
-    - المواقع النشطة (active locations)
-    - سجل عمليات التخفي (stealth operations)
-    """
-    logger.info("🔄 إعادة تهيئة التخفي المطلق...")
-    
-    # مسح النسخ الشبحية
-    self.shadows.clear()
-    
-    # مسح الأشباح
-    self.ghosts.clear()
-    
-    # مسح المواقع النشطة
-    self.active_locations.clear()
-    
-    # إعادة تعيين الموقع الحقيقي
-    self.real_location = None
-    
-    # مسح سجل عمليات التخفي
-    self.stealth_operations.clear()
-    
-    # إعادة تعيين حالة التخفي
-    self.stealth_level = STEALTH_LEVEL_NONE
-    self.stealth_mode = STEALTH_MODE_PASSIVE
-    self.is_ghost_mode = False
-    
-    # إعادة تحميل الفهرس
-    self._index = self._load_index()
-    
-    # تسجيل حدث إعادة التهيئة
-    self.core.append_event(
-        event_type="defense::stealth_reset",
-        payload={
-            "timestamp": time.time(),
-            "status": "stealth_defense_reset"
-        }
-    )
-    
-    logger.info("✅ إعادة تهيئة التخفي المطلق اكتملت - أصبحت مرئياً مؤقتاً")
     def __init__(self):
         self.core = get_core()
         self.encoder = get_encoder()
@@ -220,7 +173,53 @@ def reset(self):
         # تحميل الحالة
         self._load_state()
         
-        logger.info("👻 التخفي المabsolute جاهز - الشبح السيادي يتحرك")
+        logger.info("👻 التخفي المطلق جاهز - الشبح السيادي يتحرك")
+    
+    # -------------------------
+    # RESET — إعادة تهيئة كاملة للتخفي المطلق
+    # -------------------------
+    def reset(self):
+        """
+        إعادة تهيئة كاملة للتخفي المطلق.
+        
+        يمسح:
+        - جميع النسخ الشبحية (shadows)
+        - جميع الأشباح (ghosts)
+        - المواقع النشطة (active locations)
+        - سجل عمليات التخفي (stealth operations)
+        """
+        logger.info("🔄 إعادة تهيئة التخفي المطلق...")
+        
+        # مسح النسخ الشبحية
+        self.shadows.clear()
+        
+        # مسح الأشباح
+        self.ghosts.clear()
+        
+        # مسح المواقع النشطة
+        self.active_locations.clear()
+        
+        # إعادة تعيين الموقع الحقيقي
+        self.real_location = None
+        
+        # مسح سجل عمليات التخفي
+        self.stealth_operations.clear()
+        
+        # إعادة تعيين حالة التخفي
+        self.stealth_level = STEALTH_LEVEL_NONE
+        self.stealth_mode = STEALTH_MODE_PASSIVE
+        self.is_ghost_mode = False
+        
+        # تسجيل حدث إعادة التهيئة
+        self.core.append_event(
+            event_type="defense::stealth_reset",
+            payload={
+                "timestamp": time.time(),
+                "status": "stealth_defense_reset"
+            }
+        )
+        
+        logger.info("✅ إعادة تهيئة التخفي المطلق اكتملت - أصبحت مرئياً مؤقتاً")
     
     # ============================================================
     # المستوى 1: تشويش الميتاداتا
@@ -875,5 +874,5 @@ if __name__ == "__main__":
     print(f"   نسخ شبحية: {status['shadows_active']}")
     
     print("\n" + "=" * 70)
-    print("✅ التخفي المabsolute جاهز - الشبح السيادي يتحرك حيث يشاء")
+    print("✅ التخفي المطلق جاهز - الشبح السيادي يتحرك حيث يشاء")
     print("=" * 70)
