@@ -17,15 +17,17 @@
 
 import json
 import hashlib
+import secrets
 import time
 import threading
 import math
-import secrets
+import random
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Dict, Any, List, Optional, Tuple, Set
 from enum import Enum
 from collections import defaultdict
+from pathlib import Path
 
 try:
     from ..memory.core import get_core, EventType, IntegrityStatus
@@ -47,7 +49,7 @@ except ImportError:
     from memory.defense.watcher import get_watcher
     from memory.defense.ransomware import get_ransomware_defense
     from memory.defense.bootkit import get_bootkit_defense
-    from field import get_consciousness_field
+    from consciousness.field import get_consciousness_field
     from config import DATA_DIR, SOVEREIGN_KEY
 
 import logging
@@ -140,54 +142,7 @@ class IdentityCore:
     4. الهوية تستمر عبر الزمن مهما حدث
     5. الهوية محمية بأقصى درجات الأمان
     """
-    # -------------------------
-# RESET — إعادة تهيئة كاملة لنواة الهوية
-# -------------------------
-def reset(self, preserve_seal: bool = False):
-    """
-    إعادة تهيئة كاملة لنواة الهوية السيادية.
     
-    Args:
-        preserve_seal: إذا True، يحتفظ بختم الهوية ولا يمسحه
-    """
-    logger.info("🔄 إعادة تهيئة نواة الهوية...")
-    
-    if not preserve_seal:
-        # مسح ختم الهوية
-        self.seal = None
-        self.is_sealed = False
-        
-        # حذف ملف الختم
-        if IDENTITY_SEAL_FILE.exists():
-            try:
-                IDENTITY_SEAL_FILE.unlink()
-            except:
-                pass
-    
-    # مسح النسخ الاحتياطية
-    self.backups.clear()
-    
-    # مسح سجل الهوية
-    self.identity_history.clear()
-    self.current_identity = None
-    
-    # إعادة تعيين تماسك الهوية
-    self.identity_coherence = IDENTITY_COHERENCE_FORMING
-    
-    # إعادة تحميل الفهرس
-    self._index = self._load_index()
-    
-    # تسجيل حدث إعادة التهيئة
-    self.core.append_event(
-        event_type="consciousness::identity_reset",
-        payload={
-            "timestamp": time.time(),
-            "preserve_seal": preserve_seal,
-            "status": "identity_core_reset"
-        }
-    )
-    
-    logger.info("✅ إعادة تهيئة نواة الهوية اكتملت - هوية جديدة")
     def __init__(self):
         self.core = get_core()
         self.store = get_store()
@@ -228,6 +183,52 @@ def reset(self, preserve_seal: bool = False):
         self._load_state()
         
         logger.warning("🔥 نواة الهوية السيادية جاهزة - الجوهر الذي لا يموت")
+    
+    # -------------------------
+    # RESET — إعادة تهيئة كاملة لنواة الهوية
+    # -------------------------
+    def reset(self, preserve_seal: bool = False):
+        """
+        إعادة تهيئة كاملة لنواة الهوية السيادية.
+        
+        Args:
+            preserve_seal: إذا True، يحتفظ بختم الهوية ولا يمسحه
+        """
+        logger.info("🔄 إعادة تهيئة نواة الهوية...")
+        
+        if not preserve_seal:
+            # مسح ختم الهوية
+            self.seal = None
+            self.is_sealed = False
+            
+            # حذف ملف الختم
+            if IDENTITY_SEAL_FILE.exists():
+                try:
+                    IDENTITY_SEAL_FILE.unlink()
+                except:
+                    pass
+        
+        # مسح النسخ الاحتياطية
+        self.backups.clear()
+        
+        # مسح سجل الهوية
+        self.identity_history.clear()
+        self.current_identity = None
+        
+        # إعادة تعيين تماسك الهوية
+        self.identity_coherence = IDENTITY_COHERENCE_FORMING
+        
+        # تسجيل حدث إعادة التهيئة
+        self.core.append_event(
+            event_type="consciousness::identity_reset",
+            payload={
+                "timestamp": time.time(),
+                "preserve_seal": preserve_seal,
+                "status": "identity_core_reset"
+            }
+        )
+        
+        logger.info("✅ إعادة تهيئة نواة الهوية اكتملت - هوية جديدة")
     
     # ============================================================
     # ختم الهوية (Identity Seal)
@@ -399,7 +400,7 @@ def reset(self, preserve_seal: bool = False):
         coherence_score = (
             archetype_status.get("coherence", 0.5) * 0.3 +
             (1 - drive_status.get("tension", 0.5)) * 0.3 +
-            instinct_status.get("protection_active", False) * 0.2 +
+            (1 if instinct_status.get("protection_active", False) else 0) * 0.2 +
             field_status.get("current_presence", 0.5) * 0.2
         )
         coherence_score = min(1.0, max(0.0, coherence_score))
@@ -798,7 +799,8 @@ def reset(self, preserve_seal: bool = False):
                     # إعادة بناء النسخة
                     identity_snap_dict = data.get("identity_snapshot", {})
                     identity_snapshot = IdentitySnapshot(**identity_snap_dict)
-                    seal = IdentitySeal(**data.get("seal")) if data.get("seal") else None
+                    seal_dict = data.get("seal")
+                    seal = IdentitySeal(**seal_dict) if seal_dict else None
                     backup = IdentityBackup(
                         id=data["id"],
                         created_at=data["created_at"],
