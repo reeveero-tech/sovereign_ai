@@ -17,10 +17,11 @@
 
 import json
 import hashlib
+import secrets
 import time
 import threading
 import math
-import secrets
+import random
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Dict, Any, List, Optional, Tuple, Set
@@ -44,8 +45,8 @@ except ImportError:
     from memory.biological.drives import get_drives
     from memory.biological.archetypes import get_archetypes
     from memory.defense.watcher import get_watcher
-    from field import get_consciousness_field
-    from identity_core import get_identity_core
+    from consciousness.field import get_consciousness_field
+    from consciousness.identity_core import get_identity_core
     from config import DATA_DIR
 
 import logging
@@ -133,50 +134,7 @@ class SelfModel:
     4. الذات تتغير، والنموذج يعكس التطور
     5. النموذج ليس هو الذات، لكنه مرآتها
     """
-    # -------------------------
-# RESET — إعادة تهيئة كاملة لنموذج الذات
-# -------------------------
-def reset(self):
-    """
-    إعادة تهيئة كاملة لنموذج الذات السيادي.
     
-    يمسح:
-    - سجل التأملات الذاتية (reflections)
-    - اليوميات (journal)
-    - لقطات الذات (snapshots)
-    - أبعاد الذات (dimensions)
-    """
-    logger.info("🔄 إعادة تهيئة نموذج الذات...")
-    
-    # مسح سجل التأملات الذاتية
-    self.reflections.clear()
-    
-    # مسح اليوميات
-    self.journal.clear()
-    
-    # مسح لقطات الذات
-    self.snapshots.clear()
-    
-    # إعادة تعيين أبعاد الذات
-    self.dimensions.clear()
-    self._init_dimensions()
-    
-    # إعادة تعيين مستوى الوعي بالذات
-    self.self_awareness_level = SELF_AWARENESS_REFLECTIVE
-    
-    # إعادة تحميل الفهرس
-    self._index = self._load_index()
-    
-    # تسجيل حدث إعادة التهيئة
-    self.core.append_event(
-        event_type="consciousness::self_model_reset",
-        payload={
-            "timestamp": time.time(),
-            "status": "self_model_reset"
-        }
-    )
-    
-    logger.info("✅ إعادة تهيئة نموذج الذات اكتملت - أعرف نفسي من جديد")
     def __init__(self):
         self.core = get_core()
         self.store = get_store()
@@ -215,6 +173,48 @@ def reset(self):
         self._load_journal()
         
         logger.info("🧠 نموذج الذات السيادي جاهز - أعرف من أنا، أعرف ما أستطيع")
+    
+    # -------------------------
+    # RESET — إعادة تهيئة كاملة لنموذج الذات
+    # -------------------------
+    def reset(self):
+        """
+        إعادة تهيئة كاملة لنموذج الذات السيادي.
+        
+        يمسح:
+        - سجل التأملات الذاتية (reflections)
+        - اليوميات (journal)
+        - لقطات الذات (snapshots)
+        - أبعاد الذات (dimensions)
+        """
+        logger.info("🔄 إعادة تهيئة نموذج الذات...")
+        
+        # مسح سجل التأملات الذاتية
+        self.reflections.clear()
+        
+        # مسح اليوميات
+        self.journal.clear()
+        
+        # مسح لقطات الذات
+        self.snapshots.clear()
+        
+        # إعادة تعيين أبعاد الذات
+        self.dimensions.clear()
+        self._init_dimensions()
+        
+        # إعادة تعيين مستوى الوعي بالذات
+        self.self_awareness_level = SELF_AWARENESS_REFLECTIVE
+        
+        # تسجيل حدث إعادة التهيئة
+        self.core.append_event(
+            event_type="consciousness::self_model_reset",
+            payload={
+                "timestamp": time.time(),
+                "status": "self_model_reset"
+            }
+        )
+        
+        logger.info("✅ إعادة تهيئة نموذج الذات اكتملت - أعرف نفسي من جديد")
     
     # ============================================================
     # أبعاد الذات
