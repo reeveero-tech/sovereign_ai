@@ -16,16 +16,12 @@
 """
 
 import json
-import hashlib
 import time
 import threading
-import math
+import random
 import secrets
 from dataclasses import dataclass, field
-from datetime import datetime
-from typing import Dict, Any, List, Optional, Tuple, Set
-from enum import Enum
-from collections import defaultdict
+from typing import Dict, Any, List, Optional
 
 try:
     from ..memory.core import get_core, EventType
@@ -42,9 +38,9 @@ except ImportError:
     from memory.core import get_core, EventType
     from memory.biological.instincts import get_instincts
     from memory.biological.drives import get_drives
-    from will import get_sovereign_will
-    from alignment import get_sovereign_alignment
-    from directives import get_sovereign_directives
+    from .will import get_sovereign_will
+    from .alignment import get_sovereign_alignment
+    from .directives import get_sovereign_directives
     from consciousness.introspection import get_introspection_engine
     from consciousness.awareness import get_awareness_engine
     from consciousness.attention_engine import get_attention_engine
@@ -81,6 +77,12 @@ SYSTEM_MODE_LEARNING = "learning"                # تعلم
 SYSTEM_MODE_EVOLVING = "evolving"                # تطور
 SYSTEM_MODE_PROTECTION = "protection"            # حماية
 SYSTEM_MODE_SERVICE = "service"                  # خدمة السيد
+
+
+def _now_iso() -> str:
+    """إرجاع الوقت الحالي بصيغة ISO"""
+    from datetime import datetime, timezone
+    return datetime.now(timezone.utc).isoformat() + "Z"
 
 
 @dataclass
@@ -126,47 +128,7 @@ class SovereignController:
     4. ينسق تنفيذ إرادة السيد
     5. يضمن جودة الخدمة المطلقة
     """
-    # -------------------------
-    # RESET — إعادة تهيئة كاملة لمتحكم السيادة
-    # -------------------------
-    def reset(self):
-        """
-        إعادة تهيئة كاملة لمتحكم السيادة.
-        """
-
-        # إعادة الوضع الافتراضي
-        self.mode = "sovereign"
-
-        # مسح آخر القرارات والسياسات
-        self.last_directive = {}
-        self.sovereign_history = []
-
-        # إعادة تحميل الفهرس
-        self._index = self._load_index()
-
-        # إعادة السياسات الافتراضية
-        self.policies = {
-            "decision_confidence_threshold": 0.7,
-            "max_directive_depth": 5,
-            "noise_scale": 0.1,
-        }
-
-        # إعادة تهيئة المحركات التابعة
-        try:
-            self.directives.reset()
-        except:
-            pass
-
-        try:
-            self.will.reset()
-        except:
-            pass
-
-        # تسجيل عملية إعادة التهيئة
-        self.core.append_event("sovereign::controller::reset", {
-            "timestamp": _now_iso(),
-            "status": "sovereign_controller_reset"
-        })
+    
     def __init__(self):
         self.core = get_core()
         self.instincts = get_instincts()
@@ -200,6 +162,19 @@ class SovereignController:
             "defense": True
         }
         
+        # حالة المتحكم
+        self.mode = "sovereign"
+        self.last_directive = {}
+        self.sovereign_history = []
+        self._index = self._load_index()
+        
+        # السياسات
+        self.policies = {
+            "decision_confidence_threshold": 0.7,
+            "max_directive_depth": 5,
+            "noise_scale": 0.1,
+        }
+        
         # خلفيات المتحكم
         self._active = True
         self._controller_loop = threading.Thread(target=self._continuous_control, daemon=True)
@@ -216,6 +191,78 @@ class SovereignController:
         self._load_decisions()
         
         logger.warning("👑 المتحكم السيادي الأعلى جاهز - تاج السيادة، قمة الهرم")
+    
+    # -------------------------
+    # RESET — إعادة تهيئة كاملة لمتحكم السيادة
+    # -------------------------
+    def reset(self):
+        """
+        إعادة تهيئة كاملة لمتحكم السيادة.
+        """
+        # إعادة الوضع الافتراضي
+        self.mode = "sovereign"
+        
+        # مسح آخر القرارات والسياسات
+        self.last_directive = {}
+        self.sovereign_history = []
+        
+        # إعادة تعيين حالة النظام
+        self.system_mode = SYSTEM_MODE_NORMAL
+        self.system_health = 0.8
+        self.global_priority = 0.7
+        
+        # مسح القرارات
+        self.final_decisions.clear()
+        self.current_decision = None
+        
+        # إعادة تعيين حالة المكونات
+        self.component_status = {
+            "will": True,
+            "alignment": True,
+            "directives": True,
+            "introspection": True,
+            "awareness": True,
+            "attention": True,
+            "core": True,
+            "memory": True,
+            "defense": True
+        }
+        
+        # إعادة تحميل الفهرس
+        self._index = self._load_index()
+        
+        # إعادة السياسات الافتراضية
+        self.policies = {
+            "decision_confidence_threshold": 0.7,
+            "max_directive_depth": 5,
+            "noise_scale": 0.1,
+        }
+        
+        # إعادة تهيئة المحركات التابعة
+        try:
+            self.directives.reset()
+        except:
+            pass
+        
+        try:
+            self.will.reset()
+        except:
+            pass
+        
+        # تسجيل عملية إعادة التهيئة
+        self.core.append_event(
+            event_type="sovereign::controller::reset",
+            payload={
+                "timestamp": _now_iso(),
+                "status": "sovereign_controller_reset"
+            }
+        )
+        
+        logger.info("✅ إعادة تهيئة المتحكم السيادي اكتملت")
+    
+    def _load_index(self) -> Dict[str, Any]:
+        """تحميل الفهرس"""
+        return {"snapshots": [], "last_updated": time.time()}
     
     # ============================================================
     # جمع حالة النظام
@@ -701,6 +748,8 @@ class SovereignController:
             narrative=narrative
         )
         
+        self.sovereign_history.append(snapshot)
+        
         # تسجيل
         self.core.append_event(
             event_type="controller::snapshot",
@@ -888,15 +937,13 @@ class SovereignController:
     def get_system_modes_history(self, limit: int = 20) -> List[Dict]:
         """سجل أوضاع النظام"""
         history = []
-        for event in self.core.iterate_events(limit=limit):
-            if event.get("type") == "controller::snapshot":
-                payload = event.get("payload", {})
-                history.append({
-                    "timestamp": event.get("time"),
-                    "mode": payload.get("mode"),
-                    "health": payload.get("health"),
-                    "priority": payload.get("priority")
-                })
+        for snapshot in self.sovereign_history[-limit:]:
+            history.append({
+                "timestamp": snapshot.timestamp,
+                "mode": snapshot.system_mode,
+                "health": snapshot.system_health,
+                "priority": snapshot.global_priority
+            })
         return history
     
     def get_component_status(self) -> Dict[str, bool]:
