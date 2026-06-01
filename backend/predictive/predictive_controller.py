@@ -22,9 +22,10 @@
 from __future__ import annotations
 
 import json
+import time
 import secrets
 import threading
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Dict, Any, List, Optional
 
@@ -39,10 +40,10 @@ try:
 except ImportError:
     from memory.core import get_core
     from config import DATA_DIR
-    from predictive_engine import get_predictive_engine
-    from predictive_scenarios import get_predictive_scenario_engine
-    from predictive_simulation import get_predictive_simulation
-    from predictive_risk_manager import get_predictive_risk_manager
+    from .predictive_engine import get_predictive_engine
+    from .predictive_scenarios import get_predictive_scenario_engine
+    from .predictive_simulation import get_predictive_simulation
+    from .predictive_risk_manager import get_predictive_risk_manager
     from sovereign.controller import get_sovereign_controller
 
 import logging
@@ -64,6 +65,11 @@ PREDICTIVE_MODE_ADVISORY = "advisory"       # استشاري (توصيات فق�
 PREDICTIVE_MODE_INTEGRATED = "integrated"   # متكامل (يؤثر على النظام)
 PREDICTIVE_MODE_CONSERVATIVE = "conservative"  # متحفظ (يقبل مخاطر أقل)
 PREDICTIVE_MODE_AGGRESSIVE = "aggressive"     # عدائي (يقبل مخاطر أعلى)
+
+
+def _now_iso() -> str:
+    """إرجاع الوقت الحالي بصيغة ISO"""
+    return datetime.now(timezone.utc).isoformat() + "Z"
 
 
 @dataclass
@@ -96,61 +102,11 @@ class PredictiveController:
     4. التكامل مع السيادة لمراجعة القرارات
     5. أوضاع تشغيل مختلفة تناسب حالات الاستخدام المختلفة
     """
-    # -------------------------
-    # RESET — إعادة تهيئة كاملة لمتحكم التنبؤ
-    # -------------------------
-    def reset(self):
-        """
-        إعادة تهيئة كاملة لمتحكم التنبؤ.
-        """
-
-        # إعادة الوضع الافتراضي
-        self.mode = "analysis"
-
-        # مسح آخر نتائج التكامل
-        self.last_integrated_output = {}
-        self.integration_history = []
-
-        # إعادة تحميل الفهرس
-        self._index = self._load_index()
-
-        # إعادة السياسات الافتراضية
-        self.policies = {
-            "integration_confidence_threshold": 0.65,
-            "max_integration_depth": 4,
-            "noise_scale": 0.1,
-        }
-
-        # إعادة تهيئة المحركات التابعة
-        try:
-            self.engine.reset()
-        except:
-            pass
-
-        try:
-            self.scenarios.reset()
-        except:
-            pass
-
-        try:
-            self.simulation.reset()
-        except:
-            pass
-
-        try:
-            self.risk.reset()
-        except:
-            pass
-
-        # تسجيل عملية إعادة التهيئة
-        self.core.append_event("predictive::controller::reset", {
-            "timestamp": _now_iso(),
-            "status": "predictive_controller_reset"
-        })
+    
     def __init__(self):
         self.core = get_core()
         
-        # محركات التنبؤ (تصحيح أسماء الدوال)
+        # محركات التنبؤ
         self.engine = get_predictive_engine()
         self.scenarios = get_predictive_scenario_engine()
         self.simulation = get_predictive_simulation()
@@ -171,6 +127,19 @@ class PredictiveController:
             "integrated_actions": 0
         }
         
+        # حالة المحرك
+        self.mode_state = "analysis"
+        self.last_integrated_output = {}
+        self.integration_history = []
+        self._index = self._load_index()
+        
+        # السياسات
+        self.policies = {
+            "integration_confidence_threshold": 0.65,
+            "max_integration_depth": 4,
+            "noise_scale": 0.1,
+        }
+        
         # خلفيات التشغيل
         self._active = True
         self._continuous_cycle = threading.Thread(target=self._continuous_cycle_loop, daemon=True)
@@ -180,6 +149,77 @@ class PredictiveController:
         self._load_state()
         
         logger.info("🧠 المتحكم الطبقي للتنبؤ جاهز - ينسق محركات التنبؤ الأربعة")
+    
+    # -------------------------
+    # RESET — إعادة تهيئة كاملة لمتحكم التنبؤ
+    # -------------------------
+    def reset(self):
+        """
+        إعادة تهيئة كاملة لمتحكم التنبؤ.
+        """
+        # إعادة الوضع الافتراضي
+        self.mode_state = "analysis"
+        
+        # مسح آخر نتائج التكامل
+        self.last_integrated_output = {}
+        self.integration_history = []
+        
+        # إعادة تعيين الإحصائيات
+        self.stats = {
+            "total_cycles": 0,
+            "decisions_made": 0,
+            "advisory_signals": 0,
+            "integrated_actions": 0
+        }
+        
+        # إعادة تعيين وضع التشغيل
+        self.mode = PREDICTIVE_MODE_BALANCED
+        
+        # إعادة تحميل الفهرس
+        self._index = self._load_index()
+        
+        # إعادة السياسات الافتراضية
+        self.policies = {
+            "integration_confidence_threshold": 0.65,
+            "max_integration_depth": 4,
+            "noise_scale": 0.1,
+        }
+        
+        # إعادة تهيئة المحركات التابعة
+        try:
+            self.engine.reset()
+        except:
+            pass
+        
+        try:
+            self.scenarios.reset()
+        except:
+            pass
+        
+        try:
+            self.simulation.reset()
+        except:
+            pass
+        
+        try:
+            self.risk_manager.reset()
+        except:
+            pass
+        
+        # تسجيل عملية إعادة التهيئة
+        self.core.append_event(
+            event_type="predictive::controller::reset",
+            payload={
+                "timestamp": _now_iso(),
+                "status": "predictive_controller_reset"
+            }
+        )
+        
+        logger.info("✅ إعادة تهيئة المتحكم التنبؤي اكتملت")
+    
+    def _load_index(self) -> Dict[str, Any]:
+        """تحميل الفهرس"""
+        return {"integrations": [], "last_updated": time.time()}
     
     # ============================================================
     # الدوال الأساسية
@@ -198,7 +238,7 @@ class PredictiveController:
         
         # من محرك التنبؤ
         try:
-            sensed["predictive"] = self.engine.sense_state()
+            sensed["predictive"] = self.engine.get_prediction_status()
         except Exception as e:
             logger.warning(f"فشل في قراءة حالة predictive_engine: {e}")
             sensed["predictive"] = {}
@@ -267,7 +307,7 @@ class PredictiveController:
         """
         try:
             # تشغيل دورة السيناريوهات
-            scen_snapshot = self.scenarios.scenario_cycle()
+            self.scenarios.scenario_cycle()
             scenarios = self.scenarios.get_scenarios()
         except Exception as e:
             logger.warning(f"فشل في توليد السيناريوهات: {e}")
@@ -317,13 +357,13 @@ class PredictiveController:
         """
         try:
             # تشغيل دورة المخاطر
-            risk_snapshot = self.risk_manager.risk_cycle()
+            self.risk_manager.risk_cycle()
             
             # استخراج التقرير
             risk_report = {
                 "prioritized": self.risk_manager.get_prioritized_risks(limit=10),
                 "overall_risk": self.risk_manager.get_risk_status().get("overall_risk_level", 0),
-                "active_warnings": len(self.risk_manager.get_early_warnings()),
+                "active_warnings": len(self.risk_manager.get_early_warnings_list()),
                 "mitigation_plans": len(self.risk_manager.get_mitigation_plans())
             }
         except Exception as e:
