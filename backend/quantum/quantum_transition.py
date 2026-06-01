@@ -22,11 +22,8 @@ import random
 import secrets
 import threading
 import time
-import numpy as np
 from dataclasses import dataclass, field
-from datetime import datetime
-from typing import Dict, Any, List, Optional, Tuple, Set
-from enum import Enum
+from typing import Dict, Any, List, Optional, Tuple
 from collections import defaultdict
 
 try:
@@ -35,7 +32,7 @@ try:
     from ..config import DATA_DIR
 except ImportError:
     from memory.core import get_core, EventType
-    from quantum_state import get_quantum_state_engine, QuantumAmplitude
+    from .quantum_state import get_quantum_state_engine, QuantumAmplitude
     from config import DATA_DIR
 
 import logging
@@ -83,10 +80,10 @@ class TransitionAmplitude:
 class TransitionMatrix:
     """مصفوفة انتقال كمومية"""
     states: List[str]
-    matrix: np.ndarray
-    probabilities: np.ndarray
+    matrix: Any  # np.ndarray
+    probabilities: Any  # np.ndarray
     eigenvalues: List[complex]
-    eigenvectors: List[np.ndarray]
+    eigenvectors: List[Any]  # List[np.ndarray]
     entropy: float
     mixing_time: float
 
@@ -129,7 +126,7 @@ class QuantumTransitionEngine:
         self.transition_matrix_history: List[Dict] = []
         
         # معاملات الانتقال
-        self.hamiltonian: Optional[np.ndarray] = None
+        self.hamiltonian = None
         self.energy_levels: Dict[str, float] = {}
         
         # السياسات الافتراضية (لإعادة التهيئة)
@@ -204,7 +201,7 @@ class QuantumTransitionEngine:
     # بناء مصفوفة الانتقال
     # ============================================================
     
-    def build_transition_matrix(self, state_id: str = None) -> TransitionMatrix:
+    def build_transition_matrix(self, state_id: str = None):
         """
         بناء مصفوفة الانتقال الكمومية الكاملة.
         
@@ -227,98 +224,57 @@ class QuantumTransitionEngine:
         bases = list(state.amplitudes.keys())
         n = len(bases)
         
-        # بناء مصفوفة هاميلتوني
-        H = np.zeros((n, n), dtype=complex)
-        
-        # تعيين مستويات الطاقة
-        for i, basis in enumerate(bases):
-            if basis not in self.energy_levels:
-                self.energy_levels[basis] = random.uniform(0.5, 1.5)
-            H[i, i] = self.energy_levels[basis]
-        
-        # تعيين عناصر خارج القطر (تفاعلات)
-        for i in range(n):
-            for j in range(i + 1, n):
-                # حساب قوة التفاعل
-                phase_diff = abs(state.amplitudes[bases[i]].phase() - state.amplitudes[bases[j]].phase())
-                interference = abs(state.amplitudes[bases[i]].to_complex() - state.amplitudes[bases[j]].to_complex())
-                
-                coupling = (0.1 + phase_diff * 0.2 + interference * 0.1) * random.uniform(0.5, 1.5)
-                
-                # طور عشوائي
-                phase = cmath.exp(1j * random.uniform(0, 2 * math.pi))
-                H[i, j] = coupling * phase
-                H[j, i] = np.conj(H[i, j])
-        
-        # حساب eigenvalues والمتجهات الذاتية
-        eigenvalues, eigenvectors = np.linalg.eigh(H)
-        
-        # بناء مصفوفة الاحتمالات
-        P = np.zeros((n, n), dtype=float)
-        
-        # الوقت (محاكاة)
-        t = 1.0
-        
-        # مصفوفة التطور U = e^{-iHt}
-        U = np.zeros((n, n), dtype=complex)
-        for k in range(n):
-            U += np.outer(eigenvectors[:, k], eigenvectors[:, k].conj()) * cmath.exp(-1j * eigenvalues[k] * t)
-        
-        # حساب الاحتمالات
-        for i in range(n):
-            for j in range(n):
-                P[i, j] = abs(U[i, j]) ** 2
+        # بناء مصفوفة هاميلتوني (محاكاة مبسطة بدون numpy)
+        # حساب الاحتمالات بناءً على السعات الحالية
+        P = {}
+        for i, from_basis in enumerate(bases):
+            P[from_basis] = {}
+            for j, to_basis in enumerate(bases):
+                from_amp = state.amplitudes[from_basis]
+                to_amp = state.amplitudes[to_basis]
+                # احتمال الانتقال يتناسب مع حاصل ضرب السعات
+                prob = abs(from_amp.probability() - to_amp.probability())
+                if from_basis == to_basis:
+                    prob = max(0.5, 1 - prob)
+                else:
+                    prob = max(0.01, min(0.5, prob))
+                P[from_basis][to_basis] = prob
         
         # تطبيع الصفوف
-        for i in range(n):
-            row_sum = np.sum(P[i, :])
+        for from_basis in bases:
+            row_sum = sum(P[from_basis].values())
             if row_sum > 0:
-                P[i, :] /= row_sum
+                for to_basis in bases:
+                    P[from_basis][to_basis] /= row_sum
         
         # حساب إنتروبيا المصفوفة
         matrix_entropy = 0.0
-        for i in range(n):
-            for j in range(n):
-                if P[i, j] > 0:
-                    matrix_entropy -= P[i, j] * math.log2(P[i, j])
+        count = 0
+        for from_basis in bases:
+            for to_basis in bases:
+                prob = P[from_basis][to_basis]
+                if prob > 0:
+                    matrix_entropy -= prob * math.log2(prob)
+                    count += 1
         
         max_entropy = math.log2(n) if n > 1 else 1
         normalized_entropy = matrix_entropy / max_entropy if max_entropy > 0 else 0
         
-        # حساب وقت الخلط (mixing time)
-        mixing_time = self._calculate_mixing_time(P)
+        # حساب وقت الخلط (mixing time) - تقدير مبسط
+        mixing_time = n * (1 + normalized_entropy)
         
         # تخزين المصفوفة
         transition_matrix = TransitionMatrix(
             states=bases,
-            matrix=H,
+            matrix=P,
             probabilities=P,
-            eigenvalues=list(eigenvalues),
-            eigenvectors=[eigenvectors[:, k] for k in range(n)],
+            eigenvalues=[],
+            eigenvectors=[],
             entropy=normalized_entropy,
-            mixing_time=mixing_time
+            mixing_time=min(100.0, mixing_time)
         )
         
         return transition_matrix
-    
-    def _calculate_mixing_time(self, P: np.ndarray) -> float:
-        """حساب وقت الخلط - متى تصل المصفوفة إلى التوزيع الثابت"""
-        n = P.shape[0]
-        
-        # حساب القيمة الذاتية الثانية (spectral gap)
-        eigvals = np.linalg.eigvals(P)
-        eigvals_sorted = np.sort(np.abs(eigvals))[::-1]
-        
-        if len(eigvals_sorted) > 1:
-            spectral_gap = 1 - eigvals_sorted[1]
-            if spectral_gap > 0:
-                mixing_time = -1 / math.log(1 - spectral_gap)
-            else:
-                mixing_time = float('inf')
-        else:
-            mixing_time = float('inf')
-        
-        return min(100.0, mixing_time)
     
     # ============================================================
     # أنواع الانتقالات المختلفة
@@ -338,14 +294,14 @@ class QuantumTransitionEngine:
         # العثور على الحالة الحالية الأكثر احتمالاً
         probs = {b: state.amplitudes[b].probability() for b in bases}
         current_state = max(probs, key=probs.get)
-        current_idx = bases.index(current_state)
         
         # اختيار الحالة التالية حسب الاحتمالات
-        row_probs = transition_matrix.probabilities[current_idx, :]
-        next_idx = np.random.choice(len(bases), p=row_probs)
-        next_state = bases[next_idx]
+        row_probs = transition_matrix.probabilities[current_state]
+        next_states = list(row_probs.keys())
+        next_probs = list(row_probs.values())
         
-        transition_prob = row_probs[next_idx]
+        next_state = random.choices(next_states, weights=next_probs, k=1)[0]
+        transition_prob = row_probs[next_state]
         
         logger.debug(f"⚛️ انتقال احتمالي: {current_state} → {next_state} (احتمال {transition_prob:.1%})")
         
@@ -368,15 +324,14 @@ class QuantumTransitionEngine:
         # العثور على الحالة الحالية
         probs = {b: state.amplitudes[b].probability() for b in bases}
         current_state = max(probs, key=probs.get)
-        current_idx = bases.index(current_state)
-        target_idx = bases.index(target_state)
         
-        transition_prob = transition_matrix.probabilities[current_idx, target_idx]
+        transition_prob = transition_matrix.probabilities[current_state].get(target_state, 0.1)
         
         # تعزيز سعة الحالة المستهدفة
         target_amp = state.amplitudes[target_state]
-        new_amp = complex(target_amp.real * (1 + transition_prob), target_amp.imag * (1 + transition_prob))
-        state.amplitudes[target_state] = QuantumAmplitude.from_complex(new_amp)
+        new_amp_re = target_amp.real * (1 + transition_prob)
+        new_amp_im = target_amp.imag * (1 + transition_prob)
+        state.amplitudes[target_state] = QuantumAmplitude(new_amp_re, new_amp_im)
         
         # إعادة تطبيع
         state.amplitudes = self.qstate._normalize_amplitudes(state.amplitudes)
@@ -399,28 +354,26 @@ class QuantumTransitionEngine:
         # العثور على الحالة الحالية
         probs = {b: state.amplitudes[b].probability() for b in bases}
         current_state = max(probs, key=probs.get)
-        current_idx = bases.index(current_state)
         
         # تضخيم الانتقالات إلى الحالة الأكثر احتمالاً
-        amplified_probs = transition_matrix.probabilities[current_idx, :] ** amplification_factor
-        amplified_probs = amplified_probs / np.sum(amplified_probs)
+        row_probs = transition_matrix.probabilities[current_state]
+        next_states = list(row_probs.keys())
+        next_probs = [p ** amplification_factor for p in row_probs.values()]
+        total = sum(next_probs)
+        if total > 0:
+            next_probs = [p / total for p in next_probs]
         
-        next_idx = np.random.choice(len(bases), p=amplified_probs)
-        next_state = bases[next_idx]
-        
-        transition_prob = amplified_probs[next_idx]
+        next_state = random.choices(next_states, weights=next_probs, k=1)[0]
         
         # تعزيز الانتقال
         target_amp = state.amplitudes[next_state]
-        new_amp = complex(target_amp.real * (1 + transition_prob * 0.5),
-                         target_amp.imag * (1 + transition_prob * 0.5))
-        state.amplitudes[next_state] = QuantumAmplitude.from_complex(new_amp)
+        new_amp_re = target_amp.real * (1 + 0.5)
+        new_amp_im = target_amp.imag * (1 + 0.5)
+        state.amplitudes[next_state] = QuantumAmplitude(new_amp_re, new_amp_im)
         
         # إضعاف الحالة الحالية
         current_amp = state.amplitudes[current_state]
-        current_amp.real *= 0.8
-        current_amp.imag *= 0.8
-        state.amplitudes[current_state] = current_amp
+        state.amplitudes[current_state] = QuantumAmplitude(current_amp.real * 0.8, current_amp.imag * 0.8)
         
         # إعادة تطبيع
         state.amplitudes = self.qstate._normalize_amplitudes(state.amplitudes)
@@ -443,18 +396,21 @@ class QuantumTransitionEngine:
         # العثور على الحالة الحالية
         probs = {b: state.amplitudes[b].probability() for b in bases}
         current_state = max(probs, key=probs.get)
-        current_idx = bases.index(current_state)
         
         # تثبيط الانتقالات (الحفاظ على الحالة الحالية)
-        suppressed_probs = transition_matrix.probabilities[current_idx, :] ** suppression_factor
-        suppressed_probs = suppressed_probs / np.sum(suppressed_probs)
+        row_probs = transition_matrix.probabilities[current_state]
+        next_states = list(row_probs.keys())
+        next_probs = [p ** suppression_factor for p in row_probs.values()]
         
         # زيادة احتمال البقاء
-        suppressed_probs[current_idx] *= 2
-        suppressed_probs = suppressed_probs / np.sum(suppressed_probs)
+        current_idx = next_states.index(current_state) if current_state in next_states else 0
+        next_probs[current_idx] *= 2
         
-        next_idx = np.random.choice(len(bases), p=suppressed_probs)
-        next_state = bases[next_idx]
+        total = sum(next_probs)
+        if total > 0:
+            next_probs = [p / total for p in next_probs]
+        
+        next_state = random.choices(next_states, weights=next_probs, k=1)[0]
         
         logger.info(f"⚛️ انتقال مثبط: {current_state} → {next_state} (عامل {suppression_factor:.1f})")
         
@@ -474,9 +430,12 @@ class QuantumTransitionEngine:
         
         for i in range(len(bases)):
             for j in range(i + 1, len(bases)):
-                energy_diff = abs(self.energy_levels.get(bases[i], 0) - self.energy_levels.get(bases[j], 0))
+                energy_i = self.energy_levels.get(bases[i], 0.5)
+                energy_j = self.energy_levels.get(bases[j], 0.5)
+                energy_diff = abs(energy_i - energy_j)
                 if energy_diff < energy_match_threshold:
-                    resonant_pairs.append((bases[i], bases[j], transition_matrix.probabilities[i, j]))
+                    prob = transition_matrix.probabilities[bases[i]].get(bases[j], 0.1)
+                    resonant_pairs.append((bases[i], bases[j], prob))
         
         if not resonant_pairs:
             return None
@@ -484,7 +443,7 @@ class QuantumTransitionEngine:
         # اختيار زوج رنيني عشوائي
         selected = random.choice(resonant_pairs)
         
-        logger.info(f"⚛️ انتقال رنيني: {selected[0]} ↔ {selected[1]} (فرق طاقة {abs(self.energy_levels.get(selected[0], 0) - self.energy_levels.get(selected[1], 0)):.3f})")
+        logger.info(f"⚛️ انتقال رنيني: {selected[0]} ↔ {selected[1]} (فرق طاقة {abs(self.energy_levels.get(selected[0], 0.5) - self.energy_levels.get(selected[1], 0.5)):.3f})")
         
         return selected[0], selected[1]
     
@@ -557,8 +516,9 @@ class QuantumTransitionEngine:
             if state:
                 target_amp = state.amplitudes.get(result["to_state"])
                 if target_amp:
-                    new_amp = complex(target_amp.real * 1.2, target_amp.imag * 1.2)
-                    state.amplitudes[result["to_state"]] = QuantumAmplitude.from_complex(new_amp)
+                    new_amp_re = target_amp.real * 1.2
+                    new_amp_im = target_amp.imag * 1.2
+                    state.amplitudes[result["to_state"]] = QuantumAmplitude(new_amp_re, new_amp_im)
                     state.amplitudes = self.qstate._normalize_amplitudes(state.amplitudes)
         
         # تسجيل
@@ -621,16 +581,17 @@ class QuantumTransitionEngine:
         # تحويل مصفوفة الانتقال إلى قاموس
         matrix_dict = {}
         if transition_matrix:
-            for i, s1 in enumerate(transition_matrix.states):
-                matrix_dict[s1] = {}
-                for j, s2 in enumerate(transition_matrix.states):
-                    matrix_dict[s1][s2] = transition_matrix.probabilities[i, j]
+            for from_state in transition_matrix.states:
+                matrix_dict[from_state] = {}
+                for to_state in transition_matrix.states:
+                    matrix_dict[from_state][to_state] = transition_matrix.probabilities[from_state].get(to_state, 0)
         
         # حساب إنتروبيا الانتقال
         transition_entropy = transition_matrix.entropy if transition_matrix else 0
         
         # حساب معدل الخلط
         mixing_rate = 1.0 / transition_matrix.mixing_time if transition_matrix and transition_matrix.mixing_time > 0 else 0
+        mixing_rate = min(1.0, mixing_rate)
         
         # السرد
         narrative = self.generate_transition_narrative(result, transition_entropy, mixing_rate)
@@ -695,7 +656,7 @@ class QuantumTransitionEngine:
         if entropy > 0.7:
             narrative += "🌊 نظام ذو إنتروبيا عالية - فوضى كمومية.\n"
         elif entropy < 0.3:
-            narrative += "🎯 نظام ذو إنتروبيا منخفضة -秩序 كمومي.\n"
+            narrative += "🎯 نظام ذو إنتروبيا منخفضة - نظام كمومي.\n"
         
         return narrative
     
@@ -717,7 +678,7 @@ class QuantumTransitionEngine:
         while self._active:
             try:
                 # تحديث مستويات الطاقة ببطء
-                for state in self.energy_levels:
+                for state in list(self.energy_levels.keys()):
                     drift = random.uniform(-0.01, 0.01)
                     self.energy_levels[state] = max(0.1, min(2.0, self.energy_levels[state] + drift))
                 
@@ -806,10 +767,10 @@ class QuantumTransitionEngine:
             return None
         
         matrix_dict = {}
-        for i, s1 in enumerate(transition_matrix.states):
-            matrix_dict[s1] = {}
-            for j, s2 in enumerate(transition_matrix.states):
-                matrix_dict[s1][s2] = transition_matrix.probabilities[i, j]
+        for from_state in transition_matrix.states:
+            matrix_dict[from_state] = {}
+            for to_state in transition_matrix.states:
+                matrix_dict[from_state][to_state] = transition_matrix.probabilities[from_state].get(to_state, 0)
         
         return {
             "states": transition_matrix.states,
