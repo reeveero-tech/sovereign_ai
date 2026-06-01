@@ -16,15 +16,12 @@
 """
 
 import json
-import hashlib
 import time
 import threading
-import math
+import random
 import secrets
-from dataclasses import dataclass, field
-from datetime import datetime
-from typing import Dict, Any, List, Optional, Tuple, Set
-from enum import Enum
+from dataclasses import dataclass
+from typing import Dict, Any, List, Optional
 from collections import defaultdict
 
 try:
@@ -76,6 +73,7 @@ DIRECTIVE_STATUS_EXECUTED = "executed"
 DIRECTIVE_STATUS_FAILED = "failed"
 DIRECTIVE_STATUS_SUPERSEDED = "superseded"
 DIRECTIVE_STATUS_SUSPENDED = "suspended"
+DIRECTIVE_STATUS_EXPIRED = "expired"   # تمت إضافة هذا الثابت
 
 
 @dataclass
@@ -125,34 +123,7 @@ class SovereignDirectives:
     4. التوجيهات هي الجسر بين النية والفعل
     5. قوة التوجيهات تكمن في تطبيقها
     """
-    # -------------------------
-    # RESET — إعادة تهيئة كاملة لمحرك التوجيهات السيادية
-    # -------------------------
-    def reset(self):
-        """
-        إعادة تهيئة كاملة لمحرك التوجيهات.
-        """
-
-        # مسح آخر التوجيهات
-        self.last_directives = []
-        self.directive_history = []
-
-        # إعادة تحميل الفهرس
-        self._index = self._load_index()
-
-        # إعادة السياسات الافتراضية
-        self.policies = {
-            "directive_depth": 3,
-            "confidence_threshold": 0.6,
-            "noise_scale": 0.1,
-            "max_directives": 5,
-        }
-
-        # تسجيل عملية إعادة التهيئة
-        self.core.append_event("sovereign::directives::reset", {
-            "timestamp": _now_iso(),
-            "status": "directives_engine_reset"
-        })
+    
     def __init__(self):
         self.core = get_core()
         self.instincts = get_instincts()
@@ -172,6 +143,19 @@ class SovereignDirectives:
         self.constraints: Dict[str, Any] = {}
         self.override_rules: List[Dict[str, Any]] = []
         
+        # حالة المحرك
+        self.last_directives = []
+        self.directive_history = []
+        self._index = self._load_index()
+        
+        # السياسات
+        self.policies = {
+            "directive_depth": 3,
+            "confidence_threshold": 0.6,
+            "noise_scale": 0.1,
+            "max_directives": 5,
+        }
+        
         # خلفيات التوجيهات
         self._active = True
         self._directives_loop = threading.Thread(target=self._continuous_directives, daemon=True)
@@ -188,6 +172,52 @@ class SovereignDirectives:
         self._load_history()
         
         logger.warning("🜲 محرك التوجيهات السيادية جاهز - السلطة التنفيذية للنظام")
+    
+    # -------------------------
+    # RESET — إعادة تهيئة كاملة لمحرك التوجيهات السيادية
+    # -------------------------
+    def reset(self):
+        """
+        إعادة تهيئة كاملة لمحرك التوجيهات.
+        """
+        # مسح آخر التوجيهات
+        self.last_directives = []
+        self.directive_history = []
+        
+        # مسح التوجيهات النشطة
+        self.active_directives.clear()
+        self.directives_history.clear()
+        
+        # إعادة تعيين السياسات والقيود
+        self.operational_policies = {}
+        self.constraints = {}
+        self.override_rules = []
+        
+        # إعادة تحميل الفهرس
+        self._index = self._load_index()
+        
+        # إعادة السياسات الافتراضية
+        self.policies = {
+            "directive_depth": 3,
+            "confidence_threshold": 0.6,
+            "noise_scale": 0.1,
+            "max_directives": 5,
+        }
+        
+        # تسجيل عملية إعادة التهيئة
+        self.core.append_event(
+            event_type="sovereign::directives::reset",
+            payload={
+                "timestamp": time.time(),
+                "status": "directives_engine_reset"
+            }
+        )
+        
+        logger.info("✅ إعادة تهيئة محرك التوجيهات اكتملت")
+    
+    def _load_index(self) -> Dict[str, Any]:
+        """تحميل الفهرس"""
+        return {"directives": [], "last_updated": time.time()}
     
     # ============================================================
     # بناء التوجيهات
@@ -427,7 +457,8 @@ class SovereignDirectives:
         
         # قاعدة: تهديد عالٍ يتجاوز كل شيء
         instinct_status = self.instincts.get_instinct_status()
-        threat_level = instinct_status.get("threat_level", 0) / 4
+        threat_level_value = instinct_status.get("threat_level", 0)
+        threat_level = threat_level_value / 4 if threat_level_value else 0
         
         if threat_level > 0.7:
             rules.append({
@@ -623,6 +654,8 @@ class SovereignDirectives:
             narrative=narrative
         )
         
+        self.directive_history.append(snapshot)
+        
         # تسجيل
         self.core.append_event(
             event_type="directives::snapshot",
@@ -663,6 +696,8 @@ class SovereignDirectives:
         constitutional = [d for d in self.active_directives if d.level == DIRECTIVE_LEVEL_CONSTITUTIONAL]
         strategic = [d for d in self.active_directives if d.level == DIRECTIVE_LEVEL_STRATEGIC]
         tactical = [d for d in self.active_directives if d.level == DIRECTIVE_LEVEL_TACTICAL]
+        
+        level_names = ["", "فوري", "تشغيلي", "تكتيكي", "استراتيجي", "دستوري"]
         
         narrative = f"هناك {len(self.active_directives)} توجيهاً نشطاً. "
         
@@ -797,11 +832,13 @@ class SovereignDirectives:
         """الحالة الحالية للتوجيهات"""
         snapshot = self.directives_cycle()
         
+        level_names = ["", "فوري", "تشغيلي", "تكتيكي", "استراتيجي", "دستوري"]
+        
         return {
             "active_directives": len(snapshot.active_directives),
             "directives_count": snapshot.directives_count,
             "highest_level": snapshot.highest_level,
-            "highest_level_name": ["", "فوري", "تشغيلي", "تكتيكي", "استراتيجي", "دستوري"][snapshot.highest_level],
+            "highest_level_name": level_names[snapshot.highest_level] if snapshot.highest_level < len(level_names) else "",
             "policies_count": len(snapshot.operational_policies),
             "constraints_count": len(snapshot.constraints),
             "override_rules_count": len(snapshot.override_rules),
@@ -812,12 +849,14 @@ class SovereignDirectives:
     
     def get_active_directives(self) -> List[Dict]:
         """التوجيهات النشطة"""
+        level_names = ["", "فوري", "تشغيلي", "تكتيكي", "استراتيجي", "دستوري"]
+        
         return [
             {
                 "id": d.id[:16],
                 "name": d.name,
                 "level": d.level,
-                "level_name": ["", "فوري", "تشغيلي", "تكتيكي", "استراتيجي", "دستوري"][d.level],
+                "level_name": level_names[d.level] if d.level < len(level_names) else "",
                 "priority": d.priority,
                 "content": d.content[:100],
                 "origin": d.origin,
@@ -844,11 +883,14 @@ class SovereignDirectives:
     
     def get_directives_history(self, limit: int = 20) -> List[Dict]:
         """سجل التوجيهات السابقة"""
+        level_names = ["", "فوري", "تشغيلي", "تكتيكي", "استراتيجي", "دستوري"]
+        
         return [
             {
                 "id": d.id[:16],
                 "name": d.name,
                 "level": d.level,
+                "level_name": level_names[d.level] if d.level < len(level_names) else "",
                 "status": d.status,
                 "timestamp": d.timestamp,
                 "executed_at": d.executed_at
