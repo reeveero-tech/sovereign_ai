@@ -16,18 +16,13 @@
 """
 
 import json
-import hashlib
 import time
 import threading
-import math
-import secrets
 import random
-from dataclasses import dataclass, field
-from datetime import datetime, timedelta
-from typing import Dict, Any, List, Optional, Tuple, Set, Callable
-from enum import Enum
+import secrets
+from dataclasses import dataclass
+from typing import Dict, Any, List, Optional, Tuple
 from collections import defaultdict
-import heapq
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 try:
@@ -99,6 +94,12 @@ RUN_STATUS_FAILED = "failed"
 RUN_STATUS_CANCELLED = "cancelled"
 
 
+def _now_iso() -> str:
+    """إرجاع الوقت الحالي بصيغة ISO"""
+    from datetime import datetime, timezone
+    return datetime.now(timezone.utc).isoformat() + "Z"
+
+
 @dataclass
 class SimulationRun:
     """تشغيل محاكاة فردي"""
@@ -157,35 +158,7 @@ class SimulationCore:
     4. التقارير الواضحة توجه القرارات
     5. التكامل مع كل طبقات النظام يعطي دقة عالية
     """
-    # -------------------------
-    # RESET — إعادة تهيئة كاملة لنواة المحاكاة
-    # -------------------------
-    def reset(self):
-        """
-        إعادة تهيئة كاملة لنواة المحاكاة.
-        """
-
-        # مسح الحالة الداخلية
-        self.last_environment_state = {}
-        self.last_simulation_output = {}
-        self.cycle_history = []
-
-        # إعادة تحميل الفهرس
-        self._index = self._load_index()
-
-        # إعادة السياسات الافتراضية
-        self.policies = {
-            "max_cycles": 20,
-            "stability_threshold": 0.5,
-            "noise_scale": 0.1,
-            "environment_sync": True,
-        }
-
-        # تسجيل عملية إعادة التهيئة
-        self.core.append_event("simulation::core::reset", {
-            "timestamp": _now_iso(),
-            "status": "simulation_core_reset"
-        })
+    
     def __init__(self):
         self.core = get_core()
         self.instincts = get_instincts()
@@ -210,6 +183,20 @@ class SimulationCore:
         self.batches: Dict[str, SimulationBatch] = {}
         self.reports: List[SimulationReport] = []
         
+        # حالة المحرك
+        self.last_environment_state = {}
+        self.last_simulation_output = {}
+        self.cycle_history = []
+        self._index = self._load_index()
+        
+        # السياسات
+        self.policies = {
+            "max_cycles": 20,
+            "stability_threshold": 0.5,
+            "noise_scale": 0.1,
+            "environment_sync": True,
+        }
+        
         # إعدادات التشغيل المتوازي
         self.max_workers = 4
         self.executor = ThreadPoolExecutor(max_workers=self.max_workers)
@@ -226,6 +213,53 @@ class SimulationCore:
         self._load_state()
         
         logger.warning("🔁 نواة المحاكاة الداخلية الجبارة جاهزة - تدير آلاف التشغيلات")
+    
+    # -------------------------
+    # RESET — إعادة تهيئة كاملة لنواة المحاكاة
+    # -------------------------
+    def reset(self):
+        """
+        إعادة تهيئة كاملة لنواة المحاكاة.
+        """
+        # مسح الحالة الداخلية
+        self.last_environment_state = {}
+        self.last_simulation_output = {}
+        self.cycle_history = []
+        
+        # مسح التشغيلات والدُفعات
+        self.runs.clear()
+        self.batches.clear()
+        self.reports.clear()
+        
+        # إعادة تعيين الإعدادات
+        self.max_workers = 4
+        self.executor = ThreadPoolExecutor(max_workers=self.max_workers)
+        
+        # إعادة تحميل الفهرس
+        self._index = self._load_index()
+        
+        # إعادة السياسات الافتراضية
+        self.policies = {
+            "max_cycles": 20,
+            "stability_threshold": 0.5,
+            "noise_scale": 0.1,
+            "environment_sync": True,
+        }
+        
+        # تسجيل عملية إعادة التهيئة
+        self.core.append_event(
+            event_type="simulation::core::reset",
+            payload={
+                "timestamp": _now_iso(),
+                "status": "simulation_core_reset"
+            }
+        )
+        
+        logger.info("✅ إعادة تهيئة نواة المحاكاة اكتملت")
+    
+    def _load_index(self) -> Dict[str, Any]:
+        """تحميل الفهرس"""
+        return {"runs": [], "batches": [], "last_updated": time.time()}
     
     # ============================================================
     # إدارة التشغيلات
@@ -338,9 +372,9 @@ class SimulationCore:
             "type": "micro",
             "steps": steps,
             "runs": runs_count,
-            "aggregated": sim_batch.aggregated_stats,
-            "risk_analysis": sim_batch.risk_analysis,
-            "opportunity_analysis": sim_batch.opportunity_analysis
+            "aggregated": sim_batch.aggregated_stats if hasattr(sim_batch, 'aggregated_stats') else {},
+            "risk_analysis": sim_batch.risk_analysis if hasattr(sim_batch, 'risk_analysis') else {},
+            "opportunity_analysis": sim_batch.opportunity_analysis if hasattr(sim_batch, 'opportunity_analysis') else {}
         }
     
     def _run_meso_simulation(self, run: SimulationRun) -> Dict[str, Any]:
@@ -358,9 +392,9 @@ class SimulationCore:
             "type": "meso",
             "steps": steps,
             "runs": runs_count,
-            "aggregated": sim_batch.aggregated_stats,
-            "risk_analysis": sim_batch.risk_analysis,
-            "opportunity_analysis": sim_batch.opportunity_analysis,
+            "aggregated": sim_batch.aggregated_stats if hasattr(sim_batch, 'aggregated_stats') else {},
+            "risk_analysis": sim_batch.risk_analysis if hasattr(sim_batch, 'risk_analysis') else {},
+            "opportunity_analysis": sim_batch.opportunity_analysis if hasattr(sim_batch, 'opportunity_analysis') else {},
             "scenario_integration": scenario_status
         }
     
@@ -379,9 +413,9 @@ class SimulationCore:
             "type": "macro",
             "steps": steps,
             "runs": runs_count,
-            "aggregated": sim_batch.aggregated_stats,
-            "risk_analysis": sim_batch.risk_analysis,
-            "opportunity_analysis": sim_batch.opportunity_analysis,
+            "aggregated": sim_batch.aggregated_stats if hasattr(sim_batch, 'aggregated_stats') else {},
+            "risk_analysis": sim_batch.risk_analysis if hasattr(sim_batch, 'risk_analysis') else {},
+            "opportunity_analysis": sim_batch.opportunity_analysis if hasattr(sim_batch, 'opportunity_analysis') else {},
             "risk_integration": risk_status
         }
     
@@ -561,7 +595,7 @@ class SimulationCore:
             }
             
             # أسرع تشغيل
-            fastest = min(successful, key=lambda x: x.metrics.get("duration_seconds", float('inf')))
+            fastest = min(successful, key=lambda x: x.metrics.get("duration_seconds", 999999))
             summary["fastest_run"] = {
                 "name": fastest.name,
                 "duration": fastest.metrics.get("duration_seconds", 0)
@@ -587,7 +621,7 @@ class SimulationCore:
     # تحليل النتائج
     # ============================================================
     
-    def generate_report(self, batch_id: str) -> SimulationReport:
+    def generate_report(self, batch_id: str):
         """
         توليد تقرير مفصل عن دفعة محاكاة.
         """
@@ -636,14 +670,15 @@ class SimulationCore:
         
         # تحليل حسب السيناريو
         by_scenario = metrics.get("by_scenario", {})
-        best_scenario = max(by_scenario.items(), key=lambda x: x[1].get("avg_success_rate", 0)) if by_scenario else (None, None)
-        worst_scenario = min(by_scenario.items(), key=lambda x: x[1].get("avg_success_rate", 0)) if by_scenario else (None, None)
-        
-        if best_scenario[0]:
-            insights.append(f"أفضل سيناريو: {best_scenario[0]} (نجاح {best_scenario[1]['avg_success_rate']:.1%})")
-        
-        if worst_scenario[0]:
-            insights.append(f"أسوأ سيناريو: {worst_scenario[0]} (نجاح {worst_scenario[1]['avg_success_rate']:.1%})")
+        if by_scenario:
+            best_scenario = max(by_scenario.items(), key=lambda x: x[1].get("avg_success_rate", 0))
+            worst_scenario = min(by_scenario.items(), key=lambda x: x[1].get("avg_success_rate", 0))
+            
+            if best_scenario[0]:
+                insights.append(f"أفضل سيناريو: {best_scenario[0]} (نجاح {best_scenario[1]['avg_success_rate']:.1%})")
+            
+            if worst_scenario[0]:
+                insights.append(f"أسوأ سيناريو: {worst_scenario[0]} (نجاح {worst_scenario[1]['avg_success_rate']:.1%})")
         
         return insights
     
@@ -657,7 +692,7 @@ class SimulationCore:
                 "action": "تحسين أداء النظام",
                 "priority": "عالية",
                 "reason": "نتائج المحاكاة تشير إلى ضعف عام",
-                "confidence": 1 - metrics["avg_success_rate"]
+                "confidence": 1 - metrics.get("avg_success_rate", 0.5)
             })
         
         if metrics.get("avg_risk", 0) > 0.5:
@@ -665,7 +700,7 @@ class SimulationCore:
                 "action": "تفعيل إجراءات تخفيف المخاطر",
                 "priority": "عالية",
                 "reason": "مستوى مخاطر مرتفع في المحاكاة",
-                "confidence": metrics["avg_risk"]
+                "confidence": metrics.get("avg_risk", 0)
             })
         
         # توصيات حسب السيناريو
@@ -676,7 +711,7 @@ class SimulationCore:
                     "action": f"الاستعداد لسيناريو {scenario}",
                     "priority": "متوسطة",
                     "reason": f"مخاطر عالية في هذا السيناريو",
-                    "confidence": data["avg_risk"]
+                    "confidence": data.get("avg_risk", 0)
                 })
         
         return recommendations
@@ -761,7 +796,7 @@ class SimulationCore:
     # دورة نواة المحاكاة
     # ============================================================
     
-    def core_cycle(self) -> SimulationReport:
+    def core_cycle(self):
         """
         دورة نواة محاكاة كاملة.
         
