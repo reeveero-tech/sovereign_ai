@@ -17,6 +17,7 @@
 
 import json
 import hashlib
+import secrets
 import time
 import math
 import threading
@@ -33,9 +34,9 @@ try:
     from ..store import get_store
     from ...config import DATA_DIR
 except ImportError:
-    from core import get_core, EventType
-    from dynamic import get_dynamic_memory
-    from store import get_store
+    from memory.core import get_core, EventType
+    from memory.dynamic import get_dynamic_memory
+    from memory.store import get_store
     from config import DATA_DIR
 
 import logging
@@ -138,46 +139,7 @@ class IntentionalForgetting:
     4. النسيان ليس حذفاً دائماً (يمكن الاستعادة)
     5. كل نسيان يُسجل ويتعلم منه
     """
-    # -------------------------
-# RESET — إعادة تهيئة كاملة لنظام النسيان المقصود
-# -------------------------
-def reset(self):
-    """
-    إعادة تهيئة كاملة لنظام النسيان المقصود.
     
-    يمسح:
-    - العناصر المنسية (forgotten items)
-    - الأثر الذاكري (memory traces)
-    - سجل أحداث النسيان (forgetting events)
-    """
-    logger.info("🔄 إعادة تهيئة نظام النسيان المقصود...")
-    
-    # مسح العناصر المنسية
-    self.forgotten_items.clear()
-    
-    # مسح الأثر الذاكري
-    self.memory_traces.clear()
-    
-    # مسح سجل أحداث النسيان
-    self.forgetting_events.clear()
-    
-    # إعادة تعيين مستوى النسيان
-    self.forget_level = FORGET_LEVEL_MODERATE
-    self.forgetting_strategy = ForgettingStrategy.SMART
-    
-    # إعادة تحميل الفهرس
-    self._index = self._load_index()
-    
-    # تسجيل حدث إعادة التهيئة
-    self.core.append_event(
-        event_type="biological::forgetting_reset",
-        payload={
-            "timestamp": time.time(),
-            "status": "forgetting_system_reset"
-        }
-    )
-    
-    logger.info("✅ إعادة تهيئة نظام النسيان المقصود اكتملت - تم تذكر كل شيء مؤقتاً")
     def __init__(self):
         self.core = get_core()
         self.dynamic = get_dynamic_memory()
@@ -210,6 +172,44 @@ def reset(self):
         self._load_state()
         
         logger.info("🧠 نظام النسيان المقصود جاهز - الحكمة في معرفة متى تنسى")
+    
+    # -------------------------
+    # RESET — إعادة تهيئة كاملة لنظام النسيان المقصود
+    # -------------------------
+    def reset(self):
+        """
+        إعادة تهيئة كاملة لنظام النسيان المقصود.
+        
+        يمسح:
+        - العناصر المنسية (forgotten items)
+        - الأثر الذاكري (memory traces)
+        - سجل أحداث النسيان (forgetting events)
+        """
+        logger.info("🔄 إعادة تهيئة نظام النسيان المقصود...")
+        
+        # مسح العناصر المنسية
+        self.forgotten_items.clear()
+        
+        # مسح الأثر الذاكري
+        self.memory_traces.clear()
+        
+        # مسح سجل أحداث النسيان
+        self.forgetting_events.clear()
+        
+        # إعادة تعيين مستوى النسيان
+        self.forget_level = FORGET_LEVEL_MODERATE
+        self.forgetting_strategy = ForgettingStrategy.SMART
+        
+        # تسجيل حدث إعادة التهيئة
+        self.core.append_event(
+            event_type="biological::forgetting_reset",
+            payload={
+                "timestamp": time.time(),
+                "status": "forgetting_system_reset"
+            }
+        )
+        
+        logger.info("✅ إعادة تهيئة نظام النسيان المقصود اكتملت - تم تذكر كل شيء مؤقتاً")
     
     # ============================================================
     # منحنى النسيان (Ebbinghaus Curve)
