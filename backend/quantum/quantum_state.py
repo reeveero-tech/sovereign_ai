@@ -17,18 +17,12 @@
 
 import json
 import math
-import cmath
 import random
 import secrets
 import threading
 import time
-import numpy as np
-from dataclasses import dataclass, field
-from datetime import datetime
-from typing import Dict, Any, List, Optional, Tuple, Set
-from enum import Enum
-from collections import defaultdict
-import scipy.linalg as la
+from dataclasses import dataclass
+from typing import Dict, Any, List, Optional
 
 try:
     from ..memory.core import get_core, EventType
@@ -74,17 +68,18 @@ class QuantumAmplitude:
     real: float
     imag: float
     
-    def to_complex(self) -> complex:
+    def to_complex(self):
+        """تحويل إلى عدد مركب (محاكاة)"""
         return complex(self.real, self.imag)
     
     def probability(self) -> float:
         return self.real ** 2 + self.imag ** 2
     
     def phase(self) -> float:
-        return math.atan2(self.imag, self.real)
+        return math.atan2(self.imag, self.real) if self.real != 0 or self.imag != 0 else 0.0
     
     @staticmethod
-    def from_complex(c: complex) -> 'QuantumAmplitude':
+    def from_complex(c):
         return QuantumAmplitude(c.real, c.imag)
 
 
@@ -217,29 +212,13 @@ class QuantumStateEngine:
         self.hamiltonian.clear()
         self.time_evolution_steps = 0
         
-        # 2) إعادة تحميل الفهرس (مسح الملفات المؤقتة)
-        try:
-            # حذف ملف الحالة المؤقت إذا كان موجوداً
-            if QUANTUM_STATE_FILE.exists():
-                # نقوم بنسخ احتياطي قبل الحذف (للأمان)
-                backup_file = QUANTUM_STATE_FILE.with_suffix('.json.bak')
-                import shutil
-                shutil.copy2(QUANTUM_STATE_FILE, backup_file)
-                QUANTUM_STATE_FILE.unlink()
-                logger.debug(f"📁 تم حذف ملف الحالة القديم، نسخة احتياطية في {backup_file}")
-        except Exception as e:
-            logger.warning(f"تحذير: فشل في حذف ملف الحالة: {e}")
-        
-        # إعادة إنشاء الملفات الفارغة
-        QUANTUM_STATE_DIR.mkdir(parents=True, exist_ok=True)
-        
-        # 3) إعادة تعيين السياسات إلى القيم الافتراضية
+        # 2) إعادة تعيين السياسات إلى القيم الافتراضية
         self.policies = self._default_policies.copy()
         
-        # 4) إعادة تعيين إحصائيات إضافية
+        # 3) إعادة تعيين إحصائيات إضافية
         self._active = True  # تأكد من أن المحرك لا يزال نشطاً
         
-        # 5) تسجيل حدث إعادة التهيئة في السجل السيادي
+        # 4) تسجيل حدث إعادة التهيئة في السجل السيادي
         self.core.append_event(
             event_type="quantum::engine_reset",
             payload={
@@ -279,7 +258,7 @@ class QuantumStateEngine:
     # ============================================================
     
     def create_state(self, name: str, basis_states: List[str],
-                     initial_amplitudes: List[complex] = None) -> QuantumState:
+                     initial_amplitudes: List = None) -> QuantumState:
         """
         إنشاء حالة كمومية جديدة.
         
@@ -300,8 +279,9 @@ class QuantumStateEngine:
             # سعات عشوائية
             amplitudes = {}
             for bs in basis_states:
-                amp = complex(random.uniform(-1, 1), random.uniform(-1, 1))
-                amplitudes[bs] = QuantumAmplitude.from_complex(amp)
+                real = random.uniform(-1, 1)
+                imag = random.uniform(-1, 1)
+                amplitudes[bs] = QuantumAmplitude(real=real, imag=imag)
         
         # تطبيع الحالة
         amplitudes = self._normalize_amplitudes(amplitudes)
@@ -396,7 +376,7 @@ class QuantumStateEngine:
             return False
         
         # تطبيق هادامارد على جميع الحالات
-        for basis in state.amplitudes.keys():
+        for basis in list(state.amplitudes.keys()):
             self.apply_hadamard(state_id, basis)
         
         state.type = STATE_TYPE_SUPERPOSITION
@@ -410,7 +390,7 @@ class QuantumStateEngine:
     # ============================================================
     
     def create_entanglement(self, state_a_id: str, state_b_id: str,
-                           strength: float = 0.5) -> Optional[QuantumEntanglement]:
+                           strength: float = 0.5):
         """
         إنشاء تشابك كمومي بين حالتين.
         
@@ -466,7 +446,7 @@ class QuantumStateEngine:
         
         return entanglement
     
-    def measure_entangled(self, entanglement_id: str, which_state: str) -> Optional[str]:
+    def measure_entangled(self, entanglement_id: str, which_state: str):
         """
         قياس حالة متشابكة - يؤثر على الحالة المرتبطة.
         """
@@ -534,14 +514,17 @@ class QuantumStateEngine:
                 amp_i = state.amplitudes[basis_i]
                 amp_j = state.amplitudes[basis_j]
                 
-                # تداخل معقد
-                interference = (amp_i.to_complex() - amp_j.to_complex()) * strength
+                # تداخل معقد (محاكاة)
+                interference_real = (amp_i.real - amp_j.real) * strength
+                interference_imag = (amp_i.imag - amp_j.imag) * strength
                 
-                new_i = amp_i.to_complex() - interference
-                new_j = amp_j.to_complex() + interference
+                new_real_i = amp_i.real - interference_real
+                new_imag_i = amp_i.imag - interference_imag
+                new_real_j = amp_j.real + interference_real
+                new_imag_j = amp_j.imag + interference_imag
                 
-                state.amplitudes[basis_i] = QuantumAmplitude.from_complex(new_i)
-                state.amplitudes[basis_j] = QuantumAmplitude.from_complex(new_j)
+                state.amplitudes[basis_i] = QuantumAmplitude(real=new_real_i, imag=new_imag_i)
+                state.amplitudes[basis_j] = QuantumAmplitude(real=new_real_j, imag=new_imag_j)
         
         # إعادة تطبيع
         state.amplitudes = self._normalize_amplitudes(state.amplitudes)
@@ -560,7 +543,6 @@ class QuantumStateEngine:
             return False
         
         target_amp = state.amplitudes[target_basis]
-        target_prob = target_amp.probability()
         
         # تعزيز الحالة المستهدفة
         for basis, amp in state.amplitudes.items():
@@ -598,11 +580,12 @@ class QuantumStateEngine:
         remaining = 1 - target_amp.probability()
         if remaining > 0:
             other_bases = [b for b in state.amplitudes.keys() if b != target_basis]
-            for basis in other_bases:
-                amp = state.amplitudes[basis]
-                boost = math.sqrt(remaining / len(other_bases))
-                amp.real = max(-1, min(1, amp.real + boost))
-                amp.imag = max(-1, min(1, amp.imag + boost))
+            if other_bases:
+                for basis in other_bases:
+                    amp = state.amplitudes[basis]
+                    boost = math.sqrt(remaining / len(other_bases))
+                    amp.real = max(-1, min(1, amp.real + boost))
+                    amp.imag = max(-1, min(1, amp.imag + boost))
         
         state.amplitudes = self._normalize_amplitudes(state.amplitudes)
         
@@ -614,7 +597,7 @@ class QuantumStateEngine:
     # الانهيار (Collapse)
     # ============================================================
     
-    def collapse_state(self, state_id: str) -> Optional[str]:
+    def collapse_state(self, state_id: str):
         """
         انهيار الحالة الكمومية إلى حالة محددة.
         
@@ -685,38 +668,21 @@ class QuantumStateEngine:
     
     def evolve_state(self, state_id: str, time_step: float = 0.1) -> bool:
         """
-        تطور الحالة الكمومية عبر الزمن.
+        تطور الحالة الكمومية عبر الزمن (محاكاة مبسطة).
         
-        يحاكي معادلة شرودنغر.
+        يحاكي معادلة شرودنغر بشكل مبسط.
         """
         state = self.states.get(state_id)
         if not state:
             return False
         
-        # بناء هاميلتوني بسيط
-        n = state.dimension
-        H = np.zeros((n, n), dtype=complex)
-        
-        # هاميلتوني عشوائي
-        for i in range(n):
-            for j in range(n):
-                H[i, j] = complex(random.uniform(-0.1, 0.1), random.uniform(-0.1, 0.1))
-        
-        # مصفوفة الوحدة
-        I = np.eye(n, dtype=complex)
-        
-        # مؤثر التطور U = e^{-iHt}
-        U = la.expm(-1j * H * time_step)
-        
-        # تطبيق مؤثر التطور
-        bases = list(state.amplitudes.keys())
-        vec = np.array([state.amplitudes[b].to_complex() for b in bases], dtype=complex)
-        
-        new_vec = U @ vec
-        
-        # تحديث السعات
-        for i, basis in enumerate(bases):
-            state.amplitudes[basis] = QuantumAmplitude.from_complex(new_vec[i])
+        # تطوير السعات (محاكاة مبسطة)
+        for basis, amp in state.amplitudes.items():
+            # إضافة تأثير طور عشوائي
+            phase_shift = math.sin(self.time_evolution_steps * time_step) * 0.1
+            new_real = amp.real * math.cos(phase_shift) - amp.imag * math.sin(phase_shift)
+            new_imag = amp.real * math.sin(phase_shift) + amp.imag * math.cos(phase_shift)
+            state.amplitudes[basis] = QuantumAmplitude(real=new_real, imag=new_imag)
         
         # إعادة تطبيع
         state.amplitudes = self._normalize_amplitudes(state.amplitudes)
@@ -730,9 +696,9 @@ class QuantumStateEngine:
         """تطور زمني مستمر"""
         while self._active:
             try:
-                for state_id in self.states:
+                for state_id in list(self.states.keys()):
                     if random.random() < 0.1:  # 10% فرصة
-                        self.evolve_state(state_id, time_step=0.05)
+                        self.evolve_state(state_id, time_step=self.policies.get("evolution_time_step", 0.05))
                 
                 time.sleep(1)  # كل ثانية
             except Exception as e:
@@ -776,9 +742,9 @@ class QuantumStateEngine:
         """فك ترابط مستمر"""
         while self._active:
             try:
-                for state_id in self.states:
+                for state_id in list(self.states.keys()):
                     if random.random() < 0.05:  # 5% فرصة
-                        self.apply_decoherence(state_id, rate=0.02)
+                        self.apply_decoherence(state_id, rate=self.policies.get("decoherence_rate", 0.02))
                 
                 time.sleep(5)  # كل 5 ثوانٍ
             except Exception as e:
@@ -803,7 +769,7 @@ class QuantumStateEngine:
             for j in range(i + 1, len(bases)):
                 amp_i = state.amplitudes[bases[i]]
                 amp_j = state.amplitudes[bases[j]]
-                coherence += abs(amp_i.to_complex() * amp_j.to_complex().conjugate())
+                coherence += abs(amp_i.real * amp_j.real + amp_i.imag * amp_j.imag)
         
         return min(1.0, coherence * 2)
     
@@ -817,7 +783,7 @@ class QuantumStateEngine:
         for amp in state.amplitudes.values():
             purity += amp.probability() ** 2
         
-        return purity
+        return min(1.0, purity)
     
     def calculate_entropy(self, state: QuantumState) -> float:
         """
@@ -831,11 +797,35 @@ class QuantumStateEngine:
                 entropy -= p * math.log2(p)
         
         # تطبيع إلى [0,1]
-        max_entropy = math.log2(len(probabilities)) if len(probabilities) > 1 else 1
+        n = len(probabilities)
+        max_entropy = math.log2(n) if n > 1 else 1
         if max_entropy > 0:
             entropy = entropy / max_entropy
         
         return min(1.0, entropy)
+    
+    def compute_probabilities(self, state_id: str = None) -> Dict[str, float]:
+        """
+        حساب احتمالات الحالة.
+        """
+        if state_id is None and self.current_state:
+            state_id = self.current_state.id
+        elif state_id is None and self.states:
+            state_id = list(self.states.keys())[0]
+        else:
+            return {}
+        
+        state = self.states.get(state_id)
+        if not state:
+            return {}
+        
+        return {basis: amp.probability() for basis, amp in state.amplitudes.items()}
+    
+    def initialize_state(self, basis_states: List[str]) -> QuantumState:
+        """
+        تهيئة حالة كمومية جديدة.
+        """
+        return self.create_state("initialized_state", basis_states)
     
     # ============================================================
     # دورة كمومية كاملة
@@ -1048,7 +1038,7 @@ class QuantumStateEngine:
             "timestamp": time.time()
         }
     
-    def get_state_details(self, state_id: str) -> Optional[Dict]:
+    def get_state_details(self, state_id: str):
         """تفاصيل حالة كمومية"""
         state = self.states.get(state_id)
         if not state:
@@ -1181,7 +1171,8 @@ if __name__ == "__main__":
     # 3) إنشاء تشابك
     print("\n🔗 إنشاء تشابك كمومي...")
     ent = qs.create_entanglement(state1.id, state2.id, strength=0.7)
-    print(f"   تشابك بين {state1.name} و {state2.name} (قوة {ent.strength:.1%})")
+    if ent:
+        print(f"   تشابك بين {state1.name} و {state2.name} (قوة {ent.strength:.1%})")
     
     # 4) تطبيق تداخل
     print("\n🌀 تطبيق تداخل...")
