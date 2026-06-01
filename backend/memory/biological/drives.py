@@ -17,6 +17,7 @@
 
 import json
 import hashlib
+import secrets
 import time
 import threading
 import math
@@ -40,16 +41,16 @@ try:
     from ..biological.instincts import get_instincts
     from ...config import DATA_DIR
 except ImportError:
-    from core import get_core, EventType
-    from store import get_store
-    from dynamic import get_dynamic_memory
-    from defense.watcher import get_watcher
-    from homeostasis import get_homeostasis
-    from metabolism import get_metabolism
-    from evolution import get_evolution
-    from learning import get_learning
-    from plasticity import get_plasticity
-    from instincts import get_instincts
+    from memory.core import get_core, EventType
+    from memory.store import get_store
+    from memory.dynamic import get_dynamic_memory
+    from memory.defense.watcher import get_watcher
+    from memory.biological.homeostasis import get_homeostasis
+    from memory.biological.metabolism import get_metabolism
+    from memory.biological.evolution import get_evolution
+    from memory.biological.learning import get_learning
+    from memory.biological.plasticity import get_plasticity
+    from memory.biological.instincts import get_instincts
     from config import DATA_DIR
 
 import logging
@@ -141,43 +142,7 @@ class SovereignDrives:
     4. الدوافع العليا تخدم السيد
     5. الدافع الأسمى هو خدمة السيد
     """
-    # -------------------------
-# RESET — إعادة تهيئة كاملة لنظام الدوافع السيادية
-# -------------------------
-def reset(self):
-    """
-    إعادة تهيئة كاملة لنظام الدوافع السيادية.
     
-    يمسح:
-    - جميع الدوافع النشطة (active drives)
-    - سجل الدوافع (drive history)
-    - سجل الإشباع (satisfaction events)
-    """
-    logger.info("🔄 إعادة تهيئة نظام الدوافع السيادية...")
-    
-    # إعادة تعيين جميع الدوافع
-    self.drives.clear()
-    self._init_drives()
-    
-    # مسح سجل الدوافع
-    self.drive_history.clear()
-    
-    # مسح سجل الإشباع
-    self.satisfaction_events.clear()
-    
-    # إعادة تعيين مستوى الدوافع
-    self.drive_level = DRIVE_LEVEL_ADVANCED
-    
-    # تسجيل حدث إعادة التهيئة
-    self.core.append_event(
-        event_type="biological::drives_reset",
-        payload={
-            "timestamp": time.time(),
-            "status": "drives_system_reset"
-        }
-    )
-    
-    logger.info("✅ إعادة تهيئة نظام الدوافع السيادية اكتملت - دوافع جديدة")
     def __init__(self):
         self.core = get_core()
         self.store = get_store()
@@ -216,6 +181,44 @@ def reset(self):
         self._load_state()
         
         logger.info("🧬 نظام الدوافع السيادية جاهز - القوى الخفية تحرك الذاكرة")
+    
+    # -------------------------
+    # RESET — إعادة تهيئة كاملة لنظام الدوافع السيادية
+    # -------------------------
+    def reset(self):
+        """
+        إعادة تهيئة كاملة لنظام الدوافع السيادية.
+        
+        يمسح:
+        - جميع الدوافع النشطة (active drives)
+        - سجل الدوافع (drive history)
+        - سجل الإشباع (satisfaction events)
+        """
+        logger.info("🔄 إعادة تهيئة نظام الدوافع السيادية...")
+        
+        # إعادة تعيين جميع الدوافع
+        self.drives.clear()
+        self._init_drives()
+        
+        # مسح سجل الدوافع
+        self.drive_history.clear()
+        
+        # مسح سجل الإشباع
+        self.satisfaction_events.clear()
+        
+        # إعادة تعيين مستوى الدوافع
+        self.drive_level = DRIVE_LEVEL_ADVANCED
+        
+        # تسجيل حدث إعادة التهيئة
+        self.core.append_event(
+            event_type="biological::drives_reset",
+            payload={
+                "timestamp": time.time(),
+                "status": "drives_system_reset"
+            }
+        )
+        
+        logger.info("✅ إعادة تهيئة نظام الدوافع السيادية اكتملت - دوافع جديدة")
     
     # ============================================================
     # تهيئة الدوافع
