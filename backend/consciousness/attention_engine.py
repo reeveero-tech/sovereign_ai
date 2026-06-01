@@ -17,10 +17,11 @@
 
 import json
 import hashlib
+import secrets
 import time
 import threading
 import math
-import secrets
+import random
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Dict, Any, List, Optional, Tuple, Set
@@ -39,10 +40,10 @@ try:
 except ImportError:
     from memory.core import get_core
     from memory.dynamic import get_dynamic_memory
-    from awareness import get_awareness_engine
-    from field import get_consciousness_field
-    from self_model import get_self_model
-    from biological.meta_cognition import get_meta_cognition
+    from consciousness.awareness import get_awareness_engine
+    from consciousness.field import get_consciousness_field
+    from consciousness.self_model import get_self_model
+    from memory.biological.meta_cognition import get_meta_cognition
     from config import DATA_DIR
 
 import logging
@@ -137,69 +138,21 @@ class AttentionEngine:
     4. المقاطعة تحمي من الخطر
     5. الانتباه المستدام هو أساس الإتقان
     """
-    # -------------------------
-# RESET — إعادة تهيئة كاملة لمحرك الانتباه
-# -------------------------
-def reset(self):
-    """
-    إعادة تهيئة كاملة لمحرك الانتباه.
     
-    يمسح:
-    - جميع التخصيصات (allocations)
-    - بؤرة الانتباه (spotlight)
-    - سجل الانتباه المستدام (sustained attention)
-    - سجل اللقطات (snapshots)
-    """
-    logger.info("🔄 إعادة تهيئة محرك الانتباه...")
-    
-    # مسح جميع التخصيصات
-    self.allocations.clear()
-    
-    # مسح بؤرة الانتباه
-    self.spotlight.clear()
-    
-    # مسح سجل الانتباه المستدام
-    self.sustained_attention_items.clear()
-    
-    # مسح سجل اللقطات
-    self.snapshots.clear()
-    
-    # إعادة تعيين موارد الانتباه
-    self.total_attention_resources = 100.0
-    self.used_resources = 0.0
-    
-    # إعادة تعيين السياسات
-    self.policies = {
-        "spotlight_budget": 4,
-        "spotlight_min_share": 0.12,
-        "background_total_share": 0.4,
-        "reflective_total_share": 0.15,
-        "preemption_threat_threshold": 0.6,
-        "sustain_decay": 0.85,
-        "recency_boost": 0.25,
-        "priority_exponent": 1.6,
-    }
-    
-    # إعادة تحميل الفهرس
-    self._index = self._load_index()
-    
-    # تسجيل حدث إعادة التهيئة
-    self.core.append_event(
-        event_type="consciousness::attention_reset",
-        payload={
-            "timestamp": time.time(),
-            "status": "attention_engine_reset"
-        }
-    )
-    
-    logger.info("✅ إعادة تهيئة محرك الانتباه اكتملت - انتباه نقي")
     def __init__(self):
         self.core = get_core()
         self.dynamic = get_dynamic_memory()
         self.awareness = get_awareness_engine()
         self.field = get_consciousness_field()
         self.self_model = get_self_model()
-        self.meta = get_meta_cognition()
+        
+        # محاولة استيراد meta_cognition (قد لا يكون موجوداً)
+        try:
+            from ..biological.meta_cognition import get_meta_cognition
+            self.meta = get_meta_cognition()
+        except:
+            self.meta = None
+            logger.debug("meta_cognition غير متوفر")
         
         # موارد الانتباه
         self.total_attention_resources = 100.0  # 100 وحدة انتباه
@@ -214,6 +167,18 @@ def reset(self):
         
         # أنماط الانتباه المستدام
         self.sustained_attention_items: Dict[str, float] = {}  # item_id -> accumulated_time
+        
+        # السياسات
+        self.policies = {
+            "spotlight_budget": 4,
+            "spotlight_min_share": 0.12,
+            "background_total_share": 0.4,
+            "reflective_total_share": 0.15,
+            "preemption_threat_threshold": 0.6,
+            "sustain_decay": 0.85,
+            "recency_boost": 0.25,
+            "priority_exponent": 1.6,
+        }
         
         # خلفيات الانتباه
         self._active = True
@@ -230,6 +195,60 @@ def reset(self):
         self._load_state()
         
         logger.info("🎯 محرك الانتباه السيادي جاهز - أثمن مورد يوزع بحكمة")
+    
+    # -------------------------
+    # RESET — إعادة تهيئة كاملة لمحرك الانتباه
+    # -------------------------
+    def reset(self):
+        """
+        إعادة تهيئة كاملة لمحرك الانتباه.
+        
+        يمسح:
+        - جميع التخصيصات (allocations)
+        - بؤرة الانتباه (spotlight)
+        - سجل الانتباه المستدام (sustained attention)
+        - سجل اللقطات (snapshots)
+        """
+        logger.info("🔄 إعادة تهيئة محرك الانتباه...")
+        
+        # مسح جميع التخصيصات
+        self.allocations.clear()
+        
+        # مسح بؤرة الانتباه
+        self.spotlight.clear()
+        
+        # مسح سجل الانتباه المستدام
+        self.sustained_attention_items.clear()
+        
+        # مسح سجل اللقطات
+        self.snapshots.clear()
+        
+        # إعادة تعيين موارد الانتباه
+        self.total_attention_resources = 100.0
+        self.used_resources = 0.0
+        
+        # إعادة تعيين السياسات
+        self.policies = {
+            "spotlight_budget": 4,
+            "spotlight_min_share": 0.12,
+            "background_total_share": 0.4,
+            "reflective_total_share": 0.15,
+            "preemption_threat_threshold": 0.6,
+            "sustain_decay": 0.85,
+            "recency_boost": 0.25,
+            "priority_exponent": 1.6,
+        }
+        
+        # تسجيل حدث إعادة التهيئة
+        self.core.append_event(
+            event_type="consciousness::attention_reset",
+            payload={
+                "timestamp": time.time(),
+                "status": "attention_engine_reset"
+            }
+        )
+        
+        logger.info("✅ إعادة تهيئة محرك الانتباه اكتملت - انتباه نقي")
     
     # ============================================================
     # جمع عناصر الاهتمام
@@ -277,25 +296,23 @@ def reset(self):
             })
         
         # إشارات من الغرائز (طارئة)
-        instinct_status = self.instincts = getattr(self, 'instincts', None)
-        if not instinct_status:
-            try:
-                from ..memory.biological.instincts import get_instincts
-                self.instincts = get_instincts()
-                instinct_status = self.instincts.get_instinct_status()
-            except:
-                instinct_status = {}
-        
-        if instinct_status.get("protection_active"):
-            items.append({
-                "id": "global_protection",
-                "source": "instincts",
-                "base_priority": 0.95,
-                "channel": "urgent",
-                "summary": "نظام الحماية نشط",
-                "urgency": 1.0,
-                "sustained_potential": True
-            })
+        try:
+            from ..memory.biological.instincts import get_instincts
+            instincts = get_instincts()
+            instinct_status = instincts.get_instinct_status()
+            
+            if instinct_status.get("protection_active"):
+                items.append({
+                    "id": "global_protection",
+                    "source": "instincts",
+                    "base_priority": 0.95,
+                    "channel": "urgent",
+                    "summary": "نظام الحماية نشط",
+                    "urgency": 1.0,
+                    "sustained_potential": True
+                })
+        except:
+            pass
         
         return items
     
