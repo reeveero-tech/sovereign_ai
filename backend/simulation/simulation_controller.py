@@ -16,17 +16,12 @@
 """
 
 import json
-import hashlib
 import time
 import threading
-import math
-import secrets
 import random
-from dataclasses import dataclass, field
-from datetime import datetime
-from typing import Dict, Any, List, Optional, Tuple, Set
-from enum import Enum
-from collections import defaultdict
+import secrets
+from dataclasses import dataclass
+from typing import Dict, Any, List, Optional
 
 try:
     from ..memory.core import get_core, EventType
@@ -38,10 +33,10 @@ try:
 except ImportError:
     from memory.core import get_core, EventType
     from config import DATA_DIR
-    from simulation_core import get_simulation_core
-    from simulation_environment import get_simulation_environment_manager
-    from simulation_scheduler import get_simulation_scheduler
-    from simulation_analyzer import get_simulation_analyzer
+    from .simulation_core import get_simulation_core
+    from .simulation_environment import get_simulation_environment_manager
+    from .simulation_scheduler import get_simulation_scheduler
+    from .simulation_analyzer import get_simulation_analyzer
 
 import logging
 logger = logging.getLogger(__name__)
@@ -73,6 +68,12 @@ CONTROLLER_STATUS_RUNNING = "running"
 CONTROLLER_STATUS_ANALYZING = "analyzing"
 CONTROLLER_STATUS_OPTIMIZING = "optimizing"
 CONTROLLER_STATUS_ERROR = "error"
+
+
+def _now_iso() -> str:
+    """إرجاع الوقت الحالي بصيغة ISO"""
+    from datetime import datetime, timezone
+    return datetime.now(timezone.utc).isoformat() + "Z"
 
 
 @dataclass
@@ -118,58 +119,7 @@ class SimulationController:
     4. التكامل السلس يسرع التنفيذ
     5. المراقبة المستمرة تضمن الجودة
     """
-    # -------------------------
-    # RESET — إعادة تهيئة كاملة لمتحكم المحاكاة
-    # -------------------------
-    def reset(self):
-        """
-        إعادة تهيئة كاملة لمتحكم المحاكاة.
-        """
-
-        # إعادة الوضع الافتراضي
-        self.mode = "simulation"
-
-        # مسح نتائج التكامل السابقة
-        self.last_output = {}
-        self.controller_history = []
-
-        # إعادة تحميل الفهرس
-        self._index = self._load_index()
-
-        # إعادة السياسات الافتراضية
-        self.policies = {
-            "max_controller_depth": 5,
-            "stability_threshold": 0.5,
-            "noise_scale": 0.1,
-            "auto_balance": True,
-        }
-
-        # إعادة تهيئة المحركات التابعة
-        try:
-            self.core_engine.reset()
-        except:
-            pass
-
-        try:
-            self.environment.reset()
-        except:
-            pass
-
-        try:
-            self.scheduler.reset()
-        except:
-            pass
-
-        try:
-            self.analyzer.reset()
-        except:
-            pass
-
-        # تسجيل عملية إعادة التهيئة
-        self.core.append_event("simulation::controller::reset", {
-            "timestamp": _now_iso(),
-            "status": "simulation_controller_reset"
-        })
+    
     def __init__(self):
         self.core = get_core()
         self.sim_core = get_simulation_core()
@@ -181,6 +131,20 @@ class SimulationController:
         self.status = CONTROLLER_STATUS_IDLE
         self.decisions: List[ControlDecision] = []
         self.recommendations: List[Dict[str, Any]] = []
+        
+        # حالة التكامل
+        self.mode = "simulation"
+        self.last_output = {}
+        self.controller_history = []
+        self._index = self._load_index()
+        
+        # السياسات
+        self.policies = {
+            "max_controller_depth": 5,
+            "stability_threshold": 0.5,
+            "noise_scale": 0.1,
+            "auto_balance": True,
+        }
         
         # إحصائيات
         self.stats = {
@@ -205,6 +169,80 @@ class SimulationController:
         self._load_state()
         
         logger.warning("🎛 المتحكم الأعلى لطبقة المحاكاة الجبار جاهز - قيادة موحدة لكل عمليات المحاكاة")
+    
+    # -------------------------
+    # RESET — إعادة تهيئة كاملة لمتحكم المحاكاة
+    # -------------------------
+    def reset(self):
+        """
+        إعادة تهيئة كاملة لمتحكم المحاكاة.
+        """
+        # إعادة الوضع الافتراضي
+        self.mode = "simulation"
+        
+        # مسح نتائج التكامل السابقة
+        self.last_output = {}
+        self.controller_history = []
+        
+        # إعادة تعيين حالة المتحكم
+        self.status = CONTROLLER_STATUS_IDLE
+        self.decisions = []
+        self.recommendations = []
+        
+        # إعادة تعيين الإحصائيات
+        self.stats = {
+            "total_batches_run": 0,
+            "total_jobs_scheduled": 0,
+            "total_analyses_performed": 0,
+            "total_decisions_made": 0
+        }
+        
+        # إعادة تحميل الفهرس
+        self._index = self._load_index()
+        
+        # إعادة السياسات الافتراضية
+        self.policies = {
+            "max_controller_depth": 5,
+            "stability_threshold": 0.5,
+            "noise_scale": 0.1,
+            "auto_balance": True,
+        }
+        
+        # إعادة تهيئة المحركات التابعة
+        try:
+            self.sim_core.reset()
+        except:
+            pass
+        
+        try:
+            self.env_manager.reset()
+        except:
+            pass
+        
+        try:
+            self.scheduler.reset()
+        except:
+            pass
+        
+        try:
+            self.analyzer.reset()
+        except:
+            pass
+        
+        # تسجيل عملية إعادة التهيئة
+        self.core.append_event(
+            event_type="simulation::controller::reset",
+            payload={
+                "timestamp": _now_iso(),
+                "status": "simulation_controller_reset"
+            }
+        )
+        
+        logger.info("✅ إعادة تهيئة متحكم المحاكاة اكتملت")
+    
+    def _load_index(self) -> Dict[str, Any]:
+        """تحميل الفهرس"""
+        return {"decisions": [], "last_updated": time.time()}
     
     # ============================================================
     # الأوامر عالية المستوى
@@ -263,9 +301,6 @@ class SimulationController:
     
     def _execute_batch(self, scenarios: List[str], runs: int, steps: int, name: str) -> Dict[str, Any]:
         """تنفيذ دفعة محاكاة"""
-        # إنشاء بيئة إذا لزم الأمر
-        self.env_manager.ensure_default_environment()
-        
         # تشغيل الدفعة
         batch_id = self.sim_core.run_custom_batch(name, scenarios, runs, steps)
         
@@ -277,7 +312,7 @@ class SimulationController:
                 break
         
         # تحليل النتائج
-        if batch and batch.completed_at:
+        if batch and hasattr(batch, 'completed_at') and batch.completed_at:
             report = self.analyzer.analyze_batch(batch_id)
             
             return {
@@ -611,7 +646,7 @@ class SimulationController:
         snapshot = ControlSnapshot(
             timestamp=time.time(),
             status=self.status,
-            active_batches=len([b for b in self.sim_core.batches.values() if not b.completed_at]),
+            active_batches=len([b for b in self.sim_core.batches.values() if not hasattr(b, 'completed_at') or not b.completed_at]),
             scheduled_jobs=scheduler_status.get("pending_jobs", 0),
             total_analyses=self.stats["total_analyses_performed"],
             pending_decisions=len([d for d in self.decisions if d.status == "pending"]),
@@ -620,6 +655,8 @@ class SimulationController:
             system_health=health,
             narrative=narrative
         )
+        
+        self.controller_history.append(snapshot)
         
         # تسجيل
         self.core.append_event(
@@ -643,7 +680,7 @@ class SimulationController:
         """
         narrative = f"🎛 **حالة المتحكم**: {self.status}\n"
         narrative += f"🏥 **صحة النظام**: {health:.1%}\n"
-        narrative += f"📊 **دفعات نشطة**: {len([b for b in self.sim_core.batches.values() if not b.completed_at])}\n"
+        narrative += f"📊 **دفعات نشطة**: {len([b for b in self.sim_core.batches.values() if not hasattr(b, 'completed_at') or not b.completed_at])}\n"
         narrative += f"⏱ **وظائف مجدولة**: {scheduler_status.get('pending_jobs', 0)}\n"
         narrative += f"📈 **إجمالي التحليلات**: {self.stats['total_analyses_performed']}\n"
         
@@ -740,14 +777,15 @@ class SimulationController:
         
         # إنهاء الدفعات النشطة
         for batch in self.sim_core.batches.values():
-            if not batch.completed_at:
+            if not hasattr(batch, 'completed_at') or not batch.completed_at:
                 # وضع علامة كمكتمل بالقوة
-                batch.completed_at = time.time()
+                if hasattr(batch, 'completed_at'):
+                    batch.completed_at = time.time()
         
         result = {
             "emergency_stop": True,
             "cancelled_jobs": len(jobs),
-            "stopped_batches": len([b for b in self.sim_core.batches.values() if b.completed_at]),
+            "stopped_batches": len([b for b in self.sim_core.batches.values() if hasattr(b, 'completed_at') and b.completed_at]),
             "timestamp": time.time()
         }
         
