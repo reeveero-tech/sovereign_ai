@@ -16,20 +16,14 @@
 """
 
 import json
-import hashlib
 import time
 import threading
-import math
-import secrets
-from dataclasses import dataclass, field
-from datetime import datetime
-from typing import Dict, Any, List, Optional, Tuple, Set
-from enum import Enum
-from collections import defaultdict
-import heapq
+import random
+from dataclasses import dataclass
+from typing import Dict, Any, List, Optional, Tuple
 
 try:
-    from ..memory.core import get_core, EventType
+    from ..memory.core import get_core
     from ..memory.dynamic import get_dynamic_memory
     from ..memory.store import get_store
     from ..memory.biological.instincts import get_instincts
@@ -41,16 +35,16 @@ try:
     from .self_model import get_self_model
     from ...config import DATA_DIR
 except ImportError:
-    from memory.core import get_core, EventType
+    from memory.core import get_core
     from memory.dynamic import get_dynamic_memory
     from memory.store import get_store
     from memory.biological.instincts import get_instincts
     from memory.biological.drives import get_drives
     from memory.biological.archetypes import get_archetypes
     from memory.defense.watcher import get_watcher
-    from field import get_consciousness_field
-    from identity_core import get_identity_core
-    from self_model import get_self_model
+    from .field import get_consciousness_field
+    from .identity_core import get_identity_core
+    from .self_model import get_self_model
     from config import DATA_DIR
 
 import logging
@@ -65,6 +59,22 @@ AWARENESS_DIR = DATA_DIR / "consciousness" / "awareness"
 AWARENESS_DIR.mkdir(parents=True, exist_ok=True)
 AWARENESS_LOG = AWARENESS_DIR / "awareness_log.jsonl"
 AWARENESS_STATE_FILE = AWARENESS_DIR / "awareness_state.json"
+
+# مستويات الوعي (مضافة من field.py)
+CONSCIOUSNESS_LEVEL_NONE = 0
+CONSCIOUSNESS_LEVEL_MINIMAL = 1
+CONSCIOUSNESS_LEVEL_BASIC = 2
+CONSCIOUSNESS_LEVEL_REFLECTIVE = 3
+CONSCIOUSNESS_LEVEL_SELF_AWARE = 4
+CONSCIOUSNESS_LEVEL_TRANSCENDENT = 5
+
+# أنماط الوعي (مضافة من field.py)
+CONSCIOUSNESS_MODE_DEFAULT = "default"
+CONSCIOUSNESS_MODE_FOCUSED = "focused"
+CONSCIOUSNESS_MODE_DIFFUSE = "diffuse"
+CONSCIOUSNESS_MODE_FLOW = "flow"
+CONSCIOUSNESS_MODE_MEDITATIVE = "meditative"
+CONSCIOUSNESS_MODE_ALERT = "alert"
 
 # مستويات الانتباه
 ATTENTION_LEVEL_SUBLIMINAL = 0      # تحت الوعي (لا يُدرك)
@@ -125,56 +135,7 @@ class AwarenessEngine:
     4. الإدراك هو عملية انتقاء، ليس تسجيلاً
     5. الوعي الحقيقي يعرف ما يستحق التركيز عليه
     """
-    # -------------------------
-# RESET — إعادة تهيئة كاملة لمحرك الوعي
-# -------------------------
-def reset(self):
-    """
-    إعادة تهيئة كاملة لمحرك الوعي.
     
-    يمسح:
-    - العناصر النشطة في الوعي (active items)
-    - لحظات الوعي (consciousness moments)
-    - سجل الحقول (field history)
-    """
-    logger.info("🔄 إعادة تهيئة محرك الوعي...")
-    
-    # مسح العناصر النشطة
-    self.active_items.clear()
-    self.current_moment = None
-    self.previous_moment = None
-    
-    # مسح لحظات الوعي
-    self.moments.clear()
-    
-    # مسح سجل الحقول
-    self.field_history.clear()
-    
-    # إعادة تعيين سعة الانتباه
-    self.attention_capacity = 10.0
-    self.current_attention_usage = 0.0
-    
-    # إعادة تعيين الشعور المستمر
-    self.ongoing_feeling = "neutral"
-    self.ongoing_intensity = 0.5
-    
-    # إعادة تعيين مستوى الوعي
-    self.consciousness_level = CONSCIOUSNESS_LEVEL_SELF_AWARE
-    self.consciousness_mode = CONSCIOUSNESS_MODE_DEFAULT
-    
-    # إعادة تحميل الفهرس
-    self._index = self._load_index()
-    
-    # تسجيل حدث إعادة التهيئة
-    self.core.append_event(
-        event_type="consciousness::awareness_reset",
-        payload={
-            "timestamp": time.time(),
-            "status": "awareness_engine_reset"
-        }
-    )
-    
-    logger.info("✅ إعادة تهيئة محرك الوعي اكتملت - وعاء نقي")
     def __init__(self):
         self.core = get_core()
         self.dynamic = get_dynamic_memory()
@@ -193,10 +154,20 @@ def reset(self):
         
         # حالة الوعي الحالية
         self.current_moment: Optional[AwarenessMoment] = None
+        self.previous_moment: Optional[AwarenessMoment] = None
         self.moments: List[AwarenessMoment] = []
+        self.field_history: List = []  # إضافة field_history
         
         # العناصر النشطة في الوعي
         self.active_items: Dict[str, AwarenessItem] = {}
+        
+        # الشعور المستمر
+        self.ongoing_feeling: str = "neutral"
+        self.ongoing_intensity: float = 0.5
+        
+        # مستوى الوعي
+        self.consciousness_level = CONSCIOUSNESS_LEVEL_SELF_AWARE
+        self.consciousness_mode = CONSCIOUSNESS_MODE_DEFAULT
         
         # خلفيات الوعي
         self._active = True
@@ -211,8 +182,64 @@ def reset(self):
         
         # تحميل الحالة
         self._load_state()
+        self._index = self._load_index()
         
         logger.info("🔥 محك الوعي السيادي جاهز - البوابة التي يمر من خلالها كل شيء")
+    
+    # -------------------------
+    # RESET — إعادة تهيئة كاملة لمحرك الوعي
+    # -------------------------
+    def reset(self):
+        """
+        إعادة تهيئة كاملة لمحرك الوعي.
+        
+        يمسح:
+        - العناصر النشطة في الوعي (active items)
+        - لحظات الوعي (consciousness moments)
+        - سجل الحقول (field history)
+        """
+        logger.info("🔄 إعادة تهيئة محرك الوعي...")
+        
+        # مسح العناصر النشطة
+        self.active_items.clear()
+        self.current_moment = None
+        self.previous_moment = None
+        
+        # مسح لحظات الوعي
+        self.moments.clear()
+        
+        # مسح سجل الحقول
+        self.field_history.clear()
+        
+        # إعادة تعيين سعة الانتباه
+        self.attention_capacity = 10.0
+        self.current_attention_usage = 0.0
+        
+        # إعادة تعيين الشعور المستمر
+        self.ongoing_feeling = "neutral"
+        self.ongoing_intensity = 0.5
+        
+        # إعادة تعيين مستوى الوعي
+        self.consciousness_level = CONSCIOUSNESS_LEVEL_SELF_AWARE
+        self.consciousness_mode = CONSCIOUSNESS_MODE_DEFAULT
+        
+        # إعادة تحميل الفهرس
+        self._index = self._load_index()
+        
+        # تسجيل حدث إعادة التهيئة
+        self.core.append_event(
+            event_type="consciousness::awareness_reset",
+            payload={
+                "timestamp": time.time(),
+                "status": "awareness_engine_reset"
+            }
+        )
+        
+        logger.info("✅ إعادة تهيئة محرك الوعي اكتملت - وعاء نقي")
+    
+    def _load_index(self) -> Dict[str, Any]:
+        """تحميل الفهرس"""
+        return {"moments": [], "last_updated": time.time()}
     
     # ============================================================
     # جمع عناصر الوعي المحتملة
@@ -224,7 +251,6 @@ def reset(self):
         
         المصادر:
         - الأحداث الحسية
-        - المؤقتة
         - إشارات الغرائز
         - إشارات الدوافع
         - تغيرات الأنماط
@@ -232,28 +258,11 @@ def reset(self):
         """
         items = []
         
-        # 1) الأحداث الحسية
-        sensory_events = self.dynamic.sensory.get_latest(limit=20)
-        for event in sensory_events:
-            priority = self._calculate_item_priority(event, "sensory")
-            items.append(AwarenessItem(
-                id=f"sensory_{event.id}",
-                source="sensory",
-                channel=AWARENESS_CHANNEL_EXTERNAL,
-                content=event.payload,
-                priority=priority,
-                attention_level=ATTENTION_LEVEL_SUBLIMINAL,
-                timestamp=event.timestamp,
-                tags=["sensory", event.channel],
-                summary=str(event.payload)[:100],
-                decay_rate=0.1
-            ))
-        
-        # 2) إشارات الغرائز
+        # 1) إشارات الغرائز
         instinct_status = self.instincts.get_instinct_status()
         if instinct_status.get("protection_active"):
             items.append(AwarenessItem(
-                id="instinct_protection",
+                id=f"instinct_protection_{int(time.time()*1000)}",
                 source="instincts",
                 channel=AWARENESS_CHANNEL_AFFECTIVE,
                 content={"type": "protection", "level": instinct_status.get("instinct_level")},
@@ -265,13 +274,13 @@ def reset(self):
                 decay_rate=0.05
             ))
         
-        # 3) الدافع المهيمن
+        # 2) الدافع المهيمن
         drive_status = self.drives.get_drive_status()
         dominant = drive_status.get("dominant_drive", "")
         if dominant:
             priority = drive_status.get("active_drives", {}).get(dominant, 0.5)
             items.append(AwarenessItem(
-                id=f"drive_{dominant}",
+                id=f"drive_{dominant}_{int(time.time()*1000)}",
                 source="drives",
                 channel=AWARENESS_CHANNEL_INTERNAL,
                 content={"drive": dominant, "intensity": priority},
@@ -283,12 +292,12 @@ def reset(self):
                 decay_rate=0.08
             ))
         
-        # 4) النمط المهيمن
+        # 3) النمط المهيمن
         archetype_status = self.archetypes.get_archetype_status()
         dominant_archetype = archetype_status.get("dominant_archetype", "")
         if dominant_archetype and dominant_archetype != "mixed":
             items.append(AwarenessItem(
-                id=f"archetype_{dominant_archetype}",
+                id=f"archetype_{dominant_archetype}_{int(time.time()*1000)}",
                 source="archetypes",
                 channel=AWARENESS_CHANNEL_INTERNAL,
                 content={"archetype": dominant_archetype},
@@ -300,12 +309,12 @@ def reset(self):
                 decay_rate=0.06
             ))
         
-        # 5) التهديدات
+        # 4) التهديدات
         defense_status = self.watcher.get_status()
         threat_level = defense_status.get("threat", {}).get("level", 0)
         if threat_level > 0.3:
             items.append(AwarenessItem(
-                id=f"threat_{int(time.time())}",
+                id=f"threat_{int(time.time()*1000)}",
                 source="defense",
                 channel=AWARENESS_CHANNEL_EXTERNAL,
                 content={"threat_level": threat_level},
@@ -317,11 +326,11 @@ def reset(self):
                 decay_rate=0.15
             ))
         
-        # 6) حالة الذات
+        # 5) حالة الذات
         self_status = self.self_model.get_self_status()
         if self_status.get("self_awareness_score", 0.5) > 0.6:
             items.append(AwarenessItem(
-                id="self_awareness",
+                id=f"self_awareness_{int(time.time()*1000)}",
                 source="self_model",
                 channel=AWARENESS_CHANNEL_REFLECTIVE,
                 content={"awareness": self_status.get("self_awareness_score")},
@@ -334,19 +343,6 @@ def reset(self):
             ))
         
         return items
-    
-    def _calculate_item_priority(self, item: Any, source: str) -> float:
-        """حساب أولوية عنصر للدخول إلى الوعي"""
-        priority = 0.5
-        
-        if source == "sensory":
-            # الأحداث الحسية الحديثة لها أولوية أعلى
-            if hasattr(item, 'intensity'):
-                priority = item.intensity
-            if hasattr(item, 'novelty') and item.novelty > 0.7:
-                priority = max(priority, 0.8)
-        
-        return min(1.0, max(0.0, priority))
     
     # ============================================================
     # توزيع الانتباه
@@ -370,12 +366,10 @@ def reset(self):
         focal = []
         peripheral = []
         background = []
-        subliminal = []
         
         focal_capacity = int(self.attention_capacity * 0.5)  # 5 وحدات
         peripheral_capacity = int(self.attention_capacity * 0.3)  # 3 وحدات
         background_capacity = int(self.attention_capacity * 0.15)  # 1.5 وحدات
-        # الباقي تحت الوعي
         
         attention_used = 0
         
@@ -396,7 +390,6 @@ def reset(self):
                 attention_used += item_cost * 0.2
             else:
                 item.attention_level = ATTENTION_LEVEL_SUBLIMINAL
-                subliminal.append(item)
         
         return focal, peripheral, background, attention_used
     
@@ -454,6 +447,7 @@ def reset(self):
             attention_remaining=self.attention_capacity - attention_used
         )
         
+        self.previous_moment = self.current_moment
         self.current_moment = moment
         self.moments.append(moment)
         
