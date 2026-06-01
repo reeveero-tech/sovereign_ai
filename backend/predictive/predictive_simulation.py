@@ -16,19 +16,14 @@
 """
 
 import json
-import hashlib
 import time
 import threading
-import math
-import secrets
 import random
-import numpy as np
-from dataclasses import dataclass, field
-from datetime import datetime, timedelta
-from typing import Dict, Any, List, Optional, Tuple, Set
-from enum import Enum
+import secrets
+import math
+from dataclasses import dataclass
+from typing import Dict, Any, List, Optional, Tuple
 from collections import defaultdict
-import heapq
 
 try:
     from ..memory.core import get_core, EventType
@@ -55,8 +50,8 @@ except ImportError:
     from consciousness.introspection import get_introspection_engine
     from sovereign.will import get_sovereign_will
     from sovereign.alignment import get_sovereign_alignment
-    from predictive_engine import get_predictive_engine
-    from predictive_scenarios import get_predictive_scenario_engine
+    from .predictive_engine import get_predictive_engine
+    from .predictive_scenarios import get_predictive_scenario_engine
     from config import DATA_DIR
 
 import logging
@@ -144,34 +139,7 @@ class PredictiveSimulation:
     4. المحاكاة تكشف عن المخفي
     5. المحاكاة الجيدة تنقذ من المفاجآت
     """
-    # -------------------------
-    # RESET — إعادة تهيئة كاملة لمحرك المحاكاة التنبؤية
-    # -------------------------
-    def reset(self):
-        """
-        إعادة تهيئة كاملة لمحرك المحاكاة التنبؤية.
-        """
-
-        # مسح نتائج المحاكاة السابقة
-        self.last_simulation_result = {}
-        self.simulation_history = []
-
-        # إعادة تحميل الفهرس
-        self._index = self._load_index()
-
-        # إعادة السياسات الافتراضية
-        self.policies = {
-            "max_iterations": 12,
-            "stability_threshold": 0.45,
-            "noise_scale": 0.1,
-            "max_branches": 4,
-        }
-
-        # تسجيل عملية إعادة التهيئة
-        self.core.append_event("predictive::simulation::reset", {
-            "timestamp": _now_iso(),
-            "status": "predictive_simulation_reset"
-        })
+    
     def __init__(self):
         self.core = get_core()
         self.instincts = get_instincts()
@@ -196,6 +164,19 @@ class PredictiveSimulation:
         self.volatility = 0.05
         self.drift_rate = 0.02
         
+        # حالة المحرك
+        self.last_simulation_result = {}
+        self.simulation_history_list = []
+        self._index = self._load_index()
+        
+        # السياسات
+        self.policies = {
+            "max_iterations": 12,
+            "stability_threshold": 0.45,
+            "noise_scale": 0.1,
+            "max_branches": 4,
+        }
+        
         # خلفيات المحاكاة
         self._active = True
         self._simulation_loop = threading.Thread(target=self._continuous_simulation, daemon=True)
@@ -208,6 +189,53 @@ class PredictiveSimulation:
         self._load_state()
         
         logger.warning("🔮 محرك المحاكاة التنبؤية الجبار جاهز - يحاكي آلاف المسارات المستقبلية")
+    
+    # -------------------------
+    # RESET — إعادة تهيئة كاملة لمحرك المحاكاة التنبؤية
+    # -------------------------
+    def reset(self):
+        """
+        إعادة تهيئة كاملة لمحرك المحاكاة التنبؤية.
+        """
+        # مسح نتائج المحاكاة السابقة
+        self.last_simulation_result = {}
+        self.simulation_history_list = []
+        
+        # مسح سجل المحاكاة
+        self.simulation_history.clear()
+        self.current_batch = None
+        
+        # إعادة معاملات المحاكاة الافتراضية
+        self.default_runs = 1000
+        self.default_steps = 24
+        self.volatility = 0.05
+        self.drift_rate = 0.02
+        
+        # إعادة تحميل الفهرس
+        self._index = self._load_index()
+        
+        # إعادة السياسات الافتراضية
+        self.policies = {
+            "max_iterations": 12,
+            "stability_threshold": 0.45,
+            "noise_scale": 0.1,
+            "max_branches": 4,
+        }
+        
+        # تسجيل عملية إعادة التهيئة
+        self.core.append_event(
+            event_type="predictive::simulation::reset",
+            payload={
+                "timestamp": time.time(),
+                "status": "predictive_simulation_reset"
+            }
+        )
+        
+        logger.info("✅ إعادة تهيئة محرك المحاكاة اكتملت")
+    
+    def _load_index(self) -> Dict[str, Any]:
+        """تحميل الفهرس"""
+        return {"simulations": [], "last_updated": time.time()}
     
     # ============================================================
     # توليد المسارات العشوائية
@@ -223,7 +251,6 @@ class PredictiveSimulation:
         """
         if seed is not None:
             random.seed(seed)
-            np.random.seed(seed)
         
         trajectory = []
         current = start_state.copy()
@@ -233,7 +260,7 @@ class PredictiveSimulation:
             for key, value in current.items():
                 # حركة براونية مع انجراف
                 drift_term = drift * (1 - value)
-                noise = np.random.normal(0, volatility * value)
+                noise = random.gauss(0, volatility * value)
                 new_value = value + drift_term + noise
                 new_state[key] = max(0.0, min(1.0, new_value))
             
@@ -519,7 +546,7 @@ class PredictiveSimulation:
         avg_opportunity = sum(t.opportunity_score for t in trajectories) / n
         
         # الانحرافات المعيارية
-        success_std = math.sqrt(sum((t.success - avg_success) ** 2 for t in trajectories) / n)
+        success_std = math.sqrt(sum((t.success - avg_success) ** 2 for t in trajectories) / n) if n > 0 else 0
         
         # النسب المئوية
         sorted_risks = sorted(t.risk_score for t in trajectories)
@@ -567,10 +594,10 @@ class PredictiveSimulation:
         for metric in metrics:
             values = [t.outcome_metrics.get(metric, 0) for t in trajectories]
             mean = sum(values) / n
-            std = math.sqrt(sum((v - mean) ** 2 for v in values) / n)
+            std = math.sqrt(sum((v - mean) ** 2 for v in values) / n) if n > 0 else 0
             
             # فاصل ثقة 95%
-            margin = 1.96 * std / math.sqrt(n)
+            margin = 1.96 * std / math.sqrt(n) if n > 0 else 0
             intervals[metric] = (max(0, mean - margin), min(1, mean + margin))
         
         return intervals
@@ -723,6 +750,8 @@ class PredictiveSimulation:
             narrative=narrative
         )
         
+        self.simulation_history_list.append(snapshot)
+        
         # تسجيل
         self.core.append_event(
             event_type="simulation::batch_completed",
@@ -773,11 +802,13 @@ class PredictiveSimulation:
         
         narrative += f"متوسط النجاح: {stats.get('avg_success_rate', 0):.1%}. "
         
-        if stats.get('high_risk_percentage', 0) > 0.3:
-            narrative += f"تحذير: {stats['high_risk_percentage']:.1%} من المسارات عالية المخاطر. "
+        risk_percentage = batch.risk_analysis.get("high_risk_percentage", 0)
+        if risk_percentage > 0.3:
+            narrative += f"تحذير: {risk_percentage:.1%} من المسارات عالية المخاطر. "
         
-        if stats.get('high_opportunity_percentage', 0) > 0.3:
-            narrative += f"فرصة: {stats['high_opportunity_percentage']:.1%} من المسارات عالية الفرص. "
+        opp_percentage = batch.opportunity_analysis.get("high_opportunity_percentage", 0)
+        if opp_percentage > 0.3:
+            narrative += f"فرصة: {opp_percentage:.1%} من المسارات عالية الفرص. "
         
         narrative += f"أسوأ حالة: {stats.get('worst_case', 0):.1%} نجاح. "
         narrative += f"أفضل حالة: {stats.get('best_case', 0):.1%} نجاح."
@@ -824,7 +855,7 @@ class PredictiveSimulation:
     
     def get_simulation_status(self) -> Dict[str, Any]:
         """الحالة الحالية للمحاكاة"""
-        snapshot = self.simulation_cycle()
+        snapshot = self.simulation_cycle(runs=100, steps=12)
         
         return {
             "last_batch_id": snapshot.batch.id[:16],
@@ -841,7 +872,7 @@ class PredictiveSimulation:
     def get_simulation_results(self) -> Dict[str, Any]:
         """نتائج آخر محاكاة"""
         if not self.current_batch:
-            self.simulation_cycle()
+            self.simulation_cycle(runs=100, steps=12)
         
         batch = self.current_batch
         if not batch:
@@ -859,7 +890,7 @@ class PredictiveSimulation:
     def get_recommendations(self) -> List[Dict]:
         """التوصيات من آخر محاكاة"""
         if not self.current_batch:
-            self.simulation_cycle()
+            self.simulation_cycle(runs=100, steps=12)
         
         if self.current_batch:
             return self.current_batch.recommended_actions
@@ -957,7 +988,9 @@ if __name__ == "__main__":
     results = simulation.get_simulation_results()
     if results:
         print(f"   معدل النجاح: {results['aggregated_stats'].get('avg_success_rate', 0):.1%}")
-        print(f"   فاصل ثقة النجاح: [{results['confidence_intervals'].get('overall_success', [0,0])[0]:.1%}, {results['confidence_intervals'].get('overall_success', [0,0])[1]:.1%}]")
+        if 'overall_success' in results.get('confidence_intervals', {}):
+            ci = results['confidence_intervals']['overall_success']
+            print(f"   فاصل ثقة النجاح: [{ci[0]:.1%}, {ci[1]:.1%}]")
     
     # 3) تحليل المخاطر
     print("\n⚠️ تحليل المخاطر:")
