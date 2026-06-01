@@ -17,6 +17,7 @@
 
 import json
 import hashlib
+import secrets
 import time
 import threading
 import random
@@ -32,9 +33,9 @@ try:
     from ...config import DATA_DIR
     from ..defense.watcher import get_watcher
 except ImportError:
-    from core import get_core, EventType
+    from memory.core import get_core, EventType
     from config import DATA_DIR
-    from defense.watcher import get_watcher
+    from memory.defense.watcher import get_watcher
 
 import logging
 logger = logging.getLogger(__name__)
@@ -156,53 +157,7 @@ class ImmuneMemory:
     4. المناعة الجماعية مع النسخ الموزعة
     5. الاستجابة الفورية أسرع من الوقاية
     """
-    # -------------------------
-# RESET — إعادة تهيئة كاملة للجهاز المناعي
-# -------------------------
-def reset(self):
-    """
-    إعادة تهيئة كاملة للجهاز المناعي السيادي.
     
-    يمسح:
-    - جميع المستضدات (antigens)
-    - جميع الأجسام المضادة (antibodies)
-    - خلايا الذاكرة المناعية (memory cells)
-    - سجل الاستجابات المناعية (immune responses)
-    """
-    logger.info("🔄 إعادة تهيئة الجهاز المناعي...")
-    
-    # مسح المستضدات
-    self.antigens.clear()
-    
-    # مسح الأجسام المضادة
-    self.antibodies.clear()
-    
-    # مسح خلايا الذاكرة
-    self.memory_cells.clear()
-    
-    # مسح سجل الاستجابات
-    self.immune_responses.clear()
-    
-    # مسح كاش الحظر السريع
-    self._quick_block_cache.clear()
-    
-    # إعادة تعيين حالة المناعة
-    self.immune_status = ImmuneStatus.HEALTHY
-    self.immunity_level = IMMUNITY_LEVEL_ADAPTIVE
-    
-    # إعادة تحميل الفهرس
-    self._index = self._load_index()
-    
-    # تسجيل حدث إعادة التهيئة
-    self.core.append_event(
-        event_type="biological::immune_reset",
-        payload={
-            "timestamp": time.time(),
-            "status": "immune_system_reset"
-        }
-    )
-    
-    logger.info("✅ إعادة تهيئة الجهاز المناعي اكتملت - مناعة جديدة")
     def __init__(self):
         self.core = get_core()
         self.watcher = get_watcher()
@@ -245,6 +200,51 @@ def reset(self):
         self._load_state()
         
         logger.info("🧬 الجهاز المناعي السيادي جاهز - الجسد الحي يحمي الروح")
+    
+    # -------------------------
+    # RESET — إعادة تهيئة كاملة للجهاز المناعي
+    # -------------------------
+    def reset(self):
+        """
+        إعادة تهيئة كاملة للجهاز المناعي السيادي.
+        
+        يمسح:
+        - جميع المستضدات (antigens)
+        - جميع الأجسام المضادة (antibodies)
+        - خلايا الذاكرة المناعية (memory cells)
+        - سجل الاستجابات المناعية (immune responses)
+        """
+        logger.info("🔄 إعادة تهيئة الجهاز المناعي...")
+        
+        # مسح المستضدات
+        self.antigens.clear()
+        
+        # مسح الأجسام المضادة
+        self.antibodies.clear()
+        
+        # مسح خلايا الذاكرة
+        self.memory_cells.clear()
+        
+        # مسح سجل الاستجابات
+        self.immune_responses.clear()
+        
+        # مسح كاش الحظر السريع
+        self._quick_block_cache.clear()
+        
+        # إعادة تعيين حالة المناعة
+        self.immune_status = ImmuneStatus.HEALTHY
+        self.immunity_level = IMMUNITY_LEVEL_ADAPTIVE
+        
+        # تسجيل حدث إعادة التهيئة
+        self.core.append_event(
+            event_type="biological::immune_reset",
+            payload={
+                "timestamp": time.time(),
+                "status": "immune_system_reset"
+            }
+        )
+        
+        logger.info("✅ إعادة تهيئة الجهاز المناعي اكتملت - مناعة جديدة")
     
     # ============================================================
     # المستوى 1: اكتشاف المستضدات (Antigen Detection)
@@ -973,7 +973,8 @@ def reset(self):
         antibody_types = set(ab.antibody_type for ab in self.antibodies.values())
         score += min(0.3, len(antibody_types) * 0.05)
         
-        # كثافة خلايا الذاكرة        score += min(0.3, len(self.memory_cells) / 100)
+        # كثافة خلايا الذاكرة
+        score += min(0.3, len(self.memory_cells) / 100)
         
         # مستوى المناعة
         score += self.immunity_level * 0.1
