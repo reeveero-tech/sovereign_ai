@@ -17,17 +17,12 @@
 
 import json
 import math
-import cmath
 import random
 import secrets
 import threading
 import time
-import numpy as np
-from dataclasses import dataclass, field
-from datetime import datetime
-from typing import Dict, Any, List, Optional, Tuple, Set
-from enum import Enum
-from collections import defaultdict
+from dataclasses import dataclass
+from typing import Dict, Any, List, Optional
 
 try:
     from ..memory.core import get_core, EventType
@@ -36,8 +31,8 @@ try:
     from ..config import DATA_DIR
 except ImportError:
     from memory.core import get_core, EventType
-    from quantum_state import get_quantum_state_engine, QuantumAmplitude
-    from quantum_transition import get_quantum_transition_engine
+    from .quantum_state import get_quantum_state_engine, QuantumAmplitude
+    from .quantum_transition import get_quantum_transition_engine
     from config import DATA_DIR
 
 import logging
@@ -197,9 +192,6 @@ class QuantumSuperpositionEngine:
         
         # مسح تاريخ القياسات الجزئية
         self.partial_measurements.clear()
-        
-        # إعادة تحميل الفهرس (تفريغ السجلات)
-        # يتم ذلك تلقائياً عبر _load_state ولكن نضمن التنظيف
         
         # إعادة تهيئة السياسات الافتراضية
         self.policies = self._default_policies.copy()
@@ -432,7 +424,8 @@ class QuantumSuperpositionEngine:
                 
                 elif merge_type == MERGE_TYPE_INTERFERING:
                     # تداخل مع حساب الطور النسبي
-                    phase_diff = amp.phase() - target_sp.get(state, QuantumAmplitude(0, 0)).phase()
+                    target_amp = target_sp.get(state, QuantumAmplitude(0, 0))
+                    phase_diff = amp.phase() - target_amp.phase()
                     interference = math.cos(phase_diff)
                     if state in target_sp:
                         target_sp[state] = QuantumAmplitude(
@@ -470,7 +463,7 @@ class QuantumSuperpositionEngine:
             
             if new_amps:
                 new_id = self.create_superposition(new_name, 
-                    {s: new_amps[s].to_complex() for s in new_amps})
+                    {s: complex(new_amps[s].real, new_amps[s].imag) for s in new_amps})
                 new_ids.append(new_id)
         
         logger.info(f"⚛️ تقسيم التراكب {super_id[:16]} إلى {len(new_ids)} تراكب فرعي")
@@ -565,7 +558,7 @@ class QuantumSuperpositionEngine:
     # ============================================================
     
     def partial_measure(self, super_id: str, states_to_measure: List[str],
-                        collapse_probability: float = 0.3) -> PartialMeasurementResult:
+                        collapse_probability: float = 0.3) -> Optional[PartialMeasurementResult]:
         """
         قياس جزئي - قياس مجموعة فرعية من الحالات دون انهيار كامل.
         """
@@ -657,7 +650,7 @@ class QuantumSuperpositionEngine:
             for j in range(i + 1, len(states)):
                 amp_i = amplitudes[states[i]]
                 amp_j = amplitudes[states[j]]
-                coherence += abs(amp_i.to_complex() * amp_j.to_complex().conjugate())
+                coherence += abs(amp_i.real * amp_j.real + amp_i.imag * amp_j.imag)
         
         max_coherence = len(states) * (len(states) - 1) / 2
         if max_coherence > 0:
@@ -767,14 +760,25 @@ class QuantumSuperpositionEngine:
             })
         
         # حساب المقاييس الكلية
-        total_amplitude = sum(abs(amp.to_complex()) for sp in self.superpositions.values() for amp in sp.values())
-        avg_coherence = sum(self._calculate_coherence(sp) for sp in self.superpositions.values()) / max(1, len(self.superpositions))
+        total_amplitude = 0.0
+        for sp in self.superpositions.values():
+            for amp in sp.values():
+                total_amplitude += abs(amp.real + amp.imag)
+        
+        avg_coherence = 0.0
+        for sp in self.superpositions.values():
+            avg_coherence += self._calculate_coherence(sp)
+        if self.superpositions:
+            avg_coherence /= len(self.superpositions)
         
         # إنتروبيا التشابك
         entanglement_entropy = 0.0
         for nested in self.nested_superpositions.values():
             entanglement_entropy += nested.entanglement_degree
-        entanglement_entropy = min(1.0, entanglement_entropy / max(1, len(self.nested_superpositions)))
+        if self.nested_superpositions:
+            entanglement_entropy = min(1.0, entanglement_entropy / len(self.nested_superpositions))
+        else:
+            entanglement_entropy = 0.0
         
         # سرد
         narrative = self.generate_superposition_narrative(len(self.superpositions), avg_coherence, entanglement_entropy)
@@ -943,7 +947,7 @@ def get_quantum_superposition_engine() -> QuantumSuperpositionEngine:
 # ============================================================
 
 if __name__ == "__main__":
-    print("\n" = "=" * 80)
+    print("\n" + "=" * 80)
     print("⚛️ محرك التراكب الكمي الجبار - تراكبات متعددة المستويات")
     print("=" * 80 + "\n")
     
