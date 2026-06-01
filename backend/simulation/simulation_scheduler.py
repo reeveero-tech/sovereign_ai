@@ -16,16 +16,12 @@
 """
 
 import json
-import hashlib
 import time
 import threading
-import math
-import secrets
 import random
-from dataclasses import dataclass, field
-from datetime import datetime, timedelta
-from typing import Dict, Any, List, Optional, Tuple, Set, Callable
-from enum import Enum
+import secrets
+from dataclasses import dataclass
+from typing import Dict, Any, List, Optional, Tuple
 from collections import defaultdict
 import heapq
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -37,7 +33,7 @@ try:
 except ImportError:
     from memory.core import get_core, EventType
     from config import DATA_DIR
-    from simulation_core import get_simulation_core
+    from .simulation_core import get_simulation_core
 
 import logging
 logger = logging.getLogger(__name__)
@@ -78,6 +74,12 @@ PRIORITY_HIGH = 8
 PRIORITY_NORMAL = 5
 PRIORITY_LOW = 3
 PRIORITY_BACKGROUND = 1
+
+
+def _now_iso() -> str:
+    """إرجاع الوقت الحالي بصيغة ISO"""
+    from datetime import datetime, timezone
+    return datetime.now(timezone.utc).isoformat() + "Z"
 
 
 @dataclass
@@ -147,34 +149,7 @@ class SimulationScheduler:
     4. الجدولة المتكررة تمكن المراقبة المستمرة
     5. التكامل مع المحاكاة يضمن التنفيذ السلس
     """
-    # -------------------------
-    # RESET — إعادة تهيئة كاملة لجدولة المحاكاة
-    # -------------------------
-    def reset(self):
-        """
-        إعادة تهيئة كاملة لجدولة المحاكاة.
-        """
-
-        # مسح قائمة المهام المجدولة
-        self.scheduled_tasks = []
-        self.last_schedule_result = {}
-
-        # إعادة تحميل الفهرس
-        self._index = self._load_index()
-
-        # إعادة السياسات الافتراضية
-        self.policies = {
-            "max_tasks": 10,
-            "task_priority_decay": 0.2,
-            "noise_scale": 0.1,
-            "auto_balance": True,
-        }
-
-        # تسجيل عملية إعادة التهيئة
-        self.core.append_event("simulation::scheduler::reset", {
-            "timestamp": _now_iso(),
-            "status": "simulation_scheduler_reset"
-        })
+    
     def __init__(self):
         self.core = get_core()
         self.sim_core = get_simulation_core()
@@ -192,6 +167,19 @@ class SimulationScheduler:
         self.executor = ThreadPoolExecutor(max_workers=self.max_workers)
         self.active_futures: Dict[str, Any] = {}
         
+        # حالة المجدول
+        self.scheduled_tasks = []
+        self.last_schedule_result = {}
+        self._index = self._load_index()
+        
+        # السياسات
+        self.policies = {
+            "max_tasks": 10,
+            "task_priority_decay": 0.2,
+            "noise_scale": 0.1,
+            "auto_balance": True,
+        }
+        
         # خلفيات المجدول
         self._active = True
         self._scheduler_thread = threading.Thread(target=self._scheduler_loop, daemon=True)
@@ -208,6 +196,51 @@ class SimulationScheduler:
         self._load_jobs()
         
         logger.warning("⏱ مجدول تشغيلات المحاكاة الجبار جاهز - يدير آلاف التشغيلات المجدولة")
+    
+    # -------------------------
+    # RESET — إعادة تهيئة كاملة لجدولة المحاكاة
+    # -------------------------
+    def reset(self):
+        """
+        إعادة تهيئة كاملة لجدولة المحاكاة.
+        """
+        # مسح قائمة المهام المجدولة
+        self.scheduled_tasks = []
+        self.last_schedule_result = {}
+        
+        # مسح الوظائف
+        self.jobs.clear()
+        self.executions.clear()
+        
+        # إعادة تعيين قائمة الانتظار
+        with self._queue_lock:
+            self._priority_queue.clear()
+        
+        # إعادة تحميل الفهرس
+        self._index = self._load_index()
+        
+        # إعادة السياسات الافتراضية
+        self.policies = {
+            "max_tasks": 10,
+            "task_priority_decay": 0.2,
+            "noise_scale": 0.1,
+            "auto_balance": True,
+        }
+        
+        # تسجيل عملية إعادة التهيئة
+        self.core.append_event(
+            event_type="simulation::scheduler::reset",
+            payload={
+                "timestamp": _now_iso(),
+                "status": "simulation_scheduler_reset"
+            }
+        )
+        
+        logger.info("✅ إعادة تهيئة مجدول المحاكاة اكتملت")
+    
+    def _load_index(self) -> Dict[str, Any]:
+        """تحميل الفهرس"""
+        return {"jobs": [], "last_updated": time.time()}
     
     # ============================================================
     # إدارة الوظائف
