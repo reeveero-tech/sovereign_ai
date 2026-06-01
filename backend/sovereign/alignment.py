@@ -16,15 +16,12 @@
 """
 
 import json
-import hashlib
 import time
 import threading
-import math
+import random
 import secrets
-from dataclasses import dataclass, field
-from datetime import datetime
-from typing import Dict, Any, List, Optional, Tuple, Set
-from enum import Enum
+from dataclasses import dataclass
+from typing import Dict, Any, List, Optional
 from collections import defaultdict
 
 try:
@@ -36,7 +33,6 @@ try:
     from ..consciousness.self_model import get_self_model
     from ..consciousness.awareness import get_awareness_engine
     from ..consciousness.introspection import get_introspection_engine
-    from .will import get_sovereign_will
     from ...config import DATA_DIR
 except ImportError:
     from memory.core import get_core, EventType
@@ -47,7 +43,6 @@ except ImportError:
     from consciousness.self_model import get_self_model
     from consciousness.awareness import get_awareness_engine
     from consciousness.introspection import get_introspection_engine
-    from will import get_sovereign_will
     from config import DATA_DIR
 
 import logging
@@ -126,34 +121,7 @@ class SovereignAlignment:
     4. الانحراف عن الاصطفاف هو انحراف عن الهدف
     5. قياس الاصطفاف هو قياس جودة الوجود
     """
-    # -------------------------
-    # RESET — إعادة تهيئة كاملة لمحرك الاصطفاف السيادي
-    # -------------------------
-    def reset(self):
-        """
-        إعادة تهيئة كاملة لمحرك الاصطفاف.
-        """
-
-        # مسح آخر حالة اصطفاف
-        self.last_alignment_state = {}
-        self.alignment_history = []
-
-        # إعادة تحميل الفهرس
-        self._index = self._load_index()
-
-        # إعادة السياسات الافتراضية
-        self.policies = {
-            "alignment_depth": 3,
-            "alignment_confidence_threshold": 0.65,
-            "noise_scale": 0.05,
-            "max_alignment_layers": 4,
-        }
-
-        # تسجيل عملية إعادة التهيئة
-        self.core.append_event("sovereign::alignment::reset", {
-            "timestamp": _now_iso(),
-            "status": "sovereign_alignment_reset"
-        })
+    
     def __init__(self):
         self.core = get_core()
         self.instincts = get_instincts()
@@ -163,7 +131,9 @@ class SovereignAlignment:
         self.self_model = get_self_model()
         self.awareness = get_awareness_engine()
         self.introspection = get_introspection_engine()
-        self.will = get_sovereign_will()
+        
+        # will غير متوفر حالياً - استبدال مؤقت
+        self.will = None
         
         # حالة الاصطفاف
         self.alignment_score = 0.8
@@ -172,6 +142,8 @@ class SovereignAlignment:
         # سجل الانحرافات
         self.violations: List[AlignmentViolation] = []
         self.corrected_violations: List[AlignmentViolation] = []
+        self.last_alignment_state = {}
+        self.alignment_history = []
         
         # متجه الاصطفاف
         self.alignment_vector = {
@@ -180,6 +152,14 @@ class SovereignAlignment:
             "decision_alignment": 0.8,       # اصطفاف القرارات
             "directive_compliance": 0.8,     # امتثال للتوجيهات
             "service_dedication": 0.9        # تفاني في الخدمة
+        }
+        
+        # السياسات
+        self.policies = {
+            "alignment_depth": 3,
+            "alignment_confidence_threshold": 0.65,
+            "noise_scale": 0.05,
+            "max_alignment_layers": 4,
         }
         
         # خلفيات الاصطفاف
@@ -196,8 +176,63 @@ class SovereignAlignment:
         # تحميل الحالة
         self._load_state()
         self._load_violations()
+        self._index = self._load_index()
         
         logger.warning("🜲 محرك الاصطفاف السيادي جاهز - كل فعل يتماشى مع السيد")
+    
+    # -------------------------
+    # RESET — إعادة تهيئة كاملة لمحرك الاصطفاف السيادي
+    # -------------------------
+    def reset(self):
+        """
+        إعادة تهيئة كاملة لمحرك الاصطفاف.
+        """
+        # مسح آخر حالة اصطفاف
+        self.last_alignment_state = {}
+        self.alignment_history = []
+        
+        # إعادة تعيين درجة الاصطفاف
+        self.alignment_score = 0.8
+        self.alignment_level = ALIGNMENT_LEVEL_GOOD
+        
+        # مسح الانحرافات
+        self.violations.clear()
+        self.corrected_violations.clear()
+        
+        # إعادة تعيين متجه الاصطفاف
+        self.alignment_vector = {
+            "identity_consistency": 0.8,
+            "behavioral_fidelity": 0.8,
+            "decision_alignment": 0.8,
+            "directive_compliance": 0.8,
+            "service_dedication": 0.9
+        }
+        
+        # إعادة تحميل الفهرس
+        self._index = self._load_index()
+        
+        # إعادة السياسات الافتراضية
+        self.policies = {
+            "alignment_depth": 3,
+            "alignment_confidence_threshold": 0.65,
+            "noise_scale": 0.05,
+            "max_alignment_layers": 4,
+        }
+        
+        # تسجيل عملية إعادة التهيئة
+        self.core.append_event(
+            event_type="sovereign::alignment::reset",
+            payload={
+                "timestamp": time.time(),
+                "status": "sovereign_alignment_reset"
+            }
+        )
+        
+        logger.info("✅ إعادة تهيئة محرك الاصطفاف اكتملت")
+    
+    def _load_index(self) -> Dict[str, Any]:
+        """تحميل الفهرس"""
+        return {"alignments": [], "last_updated": time.time()}
     
     # ============================================================
     # حساب الاصطفاف
@@ -222,15 +257,14 @@ class SovereignAlignment:
         introspection_status = self.introspection.get_introspection_status()
         behavioral_fidelity = introspection_status.get("execution_fidelity", 0.7)
         
-        # 3) اصطفاف القرارات (من الإرادة)
-        will_status = self.will.get_will_status()
-        decision_alignment = will_status.get("sovereign_alignment", 0.7)
+        # 3) اصطفاف القرارات (من الإرادة - غير متوفر حالياً)
+        decision_alignment = 0.8  # قيمة افتراضية
         
         # 4) الامتثال للتوجيهات
         directive_compliance = introspection_status.get("service_quality", 0.7)
         
         # 5) التفاني في الخدمة
-        service_dedication = will_status.get("will_vector", {}).get("service", 0.9)
+        service_dedication = 0.9  # قيمة افتراضية
         
         self.alignment_vector = {
             "identity_consistency": identity_consistency,
@@ -314,9 +348,8 @@ class SovereignAlignment:
                 correction_action=None
             ))
         
-        # 3) فحص اصطفاف القرارات
-        will_status = self.will.get_will_status()
-        decision_alignment = will_status.get("sovereign_alignment", 0.7)
+        # 3) فحص اصطفاف القرارات (مبسط)
+        decision_alignment = 0.8
         if decision_alignment < 0.6:
             violations.append(AlignmentViolation(
                 id=f"viol_{int(time.time()*1000)}_{secrets.token_hex(4)}",
@@ -570,6 +603,12 @@ class SovereignAlignment:
             narrative=narrative
         )
         
+        self.alignment_history.append(snapshot)
+        
+        # الاحتفاظ بآخر 100 لقطة
+        if len(self.alignment_history) > 100:
+            self.alignment_history = self.alignment_history[-100:]
+        
         # تسجيل
         self.core.append_event(
             event_type="alignment::snapshot",
@@ -677,10 +716,12 @@ class SovereignAlignment:
         """الحالة الحالية للاصطفاف"""
         snapshot = self.alignment_cycle()
         
+        level_names = ["حرج", "منخفض", "متوسط", "جيد", "عالٍ", "كامل"]
+        
         return {
             "alignment_score": snapshot.alignment_score,
             "alignment_level": snapshot.alignment_level,
-            "alignment_level_name": ["حرج", "منخفض", "متوسط", "جيد", "عالٍ", "كامل"][snapshot.alignment_level],
+            "alignment_level_name": level_names[snapshot.alignment_level] if snapshot.alignment_level < len(level_names) else "جيد",
             "alignment_vector": snapshot.alignment_vector,
             "behavioral_alignment": snapshot.behavioral_alignment,
             "identity_alignment": snapshot.identity_alignment,
@@ -694,7 +735,12 @@ class SovereignAlignment:
     
     def get_violations(self, resolved: Optional[bool] = None) -> List[Dict]:
         """سجل الانحرافات"""
-        violations = self.violations if resolved is False else self.corrected_violations if resolved else self.violations + self.corrected_violations
+        if resolved is False:
+            violations = self.violations
+        elif resolved:
+            violations = self.corrected_violations
+        else:
+            violations = self.violations + self.corrected_violations
         
         return [
             {
@@ -716,17 +762,15 @@ class SovereignAlignment:
     
     def get_alignment_history(self, limit: int = 20) -> List[Dict]:
         """سجل الاصطفاف عبر الزمن"""
-        # تجميع من الأحداث
+        # تجميع من اللقطات المخزنة
         history = []
-        for event in self.core.iterate_events(limit=limit):
-            if event.get("type") == "alignment::snapshot":
-                payload = event.get("payload", {})
-                history.append({
-                    "timestamp": event.get("time"),
-                    "alignment_score": payload.get("alignment_score"),
-                    "alignment_level": payload.get("alignment_level"),
-                    "active_violations": payload.get("active_violations")
-                })
+        for snapshot in self.alignment_history[-limit:]:
+            history.append({
+                "timestamp": snapshot.timestamp,
+                "alignment_score": snapshot.alignment_score,
+                "alignment_level": snapshot.alignment_level,
+                "active_violations": snapshot.violations_active
+            })
         return history
     
     def get_alignment_quote(self) -> str:
