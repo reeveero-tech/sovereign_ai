@@ -38,8 +38,13 @@ except ImportError:
     from memory.core import get_core, EventType
     from memory.biological.instincts import get_instincts
     from memory.biological.drives import get_drives
-    from will import get_sovereign_will
-    from alignment import get_sovereign_alignment
+    try:
+        from .will import get_sovereign_will
+    except ImportError:
+        # تعريف مؤقت للدالة إذا لم تكن موجودة
+        def get_sovereign_will():
+            return None
+    from .alignment import get_sovereign_alignment
     from consciousness.introspection import get_introspection_engine
     from consciousness.awareness import get_awareness_engine
     from consciousness.attention_engine import get_attention_engine
@@ -73,7 +78,7 @@ DIRECTIVE_STATUS_EXECUTED = "executed"
 DIRECTIVE_STATUS_FAILED = "failed"
 DIRECTIVE_STATUS_SUPERSEDED = "superseded"
 DIRECTIVE_STATUS_SUSPENDED = "suspended"
-DIRECTIVE_STATUS_EXPIRED = "expired"   # تمت إضافة هذا الثابت
+DIRECTIVE_STATUS_EXPIRED = "expired"
 
 
 @dataclass
@@ -236,7 +241,9 @@ class SovereignDirectives:
         directives = []
         
         # 1) توجيهات من الإرادة السيادية
-        will_status = self.will.get_will_status()
+        will_status = {}
+        if self.will:
+            will_status = self.will.get_will_status()
         will_mode = will_status.get("will_mode", "balanced")
         will_vector = will_status.get("will_vector", {})
         
