@@ -17,6 +17,7 @@
 
 import json
 import hashlib
+import secrets
 import time
 import threading
 import math
@@ -41,17 +42,17 @@ try:
     from ..biological.drives import get_drives
     from ...config import DATA_DIR
 except ImportError:
-    from core import get_core, EventType
-    from store import get_store
-    from dynamic import get_dynamic_memory
-    from defense.watcher import get_watcher
-    from homeostasis import get_homeostasis
-    from metabolism import get_metabolism
-    from evolution import get_evolution
-    from learning import get_learning
-    from plasticity import get_plasticity
-    from instincts import get_instincts
-    from drives import get_drives
+    from memory.core import get_core, EventType
+    from memory.store import get_store
+    from memory.dynamic import get_dynamic_memory
+    from memory.defense.watcher import get_watcher
+    from memory.biological.homeostasis import get_homeostasis
+    from memory.biological.metabolism import get_metabolism
+    from memory.biological.evolution import get_evolution
+    from memory.biological.learning import get_learning
+    from memory.biological.plasticity import get_plasticity
+    from memory.biological.instincts import get_instincts
+    from memory.biological.drives import get_drives
     from config import DATA_DIR
 
 import logging
@@ -148,49 +149,7 @@ class CognitiveArchetypes:
     4. التعرف على النمط الحالي يساعد في التوقع
     5. التحول بين الأنماط هو تطور الوعي
     """
-    # -------------------------
-# RESET — إعادة تهيئة كاملة لنظام الأنماط الأصلية
-# -------------------------
-def reset(self):
-    """
-    إعادة تهيئة كاملة لنظام الأنماط الأصلية.
     
-    يمسح:
-    - جميع الأنماط الأصلية (archetypes)
-    - سجل التحولات (transitions)
-    - سجل اللقطات (snapshots)
-    """
-    logger.info("🔄 إعادة تهيئة نظام الأنماط الأصلية...")
-    
-    # إعادة تعيين جميع الأنماط الأصلية
-    self.archetypes.clear()
-    self._init_archetypes()
-    
-    # مسح سجل التحولات
-    self.transitions.clear()
-    
-    # مسح سجل اللقطات
-    self.snapshots.clear()
-    
-    # إعادة تعيين النمط المهيمن الحالي
-    self.current_dominant = None
-    
-    # إعادة تعيين مستوى الأنماط
-    self.archetype_level = ARCHETYPE_LEVEL_ADVANCED
-    
-    # إعادة تحميل الفهرس
-    self._index = self._load_index()
-    
-    # تسجيل حدث إعادة التهيئة
-    self.core.append_event(
-        event_type="biological::archetypes_reset",
-        payload={
-            "timestamp": time.time(),
-            "status": "archetypes_system_reset"
-        }
-    )
-    
-    logger.info("✅ إعادة تهيئة نظام الأنماط الأصلية اكتملت - أنماط جديدة جاهزة")
     def __init__(self):
         self.core = get_core()
         self.store = get_store()
@@ -228,6 +187,47 @@ def reset(self):
         self._load_state()
         
         logger.info("🧬 نظام الأنماط الأصلية جاهز - القوالب العميقة للوعي")
+    
+    # -------------------------
+    # RESET — إعادة تهيئة كاملة لنظام الأنماط الأصلية
+    # -------------------------
+    def reset(self):
+        """
+        إعادة تهيئة كاملة لنظام الأنماط الأصلية.
+        
+        يمسح:
+        - جميع الأنماط الأصلية (archetypes)
+        - سجل التحولات (transitions)
+        - سجل اللقطات (snapshots)
+        """
+        logger.info("🔄 إعادة تهيئة نظام الأنماط الأصلية...")
+        
+        # إعادة تعيين جميع الأنماط الأصلية
+        self.archetypes.clear()
+        self._init_archetypes()
+        
+        # مسح سجل التحولات
+        self.transitions.clear()
+        
+        # مسح سجل اللقطات
+        self.snapshots.clear()
+        
+        # إعادة تعيين النمط المهيمن الحالي
+        self.current_dominant = None
+        
+        # إعادة تعيين مستوى الأنماط
+        self.archetype_level = ARCHETYPE_LEVEL_ADVANCED
+        
+        # تسجيل حدث إعادة التهيئة
+        self.core.append_event(
+            event_type="biological::archetypes_reset",
+            payload={
+                "timestamp": time.time(),
+                "status": "archetypes_system_reset"
+            }
+        )
+        
+        logger.info("✅ إعادة تهيئة نظام الأنماط الأصلية اكتملت - أنماط جديدة جاهزة")
     
     # ============================================================
     # تهيئة الأنماط الأصلية
@@ -429,7 +429,7 @@ def reset(self):
         plasticity_stats = self.plasticity.get_plasticity_stats()
         
         health = homeostasis_status.get("health_score", 0.5)
-        threat = homeostasis_status.get("threat_level", 0.0)
+        threat = homeostasis_status.get("stress_index", 0.0)
         active_drives = drive_status.get("active_drives", {})
         dominant_drive = drive_status.get("dominant_drive", "")
         
@@ -769,7 +769,7 @@ def reset(self):
         homeostasis_status = self.homeostasis.get_status()
         context = {
             "health_score": homeostasis_status.get("health_score", 0.5),
-            "threat_level": homeostasis_status.get("threat_level", 0.0),
+            "stress_index": homeostasis_status.get("stress_index", 0.0),
             "dominant_drive": self.drives.get_drive_status().get("dominant_drive", "")
         }
         
