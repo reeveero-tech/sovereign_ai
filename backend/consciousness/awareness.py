@@ -23,7 +23,7 @@ from dataclasses import dataclass
 from typing import Dict, Any, List, Optional, Tuple
 
 try:
-    from ..memory.core import get_core
+    from ..memory.core import get_core, EventType
     from ..memory.dynamic import get_dynamic_memory
     from ..memory.store import get_store
     from ..memory.biological.instincts import get_instincts
@@ -35,7 +35,7 @@ try:
     from .self_model import get_self_model
     from ...config import DATA_DIR
 except ImportError:
-    from memory.core import get_core
+    from memory.core import get_core, EventType
     from memory.dynamic import get_dynamic_memory
     from memory.store import get_store
     from memory.biological.instincts import get_instincts
@@ -116,7 +116,7 @@ class AwarenessMoment:
     subliminal: List[AwarenessItem]     # تحت الوعي
     affective_tone: str
     integration: float
-    attention_capacity: float           # السعة الانتباهية المستخدمة
+    attention_capacity: float           # السعة الانتباهية
     attention_remaining: float          # السعة المتبقية
 
 
@@ -367,14 +367,14 @@ class AwarenessEngine:
         peripheral = []
         background = []
         
-        focal_capacity = int(self.attention_capacity * 0.5)  # 5 وحدات
-        peripheral_capacity = int(self.attention_capacity * 0.3)  # 3 وحدات
-        background_capacity = int(self.attention_capacity * 0.15)  # 1.5 وحدات
+        focal_capacity = int(self.attention_capacity * 0.5)
+        peripheral_capacity = int(self.attention_capacity * 0.3)
+        background_capacity = int(self.attention_capacity * 0.15)
         
         attention_used = 0
         
         for item in sorted_items:
-            item_cost = item.priority * 0.5 + 0.1  # تكلفة الانتباه للعنصر
+            item_cost = item.priority * 0.5 + 0.1
             
             if len(focal) < 5 and attention_used + item_cost <= focal_capacity:
                 item.attention_level = ATTENTION_LEVEL_FOCUSED
@@ -440,7 +440,7 @@ class AwarenessEngine:
             focal=focal,
             peripheral=peripheral,
             background=background,
-            subliminal=[],  # لا نعرض تحت الوعي
+            subliminal=[],
             affective_tone=affective_tone,
             integration=integration,
             attention_capacity=self.attention_capacity,
@@ -474,7 +474,6 @@ class AwarenessEngine:
     def _compute_affective_tone(self, focal: List[AwarenessItem], 
                                  peripheral: List[AwarenessItem]) -> str:
         """حساب النبرة الوجدانية من محتوى الوعي"""
-        # تحليل العلامات
         threat_count = 0
         protection_count = 0
         curiosity_count = 0
@@ -509,11 +508,9 @@ class AwarenessEngine:
         if total_items == 0:
             return 0.5
         
-        # معامل التركيز (كلما كان الوعي مركزاً، زاد التكامل)
         focus_ratio = len(focal) / min(5, total_items) if total_items > 0 else 0
         focus_factor = min(1.0, focus_ratio)
         
-        # معامل التنوع (أنواع مختلفة من العناصر)
         channels = set()
         for item in focal + peripheral:
             channels.add(item.channel)
@@ -528,7 +525,7 @@ class AwarenessEngine:
         while self._active:
             try:
                 self.update_awareness()
-                time.sleep(0.5)  # لحظتان في الثانية
+                time.sleep(0.5)
             except Exception as e:
                 logger.error(f"خطأ في تيار الوعي: {e}")
                 time.sleep(1)
@@ -542,15 +539,13 @@ class AwarenessEngine:
         while self._active:
             try:
                 for item_id, item in list(self.active_items.items()):
-                    # تلاشي الأولوية
                     item.priority *= (1 - item.decay_rate)
                     item.priority = max(0.0, item.priority)
                     
-                    # إزالة العناصر التي تلاشت تماماً
                     if item.priority < 0.01:
                         del self.active_items[item_id]
                 
-                time.sleep(1)  # كل ثانية
+                time.sleep(1)
             except Exception as e:
                 logger.error(f"خطأ في تلاشي الانتباه: {e}")
                 time.sleep(1)
@@ -564,7 +559,6 @@ class AwarenessEngine:
         while self._active:
             try:
                 if self.current_moment:
-                    # العناصر تحت الوعي تُعالج بشكل خفي
                     pass
                 time.sleep(0.1)
             except Exception as e:
