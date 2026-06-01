@@ -16,18 +16,13 @@
 """
 
 import json
-import hashlib
 import time
 import threading
-import math
-import secrets
 import random
-from dataclasses import dataclass, field
-from datetime import datetime, timedelta
-from typing import Dict, Any, List, Optional, Tuple, Set
-from enum import Enum
+import secrets
+from dataclasses import dataclass
+from typing import Dict, Any, List, Optional
 from collections import defaultdict
-import heapq
 
 try:
     from ..memory.core import get_core, EventType
@@ -55,9 +50,9 @@ except ImportError:
     from sovereign.will import get_sovereign_will
     from sovereign.alignment import get_sovereign_alignment
     from sovereign.directives import get_sovereign_directives
-    from predictive_engine import get_predictive_engine
-    from predictive_scenarios import get_predictive_scenario_engine
-    from predictive_simulation import get_predictive_simulation
+    from .predictive_engine import get_predictive_engine
+    from .predictive_scenarios import get_predictive_scenario_engine
+    from .predictive_simulation import get_predictive_simulation
     from config import DATA_DIR
 
 import logging
@@ -119,6 +114,7 @@ class Risk:
     last_updated: float
     mitigation_plan: Optional[Dict[str, Any]]
     history: List[Dict[str, Any]]
+    priority: float = 0.0       # أضيفت قيمة افتراضية
 
 
 @dataclass
@@ -149,34 +145,7 @@ class PredictiveRiskManager:
     4. التخفيف الاستباقي أفضل من المعالجة التفاعلية
     5. تتبع المخاطر عبر الزمن يكشف الأنماط
     """
-    # -------------------------
-    # RESET — إعادة تهيئة كاملة لمحرك إدارة المخاطر التنبؤية
-    # -------------------------
-    def reset(self):
-        """
-        إعادة تهيئة كاملة لمحرك إدارة المخاطر.
-        """
-
-        # مسح بيانات المخاطر السابقة
-        self.last_risk_assessment = {}
-        self.risk_history = []
-
-        # إعادة تحميل الفهرس
-        self._index = self._load_index()
-
-        # إعادة السياسات الافتراضية
-        self.policies = {
-            "risk_sensitivity": 0.4,
-            "max_risk_levels": 5,
-            "noise_scale": 0.1,
-            "risk_decay": 0.2,
-        }
-
-        # تسجيل عملية إعادة التهيئة
-        self.core.append_event("predictive::risk_manager::reset", {
-            "timestamp": _now_iso(),
-            "status": "predictive_risk_manager_reset"
-        })
+    
     def __init__(self):
         self.core = get_core()
         self.instincts = get_instincts()
@@ -200,6 +169,19 @@ class PredictiveRiskManager:
         self.overall_risk_level = RISK_SEVERITY_MEDIUM
         self.risk_scores: Dict[str, float] = {}
         
+        # حالة المحرك
+        self.last_risk_assessment = {}
+        self.risk_history_list = []
+        self._index = self._load_index()
+        
+        # السياسات
+        self.policies = {
+            "risk_sensitivity": 0.4,
+            "max_risk_levels": 5,
+            "noise_scale": 0.1,
+            "risk_decay": 0.2,
+        }
+        
         # خلفيات إدارة المخاطر
         self._active = True
         self._risk_detection_loop = threading.Thread(target=self._continuous_risk_detection, daemon=True)
@@ -216,6 +198,51 @@ class PredictiveRiskManager:
         self._load_registry()
         
         logger.warning("🔮 مدير المخاطر التنبؤية الجبار جاهز - يرى الخطر قبل أن يأتي")
+    
+    # -------------------------
+    # RESET — إعادة تهيئة كاملة لمحرك إدارة المخاطر التنبؤية
+    # -------------------------
+    def reset(self):
+        """
+        إعادة تهيئة كاملة لمحرك إدارة المخاطر.
+        """
+        # مسح بيانات المخاطر السابقة
+        self.last_risk_assessment = {}
+        self.risk_history_list = []
+        
+        # مسح سجل المخاطر
+        self.risks.clear()
+        self.risk_history.clear()
+        
+        # إعادة تعيين المستويات
+        self.overall_risk_level = RISK_SEVERITY_MEDIUM
+        self.risk_scores = {}
+        
+        # إعادة تحميل الفهرس
+        self._index = self._load_index()
+        
+        # إعادة السياسات الافتراضية
+        self.policies = {
+            "risk_sensitivity": 0.4,
+            "max_risk_levels": 5,
+            "noise_scale": 0.1,
+            "risk_decay": 0.2,
+        }
+        
+        # تسجيل عملية إعادة التهيئة
+        self.core.append_event(
+            event_type="predictive::risk_manager::reset",
+            payload={
+                "timestamp": time.time(),
+                "status": "predictive_risk_manager_reset"
+            }
+        )
+        
+        logger.info("✅ إعادة تهيئة مدير المخاطر اكتملت")
+    
+    def _load_index(self) -> Dict[str, Any]:
+        """تحميل الفهرس"""
+        return {"risks": [], "last_updated": time.time()}
     
     # ============================================================
     # اكتشاف المخاطر
@@ -626,7 +653,7 @@ class PredictiveRiskManager:
         
         return trends
     
-    def get_early_warnings(self) -> List[Dict[str, Any]]:
+    def get_early_warnings_list(self) -> List[Dict[str, Any]]:
         """
         استخراج الإنذارات المبكرة من المخاطر النشطة.
         """
@@ -634,13 +661,15 @@ class PredictiveRiskManager:
         
         for risk in self.risks.values():
             if risk.probability > 0.6 and risk.status not in [RISK_STATUS_RESOLVED, RISK_STATUS_ACCEPTED]:
+                warning_msg = f"تحذير: {risk.name} (احتمال {risk.probability:.1%})"
+                recommended = risk.mitigation_plan["actions"][0]["action"] if risk.mitigation_plan else "مراجعة المخطر"
                 warnings.append({
                     "risk_id": risk.id[:16],
                     "risk_name": risk.name,
                     "probability": risk.probability,
                     "urgency": risk.urgency,
-                    "message": f"تحذير: {risk.name} (احتمال {risk.probability:.1%})",
-                    "recommended_action": risk.mitigation_plan["actions"][0]["action"] if risk.mitigation_plan else "مراجعة المخطر"
+                    "message": warning_msg,
+                    "recommended_action": recommended
                 })
         
         return warnings
@@ -682,7 +711,7 @@ class PredictiveRiskManager:
         risk_trends = self.calculate_risk_trends()
         
         # إنذارات مبكرة
-        early_warnings = self.get_early_warnings()
+        early_warnings = self.get_early_warnings_list()
         
         # سرد المخاطر
         narrative = self.generate_risk_narrative(prioritized, risk_levels)
@@ -749,7 +778,8 @@ class PredictiveRiskManager:
         narrative += f"هناك {active_count} مخطراً نشطاً. "
         
         # اتجاه المخاطر
-        increasing = sum(1 for t in self.calculate_risk_trends().values() if t > 0)
+        trends = self.calculate_risk_trends()
+        increasing = sum(1 for t in trends.values() if t > 0)
         if increasing > 0:
             narrative += f"{increasing} مخاطر في ارتفاع. "
         
@@ -896,9 +926,9 @@ class PredictiveRiskManager:
             for r in prioritized[:limit]
         ]
     
-    def get_early_warnings(self) -> List[Dict]:
+    def get_early_warnings_list(self) -> List[Dict]:
         """الإنذارات المبكرة"""
-        return self.get_early_warnings()
+        return self.get_early_warnings_list()
     
     def get_mitigation_plans(self) -> List[Dict]:
         """خطط التخفيف"""
@@ -1007,7 +1037,7 @@ if __name__ == "__main__":
     
     # 4) الإنذارات المبكرة
     print("\n🚨 الإنذارات المبكرة:")
-    warnings = risk_manager.get_early_warnings()
+    warnings = risk_manager.get_early_warnings_list()
     for w in warnings:
         print(f"   {w['message']}")
     
