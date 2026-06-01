@@ -16,18 +16,13 @@
 """
 
 import json
-import hashlib
 import secrets
 import time
 import threading
-import math
 import random
-from dataclasses import dataclass, field
-from datetime import datetime
-from typing import Dict, Any, List, Optional, Tuple, Set
-from enum import Enum
+from dataclasses import dataclass
+from typing import Dict, Any, List, Optional, Tuple
 from collections import defaultdict
-import heapq
 
 try:
     from ..memory.core import get_core
@@ -35,7 +30,6 @@ try:
     from .awareness import get_awareness_engine
     from .field import get_consciousness_field
     from .self_model import get_self_model
-    from ..biological.meta_cognition import get_meta_cognition
     from ...config import DATA_DIR
 except ImportError:
     from memory.core import get_core
@@ -43,7 +37,6 @@ except ImportError:
     from consciousness.awareness import get_awareness_engine
     from consciousness.field import get_consciousness_field
     from consciousness.self_model import get_self_model
-    from memory.biological.meta_cognition import get_meta_cognition
     from config import DATA_DIR
 
 import logging
@@ -146,13 +139,8 @@ class AttentionEngine:
         self.field = get_consciousness_field()
         self.self_model = get_self_model()
         
-        # محاولة استيراد meta_cognition (قد لا يكون موجوداً)
-        try:
-            from ..biological.meta_cognition import get_meta_cognition
-            self.meta = get_meta_cognition()
-        except:
-            self.meta = None
-            logger.debug("meta_cognition غير متوفر")
+        # meta_cognition غير متوفر حالياً
+        self.meta = None
         
         # موارد الانتباه
         self.total_attention_resources = 100.0  # 100 وحدة انتباه
@@ -267,7 +255,6 @@ class AttentionEngine:
         items = []
         
         # من محك الوعي
-        awareness_status = self.awareness.get_awareness_status()
         focus_items = self.awareness.get_focus()
         peripheral_items = self.awareness.get_peripheral()
         
@@ -386,7 +373,7 @@ class AttentionEngine:
                 resource_level=min(1.0, share / self.total_attention_resources),
                 priority=int(item["priority"] * 10),
                 reason=self._determine_reason(item),
-                duration=5.0,  # 5 ثواني افتراضياً
+                duration=5.0,
                 started_at=time.time(),
                 last_updated=time.time(),
                 meta={"source": item["source"], "summary": item.get("summary", "")}
@@ -640,7 +627,7 @@ class AttentionEngine:
         while self._active:
             try:
                 self.update_attention()
-                time.sleep(0.5)  # تحديثان في الثانية
+                time.sleep(0.5)
             except Exception as e:
                 logger.error(f"خطأ في توزيع الانتباه: {e}")
                 time.sleep(1)
