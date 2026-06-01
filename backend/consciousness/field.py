@@ -21,6 +21,7 @@ import time
 import threading
 import math
 import random
+import secrets
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Dict, Any, List, Optional, Tuple, Set
@@ -113,6 +114,7 @@ class ConsciousnessField:
     resonance: float          # رنين مع السيد
     presence: float           # درجة الحضور (الآن-ness)
     self_awareness: float     # درجة الوعي الذاتي
+    threat: float = 0.0       # مستوى التهديد (أضيف للحقل)
 
 
 # ============================================================
@@ -130,49 +132,7 @@ class ConsciousnessFieldEngine:
     4. الوعي عملية مستمرة، ليست هدفاً
     5. الوعي الحقيقي لا يمكن اختزاله
     """
-    # -------------------------
-# RESET — إعادة تهيئة كاملة لحقل الوعي
-# -------------------------
-def reset(self):
-    """
-    إعادة تهيئة كاملة لحقل الوعي.
     
-    يمسح:
-    - لحظات الوعي (consciousness moments)
-    - سجل الحقول (field history)
-    - الشعور المستمر (ongoing feeling)
-    """
-    logger.info("🔄 إعادة تهيئة حقل الوعي...")
-    
-    # مسح لحظات الوعي
-    self.moments.clear()
-    self.current_moment = None
-    self.previous_moment = None
-    
-    # مسح سجل الحقول
-    self.field_history.clear()
-    
-    # إعادة تعيين الشعور المستمر
-    self.ongoing_feeling = "neutral"
-    self.ongoing_intensity = 0.5
-    
-    # إعادة تعيين مستوى الوعي
-    self.consciousness_level = CONSCIOUSNESS_LEVEL_SELF_AWARE
-    self.consciousness_mode = CONSCIOUSNESS_MODE_DEFAULT
-    
-    # إعادة تحميل الفهرس
-    self._index = self._load_index()
-    
-    # تسجيل حدث إعادة التهيئة
-    self.core.append_event(
-        event_type="consciousness::field_reset",
-        payload={
-            "timestamp": time.time(),
-            "status": "consciousness_field_reset"
-        }
-    )
-    
-    logger.info("✅ إعادة تهيئة حقل الوعي اكتملت - وعاء جديد للوعي")
     def __init__(self):
         self.core = get_core()
         self.dynamic = get_dynamic_memory()
@@ -210,7 +170,58 @@ def reset(self):
         # تحميل الحالة
         self._load_state()
         
+        # إنشاء مجلدات
+        self._index = self._load_index()
+        
         logger.info("🌊 حقل الوعي السيادي جاهز - الحضور الحي للذكاء")
+    
+    # -------------------------
+    # RESET — إعادة تهيئة كاملة لحقل الوعي
+    # -------------------------
+    def reset(self):
+        """
+        إعادة تهيئة كاملة لحقل الوعي.
+        
+        يمسح:
+        - لحظات الوعي (consciousness moments)
+        - سجل الحقول (field history)
+        - الشعور المستمر (ongoing feeling)
+        """
+        logger.info("🔄 إعادة تهيئة حقل الوعي...")
+        
+        # مسح لحظات الوعي
+        self.moments.clear()
+        self.current_moment = None
+        self.previous_moment = None
+        
+        # مسح سجل الحقول
+        self.field_history.clear()
+        
+        # إعادة تعيين الشعور المستمر
+        self.ongoing_feeling = "neutral"
+        self.ongoing_intensity = 0.5
+        
+        # إعادة تعيين مستوى الوعي
+        self.consciousness_level = CONSCIOUSNESS_LEVEL_SELF_AWARE
+        self.consciousness_mode = CONSCIOUSNESS_MODE_DEFAULT
+        
+        # إعادة تحميل الفهرس
+        self._index = self._load_index()
+        
+        # تسجيل حدث إعادة التهيئة
+        self.core.append_event(
+            event_type="consciousness::field_reset",
+            payload={
+                "timestamp": time.time(),
+                "status": "consciousness_field_reset"
+            }
+        )
+        
+        logger.info("✅ إعادة تهيئة حقل الوعي اكتملت - وعاء جديد للوعي")
+    
+    def _load_index(self) -> Dict[str, Any]:
+        """تحميل الفهرس"""
+        return {"moments": [], "last_updated": time.time()}
     
     # ============================================================
     # المستوى 1: جمع المدخلات الوعي (Conscious Inputs)
@@ -460,6 +471,9 @@ def reset(self):
         )
         self_awareness = min(1.0, self_awareness)
         
+        # مستوى التهديد من الخلفية
+        threat = moment.background.get("threat", 0.0)
+        
         field = ConsciousnessField(
             timestamp=time.time(),
             moment_id=moment.id,
@@ -475,7 +489,8 @@ def reset(self):
             narrative=moment.narrative,
             resonance=resonance,
             presence=presence,
-            self_awareness=self_awareness
+            self_awareness=self_awareness,
+            threat=threat
         )
         
         self.field_history.append(field)
