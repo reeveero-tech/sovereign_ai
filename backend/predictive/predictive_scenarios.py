@@ -16,17 +16,12 @@
 """
 
 import json
-import hashlib
 import time
 import threading
-import math
-import secrets
 import random
-from dataclasses import dataclass, field
-from datetime import datetime
-from typing import Dict, Any, List, Optional, Tuple, Set
-from enum import Enum
-from collections import defaultdict
+import secrets
+from dataclasses import dataclass
+from typing import Dict, Any, List, Optional
 
 try:
     from ..memory.core import get_core, EventType
@@ -52,7 +47,7 @@ except ImportError:
     from consciousness.introspection import get_introspection_engine
     from sovereign.will import get_sovereign_will
     from sovereign.alignment import get_sovereign_alignment
-    from predictive_engine import get_predictive_engine
+    from .predictive_engine import get_predictive_engine
     from config import DATA_DIR
 
 import logging
@@ -134,33 +129,7 @@ class PredictiveScenarioEngine:
     4. السعي للأفضل يحقق النمو
     5. الحكمة هي الاستعداد لكل الاحتمالات
     """
-    # -------------------------
-    # RESET — إعادة تهيئة كاملة لمحرك السيناريوهات
-    # -------------------------
-    def reset(self):
-        """
-        إعادة تهيئة كاملة لمحرك السيناريوهات التنبؤية.
-        """
-
-        # مسح السيناريوهات المخزنة
-        self.last_generated = []
-        self.scenario_cache = {}
-
-        # إعادة تحميل الفهرس
-        self._index = self._load_index()
-
-        # إعادة السياسات الافتراضية
-        self.policies = {
-            "max_scenarios": 8,
-            "min_signal_strength": 0.25,
-            "scenario_noise": 0.1,
-        }
-
-        # تسجيل عملية إعادة التهيئة
-        self.core.append_event("predictive::scenarios::reset", {
-            "timestamp": _now_iso(),
-            "status": "predictive_scenarios_reset"
-        })
+    
     def __init__(self):
         self.core = get_core()
         self.instincts = get_instincts()
@@ -179,6 +148,18 @@ class PredictiveScenarioEngine:
         self.scenario_history: List[ScenarioSnapshot] = []
         self.triggered_warnings: List[Dict[str, Any]] = []
         
+        # حالة المحرك
+        self.last_generated = []
+        self.scenario_cache = {}
+        self._index = self._load_index()
+        
+        # السياسات
+        self.policies = {
+            "max_scenarios": 8,
+            "min_signal_strength": 0.25,
+            "scenario_noise": 0.1,
+        }
+        
         # خلفيات السيناريوهات
         self._active = True
         self._scenario_loop = threading.Thread(target=self._continuous_scenario_analysis, daemon=True)
@@ -195,6 +176,47 @@ class PredictiveScenarioEngine:
         self._load_history()
         
         logger.warning("🔮 محرك السيناريوهات المستقبلية الجبار جاهز - يستعد لكل مستقبل قبل أن يأتي")
+    
+    # -------------------------
+    # RESET — إعادة تهيئة كاملة لمحرك السيناريوهات
+    # -------------------------
+    def reset(self):
+        """
+        إعادة تهيئة كاملة لمحرك السيناريوهات التنبؤية.
+        """
+        # مسح السيناريوهات المخزنة
+        self.last_generated = []
+        self.scenario_cache = {}
+        
+        # مسح السيناريوهات النشطة
+        self.active_scenarios.clear()
+        self.scenario_history.clear()
+        self.triggered_warnings.clear()
+        
+        # إعادة تحميل الفهرس
+        self._index = self._load_index()
+        
+        # إعادة السياسات الافتراضية
+        self.policies = {
+            "max_scenarios": 8,
+            "min_signal_strength": 0.25,
+            "scenario_noise": 0.1,
+        }
+        
+        # تسجيل عملية إعادة التهيئة
+        self.core.append_event(
+            event_type="predictive::scenarios::reset",
+            payload={
+                "timestamp": time.time(),
+                "status": "predictive_scenarios_reset"
+            }
+        )
+        
+        logger.info("✅ إعادة تهيئة محرك السيناريوهات اكتملت")
+    
+    def _load_index(self) -> Dict[str, Any]:
+        """تحميل الفهرس"""
+        return {"scenarios": [], "last_updated": time.time()}
     
     # ============================================================
     # بناء السيناريوهات
@@ -558,7 +580,7 @@ class PredictiveScenarioEngine:
         
         for indicator in scenario.indicators:
             if indicator == "سرعة الاستجابة":
-                attention_status = self.attention.get_attention_status()
+                attention_status = self.predictive.get_attention_status() if hasattr(self.predictive, 'get_attention_status') else {}
                 indicator_values[indicator] = attention_status.get("utilization", 0.5)
             elif indicator == "تماسك الهوية":
                 identity_status = self.identity.get_identity_status()
