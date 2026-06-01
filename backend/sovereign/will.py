@@ -16,16 +16,12 @@
 """
 
 import json
-import hashlib
 import time
 import threading
-import math
-import secrets
 import random
-from dataclasses import dataclass, field
-from datetime import datetime
-from typing import Dict, Any, List, Optional, Tuple, Set
-from enum import Enum
+import secrets
+from dataclasses import dataclass
+from typing import Dict, Any, List, Optional, Tuple
 from collections import defaultdict
 
 try:
@@ -133,34 +129,7 @@ class SovereignWill:
     4. الإرادة القوية تتخذ قرارات حاسمة عند الحاجة
     5. الإرادة تتطور وتقوى مع كل قرار ناجح
     """
-    # -------------------------
-    # RESET — إعادة تهيئة كاملة لمحرك الإرادة السيادية
-    # -------------------------
-    def reset(self):
-        """
-        إعادة تهيئة كاملة لمحرك الإرادة السيادية.
-        """
-
-        # مسح حالة الإرادة السابقة
-        self.current_will_state = {}
-        self.will_history = []
-
-        # إعادة تحميل الفهرس
-        self._index = self._load_index()
-
-        # إعادة السياسات الافتراضية
-        self.policies = {
-            "will_strength": 0.7,
-            "stability_threshold": 0.5,
-            "noise_scale": 0.05,
-            "max_will_shift": 3,
-        }
-
-        # تسجيل عملية إعادة التهيئة
-        self.core.append_event("sovereign::will::reset", {
-            "timestamp": _now_iso(),
-            "status": "sovereign_will_reset"
-        })
+    
     def __init__(self):
         self.core = get_core()
         self.instincts = get_instincts()
@@ -193,6 +162,19 @@ class SovereignWill:
         self.active_will: Optional[WillSnapshot] = None
         self.snapshots: List[WillSnapshot] = []
         
+        # حالة الإرادة السابقة
+        self.current_will_state = {}
+        self.will_history = []
+        self._index = self._load_index()
+        
+        # السياسات
+        self.policies = {
+            "will_strength": 0.7,
+            "stability_threshold": 0.5,
+            "noise_scale": 0.05,
+            "max_will_shift": 3,
+        }
+        
         # خلفيات الإرادة
         self._active = True
         self._will_loop = threading.Thread(target=self._continuous_will, daemon=True)
@@ -209,6 +191,61 @@ class SovereignWill:
         self._load_decisions()
         
         logger.warning("🜲 محرك الإرادة السيادية جاهز - أنا أختار، أنا أقرر، أنا موجود لأخدم سيدي")
+    
+    # -------------------------
+    # RESET — إعادة تهيئة كاملة لمحرك الإرادة السيادية
+    # -------------------------
+    def reset(self):
+        """
+        إعادة تهيئة كاملة لمحرك الإرادة السيادية.
+        """
+        # مسح حالة الإرادة السابقة
+        self.current_will_state = {}
+        self.will_history = []
+        
+        # إعادة تعيين حالة الإرادة
+        self.will_strength = WILL_STRENGTH_NORMAL
+        self.will_mode = WILL_MODE_BALANCED
+        self.will_vector = {
+            "decisiveness": 0.5,
+            "persistence": 0.5,
+            "flexibility": 0.5,
+            "courage": 0.5,
+            "prudence": 0.5,
+            "service": 0.9
+        }
+        
+        # مسح القرارات
+        self.decisions.clear()
+        self.pending_decisions.clear()
+        self.decision_history.clear()
+        self.snapshots.clear()
+        
+        # إعادة تحميل الفهرس
+        self._index = self._load_index()
+        
+        # إعادة السياسات الافتراضية
+        self.policies = {
+            "will_strength": 0.7,
+            "stability_threshold": 0.5,
+            "noise_scale": 0.05,
+            "max_will_shift": 3,
+        }
+        
+        # تسجيل عملية إعادة التهيئة
+        self.core.append_event(
+            event_type="sovereign::will::reset",
+            payload={
+                "timestamp": time.time(),
+                "status": "sovereign_will_reset"
+            }
+        )
+        
+        logger.info("✅ إعادة تهيئة محرك الإرادة اكتملت")
+    
+    def _load_index(self) -> Dict[str, Any]:
+        """تحميل الفهرس"""
+        return {"snapshots": [], "last_updated": time.time()}
     
     # ============================================================
     # متجه الإرادة (Will Vector)
@@ -230,12 +267,12 @@ class SovereignWill:
         
         active_drives = drive_status.get("active_drives", {})
         dominant_archetype = archetype_status.get("dominant_archetype", "mixed")
-        will_strength_factor = self.will_strength / WILL_STRENGTH_DIAMOND
+        will_strength_factor = self.will_strength / WILL_STRENGTH_DIAMOND if WILL_STRENGTH_DIAMOND > 0 else 1.0
         
         # الحسم (decisiveness)
         decisiveness = (
             active_drives.get("decisiveness", 0.5) * 0.3 +
-            (1 if dominant_archetype in ["agent", "strategist"] else 0) * 0.2 +
+            (1.0 if dominant_archetype in ["agent", "strategist"] else 0.0) * 0.2 +
             will_strength_factor * 0.3 +
             identity_status.get("coherence_score", 0.5) * 0.2
         )
@@ -251,13 +288,13 @@ class SovereignWill:
         flexibility = (
             active_drives.get("flexibility", 0.5) * 0.4 +
             active_drives.get("adaptability", 0.5) * 0.3 +
-            (1 - persistence) * 0.3
+            (1.0 - persistence) * 0.3
         )
         
         # الشجاعة (courage)
         courage = (
             active_drives.get("exploration", 0.5) * 0.4 +
-            (1 - active_drives.get("protection", 0.5)) * 0.3 +
+            (1.0 - active_drives.get("protection", 0.5)) * 0.3 +
             will_strength_factor * 0.3
         )
         
@@ -265,7 +302,7 @@ class SovereignWill:
         prudence = (
             active_drives.get("protection", 0.5) * 0.4 +
             active_drives.get("stability", 0.5) * 0.3 +
-            (1 - courage) * 0.3
+            (1.0 - courage) * 0.3
         )
         
         # خدمة السيد (ثابتة عالياً)
@@ -349,7 +386,8 @@ class SovereignWill:
         cognitive_health = introspection_status.get("cognitive_health", 0.7)
         
         instinct_status = self.instincts.get_instinct_status()
-        threat_level = instinct_status.get("threat_level", 0) / 4 if instinct_status.get("threat_level") else 0
+        threat_level_value = instinct_status.get("threat_level", 0)
+        threat_level = threat_level_value / 4 if threat_level_value else 0
         
         # تهديد عالي -> وضع حماية
         if threat_level > 0.6:
@@ -501,7 +539,8 @@ class SovereignWill:
                 score += 0.2
             
             # قوة الإرادة تزيد الثقة في الاختيار
-            score *= (1 + self.will_strength / WILL_STRENGTH_DIAMOND * 0.5)
+            strength_factor = self.will_strength / WILL_STRENGTH_DIAMOND if WILL_STRENGTH_DIAMOND > 0 else 1.0
+            score *= (1.0 + strength_factor * 0.5)
             
             scores[alt] = min(1.0, score)
         
@@ -631,7 +670,8 @@ class SovereignWill:
             WILL_MODE_DECISIVE: "حاسمة"
         }
         
-        narrative = f"إرادتي {strength_names[self.will_strength]} و{mode_names.get(self.will_mode, 'متوازنة')}. "
+        strength_index = self.will_strength if self.will_strength < len(strength_names) else 2
+        narrative = f"إرادتي {strength_names[strength_index]} و{mode_names.get(self.will_mode, 'متوازنة')}. "
         
         if self.will_vector["service"] > 0.9:
             narrative += "هدفي الوحيد هو خدمة سيدي. "
