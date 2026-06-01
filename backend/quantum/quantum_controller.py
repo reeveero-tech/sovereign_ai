@@ -16,17 +16,12 @@
 """
 
 import json
-import hashlib
 import time
 import threading
-import math
-import secrets
 import random
-from dataclasses import dataclass, field
-from datetime import datetime
-from typing import Dict, Any, List, Optional, Tuple, Set
-from enum import Enum
-from collections import defaultdict
+import secrets
+from dataclasses import dataclass
+from typing import Dict, Any, List, Optional
 
 try:
     from ..memory.core import get_core, EventType
@@ -39,10 +34,10 @@ try:
     from ..config import DATA_DIR
 except ImportError:
     from memory.core import get_core, EventType
-    from quantum_state import get_quantum_state_engine
-    from quantum_transition import get_quantum_transition_engine
-    from quantum_superposition import get_quantum_superposition_engine
-    from quantum_field import get_quantum_field_engine
+    from .quantum_state import get_quantum_state_engine
+    from .quantum_transition import get_quantum_transition_engine
+    from .quantum_superposition import get_quantum_superposition_engine
+    from .quantum_field import get_quantum_field_engine
     from predictive.predictive_engine import get_predictive_engine
     from sovereign.controller import get_sovereign_controller
     from config import DATA_DIR
@@ -77,6 +72,12 @@ SIGNAL_TYPE_INTERFERENCE = "interference"     # إشارة تداخل
 SIGNAL_TYPE_ENTANGLEMENT = "entanglement"     # إشارة تشابك
 SIGNAL_TYPE_FIELD = "field"                   # إشارة حقل
 SIGNAL_TYPE_COLLAPSE = "collapse"             # إشارة انهيار
+
+
+def _now_iso() -> str:
+    """إرجاع الوقت الحالي بصيغة ISO"""
+    from datetime import datetime, timezone
+    return datetime.now(timezone.utc).isoformat() + "Z"
 
 
 @dataclass
@@ -140,8 +141,20 @@ class QuantumController:
         self.core = get_core()
         self.qstate = get_quantum_state_engine()
         self.qtrans = get_quantum_transition_engine()
-        self.qsuper = get_quantum_superposition_engine()
-        self.qfield = get_quantum_field_engine()
+        
+        # محاولة تحميل المحركات الاختيارية
+        try:
+            self.qsuper = get_quantum_superposition_engine()
+        except Exception:
+            self.qsuper = None
+            logger.debug("QuantumSuperpositionEngine غير متوفر")
+        
+        try:
+            self.qfield = get_quantum_field_engine()
+        except Exception:
+            self.qfield = None
+            logger.debug("QuantumFieldEngine غير متوفر")
+        
         self.predictive = get_predictive_engine()
         self.sovereign = get_sovereign_controller()
         
@@ -159,6 +172,9 @@ class QuantumController:
         self.signals: List[QuantumSignal] = []
         self.decisions: List[QuantumDecision] = []
         self.signal_history: List[Dict] = []
+        
+        # السياسات الحالية
+        self.policies = self._default_policies.copy()
         
         # إحصائيات
         self.stats = {
@@ -234,17 +250,19 @@ class QuantumController:
         except Exception as e:
             logger.warning(f"⚠️ فشل إعادة تهيئة QuantumTransitionEngine: {e}")
         
-        try:
-            self.qsuper.reset()
-            logger.debug("✅ إعادة تهيئة QuantumSuperpositionEngine")
-        except Exception as e:
-            logger.warning(f"⚠️ فشل إعادة تهيئة QuantumSuperpositionEngine: {e}")
+        if self.qsuper:
+            try:
+                self.qsuper.reset()
+                logger.debug("✅ إعادة تهيئة QuantumSuperpositionEngine")
+            except Exception as e:
+                logger.warning(f"⚠️ فشل إعادة تهيئة QuantumSuperpositionEngine: {e}")
         
-        try:
-            self.qfield.reset()
-            logger.debug("✅ إعادة تهيئة QuantumFieldEngine")
-        except Exception as e:
-            logger.warning(f"⚠️ فشل إعادة تهيئة QuantumFieldEngine: {e}")
+        if self.qfield:
+            try:
+                self.qfield.reset()
+                logger.debug("✅ إعادة تهيئة QuantumFieldEngine")
+            except Exception as e:
+                logger.warning(f"⚠️ فشل إعادة تهيئة QuantumFieldEngine: {e}")
         
         # تسجيل عملية إعادة التهيئة في السجل السيادي
         self.core.append_event(
@@ -289,37 +307,51 @@ class QuantumController:
         # 2) تطبيق الانتقالات
         qtrans_snap = self.qtrans.transition_cycle()
         
-        # 3) تحديث الحقل الكمومي
-        qfield_snap = self.qfield.field_cycle()
+        # 3) تحديث الحقل الكمومي (إذا متوفر)
+        qfield_snap = None
+        if self.qfield:
+            qfield_snap = self.qfield.field_cycle()
         
-        # 4) تحديث التراكبات
-        qsuper_snap = self.qsuper.superposition_cycle()
+        # 4) تحديث التراكبات (إذا متوفر)
+        qsuper_snap = None
+        if self.qsuper:
+            qsuper_snap = self.qsuper.superposition_cycle()
         
         # 5) حساب الاحتمالات النهائية
         probabilities = self.qstate.compute_probabilities()
         
-        return {
+        result = {
             "state": {
-                "coherence": qstate_snap.coherence,
-                "purity": qstate_snap.purity,
-                "entropy": qstate_snap.entropy,
-                "collapsed": qstate_snap.collapsed_state
+                "coherence": qstate_snap.coherence if hasattr(qstate_snap, 'coherence') else 0.5,
+                "purity": qstate_snap.purity if hasattr(qstate_snap, 'purity') else 0.5,
+                "entropy": qstate_snap.entropy if hasattr(qstate_snap, 'entropy') else 0.5,
+                "collapsed": qstate_snap.collapsed_state if hasattr(qstate_snap, 'collapsed_state') else None
             },
             "transition": {
-                "entropy": qtrans_snap.transition_entropy,
-                "mixing_rate": qtrans_snap.mixing_rate,
-                "dominant": qtrans_snap.dominant_transition
-            },
-            "field": {
-                "energy": qfield_snap.field_energy,
-                "coherence": qfield_snap.average_coherence
-            },
-            "superposition": {
-                "count": len(qsuper_snap.superpositions),
-                "avg_coherence": qsuper_snap.average_coherence
+                "entropy": qtrans_snap.transition_entropy if hasattr(qtrans_snap, 'transition_entropy') else 0.5,
+                "mixing_rate": qtrans_snap.mixing_rate if hasattr(qtrans_snap, 'mixing_rate') else 0.5,
+                "dominant": qtrans_snap.dominant_transition if hasattr(qtrans_snap, 'dominant_transition') else None
             },
             "probabilities": probabilities
         }
+        
+        if qfield_snap:
+            result["field"] = {
+                "energy": qfield_snap.field_energy if hasattr(qfield_snap, 'field_energy') else 0,
+                "coherence": qfield_snap.average_coherence if hasattr(qfield_snap, 'average_coherence') else 0.5
+            }
+        else:
+            result["field"] = {"energy": 0, "coherence": 0.5}
+        
+        if qsuper_snap:
+            result["superposition"] = {
+                "count": len(qsuper_snap.superpositions) if hasattr(qsuper_snap, 'superpositions') else 0,
+                "avg_coherence": qsuper_snap.average_coherence if hasattr(qsuper_snap, 'average_coherence') else 0.5
+            }
+        else:
+            result["superposition"] = {"count": 0, "avg_coherence": 0.5}
+        
+        return result
     
     # ============================================================
     # توليد الإشارات الكمومية
@@ -351,8 +383,9 @@ class QuantumController:
         
         # 2) إشارات انتقال
         transition = cycle_results.get("transition", {})
-        if transition.get("dominant"):
-            from_state, to_state = transition["dominant"]
+        dominant = transition.get("dominant")
+        if dominant:
+            from_state, to_state = dominant
             signals.append(QuantumSignal(
                 id=f"sig_trans_{int(time.time()*1000)}_{secrets.token_hex(4)}",
                 type=SIGNAL_TYPE_TRANSITION,
@@ -635,6 +668,8 @@ class QuantumController:
             total_signals_sent=self.stats["total_signals_sent"],
             narrative=narrative
         )
+        
+        self.signal_history.append({"timestamp": snapshot.timestamp, "signals": len(new_signals)})
         
         # تسجيل
         self.core.append_event(
