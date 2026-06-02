@@ -1,18 +1,21 @@
-FROM python:3.12-slim
+FROM python:3.11-slim
 
 WORKDIR /app
 
-ENV PYTHONUNBUFFERED=1
-ENV PYTHONIOENCODING=utf-8
-ENV LANG=C.UTF-8
-ENV LC_ALL=C.UTF-8
-
+# نسخ ملف المتطلبات
 COPY requirements.txt .
 
+# تثبيت الاعتماديات
 RUN pip install --no-cache-dir -r requirements.txt
 
+# نسخ كل الكود
 COPY . .
 
-EXPOSE 8000
+# تعيين مجلد backend كمسار العمل
+WORKDIR /app/backend
 
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]
+# تعيين متغير البيئة
+ENV PYTHONPATH=/app
+
+# تشغيل الخادم
+CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
