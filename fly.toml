@@ -1,23 +1,33 @@
-# fly.toml app configuration file generated for app-aged-dream-2468 on 2026-06-02T17:21:55Z
-#
-# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
-#
-
-app = 'app-aged-dream-2468'
-primary_region = 'iad'
+app = "sovereign-ai"
+primary_region = "jed"
 
 [build]
+  [build.buildpacks]
+    builder = "heroku/buildpacks:20"
+
+[env]
+  PORT = "8080"
 
 [http_service]
   internal_port = 8080
   force_https = true
-  auto_stop_machines = 'stop'
+  auto_stop_machines = "stop"
   auto_start_machines = true
   min_machines_running = 0
-  processes = ['app']
 
-[[vm]]
-  memory = '1gb'
-  cpu_kind = 'shared'
-  cpus = 1
-  memory_mb = 256
+[[services]]
+  internal_port = 8080
+  protocol = "tcp"
+
+  [[services.ports]]
+    handlers = ["http"]
+    port = 80
+
+  [[services.ports]]
+    handlers = ["tls", "http"]
+    port = 443
+
+  [[services.tcp_checks]]
+    grace_period = "30s"
+    interval = "15s"
+    timeout = "2s"
