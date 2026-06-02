@@ -3,11 +3,11 @@
 
 <head>
 
-    <meta charset="UTF-8" />
+    <!-- ===================================================== -->
+    <!-- META -->
+    <!-- ===================================================== -->
 
-    <title>
-        Sovereign AI · Neural Sovereign Cockpit
-    </title>
+    <meta charset="UTF-8" />
 
     <meta
         name="viewport"
@@ -22,7 +22,7 @@
         name="description"
         content="
             Sovereign AI —
-            The Ultimate Cinematic Intelligence Interface
+            Cinematic Sovereign Intelligence Interface
         "
     />
 
@@ -31,8 +31,17 @@
         content="#050712"
     />
 
+    <meta
+        name="color-scheme"
+        content="dark"
+    />
+
+    <title>
+        Sovereign AI · Neural Sovereign Cockpit
+    </title>
+
     <!-- ===================================================== -->
-    <!-- Fonts -->
+    <!-- PRECONNECT -->
     <!-- ===================================================== -->
 
     <link
@@ -40,22 +49,29 @@
         href="https://fonts.googleapis.com"
     />
 
-    https://fonts.gstatic.com
+    <link
+        rel="preconnect"
+        href="https://fonts.gstatic.com"
+        crossorigin
+    />
+
+    <!-- ===================================================== -->
+    <!-- FONTS -->
+    <!-- ===================================================== -->
 
     <link
         href="https://fonts.googleapis.com"/>
 
     <!-- ===================================================== -->
-    <!-- Icons -->
+    <!-- ICONS -->
     <!-- ===================================================== -->
 
     
-        https://cdnjs.cloudflare.com/ajax/libs/
-        font-awesome/6.5.1/css/all.min.css
+        https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css
         
 
     <!-- ===================================================== -->
-    <!-- Styles -->
+    <!-- STYLES -->
     <!-- ===================================================== -->
 
     <link
@@ -75,11 +91,16 @@
 
     <link
         rel="stylesheet"
+        href="css/runtime.css"
+    />
+
+    <link
+        rel="stylesheet"
         href="themes/dark.css"
     />
 
     <!-- ===================================================== -->
-    <!-- Favicon -->
+    <!-- FAVICON -->
     <!-- ===================================================== -->
 
     <link
@@ -90,10 +111,16 @@
 
 </head>
 
-<body class="sovereign-body">
+<body
+    class="
+        sovereign-body
+        bg-shift
+        star-bg
+    "
+>
 
     <!-- ===================================================== -->
-    <!-- Sovereign Root -->
+    <!-- APP ROOT -->
     <!-- ===================================================== -->
 
     <div
@@ -116,8 +143,13 @@
                 glass
                 holo-lines
                 sovereign-light
+                deep-shadow
             "
         >
+
+            <!-- ============================================= -->
+            <!-- BRAND -->
+            <!-- ============================================= -->
 
             <div class="brand-block">
 
@@ -126,6 +158,7 @@
                         brand-logo
                         crown-pulse
                         sovereign-pulse
+                        liquid-border
                     "
                 >
                     🧠
@@ -145,40 +178,49 @@
                     </div>
 
                     <div class="brand-sub">
-                        قمرة القيادة العصبية السيادية
+                        Neural Sovereign Runtime
                     </div>
 
                 </div>
 
             </div>
 
+            <!-- ============================================= -->
+            <!-- STATUS -->
+            <!-- ============================================= -->
+
             <div class="status-block">
 
                 <div
+                    id="status-connection"
                     class="
                         status-pill
                         glass
                         glow-cyan
+                        sovereign-pulse-fast
                     "
-                    id="status-connection"
                 >
+
                     <div class="status-dot"></div>
 
                     <span>
                         Neural Link Active
                     </span>
+
                 </div>
 
                 <div
+                    id="runtime-mode"
                     class="
                         mode-pill
                         glass
                     "
-                    id="runtime-mode"
                 >
+
                     <i class="fas fa-crown"></i>
 
                     Sovereign Runtime
+
                 </div>
 
                 <div
@@ -187,7 +229,9 @@
                         glow-purple
                     "
                 >
+
                     v5.0.0
+
                 </div>
 
             </div>
@@ -210,11 +254,12 @@
                     panel-left
                     sovereign-card-effect
                     holo-glow
+                    glass-reflection
                 "
             >
 
                 <!-- ========================================= -->
-                <!-- PANEL HEADER -->
+                <!-- HEADER -->
                 <!-- ========================================= -->
 
                 <div class="panel-header">
@@ -230,29 +275,33 @@
                     <div class="panel-actions">
 
                         <button
+                            id="btn-reset-system"
                             class="
                                 btn
                                 btn-ghost
                                 ripple
                             "
-                            id="btn-reset-system"
                         >
+
                             <i class="fas fa-sync-alt"></i>
 
                             إعادة تهيئة
+
                         </button>
 
                         <button
+                            id="btn-export-data"
                             class="
                                 btn
                                 btn-ghost
                                 ripple
                             "
-                            id="btn-export-data"
                         >
+
                             <i class="fas fa-download"></i>
 
                             تصدير
+
                         </button>
 
                     </div>
@@ -264,11 +313,11 @@
                 <!-- ========================================= -->
 
                 <nav
+                    id="main-tabs"
                     class="
                         tabs
                         glass
                     "
-                    id="main-tabs"
                 >
 
                     <button
@@ -279,9 +328,11 @@
                         "
                         data-tab="monitor"
                     >
+
                         <i class="fas fa-chart-line"></i>
 
                         المراقبة
+
                     </button>
 
                     <button
@@ -291,9 +342,11 @@
                         "
                         data-tab="dialogue"
                     >
+
                         <i class="fas fa-comments"></i>
 
                         التفاعل
+
                     </button>
 
                     <button
@@ -303,9 +356,11 @@
                         "
                         data-tab="decisions"
                     >
+
                         <i class="fas fa-gavel"></i>
 
                         القرارات
+
                     </button>
 
                     <button
@@ -315,9 +370,11 @@
                         "
                         data-tab="proposals"
                     >
+
                         <i class="fas fa-lightbulb"></i>
 
                         الاقتراحات
+
                     </button>
 
                     <button
@@ -327,9 +384,11 @@
                         "
                         data-tab="commands"
                     >
+
                         <i class="fas fa-terminal"></i>
 
                         الأوامر
+
                     </button>
 
                 </nav>
@@ -339,11 +398,15 @@
                 <!-- ========================================= -->
 
                 <section
-                    class="tab-content"
                     id="tab-monitor"
+                    class="tab-content"
                 >
 
                     <div class="metrics-grid">
+
+                        <!-- ============================= -->
+                        <!-- CYCLES -->
+                        <!-- ============================= -->
 
                         <article
                             class="
@@ -353,6 +416,7 @@
                                 sovereign-pulse
                             "
                         >
+
                             <div class="metric-icon">
                                 <i class="fas fa-chart-simple"></i>
                             </div>
@@ -362,29 +426,33 @@
                             </div>
 
                             <div
-                                class="metric-value"
                                 id="metric-cycles"
+                                class="metric-value"
                             >
                                 0
                             </div>
 
                             <div class="metric-sub">
-                                Cycles
+                                Runtime Cycles
                             </div>
 
                             <div class="metric-bar">
 
                                 <div
+                                    id="metric-cycles-bar"
                                     class="
                                         metric-bar-fill
                                         progress-glow
                                     "
-                                    id="metric-cycles-bar"
                                 ></div>
 
                             </div>
 
                         </article>
+
+                        <!-- ============================= -->
+                        <!-- FPS -->
+                        <!-- ============================= -->
 
                         <article
                             class="
@@ -403,8 +471,8 @@
                             </div>
 
                             <div
-                                class="metric-value"
                                 id="metric-fps"
+                                class="metric-value"
                             >
                                 60
                             </div>
@@ -414,6 +482,10 @@
                             </div>
 
                         </article>
+
+                        <!-- ============================= -->
+                        <!-- AI -->
+                        <!-- ============================= -->
 
                         <article
                             class="
@@ -428,12 +500,12 @@
                             </div>
 
                             <div class="metric-label">
-                                التفكير العصبي
+                                الذكاء العصبي
                             </div>
 
                             <div
-                                class="metric-value"
                                 id="metric-predictive"
+                                class="metric-value"
                             >
                                 Active
                             </div>
@@ -443,6 +515,10 @@
                             </div>
 
                         </article>
+
+                        <!-- ============================= -->
+                        <!-- ENERGY -->
+                        <!-- ============================= -->
 
                         <article
                             class="
@@ -461,8 +537,8 @@
                             </div>
 
                             <div
-                                class="metric-value"
                                 id="metric-field-energy"
+                                class="metric-value"
                             >
                                 0.00
                             </div>
@@ -475,13 +551,17 @@
 
                     </div>
 
+                    <!-- ===================================== -->
+                    <!-- CHART -->
+                    <!-- ===================================== -->
+
                     <div
+                        id="monitor-extra"
                         class="
                             monitor-extra
                             glass
                             deep-shadow
                         "
-                        id="monitor-extra"
                     >
 
                         <canvas
@@ -497,8 +577,8 @@
                 <!-- ========================================= -->
 
                 <section
-                    class="tab-content"
                     id="tab-dialogue"
+                    class="tab-content"
                     style="display:none;"
                 >
 
@@ -529,8 +609,8 @@
                 <!-- ========================================= -->
 
                 <section
-                    class="tab-content"
                     id="tab-decisions"
+                    class="tab-content"
                     style="display:none;"
                 >
 
@@ -558,8 +638,8 @@
                 <!-- ========================================= -->
 
                 <section
-                    class="tab-content"
                     id="tab-proposals"
+                    class="tab-content"
                     style="display:none;"
                 >
 
@@ -587,8 +667,8 @@
                 <!-- ========================================= -->
 
                 <section
-                    class="tab-content"
                     id="tab-commands"
+                    class="tab-content"
                     style="display:none;"
                 >
 
@@ -623,8 +703,13 @@
                     panel-right
                     sovereign-card-effect
                     holo-glow
+                    glass-reflection
                 "
             >
+
+                <!-- ========================================= -->
+                <!-- HEADER -->
+                <!-- ========================================= -->
 
                 <div class="panel-header">
 
@@ -655,9 +740,7 @@
                             أمر سيادي
                         </span>
 
-                        <span
-                            id="sir-command-count"
-                        >
+                        <span id="sir-command-count">
                             0
                         </span>
 
@@ -674,12 +757,12 @@
                         ></textarea>
 
                         <button
+                            id="btn-send-sir-command"
                             class="
                                 btn
                                 btn-primary
                                 ripple
                             "
-                            id="btn-send-sir-command"
                         >
 
                             <i class="fas fa-paper-plane"></i>
@@ -709,9 +792,7 @@
                             Neural Dialogue
                         </span>
 
-                        <span
-                            id="chat-input-count"
-                        >
+                        <span id="chat-input-count">
                             0
                         </span>
 
@@ -728,12 +809,12 @@
                         ></textarea>
 
                         <button
+                            id="btn-send-chat"
                             class="
                                 btn
                                 btn-primary
                                 ripple
                             "
-                            id="btn-send-chat"
                         >
 
                             <i class="fas fa-paper-plane"></i>
@@ -760,34 +841,89 @@
                     <div class="quick-actions">
 
                         <button
+                            id="btn-run-cycle"
                             class="
                                 quick-btn
                                 ripple
                             "
-                            id="btn-run-cycle"
                         >
                             تشغيل دورة
                         </button>
 
                         <button
+                            id="btn-view-history"
                             class="
                                 quick-btn
                                 ripple
                             "
-                            id="btn-view-history"
                         >
                             السجل
                         </button>
 
                         <button
+                            id="btn-get-status"
                             class="
                                 quick-btn
                                 ripple
                             "
-                            id="btn-get-status"
                         >
                             الحالة
                         </button>
+
+                        <button
+                            id="btn-get-components"
+                            class="
+                                quick-btn
+                                ripple
+                            "
+                        >
+                            المكونات
+                        </button>
+
+                    </div>
+
+                </section>
+
+                <!-- ========================================= -->
+                <!-- TOGGLES -->
+                <!-- ========================================= -->
+
+                <section
+                    class="
+                        input-area
+                        glass
+                    "
+                >
+
+                    <div class="toggle-row">
+
+                        <label class="toggle-pill">
+
+                            <input
+                                type="checkbox"
+                                id="toggle-live-refresh"
+                                checked
+                            />
+
+                            <span>
+                                تحديث حي
+                            </span>
+
+                        </label>
+
+                        <label class="toggle-pill">
+
+                            <input
+                                type="checkbox"
+                                id="toggle-holographic"
+                                checked
+                            />
+
+                            <span>
+                                هولوغرافي
+                            </span>
+
+                        </label>
 
                     </div>
 
@@ -807,31 +943,31 @@
                     <div class="connection-controls">
 
                         <button
+                            id="btn-ws-connect"
                             class="
                                 btn
                                 btn-success
                             "
-                            id="btn-ws-connect"
                         >
                             اتصال
                         </button>
 
                         <button
+                            id="btn-ws-disconnect"
                             class="
                                 btn
                                 btn-danger
                             "
-                            id="btn-ws-disconnect"
                         >
                             قطع
                         </button>
 
                         <span
+                            id="ws-status-chip"
                             class="
                                 connection-status
                                 online
                             "
-                            id="ws-status-chip"
                         >
                             متصل
                         </span>
@@ -885,9 +1021,7 @@
     <!-- CHART -->
     <!-- ===================================================== -->
 
-    
-        https://cdn.jsdelivr.net/npm/chart.js
-    script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
     <!-- ===================================================== -->
     <!-- CORE -->
@@ -899,29 +1033,23 @@
     <!-- MODULES -->
     <!-- ===================================================== -->
 
-    
-        js/modules/state-manager.js
-    script>
+    js/modules/state-manager.jsscript>
 
-    
-        js/modules/render-engine.js
-    script>
+    js/modules/render-engine.jsscript>
 
-    
-        js/modules/adaptive-effects.js
-    script>
+    js/modules/adaptive-effects.jsscript>
 
-    
-        js/modules/cinematic-engine.js
-    script>
+    js/modules/cinematic-engine.jsscript>
 
-    
-        js/modules/neural-animation-engine.js
-    script>
+    <script src="js/modules/neural-animation-engine.js"></script>
 
-    
-        js/modules/live-ai-engine.js
-    script>
+    <script src="js/modules/live-ai-engine.js"></script>
+
+    <script src="js/modules/neural-ui-controller.js"></script>
+
+    <script src="js/modules/neural-memory.js"></script>
+
+    <script src="js/modules/sovereign-orchestrator.js"></script>
 
     <!-- ===================================================== -->
     <!-- LEGACY -->
