@@ -60,15 +60,18 @@
     <!-- ===================================================== -->
 
     <link
-        href="https://fonts.googleapis.com"/>
+        href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700;800&display=swap"
+        rel="stylesheet"
+    />
 
     <!-- ===================================================== -->
     <!-- ICONS -->
     <!-- ===================================================== -->
 
-    
-        https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css
-        
+    <link
+        rel="stylesheet"
+        href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
+    />
 
     <!-- ===================================================== -->
     <!-- STYLES -->
@@ -751,9 +754,7 @@
                         <textarea
                             id="sir-command-input"
                             rows="2"
-                            placeholder="
-                            اكتب أمراً سيادياً...
-                            "
+                            placeholder="اكتب أمراً سيادياً..."
                         ></textarea>
 
                         <button
@@ -803,9 +804,7 @@
                         <textarea
                             id="chat-input"
                             rows="3"
-                            placeholder="
-                            تحدث مع الذكاء السيادي...
-                            "
+                            placeholder="تحدث مع الذكاء السيادي..."
                         ></textarea>
 
                         <button
@@ -1018,7 +1017,7 @@
     </div>
 
     <!-- ===================================================== -->
-    <!-- CHART -->
+    <!-- EXTERNAL -->
     <!-- ===================================================== -->
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -1027,32 +1026,60 @@
     <!-- CORE -->
     <!-- ===================================================== -->
 
-    js/core.jsscript>
+    <script src="js/core.js"></script>
 
     <!-- ===================================================== -->
-    <!-- MODULES -->
+    <!-- FOUNDATION -->
     <!-- ===================================================== -->
 
-    js/modules/state-manager.jsscript>
+    <script src="js/modules/state-manager.js"></script>
 
-    js/modules/render-engine.jsscript>
+    <script src="js/modules/render-engine.js"></script>
 
-    js/modules/adaptive-effects.jsscript>
+    <script src="js/modules/adaptive-effects.js"></script>
 
-    js/modules/cinematic-engine.jsscript>
+    <script src="js/modules/cinematic-engine.js"></script>
 
     <script src="js/modules/neural-animation-engine.js"></script>
 
-    <script src="js/modules/live-ai-engine.js"></script>
+    <!-- ===================================================== -->
+    <!-- AI -->
+    <!-- ===================================================== -->
 
-    <script src="js/modules/neural-ui-controller.js"></script>
+    <script src="js/modules/live-ai-engine.js"></script>
 
     <script src="js/modules/neural-memory.js"></script>
 
-    <script src="js/modules/sovereign-orchestrator.js"></script>
+    <script src="js/modules/dialogue-engine.js"></script>
 
     <!-- ===================================================== -->
-    <!-- LEGACY -->
+    <!-- UI -->
+    <!-- ===================================================== -->
+
+    <script src="js/modules/neural-ui-controller.js"></script>
+
+    <script src="js/modules/notification-runtime.js"></script>
+
+    <!-- ===================================================== -->
+    <!-- NETWORK -->
+    <!-- ===================================================== -->
+
+    <script src="js/modules/websocket-runtime.js"></script>
+
+    <!-- ===================================================== -->
+    <!-- SYSTEM -->
+    <!-- ===================================================== -->
+
+    <script src="js/modules/metrics-engine.js"></script>
+
+    <script src="js/modules/command-runtime.js"></script>
+
+    <script src="js/modules/sovereign-orchestrator.js"></script>
+
+    <script src="js/modules/system-bridge.js"></script>
+
+    <!-- ===================================================== -->
+    <!-- LEGACY SUPPORT -->
     <!-- ===================================================== -->
 
     <script src="js/animations.js"></script>
