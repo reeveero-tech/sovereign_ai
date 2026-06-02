@@ -1,15 +1,16 @@
 FROM python:3.12
 
+# مجلد العمل الرئيسي
 WORKDIR /app
 
-# نسخ متطلبات بايثون
-COPY backend/requirements.txt .
+# نسخ ملف المتطلبات من الجذر
+COPY requirements.txt .
+
+# تثبيت المكتبات
 RUN pip install --no-cache-dir -r requirements.txt
 
-# نسخ باقي الكود
-COPY backend/ ./backend/
-COPY frontend/ ./frontend/
+# نسخ جميع ملفات المشروع
+COPY . .
 
-WORKDIR /app/backend
-
-CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
+# تشغيل التطبيق
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
