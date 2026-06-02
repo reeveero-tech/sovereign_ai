@@ -170,25 +170,9 @@ class SovereignOrchestrator:
         # تسجيل
         external_logger: Optional[Any] = None,
     ):
-        # تهيئة المكونات (تلقائياً أو محقونة)
-        self.consciousness = consciousness or self._load_consciousness()
-        self.memory_core = memory_core or self._load_memory_core()
-        self.memory_dynamic = memory_dynamic or self._load_memory_dynamic()
-        self.memory_store = memory_store or self._load_memory_store()
-        self.biological = biological or self._load_biological()
-        self.predictive = predictive or self._load_predictive()
-        self.simulation = simulation or self._load_simulation()
-        self.sovereign = sovereign or self._load_sovereign()
-        self.quantum = quantum or self._load_quantum()
-        
-        # الإعدادات
-        self.config = config or OrchestratorConfig()
-        self.external_logger = external_logger
-        
-        # الحالة الداخلية
-        self._session_id: str = hashlib.sha256(f"{time.time()}{secrets.token_hex(16)}".encode()).hexdigest()[:16]
-        self._history: deque = deque(maxlen=self.config.max_history)
+        # ✅ التعديل: تهيئة المتغيرات أولاً (قبل تحميل المكونات)
         self._component_health: Dict[str, ComponentHealth] = {}
+        self._session_id: str = hashlib.sha256(f"{time.time()}{secrets.token_hex(16)}".encode()).hexdigest()[:16]
         self._cache: Dict[str, tuple] = {}  # key -> (value, expiry)
         self._cache_lock = threading.RLock()
         
@@ -204,10 +188,28 @@ class SovereignOrchestrator:
             "mode_changes": []
         }
         
+        # الإعدادات
+        self.config = config or OrchestratorConfig()
+        self.external_logger = external_logger
+        
+        # الحالة الداخلية
+        self._history: deque = deque(maxlen=self.config.max_history)
+        
         # الإعدادات المتقدمة
         self._recovery_mode = False
         self._recovery_attempts_left = self.config.recovery_attempts
         self._error_counter = 0
+        
+        # تهيئة المكونات (تلقائياً أو محقونة) - الآن self._component_health موجود
+        self.consciousness = consciousness or self._load_consciousness()
+        self.memory_core = memory_core or self._load_memory_core()
+        self.memory_dynamic = memory_dynamic or self._load_memory_dynamic()
+        self.memory_store = memory_store or self._load_memory_store()
+        self.biological = biological or self._load_biological()
+        self.predictive = predictive or self._load_predictive()
+        self.simulation = simulation or self._load_simulation()
+        self.sovereign = sovereign or self._load_sovereign()
+        self.quantum = quantum or self._load_quantum()
         
         # خلفيات التشغيل
         self._active = True
