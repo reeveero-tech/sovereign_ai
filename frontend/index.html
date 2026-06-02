@@ -1,414 +1,944 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
+
 <head>
+
     <meta charset="UTF-8" />
-    <title>قمرة الذكاء السيادي · Sovereign Cockpit</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=yes" />
-    <meta name="description" content="لوحة تحكم الذكاء السيادي - العقل المطلق" />
 
-    <!-- أيقونات FontAwesome -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+    <title>
+        Sovereign AI · Neural Sovereign Cockpit
+    </title>
+
+    <meta
+        name="viewport"
+        content="
+            width=device-width,
+            initial-scale=1,
+            viewport-fit=cover
+        "
+    />
+
+    <meta
+        name="description"
+        content="
+            Sovereign AI —
+            The Ultimate Cinematic Intelligence Interface
+        "
+    />
+
+    <meta
+        name="theme-color"
+        content="#050712"
+    />
+
+    <!-- ===================================================== -->
+    <!-- Fonts -->
+    <!-- ===================================================== -->
+
+    <link
+        rel="preconnect"
+        href="https://fonts.googleapis.com"
+    />
+
+    https://fonts.gstatic.com
+
+    <link
+        href="https://fonts.googleapis.com"/>
+
+    <!-- ===================================================== -->
+    <!-- Icons -->
+    <!-- ===================================================== -->
+
     
-    <!-- الخطوط -->
-    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+        https://cdnjs.cloudflare.com/ajax/libs/
+        font-awesome/6.5.1/css/all.min.css
+        
 
-    <!-- الأساسيات -->
-    <link rel="stylesheet" href="css/style.css" />
-    <link rel="stylesheet" href="css/effects.css" />
-    <link rel="stylesheet" href="css/responsive.css" />
+    <!-- ===================================================== -->
+    <!-- Styles -->
+    <!-- ===================================================== -->
 
-    <!-- الثيم (اختياري) -->
-    <link rel="stylesheet" href="themes/dark.css" />
+    <link
+        rel="stylesheet"
+        href="css/style.css"
+    />
 
-    <link rel="icon" type="image/svg+xml" href="assets/logo.svg" />
+    <link
+        rel="stylesheet"
+        href="css/effects.css"
+    />
+
+    <link
+        rel="stylesheet"
+        href="css/responsive.css"
+    />
+
+    <link
+        rel="stylesheet"
+        href="themes/dark.css"
+    />
+
+    <!-- ===================================================== -->
+    <!-- Favicon -->
+    <!-- ===================================================== -->
+
+    <link
+        rel="icon"
+        type="image/svg+xml"
+        href="assets/logo.svg"
+    />
+
 </head>
-<body>
 
-<div id="app-root" class="app-shell">
+<body class="sovereign-body">
 
-    <!-- الشريط العلوي: هوية + حالة + معلومات -->
-    <header class="top-bar">
-        <div class="brand-block">
-            <div class="brand-logo holographic-icon">🧠</div>
-            <div class="brand-text">
-                <div class="brand-title neon-text">SOVEREIGN AI</div>
-                <div class="brand-sub">قمرة القيادة السيادية · الوجه الحقيقي للذكاء</div>
-            </div>
-        </div>
+    <!-- ===================================================== -->
+    <!-- Sovereign Root -->
+    <!-- ===================================================== -->
 
-        <div class="status-block">
-            <div class="status-pill" id="status-connection">
-                <div class="status-dot online"></div>
-                <span>متصل · Online</span>
-            </div>
-            <div class="mode-pill" id="runtime-mode">
-                <i class="fas fa-crown"></i> وضع التشغيل: Sovereign Runtime
-            </div>
-            <div class="version-pill">
-                <i class="fas fa-code-branch"></i> v4.0.0
-            </div>
-        </div>
-    </header>
+    <div
+        id="app-root"
+        class="
+            app-shell
+            sovereign-grid
+            liquid-bg
+            particles
+        "
+    >
 
-    <!-- التخطيط الرئيسي -->
-    <main class="main-layout">
+        <!-- ================================================= -->
+        <!-- TOP BAR -->
+        <!-- ================================================= -->
 
-        <!-- ============================================================ -->
-        <!-- اللوحة اليسرى: تبويبات المراقبة/الحوار/القرارات/الاقتراحات -->
-        <!-- ============================================================ -->
-        <section class="panel panel-left">
-            <div class="panel-header">
-                <div class="panel-title">
-                    <i class="fas fa-tachometer-alt"></i> لوحة التحكم السيادية
-                </div>
-                <div class="panel-actions">
-                    <button class="btn btn-ghost" id="btn-reset-system" title="إعادة تهيئة النظام بالكامل">
-                        <i class="fas fa-sync-alt"></i> إعادة تهيئة
-                    </button>
-                    <button class="btn btn-ghost" id="btn-export-data" title="تصدير جميع البيانات">
-                        <i class="fas fa-download"></i> تصدير
-                    </button>
-                </div>
-            </div>
+        <header
+            class="
+                top-bar
+                glass
+                holo-lines
+                sovereign-light
+            "
+        >
 
-            <!-- التبويبات الرئيسية -->
-            <nav class="tabs" id="main-tabs">
-                <button class="tab active" data-tab="monitor">
-                    <i class="fas fa-chart-line"></i> مراقبة الذكاء
-                </button>
-                <button class="tab" data-tab="dialogue">
-                    <i class="fas fa-comments"></i> التفاعل
-                </button>
-                <button class="tab" data-tab="decisions">
-                    <i class="fas fa-gavel"></i> القرارات
-                </button>
-                <button class="tab" data-tab="proposals">
-                    <i class="fas fa-lightbulb"></i> الاقتراحات
-                </button>
-                <button class="tab" data-tab="commands">
-                    <i class="fas fa-terminal"></i> أوامر السيد
-                </button>
-            </nav>
+            <div class="brand-block">
 
-            <!-- ========== تبويب 1: مراقبة حالة الذكاء ========== -->
-            <section class="tab-content" id="tab-monitor">
-                <div class="metrics-grid">
-                    <article class="metric-card glass">
-                        <div class="metric-icon"><i class="fas fa-chart-simple"></i></div>
-                        <div class="metric-label">الدورات السيادية</div>
-                        <div class="metric-value" id="metric-cycles">0</div>
-                        <div class="metric-sub">Cycles</div>
-                        <div class="metric-bar">
-                            <div class="metric-bar-fill" id="metric-cycles-bar" style="width:0%"></div>
-                        </div>
-                    </article>
-
-                    <article class="metric-card glass">
-                        <div class="metric-icon"><i class="fas fa-exclamation-triangle"></i></div>
-                        <div class="metric-label">آخر خطأ</div>
-                        <div class="metric-value" id="metric-error">لا يوجد</div>
-                        <div class="metric-sub">Last Error</div>
-                    </article>
-
-                    <article class="metric-card glass">
-                        <div class="metric-icon"><i class="fas fa-microchip"></i></div>
-                        <div class="metric-label">الذاكرة</div>
-                        <div class="metric-value" id="metric-memory">مستقرة</div>
-                        <div class="metric-sub">Memory Core</div>
-                    </article>
-
-                    <article class="metric-card glass">
-                        <div class="metric-icon"><i class="fas fa-brain"></i></div>
-                        <div class="metric-label">التنبؤ</div>
-                        <div class="metric-value" id="metric-predictive">نشط</div>
-                        <div class="metric-sub">Predictive</div>
-                    </article>
-
-                    <article class="metric-card glass">
-                        <div class="metric-icon"><i class="fas fa-cubes"></i></div>
-                        <div class="metric-label">المحاكاة</div>
-                        <div class="metric-value" id="metric-simulation">جاهز</div>
-                        <div class="metric-sub">Simulation</div>
-                    </article>
-
-                    <article class="metric-card glass">
-                        <div class="metric-icon"><i class="fas fa-crown"></i></div>
-                        <div class="metric-label">السيادة</div>
-                        <div class="metric-value" id="metric-sovereign">مستقر</div>
-                        <div class="metric-sub">Sovereign</div>
-                    </article>
-
-                    <!-- مقاييس إضافية -->
-                    <article class="metric-card glass">
-                        <div class="metric-icon"><i class="fas fa-charging-station"></i></div>
-                        <div class="metric-label">طاقة الحقل</div>
-                        <div class="metric-value" id="metric-field-energy">0.00</div>
-                        <div class="metric-sub">Field Energy</div>
-                    </article>
-
-                    <article class="metric-card glass">
-                        <div class="metric-icon"><i class="fas fa-waveform"></i></div>
-                        <div class="metric-label">تماسك الكم</div>
-                        <div class="metric-value" id="metric-coherence">0%</div>
-                        <div class="metric-sub">Quantum Coherence</div>
-                    </article>
+                <div
+                    class="
+                        brand-logo
+                        crown-pulse
+                        sovereign-pulse
+                    "
+                >
+                    🧠
                 </div>
 
-                <!-- مساحة للرسوم البيانية المستقبلية -->
-                <div class="monitor-extra" id="monitor-extra">
-                    <canvas id="performanceChart" width="400" height="150" style="max-width:100%; height:auto;"></canvas>
-                </div>
-            </section>
+                <div class="brand-text">
 
-            <!-- ========== تبويب 2: التفاعل مع الذكاء السيادي (حوار) ========== -->
-            <section class="tab-content" id="tab-dialogue" style="display:none;">
-                <div class="dialogue-header">
-                    <i class="fas fa-history"></i> سجل المحادثة
-                    <span class="dialogue-stats" id="dialogue-stats">0 رسالة</span>
-                </div>
-                <div id="dialogue-groups" class="groups-container">
-                    <!-- يتم ملؤها ديناميكياً من main.js -->
-                    <div class="empty-state">
-                        <i class="fas fa-comment-dots"></i>
-                        <p>لا توجد رسائل بعد. ابدأ محادثة من اللوحة اليمنى.</p>
+                    <div
+                        class="
+                            brand-title
+                            neon-text
+                            cyber-glow
+                        "
+                        data-text="SOVEREIGN AI"
+                    >
+                        SOVEREIGN AI
                     </div>
-                </div>
-            </section>
 
-            <!-- ========== تبويب 3: القرارات السيادية ========== -->
-            <section class="tab-content" id="tab-decisions" style="display:none;">
-                <div class="decisions-header">
-                    <i class="fas fa-gavel"></i> سجل القرارات
-                    <div class="decisions-filters">
-                        <button class="filter-btn active" data-filter="all">الكل</button>
-                        <button class="filter-btn" data-filter="approved">مقبولة</button>
-                        <button class="filter-btn" data-filter="pending">معلقة</button>
-                        <button class="filter-btn" data-filter="rejected">مرفوضة</button>
+                    <div class="brand-sub">
+                        قمرة القيادة العصبية السيادية
                     </div>
+
                 </div>
-                <div id="decisions-groups" class="groups-container">
-                    <div class="empty-state">
+
+            </div>
+
+            <div class="status-block">
+
+                <div
+                    class="
+                        status-pill
+                        glass
+                        glow-cyan
+                    "
+                    id="status-connection"
+                >
+                    <div class="status-dot"></div>
+
+                    <span>
+                        Neural Link Active
+                    </span>
+                </div>
+
+                <div
+                    class="
+                        mode-pill
+                        glass
+                    "
+                    id="runtime-mode"
+                >
+                    <i class="fas fa-crown"></i>
+
+                    Sovereign Runtime
+                </div>
+
+                <div
+                    class="
+                        version-pill
+                        glow-purple
+                    "
+                >
+                    v5.0.0
+                </div>
+
+            </div>
+
+        </header>
+
+        <!-- ================================================= -->
+        <!-- MAIN -->
+        <!-- ================================================= -->
+
+        <main class="main-layout">
+
+            <!-- ============================================= -->
+            <!-- LEFT PANEL -->
+            <!-- ============================================= -->
+
+            <section
+                class="
+                    panel
+                    panel-left
+                    sovereign-card-effect
+                    holo-glow
+                "
+            >
+
+                <!-- ========================================= -->
+                <!-- PANEL HEADER -->
+                <!-- ========================================= -->
+
+                <div class="panel-header">
+
+                    <div class="panel-title">
+
+                        <i class="fas fa-tachometer-alt"></i>
+
+                        Neural Sovereign Matrix
+
+                    </div>
+
+                    <div class="panel-actions">
+
+                        <button
+                            class="
+                                btn
+                                btn-ghost
+                                ripple
+                            "
+                            id="btn-reset-system"
+                        >
+                            <i class="fas fa-sync-alt"></i>
+
+                            إعادة تهيئة
+                        </button>
+
+                        <button
+                            class="
+                                btn
+                                btn-ghost
+                                ripple
+                            "
+                            id="btn-export-data"
+                        >
+                            <i class="fas fa-download"></i>
+
+                            تصدير
+                        </button>
+
+                    </div>
+
+                </div>
+
+                <!-- ========================================= -->
+                <!-- TABS -->
+                <!-- ========================================= -->
+
+                <nav
+                    class="
+                        tabs
+                        glass
+                    "
+                    id="main-tabs"
+                >
+
+                    <button
+                        class="
+                            tab
+                            active
+                            ripple
+                        "
+                        data-tab="monitor"
+                    >
+                        <i class="fas fa-chart-line"></i>
+
+                        المراقبة
+                    </button>
+
+                    <button
+                        class="
+                            tab
+                            ripple
+                        "
+                        data-tab="dialogue"
+                    >
+                        <i class="fas fa-comments"></i>
+
+                        التفاعل
+                    </button>
+
+                    <button
+                        class="
+                            tab
+                            ripple
+                        "
+                        data-tab="decisions"
+                    >
                         <i class="fas fa-gavel"></i>
-                        <p>لا توجد قرارات بعد. سيتم عرض القرارات السيادية هنا.</p>
-                    </div>
-                </div>
-            </section>
 
-            <!-- ========== تبويب 4: اقتراحات الذكاء ========== -->
-            <section class="tab-content" id="tab-proposals" style="display:none;">
-                <div class="proposals-header">
-                    <i class="fas fa-lightbulb"></i> اقتراحات الذكاء السيادي
-                    <button class="btn btn-small" id="btn-refresh-proposals">
-                        <i class="fas fa-sync-alt"></i> تحديث
+                        القرارات
                     </button>
-                </div>
-                <div id="proposals-list" class="proposals-container">
-                    <div class="empty-state">
+
+                    <button
+                        class="
+                            tab
+                            ripple
+                        "
+                        data-tab="proposals"
+                    >
                         <i class="fas fa-lightbulb"></i>
-                        <p>لا توجد اقتراحات حالياً. سيتم عرض اقتراحات الذكاء هنا.</p>
-                    </div>
-                </div>
-            </section>
 
-            <!-- ========== تبويب 5: أوامر السيد السابقة ========== -->
-            <section class="tab-content" id="tab-commands" style="display:none;">
-                <div class="commands-header">
-                    <i class="fas fa-terminal"></i> سجل أوامر السيد
-                    <button class="btn btn-small" id="btn-clear-commands">
-                        <i class="fas fa-trash-alt"></i> مسح
+                        الاقتراحات
                     </button>
-                </div>
-                <div id="commands-list" class="commands-container">
-                    <div class="empty-state">
+
+                    <button
+                        class="
+                            tab
+                            ripple
+                        "
+                        data-tab="commands"
+                    >
                         <i class="fas fa-terminal"></i>
-                        <p>لا توجد أوامر بعد. أرسل أمراً من اللوحة اليمنى.</p>
+
+                        الأوامر
+                    </button>
+
+                </nav>
+
+                <!-- ========================================= -->
+                <!-- MONITOR -->
+                <!-- ========================================= -->
+
+                <section
+                    class="tab-content"
+                    id="tab-monitor"
+                >
+
+                    <div class="metrics-grid">
+
+                        <article
+                            class="
+                                metric-card
+                                glass
+                                holo-glow
+                                sovereign-pulse
+                            "
+                        >
+                            <div class="metric-icon">
+                                <i class="fas fa-chart-simple"></i>
+                            </div>
+
+                            <div class="metric-label">
+                                الدورات
+                            </div>
+
+                            <div
+                                class="metric-value"
+                                id="metric-cycles"
+                            >
+                                0
+                            </div>
+
+                            <div class="metric-sub">
+                                Cycles
+                            </div>
+
+                            <div class="metric-bar">
+
+                                <div
+                                    class="
+                                        metric-bar-fill
+                                        progress-glow
+                                    "
+                                    id="metric-cycles-bar"
+                                ></div>
+
+                            </div>
+
+                        </article>
+
+                        <article
+                            class="
+                                metric-card
+                                glass
+                                glow-pink
+                            "
+                        >
+
+                            <div class="metric-icon">
+                                <i class="fas fa-waveform"></i>
+                            </div>
+
+                            <div class="metric-label">
+                                Neural FPS
+                            </div>
+
+                            <div
+                                class="metric-value"
+                                id="metric-fps"
+                            >
+                                60
+                            </div>
+
+                            <div class="metric-sub">
+                                Frame Stability
+                            </div>
+
+                        </article>
+
+                        <article
+                            class="
+                                metric-card
+                                glass
+                                glow-cyan
+                            "
+                        >
+
+                            <div class="metric-icon">
+                                <i class="fas fa-brain"></i>
+                            </div>
+
+                            <div class="metric-label">
+                                التفكير العصبي
+                            </div>
+
+                            <div
+                                class="metric-value"
+                                id="metric-predictive"
+                            >
+                                Active
+                            </div>
+
+                            <div class="metric-sub">
+                                Neural Runtime
+                            </div>
+
+                        </article>
+
+                        <article
+                            class="
+                                metric-card
+                                glass
+                                glow-purple
+                            "
+                        >
+
+                            <div class="metric-icon">
+                                <i class="fas fa-bolt"></i>
+                            </div>
+
+                            <div class="metric-label">
+                                الطاقة
+                            </div>
+
+                            <div
+                                class="metric-value"
+                                id="metric-field-energy"
+                            >
+                                0.00
+                            </div>
+
+                            <div class="metric-sub">
+                                Energy Field
+                            </div>
+
+                        </article>
+
                     </div>
-                </div>
-            </section>
-        </section>
 
-        <!-- ============================================================ -->
-        <!-- اللوحة اليمنى: أوامر السيد + قناة الحوار + مفاتيح سريعة -->
-        <!-- ============================================================ -->
-        <section class="panel panel-right">
-            <div class="panel-header">
-                <div class="panel-title">
-                    <i class="fas fa-crown"></i> قمرة القيادة
+                    <div
+                        class="
+                            monitor-extra
+                            glass
+                            deep-shadow
+                        "
+                        id="monitor-extra"
+                    >
+
+                        <canvas
+                            id="performanceChart"
+                        ></canvas>
+
+                    </div>
+
+                </section>
+
+                <!-- ========================================= -->
+                <!-- DIALOGUE -->
+                <!-- ========================================= -->
+
+                <section
+                    class="tab-content"
+                    id="tab-dialogue"
+                    style="display:none;"
+                >
+
+                    <div
+                        id="dialogue-groups"
+                        class="
+                            groups-container
+                            glass
+                        "
+                    >
+
+                        <div class="empty-state">
+
+                            <i class="fas fa-comment-dots"></i>
+
+                            <p>
+                                Awaiting Neural Interaction...
+                            </p>
+
+                        </div>
+
+                    </div>
+
+                </section>
+
+                <!-- ========================================= -->
+                <!-- DECISIONS -->
+                <!-- ========================================= -->
+
+                <section
+                    class="tab-content"
+                    id="tab-decisions"
+                    style="display:none;"
+                >
+
+                    <div
+                        id="decisions-groups"
+                        class="groups-container"
+                    >
+
+                        <div class="empty-state">
+
+                            <i class="fas fa-gavel"></i>
+
+                            <p>
+                                لا توجد قرارات حالياً
+                            </p>
+
+                        </div>
+
+                    </div>
+
+                </section>
+
+                <!-- ========================================= -->
+                <!-- PROPOSALS -->
+                <!-- ========================================= -->
+
+                <section
+                    class="tab-content"
+                    id="tab-proposals"
+                    style="display:none;"
+                >
+
+                    <div
+                        id="proposals-list"
+                        class="groups-container"
+                    >
+
+                        <div class="empty-state">
+
+                            <i class="fas fa-lightbulb"></i>
+
+                            <p>
+                                Awaiting Intelligence Proposals...
+                            </p>
+
+                        </div>
+
+                    </div>
+
+                </section>
+
+                <!-- ========================================= -->
+                <!-- COMMANDS -->
+                <!-- ========================================= -->
+
+                <section
+                    class="tab-content"
+                    id="tab-commands"
+                    style="display:none;"
+                >
+
+                    <div
+                        id="commands-list"
+                        class="groups-container"
+                    >
+
+                        <div class="empty-state">
+
+                            <i class="fas fa-terminal"></i>
+
+                            <p>
+                                لا توجد أوامر حتى الآن
+                            </p>
+
+                        </div>
+
+                    </div>
+
+                </section>
+
+            </section>
+
+            <!-- ============================================= -->
+            <!-- RIGHT PANEL -->
+            <!-- ============================================= -->
+
+            <section
+                class="
+                    panel
+                    panel-right
+                    sovereign-card-effect
+                    holo-glow
+                "
+            >
+
+                <div class="panel-header">
+
+                    <div class="panel-title">
+
+                        <i class="fas fa-crown"></i>
+
+                        Sovereign Command Center
+
+                    </div>
+
                 </div>
-                <div class="panel-actions">
-                    <span class="chip holographic">
-                        <i class="fas fa-mobile-alt"></i> متوافق مع الكل
-                    </span>
-                </div>
+
+                <!-- ========================================= -->
+                <!-- COMMAND INPUT -->
+                <!-- ========================================= -->
+
+                <section
+                    class="
+                        input-area
+                        glass
+                    "
+                >
+
+                    <div class="input-meta">
+
+                        <span>
+                            أمر سيادي
+                        </span>
+
+                        <span
+                            id="sir-command-count"
+                        >
+                            0
+                        </span>
+
+                    </div>
+
+                    <div class="input-row">
+
+                        <textarea
+                            id="sir-command-input"
+                            rows="2"
+                            placeholder="
+                            اكتب أمراً سيادياً...
+                            "
+                        ></textarea>
+
+                        <button
+                            class="
+                                btn
+                                btn-primary
+                                ripple
+                            "
+                            id="btn-send-sir-command"
+                        >
+
+                            <i class="fas fa-paper-plane"></i>
+
+                            إرسال
+
+                        </button>
+
+                    </div>
+
+                </section>
+
+                <!-- ========================================= -->
+                <!-- CHAT -->
+                <!-- ========================================= -->
+
+                <section
+                    class="
+                        input-area
+                        glass
+                    "
+                >
+
+                    <div class="input-meta">
+
+                        <span>
+                            Neural Dialogue
+                        </span>
+
+                        <span
+                            id="chat-input-count"
+                        >
+                            0
+                        </span>
+
+                    </div>
+
+                    <div class="input-row">
+
+                        <textarea
+                            id="chat-input"
+                            rows="3"
+                            placeholder="
+                            تحدث مع الذكاء السيادي...
+                            "
+                        ></textarea>
+
+                        <button
+                            class="
+                                btn
+                                btn-primary
+                                ripple
+                            "
+                            id="btn-send-chat"
+                        >
+
+                            <i class="fas fa-paper-plane"></i>
+
+                            إرسال
+
+                        </button>
+
+                    </div>
+
+                </section>
+
+                <!-- ========================================= -->
+                <!-- QUICK ACTIONS -->
+                <!-- ========================================= -->
+
+                <section
+                    class="
+                        input-area
+                        glass
+                    "
+                >
+
+                    <div class="quick-actions">
+
+                        <button
+                            class="
+                                quick-btn
+                                ripple
+                            "
+                            id="btn-run-cycle"
+                        >
+                            تشغيل دورة
+                        </button>
+
+                        <button
+                            class="
+                                quick-btn
+                                ripple
+                            "
+                            id="btn-view-history"
+                        >
+                            السجل
+                        </button>
+
+                        <button
+                            class="
+                                quick-btn
+                                ripple
+                            "
+                            id="btn-get-status"
+                        >
+                            الحالة
+                        </button>
+
+                    </div>
+
+                </section>
+
+                <!-- ========================================= -->
+                <!-- CONNECTION -->
+                <!-- ========================================= -->
+
+                <section
+                    class="
+                        input-area
+                        glass
+                    "
+                >
+
+                    <div class="connection-controls">
+
+                        <button
+                            class="
+                                btn
+                                btn-success
+                            "
+                            id="btn-ws-connect"
+                        >
+                            اتصال
+                        </button>
+
+                        <button
+                            class="
+                                btn
+                                btn-danger
+                            "
+                            id="btn-ws-disconnect"
+                        >
+                            قطع
+                        </button>
+
+                        <span
+                            class="
+                                connection-status
+                                online
+                            "
+                            id="ws-status-chip"
+                        >
+                            متصل
+                        </span>
+
+                    </div>
+
+                </section>
+
+            </section>
+
+        </main>
+
+        <!-- ================================================= -->
+        <!-- FOOTER -->
+        <!-- ================================================= -->
+
+        <footer
+            class="
+                bottom-bar
+                glass
+            "
+        >
+
+            <div class="footer-info">
+
+                <span>
+                    Sovereign AI Runtime
+                </span>
+
+                <span>
+                    Neural Cinematic Interface
+                </span>
+
             </div>
 
-            <!-- قسم أوامر السيد (إرسال أوامر مباشرة) -->
-            <section class="input-area glass">
-                <div class="input-meta">
-                    <span><i class="fas fa-crown"></i> أمر السيد</span>
-                    <span id="sir-command-count">0 حرف</span>
-                </div>
-                <div class="input-row">
-                    <textarea id="sir-command-input"
-                              placeholder="اكتب أمراً سيادياً...&#10;مثال: reset, status, mode normal, get components"
-                              rows="2"></textarea>
-                    <button class="btn btn-primary" id="btn-send-sir-command">
-                        <i class="fas fa-paper-plane"></i> إرسال
-                    </button>
-                </div>
-                <div class="suggestions" id="command-suggestions">
-                    <span class="suggestion-tag" data-cmd="status">📊 status</span>
-                    <span class="suggestion-tag" data-cmd="reset">🔄 reset</span>
-                    <span class="suggestion-tag" data-cmd="mode normal">⚙️ mode normal</span>
-                    <span class="suggestion-tag" data-cmd="mode safe">🛡️ mode safe</span>
-                    <span class="suggestion-tag" data-cmd="get components">🧩 get components</span>
-                    <span class="suggestion-tag" data-cmd="get history">📜 get history</span>
-                </div>
-            </section>
+            <div class="footer-meta">
 
-            <!-- قسم المحادثة مع الذكاء -->
-            <section class="input-area glass">
-                <div class="input-meta">
-                    <span><i class="fas fa-comment-dots"></i> حوار مع الذكاء</span>
-                    <span id="chat-input-count">0 حرف</span>
-                </div>
-                <div class="input-row">
-                    <textarea id="chat-input"
-                              placeholder="تحدث مع الذكاء السيادي...&#10;مثال: من أنت؟، ما هي حالتك؟، ماذا ترى في المستقبل؟"
-                              rows="2"></textarea>
-                    <button class="btn btn-secondary" id="btn-send-chat">
-                        <i class="fas fa-paper-plane"></i> إرسال
-                    </button>
-                </div>
-            </section>
+                <span
+                    id="last-update-time"
+                >
+                    --:--:--
+                </span>
 
-            <!-- مفاتيح سريعة (Quick Actions) -->
-            <section class="input-area glass">
-                <div class="input-meta">
-                    <span><i class="fas fa-bolt"></i> إجراءات سريعة</span>
-                </div>
-                <div class="quick-actions">
-                    <button class="quick-btn" id="btn-run-cycle">
-                        <i class="fas fa-play"></i> تشغيل دورة
-                    </button>
-                    <button class="quick-btn" id="btn-view-history">
-                        <i class="fas fa-history"></i> عرض السجل
-                    </button>
-                    <button class="quick-btn" id="btn-toggle-mode">
-                        <i class="fas fa-exchange-alt"></i> تبديل الوضع
-                    </button>
-                    <button class="quick-btn" id="btn-get-status">
-                        <i class="fas fa-chart-line"></i> حالة النظام
-                    </button>
-                    <button class="quick-btn" id="btn-get-components">
-                        <i class="fas fa-cubes"></i> المكونات
-                    </button>
-                </div>
-            </section>
-
-            <!-- خيارات واجهة المستخدم -->
-            <section class="input-area glass">
-                <div class="input-meta">
-                    <span><i class="fas fa-sliders-h"></i> خيارات الواجهة</span>
-                </div>
-                <div class="toggle-row">
-                    <label class="toggle-pill">
-                        <input type="checkbox" id="toggle-auto-group" checked />
-                        <span><i class="fas fa-layer-group"></i> طيّ كل ٣ رسائل</span>
-                    </label>
-                    <label class="toggle-pill">
-                        <input type="checkbox" id="toggle-live-refresh" checked />
-                        <span><i class="fas fa-sync-alt"></i> تحديث حي</span>
-                    </label>
-                    <label class="toggle-pill">
-                        <input type="checkbox" id="toggle-sound" />
-                        <span><i class="fas fa-volume-up"></i> مؤثرات صوتية</span>
-                    </label>
-                    <label class="toggle-pill">
-                        <input type="checkbox" id="toggle-holographic" checked />
-                        <span><i class="fas fa-star-of-life"></i> تأثيرات هولوغرافية</span>
-                    </label>
-                </div>
-            </section>
-
-            <!-- حالة الاتصال WebSocket -->
-            <section class="input-area glass">
-                <div class="input-meta">
-                    <span><i class="fas fa-plug"></i> الاتصال المباشر</span>
-                </div>
-                <div class="connection-controls">
-                    <button class="btn btn-success" id="btn-ws-connect">
-                        <i class="fas fa-plug"></i> اتصال
-                    </button>
-                    <button class="btn btn-danger" id="btn-ws-disconnect">
-                        <i class="fas fa-unlink"></i> قطع
-                    </button>
-                    <span class="connection-status" id="ws-status-chip">
-                        <i class="fas fa-circle"></i> غير متصل
-                    </span>
-                </div>
-            </section>
-        </section>
-    </main>
-
-    <!-- شريط سفلي (Footer) -->
-    <footer class="bottom-bar">
-        <div class="footer-info">
-            <span><i class="fas fa-microchip"></i> Sovereign AI v4.0.0</span>
-            <span><i class="fas fa-shield-alt"></i> السيادة المطلقة</span>
-            <span><i class="fas fa-globe"></i> قمرة القيادة السيادية</span>
-        </div>
-        <div class="footer-meta">
-            <span id="last-update-time">آخر تحديث: --:--:--</span>
-            <button class="btn-footer" id="btn-clear-cache">
-                <i class="fas fa-broom"></i>
-            </button>
-        </div>
-    </footer>
-
-    <!-- نافذة منبثقة لعرض مفتاح API -->
-    <div class="modal" id="apiKeyModal">
-        <div class="modal-content holographic">
-            <div class="modal-header">
-                <h3><i class="fas fa-key"></i> مفتاح API للسيد</h3>
-                <button class="close-modal">&times;</button>
             </div>
-            <div class="modal-body">
-                <p>هذا هو مفتاحك السري للتحكم في الذكاء السيادي.</p>
-                <div class="api-key-display">
-                    <code id="apiKeyValue">جاري التحميل...</code>
-                    <button id="copyApiKeyBtn" class="copy-btn">
-                        <i class="fas fa-copy"></i> نسخ
-                    </button>
-                </div>
-                <div class="warning">
-                    <i class="fas fa-exclamation-triangle"></i>
-                    لا تشارك هذا المفتاح. أي شخص يملكه يمكنه التحكم في الذكاء.
-                </div>
-            </div>
-        </div>
+
+        </footer>
+
     </div>
 
-    <!-- نافذة منبثقة لعرض التفاصيل -->
-    <div class="modal" id="detailsModal">
-        <div class="modal-content glass">
-            <div class="modal-header">
-                <h3 id="detailsModalTitle">التفاصيل</h3>
-                <button class="close-modal">&times;</button>
-            </div>
-            <div class="modal-body" id="detailsModalBody">
-                <!-- محتوى ديناميكي -->
-            </div>
-        </div>
-    </div>
+    <!-- ===================================================== -->
+    <!-- CHART -->
+    <!-- ===================================================== -->
 
-</div>
+    
+        https://cdn.jsdelivr.net/npm/chart.js
+    script>
 
-<!-- سكربتات الواجهة -->
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script src="js/animations.js"></script>
-<script src="js/websocket.js"></script>
-<script src="js/main.js"></script>
+    <!-- ===================================================== -->
+    <!-- CORE -->
+    <!-- ===================================================== -->
+
+    js/core.jsscript>
+
+    <!-- ===================================================== -->
+    <!-- MODULES -->
+    <!-- ===================================================== -->
+
+    
+        js/modules/state-manager.js
+    script>
+
+    
+        js/modules/render-engine.js
+    script>
+
+    
+        js/modules/adaptive-effects.js
+    script>
+
+    
+        js/modules/cinematic-engine.js
+    script>
+
+    
+        js/modules/neural-animation-engine.js
+    script>
+
+    
+        js/modules/live-ai-engine.js
+    script>
+
+    <!-- ===================================================== -->
+    <!-- LEGACY -->
+    <!-- ===================================================== -->
+
+    <script src="js/animations.js"></script>
+
+    <script src="js/websocket.js"></script>
+
+    <script src="js/main.js"></script>
+
+    <!-- ===================================================== -->
+    <!-- BOOT -->
+    <!-- ===================================================== -->
+
+    <script src="js/bootstrap.js"></script>
 
 </body>
+
 </html>
