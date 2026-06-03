@@ -1098,7 +1098,7 @@
     <script defer src="js/modules/system-bridge.js"></script>
 
     <!-- ===================================================== -->
-    <!-- RUNTIME LAYER (ADVANCED ORDER :: KERNEL FIRST) -->
+    <!-- RUNTIME LAYER (KERNEL -> SCHEDULER -> REGISTRY -> POWER -> LIFECYCLE -> INTERACTIVE MODULES) -->
     <!-- ===================================================== -->
 
     <script defer src="js/modules/runtime-kernel.js"></script>
@@ -1108,6 +1108,8 @@
     <script defer src="js/modules/runtime-task-registry.js"></script>
 
     <script defer src="js/modules/runtime-power-manager.js"></script>
+
+    <script defer src="js/modules/runtime-lifecycle.js"></script>
 
     <script defer src="js/modules/chat-runtime.js"></script>
 
@@ -1149,9 +1151,16 @@
 
     <!--
         =========================================================
-        NOTE: runtime-loading class will be removed by runtime-init.js
-        after full cinematic boot sequence completes.
-        This ensures smooth transition without FOUC / glitches.
+        LIFECYCLE INTEGRATION NOTE:
+        runtime-lifecycle.js manages:
+        - Boot
+        - Active
+        - Suspended
+        - Offline
+        - Degraded
+        - Shutdown
+        
+        This turns the platform into a true Runtime Operating Environment.
         =========================================================
     -->
 
