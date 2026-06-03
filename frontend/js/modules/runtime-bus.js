@@ -1,8 +1,22 @@
 /* ============================================================
    Sovereign AI — runtime-bus.js
-   الإصدار: 7.2.0 (Enterprise Runtime Bus)
+   الإصدار: 7.4.0 (Runtime Protocol Gateway)
+   
    ناقل الاتصال السيادي - العمود الفقري للـ Runtime
-   الوظيفة: Transport, Routing, Middleware, Telemetry, Error Handling
+   
+   الطبقات المستقبلية (لتجنب Monolith):
+     - Transport Engine (نقل الرسائل)
+     - Schema Gateway (normalization & validation)
+     - Telemetry Layer (القياس والإحصاءات)
+     - Middleware Orchestrator (إدارة الـ pipeline)
+     - Protocol Validator (التحقق من البروتوكولات)
+     - Error Isolation Layer (عزل الأخطاء ومنع الـ recursion)
+   
+   الأولويات المستقبلية:
+     - system channels (أولوية قصوى)
+     - critical channels (أولوية عالية)
+     - bypass channels (تجاوز الـ middleware)
+     - isolated channels (عزل تام)
    ============================================================ */
 
 class SovereignRuntimeBus {
@@ -13,7 +27,7 @@ class SovereignRuntimeBus {
 
         this.middlewares = [];
 
-        // REFACTOR: قائمة القنوات الأساسية التي لا يمكن حذفها أبداً
+        // قائمة القنوات الأساسية التي لا يمكن حذفها أبداً
         this.defaultChannels = new Set([
             'runtime',
             'system',
@@ -28,55 +42,92 @@ class SovereignRuntimeBus {
             'health',
             'state',
             'migration',
-            'runtime:errors'  // ✅ إضافة قناة الأخطاء كلاحقة
+            'runtime:errors'
         ]);
 
-        // ✅ Telemetry counters (للـ Runtime Observability المستقبلية)
+        // ✅ Telemetry counters - مستقبلاً: استخدام rolling window (EWMA) بدلاً من cumulative
+        // TODO: استبدال totalDispatchTime بـ rolling average لآخر 1000 رسالة
         this.telemetry = {
             messagesProcessed: 0,
             messagesFailed: 0,
             totalDispatchTime: 0,
-            averageDispatchTime: 0
+            averageDispatchTime: 0,
+            messagesNormalized: 0,
+            messagesRejected: 0,
+            // Future: rollingWindow
+            rollingWindowSize: 1000,
+            recentDispatchTimes: []  // للاستخدام المستقبلي
         };
 
-        // تجنب استخدام window.SOVEREIGN_BUS داخل الكلاس نفسه
+        // Cache for access layer
+        this._access = null;
+
         console.log(
-            '🛰 Runtime Bus Initialized (Enterprise Hybrid Mode)'
+            '🛰 Runtime Bus Initialized (Protocol Gateway Mode)'
         );
 
         this.init();
     }
 
     /* ========================================================
+       ACCESS HELPER (Runtime Access Layer)
+    ======================================================== */
+    get access() {
+        if (!this._access && window.SOVEREIGN_ACCESS) {
+            this._access = window.SOVEREIGN_ACCESS;
+            console.log('✅ Runtime Bus connected to Runtime Access Layer');
+        }
+        return this._access;
+    }
+
+    /* ========================================================
+       GET SCHEMA (Runtime Message Schema)
+    ======================================================== */
+    getSchema() {
+        return this.access?.legacy?.('schema') || window.SOVEREIGN_SCHEMA;
+    }
+
+    /* ========================================================
        INIT
     ======================================================== */
-
     init() {
         this.registerDefaultChannels();
         this.setupSelfTelemetry();
+        this.emitReady();
+    }
+
+    /* ========================================================
+       EMIT READY (مع تجنب bootstrap race condition)
+       
+       ✅ FIX 1: استخدام publishWithoutMiddleware بدلاً من this.access?.bus?.()
+       لتجنب اعتماد Bus على نفسه أثناء التهيئة
+    ======================================================== */
+    emitReady() {
+        // ✅ مباشرة عبر publishWithoutMiddleware لتجنب الـ race condition
+        this.publishWithoutMiddleware('bus:ready', {
+            timestamp: Date.now(),
+            channelsCount: this.defaultChannels.size,
+            version: '7.4.0',
+            source: 'runtime-bus'
+        });
     }
 
     /* ========================================================
        DEFAULT CHANNELS REGISTRATION
     ======================================================== */
-
     registerDefaultChannels() {
-        // ✅ استخدام defaultChannels Set بدلاً من array عادي
         for (const channel of this.defaultChannels) {
             if (!this.channels.has(channel)) {
                 this.channels.set(channel, []);
             }
         }
-
         console.log(`✅ Bus: ${this.defaultChannels.size} default channels registered (protected)`);
     }
 
     /* ========================================================
        SELF TELEMETRY (مراقبة Bus لنفسه)
     ======================================================== */
-
     setupSelfTelemetry() {
-        // الاشتراك في قناة الأخطاء لمراقبة صحة Bus نفسه
         this.subscribe('runtime:errors', (message) => {
             this.telemetry.messagesFailed++;
             console.warn(`⚠️ Bus Telemetry: Total failures = ${this.telemetry.messagesFailed}`);
@@ -99,18 +150,104 @@ class SovereignRuntimeBus {
         if (!this.channels.has(channel)) {
             this.createChannel(channel);
         }
-
         this.channels.get(channel).push(listener);
-        
-        // ✅ Enterprise-grade: إرجاع دالة unsubscribe
         return () => this.unsubscribe(channel, listener);
     }
 
     /* ========================================================
-       PUBLISH (Message Lifecycle كامل)
+       NORMALIZE MESSAGE (تحويل أي رسالة إلى الشكل القياسي)
+       هذه هي "Runtime Protocol Gateway"
+    ======================================================== */
+    normalizeMessage(rawChannel, rawPayload, rawId) {
+        const schema = this.getSchema();
+        
+        if (schema?.create) {
+            const standardizedMessage = schema.create({
+                type: `runtime.${rawChannel}`,
+                source: 'runtime-bus',
+                channel: rawChannel,
+                payload: rawPayload,
+                meta: {
+                    busManaged: true,
+                    normalizedAt: Date.now(),
+                    busVersion: '7.4.0'
+                }
+            });
+            
+            this.telemetry.messagesNormalized++;
+            return standardizedMessage;
+        }
+        
+        // Legacy Fallback (Migration Phase)
+        const messageId = rawId || this.generateMessageId();
+        
+        return {
+            id: messageId,
+            type: `runtime.${rawChannel}`,
+            version: 'legacy',
+            source: 'runtime-bus',
+            channel: rawChannel,
+            payload: rawPayload,
+            meta: {
+                legacy: true,
+                normalizedAt: Date.now(),
+                busVersion: '7.4.0'
+            },
+            timestamp: Date.now()
+        };
+    }
+    
+    /* ========================================================
+       VALIDATE MESSAGE (التحقق من صحة الرسالة حسب الـ Schema)
+    ======================================================== */
+    validateMessage(message) {
+        const schema = this.getSchema();
+        
+        if (schema?.validate) {
+            const isValid = schema.validate(message);
+            if (!isValid) {
+                this.telemetry.messagesRejected++;
+                console.warn(`
+🚫 Runtime Message Schema Rejected
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Channel: ${message.channel}
+Type: ${message.type}
+Id: ${message.id}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+                `);
+                return false;
+            }
+        }
+        
+        return true;
+    }
+
+    /* ========================================================
+       UPDATE TELEMETRY (مع دعم rolling window مستقبلاً)
+       
+       ✅ FIX 2: تمهيد لاستخدام rolling average بدلاً من cumulative
+    ======================================================== */
+    updateTelemetry(dispatchTime) {
+        this.telemetry.messagesProcessed++;
+        this.telemetry.totalDispatchTime += dispatchTime;
+        this.telemetry.averageDispatchTime = 
+            this.telemetry.totalDispatchTime / this.telemetry.messagesProcessed;
+        
+        // TODO: استبدال cumulative بـ rolling window (EWMA)
+        // this.telemetry.recentDispatchTimes.push(dispatchTime);
+        // if (this.telemetry.recentDispatchTimes.length > this.telemetry.rollingWindowSize) {
+        //     this.telemetry.recentDispatchTimes.shift();
+        // }
+        // const sum = this.telemetry.recentDispatchTimes.reduce((a, b) => a + b, 0);
+        // this.telemetry.averageDispatchTime = sum / this.telemetry.recentDispatchTimes.length;
+    }
+
+    /* ========================================================
+       PUBLISH (Message Lifecycle كامل مع Protocol Gateway)
+       
+       الآن: Schema → Normalization → Validation → Middleware → Contracts → Delivery
     ======================================================== */
     publish(channel, payload = {}) {
-        // بدء计时 لحساب الـ dispatch time
         const startTime = performance.now();
 
         if (!this.channels.has(channel)) {
@@ -118,32 +255,35 @@ class SovereignRuntimeBus {
             return;
         }
 
-        let message = {
-            channel,
-            payload,
-            timestamp: Date.now(),
-            id: this.generateMessageId()
-        };
+        // 1. NORMALIZE MESSAGE
+        let message = this.normalizeMessage(channel, payload);
+        
+        // 2. VALIDATE MESSAGE
+        if (!this.validateMessage(message)) {
+            return;
+        }
 
-        // ============================================
-        // 1. MIDDLEWARE PIPELINE
-        // ============================================
+        // 3. MIDDLEWARE PIPELINE
         let processedMessage = message;
         
         for (const middleware of this.middlewares) {
             try {
                 const result = middleware(processedMessage);
-                if (result) {
-                    processedMessage = result;
+                if (result === null) {
+                    console.warn(`🚫 Runtime Message Blocked by Middleware
+Channel: ${channel}
+MessageId: ${message.id}
+                    `);
+                    this.telemetry.messagesRejected++;
+                    return;
                 }
+                processedMessage = result || processedMessage;
             } catch (error) {
                 console.error(`Bus Middleware Error on channel "${channel}":`, error);
             }
         }
 
-        // ============================================
-        // 2. LISTENER DISPATCH
-        // ============================================
+        // 4. LISTENER DISPATCH
         const listeners = this.channels.get(channel);
         const errors = [];
 
@@ -156,31 +296,22 @@ class SovereignRuntimeBus {
             }
         }
 
-        // ============================================
-        // 3. TELEMETRY UPDATE
-        // ============================================
-        const endTime = performance.now();
-        const dispatchTime = endTime - startTime;
-        
-        this.telemetry.messagesProcessed++;
-        this.telemetry.totalDispatchTime += dispatchTime;
-        this.telemetry.averageDispatchTime = 
-            this.telemetry.totalDispatchTime / this.telemetry.messagesProcessed;
+        // 5. TELEMETRY UPDATE
+        const dispatchTime = performance.now() - startTime;
+        this.updateTelemetry(dispatchTime);
 
-        // ============================================
-        // 4. ERROR HANDLING (مع Guard ضد الـ Recursion)
-        // ============================================
-        // ✅ مهم جداً: منع الـ recursion في error channel
+        // 6. ERROR HANDLING
         if (errors.length > 0 && channel !== 'runtime:errors') {
             if (this.hasChannel('runtime:errors')) {
-                // استخدام publish مباشرة (مع تجنب الـ middleware لتجنب الـ loops)
                 this.publishWithoutMiddleware('runtime:errors', {
                     sourceChannel: channel,
                     errors: errors.map(e => e.message),
                     originalPayload: payload,
                     telemetry: {
                         messagesProcessed: this.telemetry.messagesProcessed,
-                        messagesFailed: this.telemetry.messagesFailed
+                        messagesFailed: this.telemetry.messagesFailed,
+                        messagesNormalized: this.telemetry.messagesNormalized,
+                        messagesRejected: this.telemetry.messagesRejected
                     }
                 });
             } else {
@@ -191,17 +322,32 @@ class SovereignRuntimeBus {
 
     /* ========================================================
        PUBLISH WITHOUT MIDDLEWARE (للأخطاء الحرجة)
-       لتجنب الـ infinite loops
+       
+       ✅ FIX 4: هذا هو الأساس لـ Runtime Priority Channels مستقبلاً
+       
+       الاستخدامات المستقبلية:
+         - system channels (أولوية قصوى، تجاوز كامل)
+         - critical channels (أولوية عالية، تجاوز جزئي)
+         - bypass channels (تجاوز الـ middleware فقط)
+         - isolated channels (عزل تام، قناة منفصلة)
     ======================================================== */
     publishWithoutMiddleware(channel, payload = {}) {
         if (!this.channels.has(channel)) return;
 
         const message = {
+            id: this.generateMessageId(),
+            type: `runtime.${channel}`,
+            version: 'critical',
+            source: 'runtime-bus',
             channel,
             payload,
-            timestamp: Date.now(),
-            id: this.generateMessageId(),
-            isErrorEvent: true
+            meta: {
+                isErrorEvent: true,
+                bypassedMiddleware: true,
+                priority: 'system',  // ✅ الأساس لـ Priority Channels
+                timestamp: Date.now()
+            },
+            timestamp: Date.now()
         };
 
         const listeners = this.channels.get(channel);
@@ -209,7 +355,7 @@ class SovereignRuntimeBus {
             try {
                 listener(message);
             } catch (error) {
-                console.error(`CRITICAL: Error in runtime:errors listener`, error);
+                console.error(`CRITICAL: Error in ${channel} listener`, error);
             }
         }
     }
@@ -235,7 +381,6 @@ class SovereignRuntimeBus {
         const listeners = this.channels.get(channel);
         const filtered = listeners.filter(l => l !== listener);
         
-        // ✅ الحماية: لا تحذف القنوات الأساسية أبداً
         if (filtered.length === 0 && !this.defaultChannels.has(channel)) {
             this.channels.delete(channel);
         } else {
@@ -259,7 +404,7 @@ class SovereignRuntimeBus {
     }
 
     /* ========================================================
-       ENHANCED STATUS (مع Telemetry)
+       ENHANCED STATUS (مع Telemetry محسّنة)
     ======================================================== */
     getStatus() {
         const status = {
@@ -267,13 +412,17 @@ class SovereignRuntimeBus {
             middlewaresCount: this.middlewares.length,
             totalListeners: 0,
             isHybrid: true,
+            protocolGateway: true,
             registeredInRegistry: !!window.SOVEREIGN?.get('bus'),
             defaultChannelsProtected: [...this.defaultChannels],
             telemetry: {
                 messagesProcessed: this.telemetry.messagesProcessed,
                 messagesFailed: this.telemetry.messagesFailed,
+                messagesNormalized: this.telemetry.messagesNormalized,
+                messagesRejected: this.telemetry.messagesRejected,
                 averageDispatchTimeMs: parseFloat(this.telemetry.averageDispatchTime.toFixed(2)),
-                totalDispatchTimeMs: parseFloat(this.telemetry.totalDispatchTime.toFixed(2))
+                totalDispatchTimeMs: parseFloat(this.telemetry.totalDispatchTime.toFixed(2)),
+                rollingWindowSize: this.telemetry.rollingWindowSize  // تمهيد للمستقبل
             }
         };
 
@@ -288,19 +437,14 @@ class SovereignRuntimeBus {
        CLEANUP (مع الحفاظ على القنوات الأساسية)
     ======================================================== */
     clearAllChannels() {
-        // ✅ حذف القنوات التي ليست أساسية فقط
-        for (const [channel, listeners] of this.channels.entries()) {
+        for (const [channel] of this.channels.entries()) {
             if (!this.defaultChannels.has(channel)) {
                 this.channels.delete(channel);
             } else {
-                // تنظيف الـ listeners فقط للقنوات الأساسية (تفريغها)
                 this.channels.set(channel, []);
             }
         }
-        
-        // إعادة التسجيل الافتراضي للقنوات الأساسية
         this.registerDefaultChannels();
-        
         console.log('🧹 Bus: Non-default channels cleared, default channels reset');
     }
 
@@ -317,7 +461,11 @@ class SovereignRuntimeBus {
             messagesProcessed: 0,
             messagesFailed: 0,
             totalDispatchTime: 0,
-            averageDispatchTime: 0
+            averageDispatchTime: 0,
+            messagesNormalized: 0,
+            messagesRejected: 0,
+            rollingWindowSize: 1000,
+            recentDispatchTimes: []
         };
         console.log('📊 Bus telemetry reset');
     }
@@ -325,21 +473,11 @@ class SovereignRuntimeBus {
 
 /* ============================================================
    إنشاء النظام العالمي (Hybrid Phase)
-   - Legacy Global: للتوافق مع الأنظمة القديمة
-   - Unified Registry: للبدء في توحيد النظام الجديد
 ============================================================ */
 
 const sovereignBus = new SovereignRuntimeBus();
 
-/* =========================================
-   Legacy Global (للتوافق مع الأنظمة القديمة)
-========================================= */
-
 window.SOVEREIGN_BUS = sovereignBus;
-
-/* =========================================
-   Unified Registry (التسجيل في النواة الموحدة)
-========================================= */
 
 if (window.SOVEREIGN?.register) {
     window.SOVEREIGN.register('bus', sovereignBus);
@@ -348,9 +486,6 @@ if (window.SOVEREIGN?.register) {
     console.warn('⚠️ Unified Registry not yet available. Bus registered as legacy global only (Hybrid Mode).');
 }
 
-// ============================================================
-// إشعار Legacy Systems (Migration Support)
-// ============================================================
 if (window.SOVEREIGN_EVENTS) {
     window.SOVEREIGN_EVENTS.emit('bus:ready', {
         timestamp: Date.now(),
