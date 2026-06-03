@@ -1,39 +1,37 @@
-# fly.toml - Sovereign AI Platform (Python/Uvicorn)
+# fly.toml app configuration file generated for sovereign-ai-k20elq on 2026-06-03T19:00:27Z
+#
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
 
-app = "sovereign-ai"
-primary_region = "ams"
+app = 'sovereign-ai-k20elq'
+primary_region = 'ams'
 
 [build]
-  # لا حاجة لـ buildpacks عند استخدام Dockerfile
-  # فقط حدد مسار Dockerfile
-  dockerfile = "Dockerfile"
+  dockerfile = 'Dockerfile'
 
 [env]
-  PORT = "8080"
-  PYTHONPATH = "/app"
+  PORT = '8080'
+  PYTHONPATH = '/app'
 
 [http_service]
   internal_port = 8080
   force_https = true
-  auto_stop_machines = "stop"
+  auto_stop_machines = 'stop'
   auto_start_machines = true
   min_machines_running = 1
-  processes = ["app"]
+  processes = ['app']
 
-# إضافة موارد كافية
-[vm]
-  memory = "512"
-  cpu_kind = "shared"
-  cpus = 1
-
-# ============================================================
-# Health check (اختياري)
-# ============================================================
 [checks]
   [checks.health]
-    type = "http"
     port = 8080
-    path = "/health"
-    interval = "10s"
-    timeout = "2s"
-    grace_period = "5s"
+    type = 'http'
+    interval = '10s'
+    timeout = '2s'
+    grace_period = '5s'
+    path = '/health'
+
+[[vm]]
+  memory = '512'
+  cpu_kind = 'shared'
+  cpus = 1
+  memory_mb = 256
