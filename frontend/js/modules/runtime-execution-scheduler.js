@@ -1,6 +1,6 @@
 /* ============================================================
    Sovereign AI — runtime-execution-scheduler.js
-   الإصدار: 8.2.0 (Runtime Execution Coordination Kernel)
+   الإصدار: 8.3.0 (Runtime Flow Stabilization Kernel)
    
    مجدول التنفيذ السيادي - إدارة وتنسيق تنفيذ المهام
    
@@ -11,23 +11,23 @@
      - تتبع دورة حياة المهام مع Retention Policy
      - توفير Telemetry للتنفيذ
      - Execution Lineage Tracking (parent-child relationships)
+     - ✅ NEW: Runtime Pacing (Flow Control) للتحكم في تدفق التنفيذ
    
    التقسيم المستقبلي (Runtime Execution Core):
      - QueueManager (إدارة الطوابير مع Aging)
      - LifecycleEngine (إدارة حالات المهام)
      - RetryEngine (معالجة الفشل وإعادة المحاولة)
      - ConcurrencyController (التحكم بالتزامن)
+     - PacingController (التحكم في تدفق التنفيذ) ✅ NEW
      - TelemetryProfiler (القياس والإحصاءات)
      - ExecutionCoordinator (التنسيق العام)
    
-   المرحلة القادمة (Adaptive Runtime Scheduling):
-     - Dynamic Priorities
-     - Load-Aware Scheduling
-     - Degraded Execution Modes
-     - Runtime Pacing
-     - Execution Backpressure
-     - Adaptive Concurrency Scaling
-     - Scheduling Fairness
+   المرحلة القادمة (Runtime Execution Pacing Policies):
+     - Priority-Aware Pacing
+     - Critical Task Bypass
+     - Degraded Pacing Modes
+     - Adaptive Draining
+     - Queue Stabilization Strategies
    ============================================================ */
 
 class SovereignRuntimeExecutionScheduler {
@@ -42,15 +42,21 @@ class SovereignRuntimeExecutionScheduler {
 
         this.activeTasks = 0;
 
-        // ✅ Task Registry with Lifecycle Tracking
-        this.tasks = new Map();  // taskId -> task details
+        // ✅ NEW: Runtime Pacing (Flow Control)
+        this.executionDelay = 0;           // Current pacing delay in ms
+        this.minExecutionDelay = 0;
+        this.maxExecutionDelay = 5000;     // Max 5 seconds delay
+        this.pacingEnabled = true;
 
-        // ✅ FIX 2: Retention Policy - prevent memory growth
+        // Task Registry with Lifecycle Tracking
+        this.tasks = new Map();
+
+        // Retention Policy
         this.maxStoredTasks = 1000;
         this.cleanupInterval = null;
 
-        // ✅ FIX 1: Aging parameters (prevent starvation)
-        this.agingFactor = 0.5;  // priority reduction per 1000ms waiting
+        // Aging parameters (prevent starvation)
+        this.agingFactor = 0.5;
         this.agingEnabled = true;
 
         // Telemetry counters
@@ -62,11 +68,13 @@ class SovereignRuntimeExecutionScheduler {
             tasksExpired: 0,
             totalExecutionTime: 0,
             averageExecutionTime: 0,
-            maxQueueSize: 0
+            maxQueueSize: 0,
+            totalPacingDelay: 0,      // ✅ NEW
+            pacingDelaysCount: 0       // ✅ NEW
         };
 
         console.log(
-            '⏱ Runtime Execution Scheduler Initialized (Adaptive Scheduling Ready)'
+            '⏱ Runtime Execution Scheduler Initialized (Flow Control Ready)'
         );
 
         this.init();
@@ -81,21 +89,117 @@ class SovereignRuntimeExecutionScheduler {
     }
 
     /* ========================================================
-       START CLEANUP INTERVAL (Retention Policy)
+       PACING CONTROL (Flow Stabilization)
        
-       ✅ FIX 2: Prevent memory growth by cleaning old tasks
+       ✅ NEW: Runtime Flow Control API
+    ======================================================== */
+
+    /* ========================================================
+       SET EXECUTION DELAY (Dynamic Pacing)
+       
+       Used by Backpressure Engine to slow down execution
+    ======================================================== */
+    setExecutionDelay(delayMs) {
+        if (!this.pacingEnabled) {
+            console.log('⏸️ Pacing is disabled, ignoring setExecutionDelay');
+            return false;
+        }
+        
+        if (typeof delayMs !== 'number' || isNaN(delayMs)) {
+            console.warn('⚠️ Invalid execution delay value:', delayMs);
+            return false;
+        }
+        
+        const newDelay = Math.min(
+            this.maxExecutionDelay,
+            Math.max(this.minExecutionDelay, delayMs)
+        );
+        
+        const oldDelay = this.executionDelay;
+        this.executionDelay = newDelay;
+        
+        console.log(`⏱️ Execution pacing set to: ${this.executionDelay}ms (was ${oldDelay}ms)`);
+        
+        // Publish event for observability
+        const bus = window.SOVEREIGN_ACCESS?.bus?.();
+        bus?.publishWithoutMiddleware?.('scheduler:pacing:changed', {
+            oldDelay,
+            newDelay: this.executionDelay,
+            source: 'backpressure-engine',
+            timestamp: Date.now()
+        });
+        
+        return true;
+    }
+
+    /* ========================================================
+       GET CURRENT EXECUTION DELAY
+    ======================================================== */
+    getExecutionDelay() {
+        return this.executionDelay;
+    }
+
+    /* ========================================================
+       CLEAR EXECUTION DELAY (Reset pacing)
+    ======================================================== */
+    clearExecutionDelay() {
+        const oldDelay = this.executionDelay;
+        this.executionDelay = 0;
+        console.log(`⏱️ Execution pacing cleared (was ${oldDelay}ms)`);
+        
+        const bus = window.SOVEREIGN_ACCESS?.bus?.();
+        bus?.publishWithoutMiddleware?.('scheduler:pacing:cleared', {
+            oldDelay,
+            timestamp: Date.now()
+        });
+        
+        return true;
+    }
+
+    /* ========================================================
+       ENABLE/DISABLE PACING
+    ======================================================== */
+    enablePacing(enabled) {
+        this.pacingEnabled = enabled;
+        if (!enabled) {
+            this.executionDelay = 0;
+        }
+        console.log(`⏱️ Pacing ${enabled ? 'enabled' : 'disabled'}`);
+        return true;
+    }
+
+    /* ========================================================
+       SET PACING LIMITS
+    ======================================================== */
+    setPacingLimits(minDelay, maxDelay) {
+        if (typeof minDelay !== 'number' || minDelay < 0) {
+            console.warn('⚠️ Invalid min delay');
+            return false;
+        }
+        if (typeof maxDelay !== 'number' || maxDelay < minDelay) {
+            console.warn('⚠️ Invalid max delay (must be >= min delay)');
+            return false;
+        }
+        
+        this.minExecutionDelay = minDelay;
+        this.maxExecutionDelay = maxDelay;
+        
+        // Clamp current delay to new limits
+        this.executionDelay = Math.min(maxDelay, Math.max(minDelay, this.executionDelay));
+        
+        console.log(`⏱️ Pacing limits updated: min=${minDelay}ms, max=${maxDelay}ms`);
+        return true;
+    }
+
+    /* ========================================================
+       CLEANUP INTERVAL (Retention Policy)
     ======================================================== */
     startCleanupInterval() {
         this.cleanupInterval = setInterval(() => {
             this.cleanupCompletedTasks();
-        }, 60000); // Clean every minute
+        }, 60000);
     }
 
-    /* ========================================================
-       CLEANUP COMPLETED TASKS (Retention Policy)
-       
-       Removes old completed/failed/canceled tasks beyond maxStoredTasks
-    ======================================================== */
     cleanupCompletedTasks() {
         const terminalStates = ['completed', 'failed', 'canceled'];
         const terminalTasks = [...this.tasks.entries()]
@@ -113,12 +217,7 @@ class SovereignRuntimeExecutionScheduler {
     }
 
     /* ========================================================
-       CALCULATE EFFECTIVE PRIORITY (Aging Mechanism)
-       
-       ✅ FIX 1: Prevent starvation by aging waiting tasks
-       
-       Formula: effectivePriority = originalPriority - (waitingTimeMs * agingFactor)
-       Lower effective priority = higher actual priority in queue (since we sort ascending)
+       AGING MECHANISM (منع Starvation)
     ======================================================== */
     calculateEffectivePriority(item) {
         if (!this.agingEnabled) {
@@ -126,23 +225,10 @@ class SovereignRuntimeExecutionScheduler {
         }
         
         const waitingTimeMs = Date.now() - (item.createdAt || Date.now());
-        const waitingReduction = waitingTimeMs * this.agingFactor / 1000; // Reduction per 1000ms
-        
-        // Effective priority can go below 0, but we keep it at 0 minimum
-        const effectivePriority = Math.max(0, item.priority - waitingReduction);
-        
-        if (waitingTimeMs > 5000 && this.debugMode) {
-            console.debug(`📊 Aging: Task ${item.id} priority ${item.priority} → ${effectivePriority.toFixed(2)} (waited ${waitingTimeMs}ms)`);
-        }
-        
-        return effectivePriority;
+        const waitingReduction = waitingTimeMs * this.agingFactor / 1000;
+        return Math.max(0, item.priority - waitingReduction);
     }
 
-    /* ========================================================
-       SORT QUEUE BY EFFECTIVE PRIORITY (Aging-Aware)
-       
-       ✅ FIX 1: Sort using effective priority to prevent starvation
-    ======================================================== */
     sortQueue() {
         this.queue.sort((a, b) => {
             const effectiveA = this.calculateEffectivePriority(a);
@@ -150,14 +236,13 @@ class SovereignRuntimeExecutionScheduler {
             return effectiveA - effectiveB;
         });
         
-        // Track max queue size for telemetry
         if (this.queue.length > this.telemetry.maxQueueSize) {
             this.telemetry.maxQueueSize = this.queue.length;
         }
     }
 
     /* ========================================================
-       SCHEDULE (جدولة مهمة جديدة)
+       SCHEDULE
     ======================================================== */
     schedule({ 
         id = crypto.randomUUID(), 
@@ -165,7 +250,8 @@ class SovereignRuntimeExecutionScheduler {
         task, 
         metadata = {},
         retryCount = 0,
-        parentTaskId = null  // ✅ FIX 4: Execution Lineage
+        parentTaskId = null,
+        bypassPacing = false   // ✅ NEW: Critical tasks can bypass pacing
     }) {
         if (typeof task !== 'function') {
             console.warn('⚠️ Invalid Scheduled Task');
@@ -181,12 +267,12 @@ class SovereignRuntimeExecutionScheduler {
             createdAt: Date.now(),
             retriesLeft: retryCount,
             retriesUsed: 0,
-            parentTaskId  // ✅ Track parent for lineage
+            parentTaskId,
+            bypassPacing  // ✅ Store bypass flag
         };
 
         this.queue.push(taskItem);
         
-        // ✅ Store in task registry
         this.tasks.set(id, {
             ...taskItem,
             startedAt: null,
@@ -195,12 +281,11 @@ class SovereignRuntimeExecutionScheduler {
             executionChain: parentTaskId ? [parentTaskId, id] : [id]
         });
 
-        // ✅ Sort with aging awareness
         this.sortQueue();
 
         this.telemetry.tasksScheduled++;
 
-        console.log(`⏱ Task Scheduled: ${id} (Priority: ${priority})${parentTaskId ? ` (Parent: ${parentTaskId})` : ''}`);
+        console.log(`⏱ Task Scheduled: ${id} (Priority: ${priority})${parentTaskId ? ` (Parent: ${parentTaskId})` : ''}${bypassPacing ? ' [PACING BYPASS]' : ''}`);
 
         this.processQueue();
 
@@ -208,7 +293,9 @@ class SovereignRuntimeExecutionScheduler {
     }
 
     /* ========================================================
-       PROCESS QUEUE (معالجة الطابور مع Aging)
+       PROCESS QUEUE (مع Aging و Pacing)
+       
+       ✅ NEW: Runtime Pacing integration
     ======================================================== */
     async processQueue() {
         if (this.processing) {
@@ -218,13 +305,27 @@ class SovereignRuntimeExecutionScheduler {
         this.processing = true;
 
         while (this.queue.length > 0 && this.activeTasks < this.maxConcurrent) {
-            // ✅ Re-sort before each batch (aging is dynamic)
             this.sortQueue();
             
             const item = this.queue.shift();
             
             if (!item) {
                 continue;
+            }
+
+            // ✅ NEW: Apply pacing delay before execution (unless bypassed)
+            if (this.pacingEnabled && this.executionDelay > 0 && !item.bypassPacing) {
+                const pacingStart = Date.now();
+                await new Promise(resolve => setTimeout(resolve, this.executionDelay));
+                const pacingDelay = Date.now() - pacingStart;
+                
+                // Track pacing telemetry
+                this.telemetry.totalPacingDelay += pacingDelay;
+                this.telemetry.pacingDelaysCount++;
+                
+                if (this.telemetry.pacingDelaysCount % 10 === 0) {
+                    console.log(`⏱️ Pacing applied: ${pacingDelay}ms (avg: ${(this.telemetry.totalPacingDelay / this.telemetry.pacingDelaysCount).toFixed(2)}ms)`);
+                }
             }
 
             const taskRecord = this.tasks.get(item.id);
@@ -246,7 +347,7 @@ class SovereignRuntimeExecutionScheduler {
     }
 
     /* ========================================================
-       EXECUTE TASK (تنفيذ مهمة فردية)
+       EXECUTE TASK
     ======================================================== */
     async executeTask(item) {
         const startTime = performance.now();
@@ -281,7 +382,7 @@ class SovereignRuntimeExecutionScheduler {
                 item.retriesLeft--;
                 item.retriesUsed++;
                 item.state = 'queued';
-                item.createdAt = Date.now(); // Reset waiting time
+                item.createdAt = Date.now();
                 
                 console.log(`🔄 Retrying task: ${item.id} (${item.retriesUsed}/${item.retriesUsed + item.retriesLeft})`);
                 
@@ -348,46 +449,6 @@ class SovereignRuntimeExecutionScheduler {
     }
 
     /* ========================================================
-       TASK INTROSPECTION APIs
-    ======================================================== */
-    getTask(taskId) {
-        return this.tasks.get(taskId) || null;
-    }
-
-    getAllTasks() {
-        return [...this.tasks.values()];
-    }
-
-    getTasksByState(state) {
-        return [...this.tasks.values()].filter(task => task.state === state);
-    }
-
-    /* ========================================================
-       RETRY TASK
-    ======================================================== */
-    retryTask(taskId, newPriority = null) {
-        const taskRecord = this.tasks.get(taskId);
-        if (!taskRecord) {
-            console.warn(`⚠️ Task not found: ${taskId}`);
-            return false;
-        }
-        
-        if (taskRecord.state !== 'failed') {
-            console.warn(`⚠️ Cannot retry task in state: ${taskRecord.state}`);
-            return false;
-        }
-        
-        return this.schedule({
-            id: crypto.randomUUID(),
-            priority: newPriority !== null ? newPriority : taskRecord.priority,
-            task: taskRecord.task,
-            metadata: { ...taskRecord.metadata, originalTaskId: taskId, isRetry: true },
-            retryCount: taskRecord.retriesLeft,
-            parentTaskId: taskRecord.parentTaskId || taskId
-        });
-    }
-
-    /* ========================================================
        CONFIGURATION APIs
     ======================================================== */
     setMaxConcurrent(max) {
@@ -433,7 +494,45 @@ class SovereignRuntimeExecutionScheduler {
     }
 
     /* ========================================================
-       CLEAR QUEUE
+       TASK INTROSPECTION APIs
+    ======================================================== */
+    getTask(taskId) {
+        return this.tasks.get(taskId) || null;
+    }
+
+    getAllTasks() {
+        return [...this.tasks.values()];
+    }
+
+    getTasksByState(state) {
+        return [...this.tasks.values()].filter(task => task.state === state);
+    }
+
+    retryTask(taskId, newPriority = null) {
+        const taskRecord = this.tasks.get(taskId);
+        if (!taskRecord) {
+            console.warn(`⚠️ Task not found: ${taskId}`);
+            return false;
+        }
+        
+        if (taskRecord.state !== 'failed') {
+            console.warn(`⚠️ Cannot retry task in state: ${taskRecord.state}`);
+            return false;
+        }
+        
+        return this.schedule({
+            id: crypto.randomUUID(),
+            priority: newPriority !== null ? newPriority : taskRecord.priority,
+            task: taskRecord.task,
+            metadata: { ...taskRecord.metadata, originalTaskId: taskId, isRetry: true },
+            retryCount: taskRecord.retriesLeft,
+            parentTaskId: taskRecord.parentTaskId || taskId,
+            bypassPacing: taskRecord.bypassPacing || false
+        });
+    }
+
+    /* ========================================================
+       QUEUE MANAGEMENT
     ======================================================== */
     clearQueue() {
         const clearedCount = this.queue.length;
@@ -442,9 +541,6 @@ class SovereignRuntimeExecutionScheduler {
         return clearedCount;
     }
 
-    /* ========================================================
-       CLEANUP NOW (Manual cleanup)
-    ======================================================== */
     cleanupNow() {
         this.cleanupCompletedTasks();
         console.log('🧹 Manual cleanup completed');
@@ -460,6 +556,7 @@ class SovereignRuntimeExecutionScheduler {
             priority: item.priority,
             duration: parseFloat(duration.toFixed(2)),
             parentTaskId: item.parentTaskId || null,
+            pacingDelayed: this.executionDelay > 0 && !item.bypassPacing,
             timestamp: Date.now()
         });
     }
@@ -493,13 +590,15 @@ class SovereignRuntimeExecutionScheduler {
             maxStoredTasks: this.maxStoredTasks,
             agingEnabled: this.agingEnabled,
             agingFactor: this.agingFactor,
-            version: '8.2.0',
+            pacingEnabled: this.pacingEnabled,
+            executionDelay: this.executionDelay,
+            version: '8.3.0',
             timestamp: Date.now()
         });
     }
 
     /* ========================================================
-       STATUS (مع Telemetry محسّنة)
+       STATUS (مع Pacing Telemetry)
     ======================================================== */
     getStatus() {
         const tasksByState = {
@@ -510,12 +609,12 @@ class SovereignRuntimeExecutionScheduler {
             canceled: this.getTasksByState('canceled').length
         };
         
-        // Calculate waiting tasks aging info
         const waitingTasks = this.queue.map(item => ({
             id: item.id,
             priority: item.priority,
             effectivePriority: this.calculateEffectivePriority(item),
-            waitingTimeMs: Date.now() - (item.createdAt || Date.now())
+            waitingTimeMs: Date.now() - (item.createdAt || Date.now()),
+            bypassPacing: item.bypassPacing
         }));
         
         return {
@@ -524,10 +623,20 @@ class SovereignRuntimeExecutionScheduler {
             maxConcurrent: this.maxConcurrent,
             processing: this.processing,
             tasksByState,
+            pacing: {
+                enabled: this.pacingEnabled,
+                currentDelayMs: this.executionDelay,
+                minDelayMs: this.minExecutionDelay,
+                maxDelayMs: this.maxExecutionDelay,
+                avgPacingDelayMs: this.telemetry.pacingDelaysCount > 0 
+                    ? parseFloat((this.telemetry.totalPacingDelay / this.telemetry.pacingDelaysCount).toFixed(2))
+                    : 0,
+                totalPacingDelayMs: parseFloat(this.telemetry.totalPacingDelay.toFixed(2))
+            },
             aging: {
                 enabled: this.agingEnabled,
                 factor: this.agingFactor,
-                waitingTasks: waitingTasks.slice(0, 5)  // Show top 5 waiting tasks
+                waitingTasks: waitingTasks.slice(0, 5)
             },
             retention: {
                 maxStoredTasks: this.maxStoredTasks,
@@ -548,7 +657,7 @@ class SovereignRuntimeExecutionScheduler {
     }
 
     /* ========================================================
-       STOP CLEANUP INTERVAL (For testing/shutdown)
+       SHUTDOWN
     ======================================================== */
     shutdown() {
         if (this.cleanupInterval) {
@@ -570,8 +679,6 @@ window.SOVEREIGN_EXECUTION_SCHEDULER = sovereignScheduler;
 if (window.SOVEREIGN?.register) {
     window.SOVEREIGN.register('execution-scheduler', sovereignScheduler);
     console.log('✅ Execution Scheduler registered in Unified Registry');
-} else {
-    console.warn('⚠️ Unified Registry not yet available. Scheduler registered as legacy global only.');
 }
 
 window.SOVEREIGN_EVENTS?.emit('scheduler:ready', {
