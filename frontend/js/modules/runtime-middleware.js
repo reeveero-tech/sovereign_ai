@@ -1,28 +1,31 @@
 /* ============================================================
    Sovereign AI — runtime-middleware.js
-   الإصدار: 7.4.0 (Runtime Governance Engine)
+   الإصدار: 7.6.0 (Runtime Governance Kernel)
    
    الوظيفة: 
      - إدارة Middleware Pipeline للـ Bus مع أولويات تنفيذية
+     - إدارة Lifecycle State للـ Middlewares (active, suspended, failed, degraded)
      - تنفيذ Core Middleware (إضافة runtimeId, processedAt)
      - تنفيذ Security Middleware (التحقق من صحة المدخلات)
      - تنفيذ Analytics Middleware (تخزين مؤقت للرسائل)
      - تنفيذ Contract Validation Middleware (التحقق من صحة العقود)
      - تنفيذ Access Control Middleware (التحقق من صلاحيات Runtime)
+     - تنفيذ Isolation Zone Middleware (Runtime Fault Containment)
      
-   التقسيم المستقبلي للملف (Runtime Governance Engine):
-     - MiddlewareRegistry (تسجيل وإدارة الـ Middlewares مع الأولويات)
+   التقسيم المستقبلي للملف (Runtime Governance Kernel):
+     - MiddlewareRegistry (تسجيل وإدارة الـ Middlewares مع الأولويات والحالة)
+     - ExecutionScheduler (ترتيب وتنفيذ الـ Middlewares)
+     - GovernanceEngine (Enforcement & Policy)
+     - IsolationLayer (Fault Containment & Zone Enforcement)
      - AuthorizationLayer (ACL & Permission Validation)
-     - ContractsLayer (Contract Validation)
-     - SecurityLayer (Input Validation & Protection)
      - TelemetryLayer (Profiling & Metrics)
-     - GovernanceLayer (Enforcement & Policy)
    
-   المرحلة القادمة (بعد التقسيم):
-     - Runtime Isolation Zones (fault containment)
-     - Execution Isolation (subsystem sandboxing)
-     - Domain Separation (runtime partitioning)
-     - Subsystem Sandboxing (capability boundaries)
+   المرحلة القادمة (Runtime Execution Sandboxing):
+     - Execution Boundaries (حدود التنفيذ بين subsystems)
+     - Resource Caps (الحد الأقصى للموارد لكل subsystem)
+     - Subsystem Isolation (عزل كامل بين subsystems)
+     - Safe Execution Scopes (بيئات تنفيذ آمنة)
+     - Runtime Containment (احتواء الأعطال على مستوى الـ subsystem)
    ============================================================ */
 
 class SovereignRuntimeMiddleware {
@@ -31,8 +34,11 @@ class SovereignRuntimeMiddleware {
 
         this.middlewareCount = 0;
         
-        // ✅ FIX 1: Store middlewares locally with priority for sorting
+        // Store middlewares locally with priority for sorting
         this.pendingMiddlewares = new Map();  // name -> { handler, priority }
+        
+        // ✅ FIX 1: Prevent duplicate application
+        this.middlewaresApplied = false;
         
         // Cache for access layer
         this._access = null;
@@ -43,11 +49,12 @@ class SovereignRuntimeMiddleware {
         // Debug mode to prevent noisy telemetry
         this.debugMode = false;
         
-        // Registered middlewares for telemetry
+        // ✅ FIX 2: Registered middlewares with lifecycle state
+        // Each middleware has: { name, priority, registeredAt, state, stateChangedAt, errorCount }
         this.registeredMiddlewares = new Map();
 
         console.log(
-            '🧩 Runtime Middleware Initialized (Governance Engine Ready)'
+            '🧩 Runtime Middleware Initialized (Governance Kernel Ready)'
         );
 
         this.init();
@@ -67,9 +74,15 @@ class SovereignRuntimeMiddleware {
     /* ========================================================
        APPLY PENDING MIDDLEWARES (with priority sorting)
        
-       ✅ FIX 1: Sort middlewares by priority before applying to bus
+       ✅ FIX 1: Prevent duplicate application
     ======================================================== */
     applyPendingMiddlewares() {
+        // Prevent duplicate application
+        if (this.middlewaresApplied) {
+            console.warn('⚠️ Middlewares already applied. Skipping duplicate application.');
+            return true;
+        }
+        
         const bus = this.access?.bus?.() || window.SOVEREIGN_BUS;
         
         if (!bus) {
@@ -83,9 +96,18 @@ class SovereignRuntimeMiddleware {
         
         for (const [name, { handler }] of sorted) {
             bus.use(handler);
-            console.log(`🔧 Middleware applied: ${name}`);
+            console.log(`🔧 Middleware applied: ${name} (Priority: ${this.pendingMiddlewares.get(name).priority})`);
+            
+            // Update state to active
+            const reg = this.registeredMiddlewares.get(name);
+            if (reg) {
+                reg.state = 'active';
+                reg.stateChangedAt = Date.now();
+                this.registeredMiddlewares.set(name, reg);
+            }
         }
         
+        this.middlewaresApplied = true;
         console.log(`✅ All ${sorted.length} middlewares applied (sorted by priority)`);
         return true;
     }
@@ -95,13 +117,14 @@ class SovereignRuntimeMiddleware {
     ======================================================== */
     init() {
         this.initContractMappings();
-        this.registerCoreMiddleware();
-        this.registerSecurityMiddleware();
-        this.registerAnalyticsMiddleware();
-        this.registerContractMiddleware();
-        this.registerAccessControlMiddleware();
+        this.registerCoreMiddleware();        // Priority 1
+        this.registerSecurityMiddleware();    // Priority 2
+        this.registerAccessControlMiddleware(); // Priority 4
+        this.registerContractMiddleware();    // Priority 5
+        this.registerIsolationMiddleware();   // Priority 6
+        this.registerAnalyticsMiddleware();   // Priority 8
         
-        // ✅ Apply all registered middlewares with priority sorting
+        // Apply all registered middlewares with priority sorting
         this.applyPendingMiddlewares();
         
         this.emitReady();
@@ -175,9 +198,48 @@ class SovereignRuntimeMiddleware {
     }
 
     /* ========================================================
-       UNIFIED MIDDLEWARE REGISTRATION (with priority)
+       UPDATE MIDDLEWARE STATE (Lifecycle Management)
        
-       ✅ FIX 1: Store middleware locally instead of direct bus.use()
+       ✅ FIX 2: Support lifecycle state changes
+    ======================================================== */
+    updateMiddlewareState(name, state, error = null) {
+        if (!this.registeredMiddlewares.has(name)) {
+            console.warn(`⚠️ Cannot update state for unknown middleware: ${name}`);
+            return false;
+        }
+        
+        const reg = this.registeredMiddlewares.get(name);
+        const validStates = ['active', 'suspended', 'failed', 'degraded'];
+        
+        if (!validStates.includes(state)) {
+            console.warn(`⚠️ Invalid state: ${state} for middleware ${name}`);
+            return false;
+        }
+        
+        reg.state = state;
+        reg.stateChangedAt = Date.now();
+        if (error) {
+            reg.errorCount = (reg.errorCount || 0) + 1;
+            reg.lastError = error;
+        }
+        
+        this.registeredMiddlewares.set(name, reg);
+        
+        console.log(`📊 Middleware state changed: ${name} → ${state}`);
+        
+        // Publish state change event
+        const bus = this.access?.bus?.();
+        bus?.publishWithoutMiddleware?.('middleware:state:changed', {
+            name,
+            state,
+            timestamp: Date.now()
+        });
+        
+        return true;
+    }
+
+    /* ========================================================
+       UNIFIED MIDDLEWARE REGISTRATION (with priority)
     ======================================================== */
     registerMiddleware(name, handler, priority = 10) {
         if (typeof handler !== 'function') {
@@ -192,12 +254,15 @@ class SovereignRuntimeMiddleware {
             registeredAt: Date.now()
         });
         
-        // Store metadata for telemetry
+        // ✅ FIX 2: Store metadata with lifecycle state
         this.registeredMiddlewares.set(name, {
             name,
             priority,
             registeredAt: Date.now(),
-            active: true
+            state: 'pending',  // pending, active, suspended, failed, degraded
+            stateChangedAt: Date.now(),
+            errorCount: 0,
+            lastError: null
         });
         
         this.middlewareCount++;
@@ -216,6 +281,27 @@ class SovereignRuntimeMiddleware {
     }
     
     /* ========================================================
+       SUSPEND MIDDLEWARE (Runtime Lifecycle Management)
+    ======================================================== */
+    suspendMiddleware(name) {
+        return this.updateMiddlewareState(name, 'suspended');
+    }
+    
+    /* ========================================================
+       RESUME MIDDLEWARE
+    ======================================================== */
+    resumeMiddleware(name) {
+        return this.updateMiddlewareState(name, 'active');
+    }
+    
+    /* ========================================================
+       MARK MIDDLEWARE FAILED
+    ======================================================== */
+    markMiddlewareFailed(name, error) {
+        return this.updateMiddlewareState(name, 'failed', error);
+    }
+    
+    /* ========================================================
        UNREGISTER MIDDLEWARE (Future enhancement)
     ======================================================== */
     unregisterMiddleware(name) {
@@ -229,17 +315,15 @@ class SovereignRuntimeMiddleware {
     emitReady() {
         const bus = this.access?.bus?.();
         
-        // ✅ Use publishWithoutMiddleware to avoid recursive governance loops
         if (bus?.publishWithoutMiddleware) {
             bus.publishWithoutMiddleware('middleware:ready', {
                 timestamp: Date.now(),
                 middlewareCount: this.middlewareCount,
                 contractMappingsCount: this.contractMappings.size,
                 source: 'runtime-middleware',
-                version: '7.4.0'
+                version: '7.6.0'
             });
         } else {
-            // Fallback to legacy events
             window.SOVEREIGN_EVENTS?.emit('middleware:ready', {
                 timestamp: Date.now(),
                 middlewareCount: this.middlewareCount
@@ -264,7 +348,7 @@ class SovereignRuntimeMiddleware {
             message.meta.core = {
                 runtimeId: message.runtimeId,
                 processedAt: message.processedAt,
-                middlewareVersion: '7.4.0'
+                middlewareVersion: '7.6.0'
             };
             
             return message;
@@ -304,32 +388,105 @@ class SovereignRuntimeMiddleware {
     }
 
     /* ========================================================
-       ANALYTICS MIDDLEWARE (Priority 8)
+       ACCESS CONTROL MIDDLEWARE (Priority 4)
     ======================================================== */
-    registerAnalyticsMiddleware() {
-        this.registerMiddleware('analytics', (message) => {
-            if (message.isErrorEvent || message.isBlocked) {
+    registerAccessControlMiddleware() {
+        const bus = this.access?.bus?.();
+        const acl = this.access?.legacy?.('acl') || window.SOVEREIGN_ACL;
+        
+        if (!bus || !acl) {
+            console.warn('⚠️ Access Control Middleware Missing Dependencies (ACL not available)');
+        }
+        
+        const rules = {
+            'analytics:capture': { domain: 'analytics-domain', permission: 'telemetry.write' },
+            'analytics:ready': { domain: 'analytics-domain', permission: 'telemetry.read' },
+            'analytics:export': { domain: 'analytics-domain', permission: 'telemetry.export' },
+            'runtime:errors': { domain: 'transport-domain', permission: 'transport.publish' },
+            'bus:ready': { domain: 'transport-domain', permission: 'transport.observe' },
+            'policy:activated': { domain: 'governance-domain', permission: 'policy.enforce' },
+            'policy:ready': { domain: 'governance-domain', permission: 'policy.read' },
+            'intelligence:state:changed': { domain: 'intelligence-domain', permission: 'intelligence.read' },
+            'intelligence:ready': { domain: 'intelligence-domain', permission: 'intelligence.observe' },
+            'intelligence:analysis:completed': { domain: 'intelligence-domain', permission: 'intelligence.analyze' },
+            'health:update': { domain: 'health-domain', permission: 'health.write' },
+            'system:health:request': { domain: 'health-domain', permission: 'health.read' },
+            'system:health:response': { domain: 'health-domain', permission: 'health.read' },
+            'kernel:heartbeat': { domain: 'kernel-domain', permission: 'kernel.observe' },
+            'kernel:degraded': { domain: 'kernel-domain', permission: 'kernel.observe' },
+            'middleware:ready': { domain: 'middleware-domain', permission: 'middleware.read' },
+            'middleware:registered': { domain: 'middleware-domain', permission: 'middleware.observe' }
+        };
+        
+        this.registerMiddleware('access-control', (message) => {
+            const rule = rules[message.channel];
+            
+            if (!rule) {
+                if (this.debugMode) {
+                    console.debug(`📝 No ACL rule defined for channel: ${message.channel}`);
+                }
                 return message;
             }
             
-            const cache = this.access?.cache?.() || window.SOVEREIGN_CACHE;
+            if (!acl?.check) {
+                if (this.debugMode) {
+                    console.debug(`⚠️ ACL check skipped for ${message.channel} (ACL not ready)`);
+                }
+                return message;
+            }
             
-            if (cache?.set) {
-                cache.set(
-                    `bus-${message.timestamp}-${message.channel}`,
-                    {
+            const allowed = acl.check(rule.domain, rule.permission);
+            
+            if (!allowed) {
+                console.warn(`
+🚫 Runtime Access Denied
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Channel: ${message.channel}
+Domain: ${rule.domain}
+Permission: ${rule.permission}
+RuntimeId: ${message.runtimeId}
+TraceId: ${message.meta?.context?.traceId}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+                `);
+                
+                const bus2 = this.access?.bus?.();
+                if (bus2?.publishWithoutMiddleware) {
+                    bus2.publishWithoutMiddleware('security:access:denied', {
                         channel: message.channel,
-                        runtimeId: message.runtimeId,
-                        timestamp: message.timestamp,
-                        hasContract: !!message.meta?.contract?.validated,
-                        authorized: !!message.envelope?.governance?.authorized
-                    },
-                    120000
-                );
+                        domain: rule.domain,
+                        permission: rule.permission,
+                        traceId: message.meta?.context?.traceId,
+                        timestamp: Date.now()
+                    });
+                }
+                
+                return null;
+            }
+            
+            if (message.envelope) {
+                message.envelope.governance = {
+                    ...message.envelope.governance,
+                    domain: rule.domain,
+                    permission: rule.permission,
+                    authorized: true,
+                    authorizedAt: Date.now(),
+                    authVersion: '1.0.0'
+                };
+            }
+            
+            if (message.meta) {
+                message.meta.authorization = {
+                    domain: rule.domain,
+                    permission: rule.permission,
+                    authorized: true,
+                    authorizedAt: Date.now()
+                };
             }
             
             return message;
-        }, 8);
+        }, 4);
+        
+        console.log('✅ Access Control Middleware Enabled (Runtime Authorization)');
     }
 
     /* ========================================================
@@ -386,114 +543,133 @@ Timestamp: ${message.timestamp}
     }
     
     /* ========================================================
-       ACCESS CONTROL MIDDLEWARE (Priority 4)
-       
-       ✅ FIX 2: Use publishWithoutMiddleware to avoid recursive loops
+       ISOLATION ZONE MIDDLEWARE (Priority 6)
     ======================================================== */
-    registerAccessControlMiddleware() {
+    registerIsolationMiddleware() {
         const bus = this.access?.bus?.();
+        const zones = this.access?.legacy?.('zones') || window.SOVEREIGN_ZONES;
         
-        // ✅ FIX 3: TODO - add access.acl() to Runtime Access Layer
-        // Target: const acl = this.access?.acl?.() || window.SOVEREIGN_ACL;
-        const acl = this.access?.legacy?.('acl') || window.SOVEREIGN_ACL;
-        
-        if (!bus || !acl) {
-            console.warn('⚠️ Access Control Middleware Missing Dependencies (ACL not available)');
-            console.log('📝 Access Control Middleware will register but authorization will be skipped until ACL is ready');
+        if (!bus || !zones) {
+            console.warn('⚠️ Isolation Middleware Missing Dependencies (Zones not available)');
         }
         
-        // Channel → Permission Mapping (Runtime Authorization Rules)
-        const rules = {
-            'analytics:capture': { domain: 'analytics-domain', permission: 'telemetry.write' },
-            'analytics:ready': { domain: 'analytics-domain', permission: 'telemetry.read' },
-            'analytics:export': { domain: 'analytics-domain', permission: 'telemetry.export' },
-            'runtime:errors': { domain: 'transport-domain', permission: 'transport.publish' },
-            'bus:ready': { domain: 'transport-domain', permission: 'transport.observe' },
-            'policy:activated': { domain: 'governance-domain', permission: 'policy.enforce' },
-            'policy:ready': { domain: 'governance-domain', permission: 'policy.read' },
-            'intelligence:state:changed': { domain: 'intelligence-domain', permission: 'intelligence.read' },
-            'intelligence:ready': { domain: 'intelligence-domain', permission: 'intelligence.observe' },
-            'intelligence:analysis:completed': { domain: 'intelligence-domain', permission: 'intelligence.analyze' },
-            'health:update': { domain: 'health-domain', permission: 'health.write' },
-            'system:health:request': { domain: 'health-domain', permission: 'health.read' },
-            'system:health:response': { domain: 'health-domain', permission: 'health.read' },
-            'kernel:heartbeat': { domain: 'kernel-domain', permission: 'kernel.observe' },
-            'kernel:degraded': { domain: 'kernel-domain', permission: 'kernel.observe' },
-            'middleware:ready': { domain: 'middleware-domain', permission: 'middleware.read' },
-            'middleware:registered': { domain: 'middleware-domain', permission: 'middleware.observe' }
+        const domainMappings = {
+            'analytics:capture': 'analytics-domain',
+            'analytics:ready': 'analytics-domain',
+            'analytics:export': 'analytics-domain',
+            'policy:activated': 'governance-domain',
+            'policy:ready': 'governance-domain',
+            'runtime:errors': 'transport-domain',
+            'bus:ready': 'transport-domain',
+            'intelligence:state:changed': 'intelligence-domain',
+            'intelligence:ready': 'intelligence-domain',
+            'intelligence:analysis:completed': 'intelligence-domain',
+            'health:update': 'health-domain',
+            'system:health:request': 'health-domain',
+            'system:health:response': 'health-domain',
+            'kernel:heartbeat': 'kernel-domain',
+            'kernel:degraded': 'kernel-domain',
+            'middleware:ready': 'middleware-domain',
+            'middleware:registered': 'middleware-domain'
         };
         
-        this.registerMiddleware('access-control', (message) => {
-            const rule = rules[message.channel];
+        this.registerMiddleware('isolation-zones', (message) => {
+            const domain = domainMappings[message.channel];
             
-            if (!rule) {
+            if (!domain) {
                 if (this.debugMode) {
-                    console.debug(`📝 No ACL rule defined for channel: ${message.channel}`);
+                    console.debug(`📝 No zone domain mapping for channel: ${message.channel}`);
                 }
                 return message;
             }
             
-            if (!acl?.check) {
+            if (!zones?.isDomainAllowed) {
                 if (this.debugMode) {
-                    console.debug(`⚠️ ACL check skipped for ${message.channel} (ACL not ready)`);
+                    console.debug(`⚠️ Zone validation skipped for domain ${domain} (Zones not ready)`);
                 }
                 return message;
             }
             
-            const allowed = acl.check(rule.domain, rule.permission);
+            const allowed = zones.isDomainAllowed(domain);
             
             if (!allowed) {
                 console.warn(`
-🚫 Runtime Access Denied
+🛑 Runtime Zone Blocked
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Channel: ${message.channel}
-Domain: ${rule.domain}
-Permission: ${rule.permission}
+Domain: ${domain}
 RuntimeId: ${message.runtimeId}
 TraceId: ${message.meta?.context?.traceId}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
                 `);
                 
-                // ✅ FIX 2: Use publishWithoutMiddleware to avoid recursive governance loops
                 const bus2 = this.access?.bus?.();
                 if (bus2?.publishWithoutMiddleware) {
-                    bus2.publishWithoutMiddleware('security:access:denied', {
+                    bus2.publishWithoutMiddleware('isolation:zone:blocked', {
                         channel: message.channel,
-                        domain: rule.domain,
-                        permission: rule.permission,
+                        domain: domain,
                         traceId: message.meta?.context?.traceId,
                         timestamp: Date.now()
                     });
                 }
                 
+                if (message.envelope) {
+                    message.envelope.governance = {
+                        ...message.envelope.governance,
+                        isolated: true,
+                        blockedDomain: domain,
+                        blockedReason: 'zone_inactive',
+                        blockedAt: Date.now()
+                    };
+                }
+                
                 return null;
             }
             
-            // Governance Enrichment
             if (message.envelope) {
                 message.envelope.governance = {
                     ...message.envelope.governance,
-                    domain: rule.domain,
-                    permission: rule.permission,
-                    authorized: true,
-                    authorizedAt: Date.now(),
-                    authVersion: '1.0.0'
-                };
-            }
-            
-            if (message.meta) {
-                message.meta.authorization = {
-                    domain: rule.domain,
-                    permission: rule.permission,
-                    authorized: true,
-                    authorizedAt: Date.now()
+                    isolated: false,
+                    domain: domain,
+                    zoneValidated: true,
+                    zoneValidatedAt: Date.now()
                 };
             }
             
             return message;
-        }, 4);
+        }, 6);
         
-        console.log('✅ Access Control Middleware Enabled (Runtime Authorization)');
+        console.log('✅ Isolation Zone Middleware Enabled (Runtime Fault Containment)');
+    }
+
+    /* ========================================================
+       ANALYTICS MIDDLEWARE (Priority 8)
+    ======================================================== */
+    registerAnalyticsMiddleware() {
+        this.registerMiddleware('analytics', (message) => {
+            if (message.isErrorEvent || message.isBlocked) {
+                return message;
+            }
+            
+            const cache = this.access?.cache?.() || window.SOVEREIGN_CACHE;
+            
+            if (cache?.set) {
+                cache.set(
+                    `bus-${message.timestamp}-${message.channel}`,
+                    {
+                        channel: message.channel,
+                        runtimeId: message.runtimeId,
+                        timestamp: message.timestamp,
+                        hasContract: !!message.meta?.contract?.validated,
+                        authorized: !!message.envelope?.governance?.authorized,
+                        zoneValidated: !!message.envelope?.governance?.zoneValidated
+                    },
+                    120000
+                );
+            }
+            
+            return message;
+        }, 8);
     }
     
     /* ========================================================
@@ -511,7 +687,7 @@ TraceId: ${message.meta?.context?.traceId}
     }
 
     /* ========================================================
-       GET MIDDLEWARE EXECUTION ORDER (للمراقبة)
+       GET MIDDLEWARE EXECUTION ORDER
     ======================================================== */
     getMiddlewareExecutionOrder() {
         const sorted = [...this.pendingMiddlewares.entries()]
@@ -522,22 +698,64 @@ TraceId: ${message.meta?.context?.traceId}
     }
 
     /* ========================================================
-       STATUS (مع Authorization Telemetry)
+       GET MIDDLEWARE LIFECYCLE DETAILS
+       
+       ✅ FIX 4: Detailed middleware status with lifecycle state
+    ======================================================== */
+    getMiddlewareLifecycleDetails() {
+        const details = [];
+        
+        for (const [name, reg] of this.registeredMiddlewares.entries()) {
+            details.push({
+                name: reg.name,
+                priority: reg.priority,
+                state: reg.state,
+                registeredAt: reg.registeredAt,
+                stateChangedAt: reg.stateChangedAt,
+                errorCount: reg.errorCount,
+                lastError: reg.lastError,
+                isApplied: this.middlewaresApplied
+            });
+        }
+        
+        return details;
+    }
+
+    /* ========================================================
+       STATUS (مع Telemetry محسّنة)
     ======================================================== */
     getStatus() {
         const activeMiddlewares = [...this.registeredMiddlewares.keys()];
         const executionOrder = this.getMiddlewareExecutionOrder();
+        const lifecycleDetails = this.getMiddlewareLifecycleDetails();
+        
+        // Count states
+        const stateCounts = {
+            pending: 0,
+            active: 0,
+            suspended: 0,
+            failed: 0,
+            degraded: 0
+        };
+        
+        for (const [, reg] of this.registeredMiddlewares.entries()) {
+            stateCounts[reg.state] = (stateCounts[reg.state] || 0) + 1;
+        }
         
         return {
             middlewaresCount: this.middlewareCount,
             registeredMiddlewares: activeMiddlewares,
             middlewareExecutionOrder: executionOrder,
+            middlewareLifecycleDetails: lifecycleDetails,
+            stateCounts: stateCounts,
             prioritiesEnabled: true,
+            middlewaresApplied: this.middlewaresApplied,
             contractMappingsCount: this.contractMappings.size,
             contractMappings: this.getAllContractMappings(),
             debugMode: this.debugMode,
             accessLayerConnected: !!this._access,
             authorizationEnabled: true,
+            isolationEnabled: true,
             timestamp: Date.now()
         };
     }
