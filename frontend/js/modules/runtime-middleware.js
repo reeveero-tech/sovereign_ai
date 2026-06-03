@@ -1,33 +1,28 @@
 /* ============================================================
    Sovereign AI — runtime-middleware.js
-   الإصدار: 7.2.0 (Runtime Governance Enforcement Pipeline)
+   الإصدار: 7.4.0 (Runtime Governance Engine)
    
    الوظيفة: 
-     - إدارة Middleware Pipeline للـ Bus
+     - إدارة Middleware Pipeline للـ Bus مع أولويات تنفيذية
      - تنفيذ Core Middleware (إضافة runtimeId, processedAt)
      - تنفيذ Security Middleware (التحقق من صحة المدخلات)
      - تنفيذ Analytics Middleware (تخزين مؤقت للرسائل)
      - تنفيذ Contract Validation Middleware (التحقق من صحة العقود)
+     - تنفيذ Access Control Middleware (التحقق من صلاحيات Runtime)
      
-   المبادئ:
-     - Middleware مسؤول عن معالجة الرسائل قبل وصولها إلى المستمعين
-     - يمكن لأي Middleware إرجاع null لحظر الرسالة تماماً
-     - العقود تحدد هيكل الرسائل المسموح بها
-     - الـ Metadata معزولة في message.meta عن payload
-     
-   مستقبلاً (Runtime Standards & Protocols):
-     ✅ Unified Message Schema
-     ✅ Runtime Protocol Definitions
-     ✅ Runtime Trace IDs
-     ✅ Distributed Runtime Context
-     ✅ Service Lifecycle Contracts
-     
-   التقسيم المستقبلي للملف:
-     - MiddlewareRegistry (تسجيل وإدارة الـ Middlewares)
-     - CoreMiddleware
-     - SecurityMiddleware
-     - AnalyticsMiddleware
-     - ContractMiddleware
+   التقسيم المستقبلي للملف (Runtime Governance Engine):
+     - MiddlewareRegistry (تسجيل وإدارة الـ Middlewares مع الأولويات)
+     - AuthorizationLayer (ACL & Permission Validation)
+     - ContractsLayer (Contract Validation)
+     - SecurityLayer (Input Validation & Protection)
+     - TelemetryLayer (Profiling & Metrics)
+     - GovernanceLayer (Enforcement & Policy)
+   
+   المرحلة القادمة (بعد التقسيم):
+     - Runtime Isolation Zones (fault containment)
+     - Execution Isolation (subsystem sandboxing)
+     - Domain Separation (runtime partitioning)
+     - Subsystem Sandboxing (capability boundaries)
    ============================================================ */
 
 class SovereignRuntimeMiddleware {
@@ -36,20 +31,23 @@ class SovereignRuntimeMiddleware {
 
         this.middlewareCount = 0;
         
+        // ✅ FIX 1: Store middlewares locally with priority for sorting
+        this.pendingMiddlewares = new Map();  // name -> { handler, priority }
+        
         // Cache for access layer
         this._access = null;
         
-        // ✅ FIX 1: Dynamic contract mappings (Runtime Configuration)
+        // Dynamic contract mappings (Runtime Configuration)
         this.contractMappings = new Map();
         
-        // ✅ FIX 2: Debug mode to prevent noisy telemetry
-        this.debugMode = false;  // Set to true for development only
+        // Debug mode to prevent noisy telemetry
+        this.debugMode = false;
         
         // Registered middlewares for telemetry
         this.registeredMiddlewares = new Map();
 
         console.log(
-            '🧩 Runtime Middleware Initialized (Governance Pipeline Ready)'
+            '🧩 Runtime Middleware Initialized (Governance Engine Ready)'
         );
 
         this.init();
@@ -67,6 +65,32 @@ class SovereignRuntimeMiddleware {
     }
 
     /* ========================================================
+       APPLY PENDING MIDDLEWARES (with priority sorting)
+       
+       ✅ FIX 1: Sort middlewares by priority before applying to bus
+    ======================================================== */
+    applyPendingMiddlewares() {
+        const bus = this.access?.bus?.() || window.SOVEREIGN_BUS;
+        
+        if (!bus) {
+            console.warn('⚠️ Cannot apply middlewares: Bus not available');
+            return false;
+        }
+        
+        // Sort by priority (lower number = higher priority)
+        const sorted = [...this.pendingMiddlewares.entries()]
+            .sort((a, b) => a[1].priority - b[1].priority);
+        
+        for (const [name, { handler }] of sorted) {
+            bus.use(handler);
+            console.log(`🔧 Middleware applied: ${name}`);
+        }
+        
+        console.log(`✅ All ${sorted.length} middlewares applied (sorted by priority)`);
+        return true;
+    }
+
+    /* ========================================================
        INIT
     ======================================================== */
     init() {
@@ -75,6 +99,11 @@ class SovereignRuntimeMiddleware {
         this.registerSecurityMiddleware();
         this.registerAnalyticsMiddleware();
         this.registerContractMiddleware();
+        this.registerAccessControlMiddleware();
+        
+        // ✅ Apply all registered middlewares with priority sorting
+        this.applyPendingMiddlewares();
+        
         this.emitReady();
     }
 
@@ -82,7 +111,6 @@ class SovereignRuntimeMiddleware {
        INIT CONTRACT MAPPINGS (Runtime Configuration)
     ======================================================== */
     initContractMappings() {
-        // Define all channel → contract mappings
         const mappings = {
             'analytics:capture': 'analytics.capture',
             'intelligence:state:changed': 'intelligence.state.change',
@@ -133,35 +161,36 @@ class SovereignRuntimeMiddleware {
     }
     
     /* ========================================================
-       SET DEBUG MODE (Runtime Configuration)
+       SET DEBUG MODE
     ======================================================== */
     setDebugMode(enabled) {
         this.debugMode = enabled;
         console.log(`🐛 Debug mode: ${enabled ? 'ON' : 'OFF'}`);
         
         const bus = this.access?.bus?.();
-        bus?.publish('middleware:debug:changed', {
+        bus?.publishWithoutMiddleware?.('middleware:debug:changed', {
             debugMode: enabled,
             timestamp: Date.now()
         });
     }
 
     /* ========================================================
-       UNIFIED MIDDLEWARE REGISTRATION (FIX 3)
-       يوحد التسجيل، التليمتري، والـ ordering
+       UNIFIED MIDDLEWARE REGISTRATION (with priority)
+       
+       ✅ FIX 1: Store middleware locally instead of direct bus.use()
     ======================================================== */
     registerMiddleware(name, handler, priority = 10) {
-        const bus = this.access?.bus?.() || window.SOVEREIGN_BUS;
-        
-        if (!bus) {
-            console.warn(`⚠️ Cannot register "${name}" middleware: Bus not available`);
-            return false;
-        }
-        
         if (typeof handler !== 'function') {
             console.warn(`⚠️ Cannot register "${name}" middleware: Handler must be a function`);
             return false;
         }
+        
+        // Store for later sorting and application
+        this.pendingMiddlewares.set(name, {
+            handler,
+            priority,
+            registeredAt: Date.now()
+        });
         
         // Store metadata for telemetry
         this.registeredMiddlewares.set(name, {
@@ -171,15 +200,13 @@ class SovereignRuntimeMiddleware {
             active: true
         });
         
-        // Register the handler
-        bus.use(handler);
         this.middlewareCount++;
         
         console.log(`✅ Middleware Registered: ${name} (Priority: ${priority})`);
         
-        // Emit telemetry
-        const bus2 = this.access?.bus?.();
-        bus2?.publish('middleware:registered', {
+        // Emit telemetry (without middleware to avoid loops)
+        const bus = this.access?.bus?.();
+        bus?.publishWithoutMiddleware?.('middleware:registered', {
             name,
             priority,
             timestamp: Date.now()
@@ -192,37 +219,36 @@ class SovereignRuntimeMiddleware {
        UNREGISTER MIDDLEWARE (Future enhancement)
     ======================================================== */
     unregisterMiddleware(name) {
-        // Note: Unregistering middleware requires bus.unuse() which is not implemented yet
         console.warn(`⚠️ Unregister middleware "${name}" not yet supported (needs bus.unuse())`);
         return false;
     }
 
     /* ========================================================
-       EMIT READY (للـ Runtime Observability)
+       EMIT READY (مع تجنب الـ recursion)
     ======================================================== */
     emitReady() {
-        const access = this.access;
-        const bus = access?.bus?.();
+        const bus = this.access?.bus?.();
         
-        if (bus) {
-            bus.publish('middleware:ready', {
+        // ✅ Use publishWithoutMiddleware to avoid recursive governance loops
+        if (bus?.publishWithoutMiddleware) {
+            bus.publishWithoutMiddleware('middleware:ready', {
                 timestamp: Date.now(),
                 middlewareCount: this.middlewareCount,
                 contractMappingsCount: this.contractMappings.size,
                 source: 'runtime-middleware',
-                version: '7.2.0'
+                version: '7.4.0'
+            });
+        } else {
+            // Fallback to legacy events
+            window.SOVEREIGN_EVENTS?.emit('middleware:ready', {
+                timestamp: Date.now(),
+                middlewareCount: this.middlewareCount
             });
         }
-        
-        window.SOVEREIGN_EVENTS?.emit('middleware:ready', {
-            timestamp: Date.now(),
-            middlewareCount: this.middlewareCount
-        });
     }
 
     /* ========================================================
-       CORE MIDDLEWARE
-       يضيف runtimeId و processedAt وهيكل meta لكل رسالة
+       CORE MIDDLEWARE (Priority 1)
     ======================================================== */
     registerCoreMiddleware() {
         this.registerMiddleware('core', (message) => {
@@ -231,43 +257,37 @@ class SovereignRuntimeMiddleware {
             }
             message.processedAt = Date.now();
             
-            // ✅ FIX 4: Initialize meta structure if not exists
             if (!message.meta) {
                 message.meta = {};
             }
             
-            // Add core metadata
             message.meta.core = {
                 runtimeId: message.runtimeId,
                 processedAt: message.processedAt,
-                middlewareVersion: '7.2.0'
+                middlewareVersion: '7.4.0'
             };
             
             return message;
-        }, 1); // Highest priority (executes first)
+        }, 1);
     }
 
     /* ========================================================
-       SECURITY MIDDLEWARE
-       يتحقق من صحة المدخلات قبل المعالجة
+       SECURITY MIDDLEWARE (Priority 2)
     ======================================================== */
     registerSecurityMiddleware() {
         this.registerMiddleware('security', (message) => {
             try {
                 const payload = JSON.stringify(message.payload || {});
-                
                 const security = this.access?.security?.() || window.SOVEREIGN_SECURITY;
                 
                 if (security?.validateInput) {
                     const safe = security.validateInput(payload);
                     if (!safe) {
                         console.warn(`🛡️ Security Middleware Blocked: ${message.channel}`);
-                        // ✅ Return null to block the message (Runtime Enforcement)
                         return null;
                     }
                 }
                 
-                // Add security metadata
                 if (message.meta) {
                     message.meta.security = {
                         validated: true,
@@ -284,12 +304,10 @@ class SovereignRuntimeMiddleware {
     }
 
     /* ========================================================
-       ANALYTICS MIDDLEWARE
-       يخزن نسخة من الرسائل في Cache للتتبع
+       ANALYTICS MIDDLEWARE (Priority 8)
     ======================================================== */
     registerAnalyticsMiddleware() {
         this.registerMiddleware('analytics', (message) => {
-            // Don't store error messages or blocked messages
             if (message.isErrorEvent || message.isBlocked) {
                 return message;
             }
@@ -303,52 +321,44 @@ class SovereignRuntimeMiddleware {
                         channel: message.channel,
                         runtimeId: message.runtimeId,
                         timestamp: message.timestamp,
-                        hasContract: !!message.meta?.contract?.validated
+                        hasContract: !!message.meta?.contract?.validated,
+                        authorized: !!message.envelope?.governance?.authorized
                     },
-                    120000 // 2 minutes TTL
+                    120000
                 );
             }
             
             return message;
-        }, 8); // Lower priority (executes after contract validation)
+        }, 8);
     }
 
     /* ========================================================
-       CONTRACT VALIDATION MIDDLEWARE
-       يتحقق من أن الرسائل تتبع العقود المحددة مسبقاً
-       هذا هو "Runtime Contracts Layer" الحقيقي
+       CONTRACT VALIDATION MIDDLEWARE (Priority 5)
     ======================================================== */
     registerContractMiddleware() {
         this.registerMiddleware('contract', (message) => {
-            // Initialize meta if not exists
             if (!message.meta) {
                 message.meta = {};
             }
             
-            // Get contract name from dynamic mappings
             const contractName = this.contractMappings.get(message.channel);
             
-            // If no contract defined for this channel
             if (!contractName) {
-                // Only log in debug mode to avoid noisy telemetry
                 if (this.debugMode && !message.channel?.startsWith('runtime:')) {
                     console.debug(`📝 No contract defined for channel: ${message.channel}`);
                 }
                 return message;
             }
             
-            // Get contracts registry
             const contracts = this.access?.legacy?.('contracts') || window.SOVEREIGN_CONTRACTS;
             
-            // If contracts not available, allow message (transitional phase)
             if (!contracts?.validate) {
                 if (this.debugMode) {
-                    console.debug(`⚠️ Contract validation skipped for ${contractName} (Contracts Registry not ready)`);
+                    console.debug(`⚠️ Contract validation skipped for ${contractName}`);
                 }
                 return message;
             }
             
-            // Validate message against contract
             const isValid = contracts.validate(contractName, message.payload);
             
             if (!isValid) {
@@ -361,12 +371,9 @@ RuntimeId: ${message.runtimeId}
 Timestamp: ${message.timestamp}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
                 `);
-                
-                // ✅ Return null to block the message (Runtime Governance Enforcement)
                 return null;
             }
             
-            // ✅ FIX 4: Add contract metadata to message.meta (isolated from payload)
             message.meta.contract = {
                 validated: true,
                 name: contractName,
@@ -375,7 +382,118 @@ Timestamp: ${message.timestamp}
             };
             
             return message;
-        }, 5); // Medium priority (after core/security, before analytics)
+        }, 5);
+    }
+    
+    /* ========================================================
+       ACCESS CONTROL MIDDLEWARE (Priority 4)
+       
+       ✅ FIX 2: Use publishWithoutMiddleware to avoid recursive loops
+    ======================================================== */
+    registerAccessControlMiddleware() {
+        const bus = this.access?.bus?.();
+        
+        // ✅ FIX 3: TODO - add access.acl() to Runtime Access Layer
+        // Target: const acl = this.access?.acl?.() || window.SOVEREIGN_ACL;
+        const acl = this.access?.legacy?.('acl') || window.SOVEREIGN_ACL;
+        
+        if (!bus || !acl) {
+            console.warn('⚠️ Access Control Middleware Missing Dependencies (ACL not available)');
+            console.log('📝 Access Control Middleware will register but authorization will be skipped until ACL is ready');
+        }
+        
+        // Channel → Permission Mapping (Runtime Authorization Rules)
+        const rules = {
+            'analytics:capture': { domain: 'analytics-domain', permission: 'telemetry.write' },
+            'analytics:ready': { domain: 'analytics-domain', permission: 'telemetry.read' },
+            'analytics:export': { domain: 'analytics-domain', permission: 'telemetry.export' },
+            'runtime:errors': { domain: 'transport-domain', permission: 'transport.publish' },
+            'bus:ready': { domain: 'transport-domain', permission: 'transport.observe' },
+            'policy:activated': { domain: 'governance-domain', permission: 'policy.enforce' },
+            'policy:ready': { domain: 'governance-domain', permission: 'policy.read' },
+            'intelligence:state:changed': { domain: 'intelligence-domain', permission: 'intelligence.read' },
+            'intelligence:ready': { domain: 'intelligence-domain', permission: 'intelligence.observe' },
+            'intelligence:analysis:completed': { domain: 'intelligence-domain', permission: 'intelligence.analyze' },
+            'health:update': { domain: 'health-domain', permission: 'health.write' },
+            'system:health:request': { domain: 'health-domain', permission: 'health.read' },
+            'system:health:response': { domain: 'health-domain', permission: 'health.read' },
+            'kernel:heartbeat': { domain: 'kernel-domain', permission: 'kernel.observe' },
+            'kernel:degraded': { domain: 'kernel-domain', permission: 'kernel.observe' },
+            'middleware:ready': { domain: 'middleware-domain', permission: 'middleware.read' },
+            'middleware:registered': { domain: 'middleware-domain', permission: 'middleware.observe' }
+        };
+        
+        this.registerMiddleware('access-control', (message) => {
+            const rule = rules[message.channel];
+            
+            if (!rule) {
+                if (this.debugMode) {
+                    console.debug(`📝 No ACL rule defined for channel: ${message.channel}`);
+                }
+                return message;
+            }
+            
+            if (!acl?.check) {
+                if (this.debugMode) {
+                    console.debug(`⚠️ ACL check skipped for ${message.channel} (ACL not ready)`);
+                }
+                return message;
+            }
+            
+            const allowed = acl.check(rule.domain, rule.permission);
+            
+            if (!allowed) {
+                console.warn(`
+🚫 Runtime Access Denied
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Channel: ${message.channel}
+Domain: ${rule.domain}
+Permission: ${rule.permission}
+RuntimeId: ${message.runtimeId}
+TraceId: ${message.meta?.context?.traceId}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+                `);
+                
+                // ✅ FIX 2: Use publishWithoutMiddleware to avoid recursive governance loops
+                const bus2 = this.access?.bus?.();
+                if (bus2?.publishWithoutMiddleware) {
+                    bus2.publishWithoutMiddleware('security:access:denied', {
+                        channel: message.channel,
+                        domain: rule.domain,
+                        permission: rule.permission,
+                        traceId: message.meta?.context?.traceId,
+                        timestamp: Date.now()
+                    });
+                }
+                
+                return null;
+            }
+            
+            // Governance Enrichment
+            if (message.envelope) {
+                message.envelope.governance = {
+                    ...message.envelope.governance,
+                    domain: rule.domain,
+                    permission: rule.permission,
+                    authorized: true,
+                    authorizedAt: Date.now(),
+                    authVersion: '1.0.0'
+                };
+            }
+            
+            if (message.meta) {
+                message.meta.authorization = {
+                    domain: rule.domain,
+                    permission: rule.permission,
+                    authorized: true,
+                    authorizedAt: Date.now()
+                };
+            }
+            
+            return message;
+        }, 4);
+        
+        console.log('✅ Access Control Middleware Enabled (Runtime Authorization)');
     }
     
     /* ========================================================
@@ -393,18 +511,33 @@ Timestamp: ${message.timestamp}
     }
 
     /* ========================================================
-       STATUS (مع Telemetry محسّنة)
+       GET MIDDLEWARE EXECUTION ORDER (للمراقبة)
+    ======================================================== */
+    getMiddlewareExecutionOrder() {
+        const sorted = [...this.pendingMiddlewares.entries()]
+            .sort((a, b) => a[1].priority - b[1].priority)
+            .map(([name, { priority }]) => ({ name, priority }));
+        
+        return sorted;
+    }
+
+    /* ========================================================
+       STATUS (مع Authorization Telemetry)
     ======================================================== */
     getStatus() {
         const activeMiddlewares = [...this.registeredMiddlewares.keys()];
+        const executionOrder = this.getMiddlewareExecutionOrder();
         
         return {
             middlewaresCount: this.middlewareCount,
             registeredMiddlewares: activeMiddlewares,
+            middlewareExecutionOrder: executionOrder,
+            prioritiesEnabled: true,
             contractMappingsCount: this.contractMappings.size,
             contractMappings: this.getAllContractMappings(),
             debugMode: this.debugMode,
             accessLayerConnected: !!this._access,
+            authorizationEnabled: true,
             timestamp: Date.now()
         };
     }
@@ -412,21 +545,11 @@ Timestamp: ${message.timestamp}
 
 /* ============================================================
    إنشاء النظام العالمي (Hybrid Phase)
-   - Legacy Global: للتوافق مع الأنظمة القديمة
-   - Unified Registry: للتسجيل في النواة الموحدة
 ============================================================ */
 
 const sovereignMiddleware = new SovereignRuntimeMiddleware();
 
-/* =========================================
-   Legacy Global (للتوافق مع الأنظمة القديمة)
-========================================= */
-
 window.SOVEREIGN_MIDDLEWARE = sovereignMiddleware;
-
-/* =========================================
-   Unified Registry (التسجيل في النواة الموحدة)
-========================================= */
 
 if (window.SOVEREIGN?.register) {
     window.SOVEREIGN.register('middleware', sovereignMiddleware);
@@ -435,9 +558,6 @@ if (window.SOVEREIGN?.register) {
     console.warn('⚠️ Unified Registry not yet available. Middleware registered as legacy global only.');
 }
 
-// ============================================================
-// إشهار النظام للأنظمة القديمة
-// ============================================================
 window.SOVEREIGN_EVENTS?.emit('middleware:ready', {
     timestamp: Date.now(),
     status: sovereignMiddleware.getStatus()
