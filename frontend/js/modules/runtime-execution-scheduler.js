@@ -1,7 +1,33 @@
 /* ============================================================
    Sovereign AI — runtime-execution-scheduler.js
-   الإصدار: 8.0.0
-   مجدول التنفيذ السيادي
+   الإصدار: 8.2.0 (Runtime Execution Coordination Kernel)
+   
+   مجدول التنفيذ السيادي - إدارة وتنسيق تنفيذ المهام
+   
+   الوظيفة:
+     - إدارة طوابير التنفيذ مع Aging Mechanism (منع Starvation)
+     - جدولة المهام حسب الأولوية الديناميكية
+     - التحكم في التنفيذ المتزامن
+     - تتبع دورة حياة المهام مع Retention Policy
+     - توفير Telemetry للتنفيذ
+     - Execution Lineage Tracking (parent-child relationships)
+   
+   التقسيم المستقبلي (Runtime Execution Core):
+     - QueueManager (إدارة الطوابير مع Aging)
+     - LifecycleEngine (إدارة حالات المهام)
+     - RetryEngine (معالجة الفشل وإعادة المحاولة)
+     - ConcurrencyController (التحكم بالتزامن)
+     - TelemetryProfiler (القياس والإحصاءات)
+     - ExecutionCoordinator (التنسيق العام)
+   
+   المرحلة القادمة (Adaptive Runtime Scheduling):
+     - Dynamic Priorities
+     - Load-Aware Scheduling
+     - Degraded Execution Modes
+     - Runtime Pacing
+     - Execution Backpressure
+     - Adaptive Concurrency Scaling
+     - Scheduling Fairness
    ============================================================ */
 
 class SovereignRuntimeExecutionScheduler {
@@ -12,14 +38,35 @@ class SovereignRuntimeExecutionScheduler {
 
         this.processing = false;
 
-        this.maxConcurrent =
-            5;
+        this.maxConcurrent = 5;
 
-        this.activeTasks =
-            0;
+        this.activeTasks = 0;
+
+        // ✅ Task Registry with Lifecycle Tracking
+        this.tasks = new Map();  // taskId -> task details
+
+        // ✅ FIX 2: Retention Policy - prevent memory growth
+        this.maxStoredTasks = 1000;
+        this.cleanupInterval = null;
+
+        // ✅ FIX 1: Aging parameters (prevent starvation)
+        this.agingFactor = 0.5;  // priority reduction per 1000ms waiting
+        this.agingEnabled = true;
+
+        // Telemetry counters
+        this.telemetry = {
+            tasksScheduled: 0,
+            tasksCompleted: 0,
+            tasksFailed: 0,
+            tasksCanceled: 0,
+            tasksExpired: 0,
+            totalExecutionTime: 0,
+            averageExecutionTime: 0,
+            maxQueueSize: 0
+        };
 
         console.log(
-            '⏱ Runtime Execution Scheduler Initialized'
+            '⏱ Runtime Execution Scheduler Initialized (Adaptive Scheduling Ready)'
         );
 
         this.init();
@@ -28,75 +75,132 @@ class SovereignRuntimeExecutionScheduler {
     /* ========================================================
        INIT
     ======================================================== */
-
     init() {
-
         this.publishReady();
+        this.startCleanupInterval();
     }
 
     /* ========================================================
-       SCHEDULE
+       START CLEANUP INTERVAL (Retention Policy)
+       
+       ✅ FIX 2: Prevent memory growth by cleaning old tasks
     ======================================================== */
+    startCleanupInterval() {
+        this.cleanupInterval = setInterval(() => {
+            this.cleanupCompletedTasks();
+        }, 60000); // Clean every minute
+    }
 
-    schedule({
+    /* ========================================================
+       CLEANUP COMPLETED TASKS (Retention Policy)
+       
+       Removes old completed/failed/canceled tasks beyond maxStoredTasks
+    ======================================================== */
+    cleanupCompletedTasks() {
+        const terminalStates = ['completed', 'failed', 'canceled'];
+        const terminalTasks = [...this.tasks.entries()]
+            .filter(([_, task]) => terminalStates.includes(task.state))
+            .sort((a, b) => (a[1].completedAt || 0) - (b[1].completedAt || 0));
+        
+        if (terminalTasks.length > this.maxStoredTasks) {
+            const toRemove = terminalTasks.length - this.maxStoredTasks;
+            for (let i = 0; i < toRemove; i++) {
+                this.tasks.delete(terminalTasks[i][0]);
+                this.telemetry.tasksExpired++;
+            }
+            console.log(`🧹 Cleaned up ${toRemove} old tasks (retention policy)`);
+        }
+    }
 
-        id =
-            crypto.randomUUID(),
+    /* ========================================================
+       CALCULATE EFFECTIVE PRIORITY (Aging Mechanism)
+       
+       ✅ FIX 1: Prevent starvation by aging waiting tasks
+       
+       Formula: effectivePriority = originalPriority - (waitingTimeMs * agingFactor)
+       Lower effective priority = higher actual priority in queue (since we sort ascending)
+    ======================================================== */
+    calculateEffectivePriority(item) {
+        if (!this.agingEnabled) {
+            return item.priority;
+        }
+        
+        const waitingTimeMs = Date.now() - (item.createdAt || Date.now());
+        const waitingReduction = waitingTimeMs * this.agingFactor / 1000; // Reduction per 1000ms
+        
+        // Effective priority can go below 0, but we keep it at 0 minimum
+        const effectivePriority = Math.max(0, item.priority - waitingReduction);
+        
+        if (waitingTimeMs > 5000 && this.debugMode) {
+            console.debug(`📊 Aging: Task ${item.id} priority ${item.priority} → ${effectivePriority.toFixed(2)} (waited ${waitingTimeMs}ms)`);
+        }
+        
+        return effectivePriority;
+    }
 
-        priority =
-            10,
+    /* ========================================================
+       SORT QUEUE BY EFFECTIVE PRIORITY (Aging-Aware)
+       
+       ✅ FIX 1: Sort using effective priority to prevent starvation
+    ======================================================== */
+    sortQueue() {
+        this.queue.sort((a, b) => {
+            const effectiveA = this.calculateEffectivePriority(a);
+            const effectiveB = this.calculateEffectivePriority(b);
+            return effectiveA - effectiveB;
+        });
+        
+        // Track max queue size for telemetry
+        if (this.queue.length > this.telemetry.maxQueueSize) {
+            this.telemetry.maxQueueSize = this.queue.length;
+        }
+    }
 
-        task,
-
-        metadata = {}
+    /* ========================================================
+       SCHEDULE (جدولة مهمة جديدة)
+    ======================================================== */
+    schedule({ 
+        id = crypto.randomUUID(), 
+        priority = 10, 
+        task, 
+        metadata = {},
+        retryCount = 0,
+        parentTaskId = null  // ✅ FIX 4: Execution Lineage
     }) {
-
-        if (
-            typeof task !==
-            'function'
-        ) {
-
-            console.warn(
-                '⚠️ Invalid Scheduled Task'
-            );
-
+        if (typeof task !== 'function') {
+            console.warn('⚠️ Invalid Scheduled Task');
             return false;
         }
 
-        this.queue.push({
-
+        const taskItem = {
             id,
-
             priority,
-
             task,
-
             metadata,
+            state: 'queued',
+            createdAt: Date.now(),
+            retriesLeft: retryCount,
+            retriesUsed: 0,
+            parentTaskId  // ✅ Track parent for lineage
+        };
 
-            state:
-                'queued',
-
-            createdAt:
-                Date.now()
+        this.queue.push(taskItem);
+        
+        // ✅ Store in task registry
+        this.tasks.set(id, {
+            ...taskItem,
+            startedAt: null,
+            completedAt: null,
+            error: null,
+            executionChain: parentTaskId ? [parentTaskId, id] : [id]
         });
 
-        /* =========================================
-           SORT PRIORITY
-        ========================================= */
+        // ✅ Sort with aging awareness
+        this.sortQueue();
 
-        this.queue.sort(
-            (a, b) =>
-                a.priority -
-                b.priority
-        );
+        this.telemetry.tasksScheduled++;
 
-        console.log(
-            `
-⏱ Task Scheduled
-Task:
-${id}
-            `
-        );
+        console.log(`⏱ Task Scheduled: ${id} (Priority: ${priority})${parentTaskId ? ` (Parent: ${parentTaskId})` : ''}`);
 
         this.processQueue();
 
@@ -104,234 +208,373 @@ ${id}
     }
 
     /* ========================================================
-       PROCESS
+       PROCESS QUEUE (معالجة الطابور مع Aging)
     ======================================================== */
-
     async processQueue() {
-
-        if (
-            this.processing
-        ) {
-
+        if (this.processing) {
             return;
         }
 
-        this.processing =
-            true;
+        this.processing = true;
 
-        while (
-            this.queue.length &&
-            this.activeTasks <
-            this.maxConcurrent
-        ) {
-
-            const item =
-                this.queue.shift();
-
+        while (this.queue.length > 0 && this.activeTasks < this.maxConcurrent) {
+            // ✅ Re-sort before each batch (aging is dynamic)
+            this.sortQueue();
+            
+            const item = this.queue.shift();
+            
             if (!item) {
-
                 continue;
             }
 
-            this.executeTask(
-                item
-            );
+            const taskRecord = this.tasks.get(item.id);
+            if (taskRecord) {
+                taskRecord.state = 'running';
+                taskRecord.startedAt = Date.now();
+                this.tasks.set(item.id, taskRecord);
+            }
+
+            this.activeTasks++;
+            
+            this.executeTask(item).finally(() => {
+                this.activeTasks--;
+                this.processQueue();
+            });
         }
 
-        this.processing =
-            false;
+        this.processing = false;
     }
 
     /* ========================================================
-       EXECUTE
+       EXECUTE TASK (تنفيذ مهمة فردية)
     ======================================================== */
-
     async executeTask(item) {
-
-        this.activeTasks++;
-
-        item.state =
-            'running';
-
-        const start =
-            performance.now();
-
+        const startTime = performance.now();
+        
         try {
-
-            await item.task();
-
-            item.state =
-                'completed';
-
-            const duration =
-                performance.now() -
-                start;
-
-            this.publishCompleted(
-                item,
-                duration
-            );
-
+            const result = await item.task();
+            
+            const duration = performance.now() - startTime;
+            
+            const taskRecord = this.tasks.get(item.id);
+            if (taskRecord) {
+                taskRecord.state = 'completed';
+                taskRecord.completedAt = Date.now();
+                taskRecord.result = result;
+                taskRecord.duration = duration;
+                this.tasks.set(item.id, taskRecord);
+            }
+            
+            this.telemetry.tasksCompleted++;
+            this.telemetry.totalExecutionTime += duration;
+            this.telemetry.averageExecutionTime = 
+                this.telemetry.totalExecutionTime / this.telemetry.tasksCompleted;
+            
+            this.publishCompleted(item, duration);
+            
         } catch (error) {
-
-            item.state =
-                'failed';
-
-            console.error(
-                `
-⚠️ Scheduled Task Failed
-Task:
-${item.id}
-                `,
-                error
-            );
-
-            this.publishFailed(
-                item,
-                error
-            );
+            const duration = performance.now() - startTime;
+            
+            console.error(`⚠️ Scheduled Task Failed: ${item.id}`, error);
+            
+            if (item.retriesLeft > 0) {
+                item.retriesLeft--;
+                item.retriesUsed++;
+                item.state = 'queued';
+                item.createdAt = Date.now(); // Reset waiting time
+                
+                console.log(`🔄 Retrying task: ${item.id} (${item.retriesUsed}/${item.retriesUsed + item.retriesLeft})`);
+                
+                const taskRecord = this.tasks.get(item.id);
+                if (taskRecord) {
+                    taskRecord.state = 'queued';
+                    taskRecord.retriesUsed = item.retriesUsed;
+                    taskRecord.retriesLeft = item.retriesLeft;
+                    taskRecord.lastError = error.message;
+                    this.tasks.set(item.id, taskRecord);
+                }
+                
+                this.queue.push(item);
+                this.sortQueue();
+                this.processQueue();
+            } else {
+                const taskRecord = this.tasks.get(item.id);
+                if (taskRecord) {
+                    taskRecord.state = 'failed';
+                    taskRecord.completedAt = Date.now();
+                    taskRecord.error = error.message;
+                    taskRecord.duration = duration;
+                    this.tasks.set(item.id, taskRecord);
+                }
+                
+                this.telemetry.tasksFailed++;
+                this.publishFailed(item, error);
+            }
         }
+    }
 
-        this.activeTasks--;
+    /* ========================================================
+       CANCEL TASK
+    ======================================================== */
+    cancelTask(taskId) {
+        const queueIndex = this.queue.findIndex(item => item.id === taskId);
+        if (queueIndex !== -1) {
+            const removed = this.queue.splice(queueIndex, 1)[0];
+            
+            const taskRecord = this.tasks.get(taskId);
+            if (taskRecord) {
+                taskRecord.state = 'canceled';
+                taskRecord.completedAt = Date.now();
+                this.tasks.set(taskId, taskRecord);
+            }
+            
+            this.telemetry.tasksCanceled++;
+            console.log(`❌ Task Canceled: ${taskId}`);
+            
+            this.publishCanceled(removed);
+            return true;
+        }
+        
+        const runningTask = this.tasks.get(taskId);
+        if (runningTask && runningTask.state === 'running') {
+            runningTask.state = 'canceled';
+            this.tasks.set(taskId, runningTask);
+            console.warn(`⚠️ Task marked for cancellation (already running): ${taskId}`);
+            return true;
+        }
+        
+        console.warn(`⚠️ Task not found: ${taskId}`);
+        return false;
+    }
 
+    /* ========================================================
+       TASK INTROSPECTION APIs
+    ======================================================== */
+    getTask(taskId) {
+        return this.tasks.get(taskId) || null;
+    }
+
+    getAllTasks() {
+        return [...this.tasks.values()];
+    }
+
+    getTasksByState(state) {
+        return [...this.tasks.values()].filter(task => task.state === state);
+    }
+
+    /* ========================================================
+       RETRY TASK
+    ======================================================== */
+    retryTask(taskId, newPriority = null) {
+        const taskRecord = this.tasks.get(taskId);
+        if (!taskRecord) {
+            console.warn(`⚠️ Task not found: ${taskId}`);
+            return false;
+        }
+        
+        if (taskRecord.state !== 'failed') {
+            console.warn(`⚠️ Cannot retry task in state: ${taskRecord.state}`);
+            return false;
+        }
+        
+        return this.schedule({
+            id: crypto.randomUUID(),
+            priority: newPriority !== null ? newPriority : taskRecord.priority,
+            task: taskRecord.task,
+            metadata: { ...taskRecord.metadata, originalTaskId: taskId, isRetry: true },
+            retryCount: taskRecord.retriesLeft,
+            parentTaskId: taskRecord.parentTaskId || taskId
+        });
+    }
+
+    /* ========================================================
+       CONFIGURATION APIs
+    ======================================================== */
+    setMaxConcurrent(max) {
+        if (typeof max !== 'number' || max < 1) {
+            console.warn('⚠️ Invalid maxConcurrent value');
+            return false;
+        }
+        this.maxConcurrent = max;
+        console.log(`📊 Max concurrent tasks updated to: ${max}`);
         this.processQueue();
+        return true;
+    }
+
+    setMaxStoredTasks(max) {
+        if (typeof max !== 'number' || max < 100) {
+            console.warn('⚠️ Invalid maxStoredTasks value (minimum 100)');
+            return false;
+        }
+        this.maxStoredTasks = max;
+        console.log(`📊 Max stored tasks updated to: ${max}`);
+        this.cleanupCompletedTasks();
+        return true;
+    }
+
+    setAgingFactor(factor) {
+        if (typeof factor !== 'number' || factor < 0 || factor > 2) {
+            console.warn('⚠️ Invalid aging factor (0-2)');
+            return false;
+        }
+        this.agingFactor = factor;
+        console.log(`📊 Aging factor updated to: ${factor}`);
+        this.sortQueue();
+        return true;
+    }
+
+    enableAging(enabled) {
+        this.agingEnabled = enabled;
+        console.log(`📊 Aging ${enabled ? 'enabled' : 'disabled'}`);
+        if (enabled) {
+            this.sortQueue();
+        }
+        return true;
     }
 
     /* ========================================================
-       COMPLETED
+       CLEAR QUEUE
     ======================================================== */
-
-    publishCompleted(
-        item,
-        duration
-    ) {
-
-        const bus =
-            window.SOVEREIGN_ACCESS
-                ?.bus?.();
-
-        bus
-            ?.publishWithoutMiddleware?.(
-
-                'scheduler:task:completed',
-
-                {
-
-                    task:
-                        item.id,
-
-                    priority:
-                        item.priority,
-
-                    duration,
-
-                    timestamp:
-                        Date.now()
-                }
-            );
+    clearQueue() {
+        const clearedCount = this.queue.length;
+        this.queue = [];
+        console.log(`🧹 Queue cleared: ${clearedCount} tasks removed`);
+        return clearedCount;
     }
 
     /* ========================================================
-       FAILED
+       CLEANUP NOW (Manual cleanup)
     ======================================================== */
-
-    publishFailed(
-        item,
-        error
-    ) {
-
-        const bus =
-            window.SOVEREIGN_ACCESS
-                ?.bus?.();
-
-        bus
-            ?.publishWithoutMiddleware?.(
-
-                'scheduler:task:failed',
-
-                {
-
-                    task:
-                        item.id,
-
-                    error:
-                        error.message,
-
-                    timestamp:
-                        Date.now()
-                }
-            );
+    cleanupNow() {
+        this.cleanupCompletedTasks();
+        console.log('🧹 Manual cleanup completed');
     }
 
     /* ========================================================
-       READY
+       EVENT PUBLISHERS
     ======================================================== */
+    publishCompleted(item, duration) {
+        const bus = window.SOVEREIGN_ACCESS?.bus?.();
+        bus?.publishWithoutMiddleware?.('scheduler:task:completed', {
+            task: item.id,
+            priority: item.priority,
+            duration: parseFloat(duration.toFixed(2)),
+            parentTaskId: item.parentTaskId || null,
+            timestamp: Date.now()
+        });
+    }
+
+    publishFailed(item, error) {
+        const bus = window.SOVEREIGN_ACCESS?.bus?.();
+        bus?.publishWithoutMiddleware?.('scheduler:task:failed', {
+            task: item.id,
+            priority: item.priority,
+            error: error.message,
+            retriesUsed: item.retriesUsed,
+            parentTaskId: item.parentTaskId || null,
+            timestamp: Date.now()
+        });
+    }
+
+    publishCanceled(item) {
+        const bus = window.SOVEREIGN_ACCESS?.bus?.();
+        bus?.publishWithoutMiddleware?.('scheduler:task:canceled', {
+            task: item.id,
+            priority: item.priority,
+            parentTaskId: item.parentTaskId || null,
+            timestamp: Date.now()
+        });
+    }
 
     publishReady() {
-
-        const bus =
-            window.SOVEREIGN_ACCESS
-                ?.bus?.();
-
-        bus
-            ?.publishWithoutMiddleware?.(
-
-                'scheduler:ready',
-
-                {
-
-                    maxConcurrent:
-                        this.maxConcurrent,
-
-                    timestamp:
-                        Date.now()
-                }
-            );
+        const bus = window.SOVEREIGN_ACCESS?.bus?.();
+        bus?.publishWithoutMiddleware?.('scheduler:ready', {
+            maxConcurrent: this.maxConcurrent,
+            maxStoredTasks: this.maxStoredTasks,
+            agingEnabled: this.agingEnabled,
+            agingFactor: this.agingFactor,
+            version: '8.2.0',
+            timestamp: Date.now()
+        });
     }
 
     /* ========================================================
-       STATUS
+       STATUS (مع Telemetry محسّنة)
     ======================================================== */
-
     getStatus() {
-
-        return {
-
-            queued:
-                this.queue.length,
-
-            active:
-                this.activeTasks,
-
-            maxConcurrent:
-                this.maxConcurrent,
-
-            processing:
-                this.processing
+        const tasksByState = {
+            queued: this.getTasksByState('queued').length,
+            running: this.getTasksByState('running').length,
+            completed: this.getTasksByState('completed').length,
+            failed: this.getTasksByState('failed').length,
+            canceled: this.getTasksByState('canceled').length
         };
+        
+        // Calculate waiting tasks aging info
+        const waitingTasks = this.queue.map(item => ({
+            id: item.id,
+            priority: item.priority,
+            effectivePriority: this.calculateEffectivePriority(item),
+            waitingTimeMs: Date.now() - (item.createdAt || Date.now())
+        }));
+        
+        return {
+            queued: this.queue.length,
+            active: this.activeTasks,
+            maxConcurrent: this.maxConcurrent,
+            processing: this.processing,
+            tasksByState,
+            aging: {
+                enabled: this.agingEnabled,
+                factor: this.agingFactor,
+                waitingTasks: waitingTasks.slice(0, 5)  // Show top 5 waiting tasks
+            },
+            retention: {
+                maxStoredTasks: this.maxStoredTasks,
+                currentStored: this.tasks.size,
+                expiredCount: this.telemetry.tasksExpired
+            },
+            telemetry: {
+                tasksScheduled: this.telemetry.tasksScheduled,
+                tasksCompleted: this.telemetry.tasksCompleted,
+                tasksFailed: this.telemetry.tasksFailed,
+                tasksCanceled: this.telemetry.tasksCanceled,
+                averageExecutionTimeMs: parseFloat(this.telemetry.averageExecutionTime.toFixed(2)),
+                totalExecutionTimeMs: parseFloat(this.telemetry.totalExecutionTime.toFixed(2)),
+                maxQueueSize: this.telemetry.maxQueueSize
+            },
+            timestamp: Date.now()
+        };
+    }
+
+    /* ========================================================
+       STOP CLEANUP INTERVAL (For testing/shutdown)
+    ======================================================== */
+    shutdown() {
+        if (this.cleanupInterval) {
+            clearInterval(this.cleanupInterval);
+            this.cleanupInterval = null;
+        }
+        console.log('🛑 Execution Scheduler shut down');
     }
 }
 
 /* ============================================================
-   إنشاء النظام العالمي
+   إنشاء النظام العالمي (Hybrid Phase)
 ============================================================ */
 
-const sovereignScheduler =
-    new SovereignRuntimeExecutionScheduler();
+const sovereignScheduler = new SovereignRuntimeExecutionScheduler();
 
-/* =========================================
-   Legacy Global
-========================================= */
+window.SOVEREIGN_EXECUTION_SCHEDULER = sovereignScheduler;
 
-window.SOVEREIGN_EXECUTION_SCHEDULER =
-    sovereignScheduler;
+if (window.SOVEREIGN?.register) {
+    window.SOVEREIGN.register('execution-scheduler', sovereignScheduler);
+    console.log('✅ Execution Scheduler registered in Unified Registry');
+} else {
+    console.warn('⚠️ Unified Registry not yet available. Scheduler registered as legacy global only.');
+}
 
-/* =========================================
-   Unified Registry
-========================================= */
-
-window.SOVEREIGN
-    ?.register(
-        'execution-scheduler',
-        sovereignScheduler
-    );
+window.SOVEREIGN_EVENTS?.emit('scheduler:ready', {
+    timestamp: Date.now(),
+    status: sovereignScheduler.getStatus()
+});
