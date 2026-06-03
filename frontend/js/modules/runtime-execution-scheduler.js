@@ -1,6 +1,6 @@
 /* ============================================================
    Sovereign AI — runtime-execution-scheduler.js
-   الإصدار: 8.3.0 (Runtime Flow Stabilization Kernel)
+   الإصدار: 8.4.0 (Runtime Flow Stabilization Kernel with Pacing Policies)
    
    مجدول التنفيذ السيادي - إدارة وتنسيق تنفيذ المهام
    
@@ -11,14 +11,14 @@
      - تتبع دورة حياة المهام مع Retention Policy
      - توفير Telemetry للتنفيذ
      - Execution Lineage Tracking (parent-child relationships)
-     - ✅ NEW: Runtime Pacing (Flow Control) للتحكم في تدفق التنفيذ
+     - ✅ Runtime Pacing Policies (عبر runtime-pacing.js)
    
    التقسيم المستقبلي (Runtime Execution Core):
      - QueueManager (إدارة الطوابير مع Aging)
      - LifecycleEngine (إدارة حالات المهام)
      - RetryEngine (معالجة الفشل وإعادة المحاولة)
      - ConcurrencyController (التحكم بالتزامن)
-     - PacingController (التحكم في تدفق التنفيذ) ✅ NEW
+     - PacingController (التحكم في تدفق التنفيذ)
      - TelemetryProfiler (القياس والإحصاءات)
      - ExecutionCoordinator (التنسيق العام)
    
@@ -42,10 +42,10 @@ class SovereignRuntimeExecutionScheduler {
 
         this.activeTasks = 0;
 
-        // ✅ NEW: Runtime Pacing (Flow Control)
-        this.executionDelay = 0;           // Current pacing delay in ms
+        // Runtime Pacing (Flow Control) - Global fallback
+        this.executionDelay = 0;
         this.minExecutionDelay = 0;
-        this.maxExecutionDelay = 5000;     // Max 5 seconds delay
+        this.maxExecutionDelay = 5000;
         this.pacingEnabled = true;
 
         // Task Registry with Lifecycle Tracking
@@ -59,6 +59,9 @@ class SovereignRuntimeExecutionScheduler {
         this.agingFactor = 0.5;
         this.agingEnabled = true;
 
+        // Debug mode
+        this.debugMode = false;
+
         // Telemetry counters
         this.telemetry = {
             tasksScheduled: 0,
@@ -69,15 +72,24 @@ class SovereignRuntimeExecutionScheduler {
             totalExecutionTime: 0,
             averageExecutionTime: 0,
             maxQueueSize: 0,
-            totalPacingDelay: 0,      // ✅ NEW
-            pacingDelaysCount: 0       // ✅ NEW
+            totalPacingDelay: 0,
+            pacingDelaysCount: 0,
+            pacingBypassed: 0
         };
 
         console.log(
-            '⏱ Runtime Execution Scheduler Initialized (Flow Control Ready)'
+            '⏱ Runtime Execution Scheduler Initialized (Pacing Policies Ready)'
         );
 
         this.init();
+    }
+
+    /* ========================================================
+       HELPER: Get Pacing Manager (من runtime-pacing.js)
+    ======================================================== */
+    getPacingManager() {
+        return window.SOVEREIGN_ACCESS?.legacy?.('pacing') ||
+               window.SOVEREIGN_PACING;
     }
 
     /* ========================================================
@@ -89,15 +101,15 @@ class SovereignRuntimeExecutionScheduler {
     }
 
     /* ========================================================
-       PACING CONTROL (Flow Stabilization)
-       
-       ✅ NEW: Runtime Flow Control API
+       SET DEBUG MODE
     ======================================================== */
+    setDebugMode(enabled) {
+        this.debugMode = enabled;
+        console.log(`🐛 Scheduler debug mode: ${enabled ? 'ON' : 'OFF'}`);
+    }
 
     /* ========================================================
-       SET EXECUTION DELAY (Dynamic Pacing)
-       
-       Used by Backpressure Engine to slow down execution
+       PACING CONTROL APIS (Global Fallback)
     ======================================================== */
     setExecutionDelay(delayMs) {
         if (!this.pacingEnabled) {
@@ -118,9 +130,8 @@ class SovereignRuntimeExecutionScheduler {
         const oldDelay = this.executionDelay;
         this.executionDelay = newDelay;
         
-        console.log(`⏱️ Execution pacing set to: ${this.executionDelay}ms (was ${oldDelay}ms)`);
+        console.log(`⏱️ Global execution pacing set to: ${this.executionDelay}ms (was ${oldDelay}ms)`);
         
-        // Publish event for observability
         const bus = window.SOVEREIGN_ACCESS?.bus?.();
         bus?.publishWithoutMiddleware?.('scheduler:pacing:changed', {
             oldDelay,
@@ -132,20 +143,14 @@ class SovereignRuntimeExecutionScheduler {
         return true;
     }
 
-    /* ========================================================
-       GET CURRENT EXECUTION DELAY
-    ======================================================== */
     getExecutionDelay() {
         return this.executionDelay;
     }
 
-    /* ========================================================
-       CLEAR EXECUTION DELAY (Reset pacing)
-    ======================================================== */
     clearExecutionDelay() {
         const oldDelay = this.executionDelay;
         this.executionDelay = 0;
-        console.log(`⏱️ Execution pacing cleared (was ${oldDelay}ms)`);
+        console.log(`⏱️ Global execution pacing cleared (was ${oldDelay}ms)`);
         
         const bus = window.SOVEREIGN_ACCESS?.bus?.();
         bus?.publishWithoutMiddleware?.('scheduler:pacing:cleared', {
@@ -156,9 +161,6 @@ class SovereignRuntimeExecutionScheduler {
         return true;
     }
 
-    /* ========================================================
-       ENABLE/DISABLE PACING
-    ======================================================== */
     enablePacing(enabled) {
         this.pacingEnabled = enabled;
         if (!enabled) {
@@ -168,9 +170,6 @@ class SovereignRuntimeExecutionScheduler {
         return true;
     }
 
-    /* ========================================================
-       SET PACING LIMITS
-    ======================================================== */
     setPacingLimits(minDelay, maxDelay) {
         if (typeof minDelay !== 'number' || minDelay < 0) {
             console.warn('⚠️ Invalid min delay');
@@ -183,8 +182,6 @@ class SovereignRuntimeExecutionScheduler {
         
         this.minExecutionDelay = minDelay;
         this.maxExecutionDelay = maxDelay;
-        
-        // Clamp current delay to new limits
         this.executionDelay = Math.min(maxDelay, Math.max(minDelay, this.executionDelay));
         
         console.log(`⏱️ Pacing limits updated: min=${minDelay}ms, max=${maxDelay}ms`);
@@ -242,7 +239,7 @@ class SovereignRuntimeExecutionScheduler {
     }
 
     /* ========================================================
-       SCHEDULE
+       SCHEDULE (جدولة مهمة جديدة)
     ======================================================== */
     schedule({ 
         id = crypto.randomUUID(), 
@@ -251,7 +248,7 @@ class SovereignRuntimeExecutionScheduler {
         metadata = {},
         retryCount = 0,
         parentTaskId = null,
-        bypassPacing = false   // ✅ NEW: Critical tasks can bypass pacing
+        bypassPacing = false
     }) {
         if (typeof task !== 'function') {
             console.warn('⚠️ Invalid Scheduled Task');
@@ -268,7 +265,7 @@ class SovereignRuntimeExecutionScheduler {
             retriesLeft: retryCount,
             retriesUsed: 0,
             parentTaskId,
-            bypassPacing  // ✅ Store bypass flag
+            bypassPacing
         };
 
         this.queue.push(taskItem);
@@ -282,7 +279,6 @@ class SovereignRuntimeExecutionScheduler {
         });
 
         this.sortQueue();
-
         this.telemetry.tasksScheduled++;
 
         console.log(`⏱ Task Scheduled: ${id} (Priority: ${priority})${parentTaskId ? ` (Parent: ${parentTaskId})` : ''}${bypassPacing ? ' [PACING BYPASS]' : ''}`);
@@ -293,9 +289,9 @@ class SovereignRuntimeExecutionScheduler {
     }
 
     /* ========================================================
-       PROCESS QUEUE (مع Aging و Pacing)
+       PROCESS QUEUE (مع Pacing Policies)
        
-       ✅ NEW: Runtime Pacing integration
+       ✅ يستخدم runtime-pacing.js لتأخير مخصص حسب القناة
     ======================================================== */
     async processQueue() {
         if (this.processing) {
@@ -313,18 +309,35 @@ class SovereignRuntimeExecutionScheduler {
                 continue;
             }
 
-            // ✅ NEW: Apply pacing delay before execution (unless bypassed)
-            if (this.pacingEnabled && this.executionDelay > 0 && !item.bypassPacing) {
-                const pacingStart = Date.now();
-                await new Promise(resolve => setTimeout(resolve, this.executionDelay));
-                const pacingDelay = Date.now() - pacingStart;
+            // ============================================
+            // Runtime Pacing Policies (عبر runtime-pacing.js)
+            // ============================================
+            if (this.pacingEnabled) {
+                const pacing = this.getPacingManager();
                 
-                // Track pacing telemetry
-                this.telemetry.totalPacingDelay += pacingDelay;
-                this.telemetry.pacingDelaysCount++;
+                // الحصول على القناة من metadata (إذا كانت موجودة)
+                const channel = item.metadata?.channel;
                 
-                if (this.telemetry.pacingDelaysCount % 10 === 0) {
-                    console.log(`⏱️ Pacing applied: ${pacingDelay}ms (avg: ${(this.telemetry.totalPacingDelay / this.telemetry.pacingDelaysCount).toFixed(2)}ms)`);
+                // التحقق مما إذا كانت المهمة حرجة ويجب تجاوز التأخير
+                const bypass = pacing?.shouldBypass?.(channel) || item.bypassPacing || false;
+                
+                // الحصول على التأخير (مخصص حسب القناة أو fallback إلى التأخير العام)
+                const delay = pacing?.getDelay?.(channel) ?? this.executionDelay;
+                
+                if (!bypass && delay > 0) {
+                    const pacingStart = Date.now();
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                    const pacingDelay = Date.now() - pacingStart;
+                    
+                    this.telemetry.totalPacingDelay += pacingDelay;
+                    this.telemetry.pacingDelaysCount++;
+                    
+                    if (this.debugMode || this.telemetry.pacingDelaysCount % 10 === 0) {
+                        console.log(`⏱️ Pacing applied: ${pacingDelay}ms (channel: ${channel || 'default'}, delay: ${delay}ms, avg: ${(this.telemetry.totalPacingDelay / this.telemetry.pacingDelaysCount).toFixed(2)}ms)`);
+                    }
+                } else if (bypass && this.debugMode) {
+                    this.telemetry.pacingBypassed++;
+                    console.log(`⏩ Pacing bypassed for task: ${item.id} (channel: ${channel || 'default'})`);
                 }
             }
 
@@ -449,7 +462,7 @@ class SovereignRuntimeExecutionScheduler {
     }
 
     /* ========================================================
-       CONFIGURATION APIs
+       CONFIGURATION APIS
     ======================================================== */
     setMaxConcurrent(max) {
         if (typeof max !== 'number' || max < 1) {
@@ -494,7 +507,7 @@ class SovereignRuntimeExecutionScheduler {
     }
 
     /* ========================================================
-       TASK INTROSPECTION APIs
+       TASK INTROSPECTION APIS
     ======================================================== */
     getTask(taskId) {
         return this.tasks.get(taskId) || null;
@@ -592,13 +605,13 @@ class SovereignRuntimeExecutionScheduler {
             agingFactor: this.agingFactor,
             pacingEnabled: this.pacingEnabled,
             executionDelay: this.executionDelay,
-            version: '8.3.0',
+            version: '8.4.0',
             timestamp: Date.now()
         });
     }
 
     /* ========================================================
-       STATUS (مع Pacing Telemetry)
+       STATUS (مع Pacing Policies Telemetry)
     ======================================================== */
     getStatus() {
         const tasksByState = {
@@ -617,6 +630,9 @@ class SovereignRuntimeExecutionScheduler {
             bypassPacing: item.bypassPacing
         }));
         
+        const pacingManager = this.getPacingManager();
+        const pacingPolicies = pacingManager?.getAllPolicies?.() || {};
+        
         return {
             queued: this.queue.length,
             active: this.activeTasks,
@@ -625,13 +641,15 @@ class SovereignRuntimeExecutionScheduler {
             tasksByState,
             pacing: {
                 enabled: this.pacingEnabled,
-                currentDelayMs: this.executionDelay,
+                globalDelayMs: this.executionDelay,
                 minDelayMs: this.minExecutionDelay,
                 maxDelayMs: this.maxExecutionDelay,
+                policies: pacingPolicies,
                 avgPacingDelayMs: this.telemetry.pacingDelaysCount > 0 
                     ? parseFloat((this.telemetry.totalPacingDelay / this.telemetry.pacingDelaysCount).toFixed(2))
                     : 0,
-                totalPacingDelayMs: parseFloat(this.telemetry.totalPacingDelay.toFixed(2))
+                totalPacingDelayMs: parseFloat(this.telemetry.totalPacingDelay.toFixed(2)),
+                bypassedCount: this.telemetry.pacingBypassed
             },
             aging: {
                 enabled: this.agingEnabled,
