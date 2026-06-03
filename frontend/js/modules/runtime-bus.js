@@ -1,23 +1,25 @@
 /* ============================================================
    Sovereign AI — runtime-bus.js
-   الإصدار: 7.6.0 (Distributed Runtime Operating System Kernel)
+   الإصدار: 7.8.0 (Runtime Transport Kernel)
    
-   ⚠️ IMPORTANT: This file is approaching "Bus Saturation Point"
-   Future decomposition required:
-     - TransportEngine (النقل الأساسي)
-     - ProtocolGateway (normalization & validation)
-     - ContextManager (propagation & lineage)
-     - TelemetryEngine (metrics & rolling windows)
-     - MiddlewareOrchestrator (pipeline management)
-     - ErrorIsolationLayer (fault boundaries)
+   ⚠️ CRITICAL: Bus has reached "Core Saturation Point"
+   Future decomposition REQUIRED:
+     
+     Subsystem  | Responsibility
+     -----------|------------------------------------------------
+     TransportEngine | النقل الأساسي للرسائل
+     ContextPropagator | إدارة التتبع والـ lineage (بدون global state)
+     EnvelopeInjector | حقن الأغلفة الموحدة
+     TelemetryProfiler | القياس و rolling averages
+     ProtocolValidator | التحقق من صحة schema, context, envelope
+     MiddlewareOrchestrator | إدارة الـ pipeline
+     ErrorIsolationLayer | عزل الأخطاء ومنع الـ recursion
    
    المرحلة القادمة (بعد التقسيم):
-     - Runtime Trace Engine
+     - Runtime Session Manager (session start/end, scopes, domains)
      - Distributed Trace Collector
-     - Runtime Session Manager
-     - Unified Runtime Envelope
-     - Runtime Priority Routing
-     - Service Lifecycle Enforcement
+     - Session Lifecycle Management
+     - Execution Domain Isolation
    ============================================================ */
 
 class SovereignRuntimeBus {
@@ -25,17 +27,17 @@ class SovereignRuntimeBus {
     constructor() {
 
         this.channels = new Map();
-
         this.middlewares = [];
 
-        // قائمة القنوات الأساسية
+        // ✅ Removed: this.lastTraceId (global mutable state)
+        // ✅ FIX 1: No more global trace ID - using explicit propagation only
+
         this.defaultChannels = new Set([
             'runtime', 'system', 'security', 'analytics', 'chat',
             'performance', 'kernel', 'lifecycle', 'orchestrator',
             'policy', 'health', 'state', 'migration', 'runtime:errors'
         ]);
 
-        // ✅ Telemetry مع rolling window فعال
         this.telemetry = {
             messagesProcessed: 0,
             messagesFailed: 0,
@@ -45,27 +47,22 @@ class SovereignRuntimeBus {
             messagesRejected: 0,
             messagesWithContext: 0,
             messagesMissingContext: 0,
+            messagesWithEnvelope: 0,
+            messagesMissingEnvelope: 0,
             rollingWindowSize: 1000,
-            recentDispatchTimes: [],      // ✅ الآن سيتم استخدامها
-            rollingAverageDispatchTime: 0  // ✅ rolling average الحقيقي
+            recentDispatchTimes: [],
+            rollingAverageDispatchTime: 0
         };
 
-        // Cache for access layer
         this._access = null;
 
-        // ✅ تخزين آخر traceId للـ parent-child relationship
-        this.lastTraceId = null;
-
         console.log(
-            '🛰 Runtime Bus Initialized (Distributed Runtime Kernel)'
+            '🛰 Runtime Bus Initialized (Transport Kernel Mode)'
         );
 
         this.init();
     }
 
-    /* ========================================================
-       ACCESS HELPER
-    ======================================================== */
     get access() {
         if (!this._access && window.SOVEREIGN_ACCESS) {
             this._access = window.SOVEREIGN_ACCESS;
@@ -74,9 +71,6 @@ class SovereignRuntimeBus {
         return this._access;
     }
 
-    /* ========================================================
-       GET SCHEMA & CONTEXT MANAGER
-    ======================================================== */
     getSchema() {
         return this.access?.legacy?.('schema') || window.SOVEREIGN_SCHEMA;
     }
@@ -85,9 +79,10 @@ class SovereignRuntimeBus {
         return this.access?.legacy?.('context') || window.SOVEREIGN_CONTEXT;
     }
 
-    /* ========================================================
-       INIT
-    ======================================================== */
+    getEnvelopeManager() {
+        return this.access?.legacy?.('envelope') || window.SOVEREIGN_ENVELOPE;
+    }
+
     init() {
         this.registerDefaultChannels();
         this.setupSelfTelemetry();
@@ -98,9 +93,10 @@ class SovereignRuntimeBus {
         this.publishWithoutMiddleware('bus:ready', {
             timestamp: Date.now(),
             channelsCount: this.defaultChannels.size,
-            version: '7.6.0',
+            version: '7.8.0',
             source: 'runtime-bus',
-            contextSupported: !!this.getContextManager()
+            contextSupported: !!this.getContextManager(),
+            envelopeSupported: !!this.getEnvelopeManager()
         });
     }
 
@@ -114,7 +110,7 @@ class SovereignRuntimeBus {
     }
 
     setupSelfTelemetry() {
-        this.subscribe('runtime:errors', (message) => {
+        this.subscribe('runtime:errors', () => {
             this.telemetry.messagesFailed++;
         });
     }
@@ -143,15 +139,12 @@ class SovereignRuntimeBus {
         return `session_${Date.now()}_${Math.random().toString(36).substr(2, 8)}`;
     }
 
-    /* ========================================================
-       NORMALIZE MESSAGE
-    ======================================================== */
     normalizeMessage(rawChannel, rawPayload, rawId) {
         const schema = this.getSchema();
         const messageId = rawId || this.generateMessageId();
         
         if (schema?.create) {
-            const standardizedMessage = schema.create({
+            const msg = schema.create({
                 type: `runtime.${rawChannel}`,
                 source: 'runtime-bus',
                 channel: rawChannel,
@@ -159,11 +152,11 @@ class SovereignRuntimeBus {
                 meta: {
                     busManaged: true,
                     normalizedAt: Date.now(),
-                    busVersion: '7.6.0'
+                    busVersion: '7.8.0'
                 }
             });
             this.telemetry.messagesNormalized++;
-            return standardizedMessage;
+            return msg;
         }
         
         return {
@@ -173,37 +166,41 @@ class SovereignRuntimeBus {
             source: 'runtime-bus',
             channel: rawChannel,
             payload: rawPayload,
-            meta: { legacy: true, normalizedAt: Date.now(), busVersion: '7.6.0' },
+            meta: { legacy: true, normalizedAt: Date.now(), busVersion: '7.8.0' },
             timestamp: Date.now()
         };
     }
     
     /* ========================================================
-       ATTACH RUNTIME CONTEXT (مع Distributed Lineage)
+       ATTACH RUNTIME CONTEXT
        
-       ✅ FIX 1: Lineage الحقيقي مع causality chain
+       ✅ FIX 1: No more global lastTraceId
+       Using explicit propagation only
     ======================================================== */
     attachRuntimeContext(message, channel) {
         const contextManager = this.getContextManager();
+        
+        // ✅ Get parent trace ID from message metadata if available
+        const parentTraceId = message.meta?.context?.traceId || null;
         const currentTraceId = this.generateTraceId();
-        const parentTraceId = this.lastTraceId;  // للحفاظ على causality chain
         
         if (contextManager?.attach) {
             const attachedMessage = contextManager.attach(message, {
                 source: 'runtime-bus',
                 scope: channel,
-                parentTraceId: parentTraceId  // ✅ تمرير الـ parent للـ lineage
+                parentTraceId: parentTraceId  // ✅ explicit propagation
             });
             this.telemetry.messagesWithContext++;
-            this.lastTraceId = attachedMessage.meta?.context?.traceId || currentTraceId;
             return attachedMessage;
         }
         
-        // ✅ Fallback مع lineage كامل
-        if (!message.meta) message.meta = {};
+        // ✅ FIX 2: Preserve existing meta instead of replacing
+        if (!message.meta) {
+            message.meta = {};
+        }
         
-        // ✅ FIX 3: تقسيم meta إلى أقسام (Runtime Envelope)
         message.meta = {
+            ...message.meta,  // ✅ Preserve existing metadata
             context: {
                 sessionId: this.generateSessionId(),
                 traceId: currentTraceId,
@@ -211,6 +208,7 @@ class SovereignRuntimeBus {
                 scope: channel,
                 source: 'runtime-bus-fallback',
                 lineage: [
+                    ...(message.meta.context?.lineage || []),
                     {
                         service: 'runtime-bus',
                         timestamp: Date.now(),
@@ -221,14 +219,17 @@ class SovereignRuntimeBus {
                 ]
             },
             telemetry: {
+                ...message.meta.telemetry,
                 createdAt: Date.now(),
-                busVersion: '7.6.0'
+                busVersion: '7.8.0'
             },
             governance: {
+                ...message.meta.governance,
                 validated: false,
                 contractChecked: false
             },
             transport: {
+                ...message.meta.transport,
                 priority: 'normal',
                 retryCount: 0,
                 ttl: 30000
@@ -236,15 +237,92 @@ class SovereignRuntimeBus {
         };
         
         this.telemetry.messagesWithContext++;
-        this.lastTraceId = currentTraceId;
         return message;
     }
     
+    /* ========================================================
+       INJECT RUNTIME ENVELOPE
+       
+       ✅ FIX 4: Enhanced transport semantics (retryable, priority, ttl)
+    ======================================================== */
+    injectRuntimeEnvelope(message, channel) {
+        const envelopeManager = this.getEnvelopeManager();
+        const isCritical = channel === 'runtime:errors';
+        
+        if (envelopeManager?.attach) {
+            const envelopedMessage = envelopeManager.attach(message, {
+                protocol: {
+                    channel: channel,
+                    type: message.type || `runtime.${channel}`,
+                    version: '7.8.0'
+                },
+                transport: {
+                    reliable: true,
+                    priority: isCritical ? 'critical' : 'normal',
+                    retryable: !isCritical,      // ✅ critical messages not retryable
+                    ttl: isCritical ? 60000 : 30000,  // ✅ different TTL per priority
+                    maxRetries: isCritical ? 0 : 3
+                },
+                governance: {
+                    validated: false,
+                    contractChecked: false,
+                    policyChecked: false
+                },
+                telemetry: {
+                    tracked: true,
+                    sourceTimestamp: Date.now(),
+                    busVersion: '7.8.0'
+                },
+                tracing: {
+                    traceId: message.meta?.context?.traceId || this.generateTraceId(),
+                    sessionId: message.meta?.context?.sessionId,
+                    parentTraceId: message.meta?.context?.parentTraceId
+                }
+            });
+            this.telemetry.messagesWithEnvelope++;
+            return envelopedMessage;
+        }
+        
+        // ✅ Fallback Envelope with proper transport semantics
+        if (!message.envelope) {
+            message.envelope = {
+                protocol: {
+                    channel: channel,
+                    type: message.type || `runtime.${channel}`,
+                    version: 'legacy'
+                },
+                transport: {
+                    reliable: true,
+                    priority: isCritical ? 'critical' : 'normal',
+                    retryable: !isCritical,
+                    ttl: isCritical ? 60000 : 30000
+                },
+                governance: {
+                    validated: false,
+                    contractChecked: false
+                },
+                telemetry: {
+                    tracked: true,
+                    sourceTimestamp: Date.now(),
+                    busVersion: '7.8.0'
+                },
+                tracing: {
+                    traceId: message.meta?.context?.traceId || this.generateTraceId(),
+                    sessionId: message.meta?.context?.sessionId
+                }
+            };
+            this.telemetry.messagesWithEnvelope++;
+        }
+        
+        return message;
+    }
+
     /* ========================================================
        VALIDATE MESSAGE
     ======================================================== */
     validateMessage(message) {
         const schema = this.getSchema();
+        const envelopeManager = this.getEnvelopeManager();
         
         if (schema?.validate && !schema.validate(message)) {
             this.telemetry.messagesRejected++;
@@ -252,44 +330,45 @@ class SovereignRuntimeBus {
             return false;
         }
         
-        // ✅ Context validation مع التحقق من lineage
         if (!message.meta?.context?.traceId) {
             this.telemetry.messagesMissingContext++;
             console.warn(`⚠️ Context Missing: ${message.channel}`);
             return false;
         }
         
+        if (envelopeManager?.validate) {
+            if (!envelopeManager.validate(message)) {
+                this.telemetry.messagesMissingEnvelope++;
+                console.warn(`⚠️ Envelope Invalid: ${message.channel}`);
+                return false;
+            }
+        } else if (!message.envelope) {
+            this.telemetry.messagesMissingEnvelope++;
+            console.warn(`⚠️ Envelope Missing: ${message.channel}`);
+            return false;
+        }
+        
         return true;
     }
 
-    /* ========================================================
-       UPDATE TELEMETRY (مع Rolling Average الحقيقي)
-       
-       ✅ FIX 2: تفعيل recentDispatchTimes وحساب rolling average
-    ======================================================== */
     updateTelemetry(dispatchTime) {
         this.telemetry.messagesProcessed++;
         this.telemetry.totalDispatchTime += dispatchTime;
         this.telemetry.averageDispatchTime = 
             this.telemetry.totalDispatchTime / this.telemetry.messagesProcessed;
         
-        // ✅ Rolling window implementation
         this.telemetry.recentDispatchTimes.push(dispatchTime);
         
         if (this.telemetry.recentDispatchTimes.length > this.telemetry.rollingWindowSize) {
             this.telemetry.recentDispatchTimes.shift();
         }
         
-        // ✅ Calculate rolling average
         if (this.telemetry.recentDispatchTimes.length > 0) {
             const sum = this.telemetry.recentDispatchTimes.reduce((a, b) => a + b, 0);
             this.telemetry.rollingAverageDispatchTime = sum / this.telemetry.recentDispatchTimes.length;
         }
     }
 
-    /* ========================================================
-       PUBLISH (Core Pipeline)
-    ======================================================== */
     publish(channel, payload = {}) {
         const startTime = performance.now();
 
@@ -300,6 +379,7 @@ class SovereignRuntimeBus {
 
         let message = this.normalizeMessage(channel, payload);
         message = this.attachRuntimeContext(message, channel);
+        message = this.injectRuntimeEnvelope(message, channel);
         
         if (!this.validateMessage(message)) return;
 
@@ -339,20 +419,19 @@ class SovereignRuntimeBus {
                 errors: errors.map(e => e.message),
                 originalPayload: payload,
                 context: message.meta?.context,
+                envelope: message.envelope,
                 telemetry: {
                     messagesProcessed: this.telemetry.messagesProcessed,
                     messagesFailed: this.telemetry.messagesFailed,
                     messagesRejected: this.telemetry.messagesRejected,
                     messagesWithContext: this.telemetry.messagesWithContext,
+                    messagesWithEnvelope: this.telemetry.messagesWithEnvelope,
                     rollingAverageDispatchTime: this.telemetry.rollingAverageDispatchTime
                 }
             });
         }
     }
 
-    /* ========================================================
-       PUBLISH WITHOUT MIDDLEWARE (Priority Channel)
-    ======================================================== */
     publishWithoutMiddleware(channel, payload = {}) {
         if (!this.channels.has(channel)) return;
 
@@ -363,17 +442,21 @@ class SovereignRuntimeBus {
             source: 'runtime-bus',
             channel,
             payload,
-            meta: {
-                context: payload.context || {
+            envelope: payload.envelope || {
+                protocol: { channel, type: `runtime.${channel}`, version: 'critical' },
+                transport: { reliable: true, priority: 'critical', retryable: false, ttl: 60000, bypassedMiddleware: true },
+                governance: { validated: true, bypassed: true },
+                telemetry: { tracked: true, sourceTimestamp: Date.now(), priority: 'system' },
+                tracing: { traceId: `critical_${Date.now()}`, sessionId: `system_${Date.now()}` }
+            },
+            meta: payload.context ? { context: payload.context } : {
+                context: {
                     sessionId: `system_${Date.now()}`,
-                    traceId: `system_trace_${Date.now()}`,
+                    traceId: `critical_trace_${Date.now()}`,
                     scope: channel,
                     source: 'runtime-bus-critical',
                     lineage: [{ service: 'runtime-bus-critical', timestamp: Date.now() }]
-                },
-                telemetry: { createdAt: Date.now(), priority: 'system' },
-                governance: { bypassed: true },
-                transport: { priority: 'system', bypassedMiddleware: true, isErrorEvent: true }
+                }
             },
             timestamp: Date.now()
         };
@@ -388,9 +471,6 @@ class SovereignRuntimeBus {
         }
     }
 
-    /* ========================================================
-       MIDDLEWARE MANAGEMENT
-    ======================================================== */
     use(middleware) {
         if (typeof middleware !== 'function') {
             console.warn('Bus: Middleware must be a function');
@@ -420,9 +500,6 @@ class SovereignRuntimeBus {
         return this.channels.get(channel)?.length || 0;
     }
 
-    /* ========================================================
-       STATUS (مع Telemetry محسّنة)
-    ======================================================== */
     getStatus() {
         const status = {
             channels: [...this.channels.keys()],
@@ -430,9 +507,11 @@ class SovereignRuntimeBus {
             totalListeners: 0,
             protocolGateway: true,
             contextPropagation: true,
+            envelopeInjection: true,
             registeredInRegistry: !!window.SOVEREIGN?.get('bus'),
             defaultChannelsProtected: [...this.defaultChannels],
             contextManagerAvailable: !!this.getContextManager(),
+            envelopeManagerAvailable: !!this.getEnvelopeManager(),
             telemetry: {
                 messagesProcessed: this.telemetry.messagesProcessed,
                 messagesFailed: this.telemetry.messagesFailed,
@@ -440,6 +519,8 @@ class SovereignRuntimeBus {
                 messagesRejected: this.telemetry.messagesRejected,
                 messagesWithContext: this.telemetry.messagesWithContext,
                 messagesMissingContext: this.telemetry.messagesMissingContext,
+                messagesWithEnvelope: this.telemetry.messagesWithEnvelope,
+                messagesMissingEnvelope: this.telemetry.messagesMissingEnvelope,
                 averageDispatchTimeMs: parseFloat(this.telemetry.averageDispatchTime.toFixed(2)),
                 rollingAverageDispatchTimeMs: parseFloat(this.telemetry.rollingAverageDispatchTime?.toFixed(2) || 0),
                 rollingWindowSize: this.telemetry.rollingWindowSize,
@@ -481,6 +562,8 @@ class SovereignRuntimeBus {
             messagesRejected: 0,
             messagesWithContext: 0,
             messagesMissingContext: 0,
+            messagesWithEnvelope: 0,
+            messagesMissingEnvelope: 0,
             rollingWindowSize: 1000,
             recentDispatchTimes: [],
             rollingAverageDispatchTime: 0
