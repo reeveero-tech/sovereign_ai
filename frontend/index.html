@@ -1098,7 +1098,7 @@
     <script defer src="js/modules/system-bridge.js"></script>
 
     <!-- ===================================================== -->
-    <!-- RUNTIME LAYER (KERNEL -> SCHEDULER -> REGISTRY -> POWER -> LIFECYCLE -> INTERACTIVE MODULES) -->
+    <!-- RUNTIME LAYER (OPTIMIZED ORDER WITH RECOVERY) -->
     <!-- ===================================================== -->
 
     <script defer src="js/modules/runtime-kernel.js"></script>
@@ -1110,6 +1110,8 @@
     <script defer src="js/modules/runtime-power-manager.js"></script>
 
     <script defer src="js/modules/runtime-lifecycle.js"></script>
+
+    <script defer src="js/modules/runtime-recovery.js"></script>
 
     <script defer src="js/modules/chat-runtime.js"></script>
 
@@ -1151,16 +1153,17 @@
 
     <!--
         =========================================================
-        LIFECYCLE INTEGRATION NOTE:
-        runtime-lifecycle.js manages:
-        - Boot
-        - Active
-        - Suspended
-        - Offline
-        - Degraded
-        - Shutdown
+        SELF‑RECOVERY RUNTIME ARCHITECTURE:
+        runtime-recovery.js enables:
+        - Failure detection
+        - Performance degradation handling
+        - Socket failure recovery
+        - Global error monitoring
+        - Recovery attempts with backoff
+        - Safe mode activation
+        - Runtime stabilization
         
-        This turns the platform into a true Runtime Operating Environment.
+        This transforms the platform into a Resilient AI Runtime Environment.
         =========================================================
     -->
 
