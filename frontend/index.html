@@ -1097,8 +1097,18 @@
     <script defer src="js/modules/system-bridge.js"></script>
 
     <!-- ===================================================== -->
-    <!-- RUNTIME LAYER (COMPLETE RUNTIME FABRIC WITH HEALTH MATRIX) -->
+    <!-- RUNTIME LAYER (CONSOLIDATION & MIGRATION PHASE) -->
     <!-- ===================================================== -->
+
+    <!-- 
+        IMPORTANT: Unified Registry must be first.
+        Migration Manager must be early to orchestrate transition.
+        This is the foundation of Runtime Consolidation Phase.
+    -->
+
+    <script defer src="js/modules/runtime-unified-registry.js"></script>
+
+    <script defer src="js/modules/runtime-migration-manager.js"></script>
 
     <script defer src="js/modules/runtime-kernel.js"></script>
 
@@ -1182,17 +1192,12 @@
 
     <!--
         =========================================================
-        RUNTIME HEALTH MATRIX:
-        runtime-health-matrix.js enables:
-        - Overall runtime health measurement
-        - Subsystem health monitoring
-        - Health scoring per capability
-        - Degradation detection & alerting
-        - Runtime stability awareness
-        - Health broadcasting across systems
-        - Operational health visibility
-        
-        This creates a complete Autonomous AI Operating Fabric.
+        RUNTIME CONSOLIDATION & MIGRATION PHASE:
+        - Unified Registry: Central runtime root
+        - Migration Manager: Hybrid transition orchestration
+        - All systems now in gradual migration to unified architecture
+        - Backward compatibility maintained via window.SOVEREIGN_*
+        - This is a living Runtime Operating Ecosystem evolution.
         =========================================================
     -->
 
