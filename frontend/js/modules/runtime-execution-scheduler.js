@@ -1,33 +1,13 @@
 /* ============================================================
    Sovereign AI — runtime-execution-scheduler.js
-   الإصدار: 8.4.0 (Runtime Flow Stabilization Kernel with Pacing Policies)
+   الإصدار: 8.5.0 (Runtime Flow Stabilization Kernel with Queue Intelligence)
    
    مجدول التنفيذ السيادي - إدارة وتنسيق تنفيذ المهام
    
-   الوظيفة:
-     - إدارة طوابير التنفيذ مع Aging Mechanism (منع Starvation)
-     - جدولة المهام حسب الأولوية الديناميكية
-     - التحكم في التنفيذ المتزامن
-     - تتبع دورة حياة المهام مع Retention Policy
-     - توفير Telemetry للتنفيذ
-     - Execution Lineage Tracking (parent-child relationships)
-     - ✅ Runtime Pacing Policies (عبر runtime-pacing.js)
-   
-   التقسيم المستقبلي (Runtime Execution Core):
-     - QueueManager (إدارة الطوابير مع Aging)
-     - LifecycleEngine (إدارة حالات المهام)
-     - RetryEngine (معالجة الفشل وإعادة المحاولة)
-     - ConcurrencyController (التحكم بالتزامن)
-     - PacingController (التحكم في تدفق التنفيذ)
-     - TelemetryProfiler (القياس والإحصاءات)
-     - ExecutionCoordinator (التنسيق العام)
-   
-   المرحلة القادمة (Runtime Execution Pacing Policies):
-     - Priority-Aware Pacing
-     - Critical Task Bypass
-     - Degraded Pacing Modes
-     - Adaptive Draining
-     - Queue Stabilization Strategies
+   ✅ NEW: Queue Intelligence Integration
+     - Dynamic queue sorting via runtime-queue-intelligence.js
+     - Adaptive task deferral (starvation prevention, priority aging)
+     - External queue optimization strategies
    ============================================================ */
 
 class SovereignRuntimeExecutionScheduler {
@@ -42,7 +22,7 @@ class SovereignRuntimeExecutionScheduler {
 
         this.activeTasks = 0;
 
-        // Runtime Pacing (Flow Control) - Global fallback
+        // Runtime Pacing (Flow Control)
         this.executionDelay = 0;
         this.minExecutionDelay = 0;
         this.maxExecutionDelay = 5000;
@@ -55,7 +35,7 @@ class SovereignRuntimeExecutionScheduler {
         this.maxStoredTasks = 1000;
         this.cleanupInterval = null;
 
-        // Aging parameters (prevent starvation)
+        // Aging parameters (prevent starvation) - fallback
         this.agingFactor = 0.5;
         this.agingEnabled = true;
 
@@ -74,22 +54,33 @@ class SovereignRuntimeExecutionScheduler {
             maxQueueSize: 0,
             totalPacingDelay: 0,
             pacingDelaysCount: 0,
-            pacingBypassed: 0
+            pacingBypassed: 0,
+            tasksDeferred: 0      // ✅ NEW: Track deferred tasks
         };
 
         console.log(
-            '⏱ Runtime Execution Scheduler Initialized (Pacing Policies Ready)'
+            '⏱ Runtime Execution Scheduler Initialized (Queue Intelligence Ready)'
         );
 
         this.init();
     }
 
     /* ========================================================
-       HELPER: Get Pacing Manager (من runtime-pacing.js)
+       HELPER: Get Pacing Manager
     ======================================================== */
     getPacingManager() {
         return window.SOVEREIGN_ACCESS?.legacy?.('pacing') ||
                window.SOVEREIGN_PACING;
+    }
+
+    /* ========================================================
+       HELPER: Get Queue Intelligence Manager
+       
+       ✅ NEW: External queue optimization strategies
+    ======================================================== */
+    getQueueIntelligence() {
+        return window.SOVEREIGN_ACCESS?.legacy?.('queue_intelligence') ||
+               window.SOVEREIGN_QUEUE_INTELLIGENCE;
     }
 
     /* ========================================================
@@ -109,7 +100,7 @@ class SovereignRuntimeExecutionScheduler {
     }
 
     /* ========================================================
-       PACING CONTROL APIS (Global Fallback)
+       PACING CONTROL APIS
     ======================================================== */
     setExecutionDelay(delayMs) {
         if (!this.pacingEnabled) {
@@ -214,7 +205,7 @@ class SovereignRuntimeExecutionScheduler {
     }
 
     /* ========================================================
-       AGING MECHANISM (منع Starvation)
+       FALLBACK AGING MECHANISM (في حالة عدم توفر Queue Intelligence)
     ======================================================== */
     calculateEffectivePriority(item) {
         if (!this.agingEnabled) {
@@ -226,7 +217,7 @@ class SovereignRuntimeExecutionScheduler {
         return Math.max(0, item.priority - waitingReduction);
     }
 
-    sortQueue() {
+    fallbackSortQueue() {
         this.queue.sort((a, b) => {
             const effectiveA = this.calculateEffectivePriority(a);
             const effectiveB = this.calculateEffectivePriority(b);
@@ -265,7 +256,8 @@ class SovereignRuntimeExecutionScheduler {
             retriesLeft: retryCount,
             retriesUsed: 0,
             parentTaskId,
-            bypassPacing
+            bypassPacing,
+            deferredCount: 0
         };
 
         this.queue.push(taskItem);
@@ -278,7 +270,15 @@ class SovereignRuntimeExecutionScheduler {
             executionChain: parentTaskId ? [parentTaskId, id] : [id]
         });
 
-        this.sortQueue();
+        // Use Queue Intelligence for sorting if available
+        const intelligence = this.getQueueIntelligence();
+        
+        if (intelligence?.sortQueue) {
+            this.queue = intelligence.sortQueue(this.queue);
+        } else {
+            this.fallbackSortQueue();
+        }
+        
         this.telemetry.tasksScheduled++;
 
         console.log(`⏱ Task Scheduled: ${id} (Priority: ${priority})${parentTaskId ? ` (Parent: ${parentTaskId})` : ''}${bypassPacing ? ' [PACING BYPASS]' : ''}`);
@@ -289,9 +289,10 @@ class SovereignRuntimeExecutionScheduler {
     }
 
     /* ========================================================
-       PROCESS QUEUE (مع Pacing Policies)
+       PROCESS QUEUE (مع Queue Intelligence و Adaptive Deferral)
        
-       ✅ يستخدم runtime-pacing.js لتأخير مخصص حسب القناة
+       ✅ Queue Intelligence: فرز ديناميكي للطابور
+       ✅ Adaptive Deferral: تأجيل المهام حسب استراتيجيات خارجية
     ======================================================== */
     async processQueue() {
         if (this.processing) {
@@ -301,11 +302,35 @@ class SovereignRuntimeExecutionScheduler {
         this.processing = true;
 
         while (this.queue.length > 0 && this.activeTasks < this.maxConcurrent) {
-            this.sortQueue();
+            // ============================================
+            // Queue Intelligence - Dynamic Queue Sorting
+            // ============================================
+            const intelligence = this.getQueueIntelligence();
+            
+            if (intelligence?.sortQueue) {
+                this.queue = intelligence.sortQueue(this.queue);
+            } else {
+                this.fallbackSortQueue();
+            }
             
             const item = this.queue.shift();
             
             if (!item) {
+                continue;
+            }
+
+            // ============================================
+            // Adaptive Deferral - استراتيجيات تأجيل ذكية
+            // ============================================
+            if (intelligence?.shouldDefer?.(item)) {
+                item.deferredAt = Date.now();
+                item.deferredCount = (item.deferredCount || 0) + 1;
+                this.queue.push(item);
+                this.telemetry.tasksDeferred++;
+                
+                if (this.debugMode) {
+                    console.log(`⏸️ Task deferred: ${item.id} (deferred count: ${item.deferredCount})`);
+                }
                 continue;
             }
 
@@ -315,13 +340,8 @@ class SovereignRuntimeExecutionScheduler {
             if (this.pacingEnabled) {
                 const pacing = this.getPacingManager();
                 
-                // الحصول على القناة من metadata (إذا كانت موجودة)
                 const channel = item.metadata?.channel;
-                
-                // التحقق مما إذا كانت المهمة حرجة ويجب تجاوز التأخير
                 const bypass = pacing?.shouldBypass?.(channel) || item.bypassPacing || false;
-                
-                // الحصول على التأخير (مخصص حسب القناة أو fallback إلى التأخير العام)
                 const delay = pacing?.getDelay?.(channel) ?? this.executionDelay;
                 
                 if (!bypass && delay > 0) {
@@ -409,7 +429,14 @@ class SovereignRuntimeExecutionScheduler {
                 }
                 
                 this.queue.push(item);
-                this.sortQueue();
+                
+                // Re-sort after adding retry
+                const intelligence = this.getQueueIntelligence();
+                if (intelligence?.sortQueue) {
+                    this.queue = intelligence.sortQueue(this.queue);
+                } else {
+                    this.fallbackSortQueue();
+                }
                 this.processQueue();
             } else {
                 const taskRecord = this.tasks.get(item.id);
@@ -493,15 +520,28 @@ class SovereignRuntimeExecutionScheduler {
         }
         this.agingFactor = factor;
         console.log(`📊 Aging factor updated to: ${factor}`);
-        this.sortQueue();
+        
+        // Re-sort with new factor
+        const intelligence = this.getQueueIntelligence();
+        if (intelligence?.sortQueue) {
+            this.queue = intelligence.sortQueue(this.queue);
+        } else {
+            this.fallbackSortQueue();
+        }
         return true;
     }
 
     enableAging(enabled) {
         this.agingEnabled = enabled;
         console.log(`📊 Aging ${enabled ? 'enabled' : 'disabled'}`);
+        
         if (enabled) {
-            this.sortQueue();
+            const intelligence = this.getQueueIntelligence();
+            if (intelligence?.sortQueue) {
+                this.queue = intelligence.sortQueue(this.queue);
+            } else {
+                this.fallbackSortQueue();
+            }
         }
         return true;
     }
@@ -570,6 +610,7 @@ class SovereignRuntimeExecutionScheduler {
             duration: parseFloat(duration.toFixed(2)),
             parentTaskId: item.parentTaskId || null,
             pacingDelayed: this.executionDelay > 0 && !item.bypassPacing,
+            deferredCount: item.deferredCount || 0,
             timestamp: Date.now()
         });
     }
@@ -605,13 +646,14 @@ class SovereignRuntimeExecutionScheduler {
             agingFactor: this.agingFactor,
             pacingEnabled: this.pacingEnabled,
             executionDelay: this.executionDelay,
-            version: '8.4.0',
+            queueIntelligenceAvailable: !!this.getQueueIntelligence(),
+            version: '8.5.0',
             timestamp: Date.now()
         });
     }
 
     /* ========================================================
-       STATUS (مع Pacing Policies Telemetry)
+       STATUS (مع Queue Intelligence Telemetry)
     ======================================================== */
     getStatus() {
         const tasksByState = {
@@ -627,11 +669,14 @@ class SovereignRuntimeExecutionScheduler {
             priority: item.priority,
             effectivePriority: this.calculateEffectivePriority(item),
             waitingTimeMs: Date.now() - (item.createdAt || Date.now()),
-            bypassPacing: item.bypassPacing
+            bypassPacing: item.bypassPacing,
+            deferredCount: item.deferredCount || 0
         }));
         
         const pacingManager = this.getPacingManager();
         const pacingPolicies = pacingManager?.getAllPolicies?.() || {};
+        
+        const intelligence = this.getQueueIntelligence();
         
         return {
             queued: this.queue.length,
@@ -639,6 +684,11 @@ class SovereignRuntimeExecutionScheduler {
             maxConcurrent: this.maxConcurrent,
             processing: this.processing,
             tasksByState,
+            queueIntelligence: {
+                available: !!intelligence,
+                hasSortQueue: !!intelligence?.sortQueue,
+                hasShouldDefer: !!intelligence?.shouldDefer
+            },
             pacing: {
                 enabled: this.pacingEnabled,
                 globalDelayMs: this.executionDelay,
@@ -655,6 +705,9 @@ class SovereignRuntimeExecutionScheduler {
                 enabled: this.agingEnabled,
                 factor: this.agingFactor,
                 waitingTasks: waitingTasks.slice(0, 5)
+            },
+            deferral: {
+                totalDeferred: this.telemetry.tasksDeferred
             },
             retention: {
                 maxStoredTasks: this.maxStoredTasks,
