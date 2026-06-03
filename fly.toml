@@ -1,14 +1,42 @@
+# fly.toml - Sovereign AI Platform
+# التصحيح: إصلاح buildpacks (array) و auto_stop_machines (string صحيح)
+
 app = "sovereign-ai"
 primary_region = "ams"
 
 [build]
+  # ✅ تصحيح: buildpacks يجب أن يكون array وليس object
+  # إذا كنت لا تستخدم buildpacks، اتركه فارغاً
+  buildpacks = []
 
 [env]
   PORT = "8080"
+  NODE_ENV = "production"
 
 [http_service]
   internal_port = 8080
   force_https = true
+  # ✅ تصحيح: auto_stop_machines يجب أن يكون string من القيم المسموحة:
+  # "stop", "start", أو "off"
   auto_stop_machines = "stop"
   auto_start_machines = true
   min_machines_running = 0
+  processes = ["app"]
+
+# ============================================================
+# Optional: Static file serving
+# ============================================================
+# [[statics]]
+#   guest_path = "/app/public"
+#   url_prefix = "/"
+
+# ============================================================
+# Optional: Health checks
+# ============================================================
+# [checks]
+#   [checks.health]
+#     type = "http"
+#     port = 8080
+#     path = "/health"
+#     interval = "10s"
+#     timeout = "2s"
