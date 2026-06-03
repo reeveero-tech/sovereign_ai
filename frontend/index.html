@@ -1098,7 +1098,7 @@
     <script defer src="js/modules/system-bridge.js"></script>
 
     <!-- ===================================================== -->
-    <!-- RUNTIME LAYER (OPTIMIZED ORDER WITH RECOVERY) -->
+    <!-- RUNTIME LAYER (FULL TELEMETRY & DIAGNOSTICS) -->
     <!-- ===================================================== -->
 
     <script defer src="js/modules/runtime-kernel.js"></script>
@@ -1112,6 +1112,8 @@
     <script defer src="js/modules/runtime-lifecycle.js"></script>
 
     <script defer src="js/modules/runtime-recovery.js"></script>
+
+    <script defer src="js/modules/runtime-diagnostics.js"></script>
 
     <script defer src="js/modules/chat-runtime.js"></script>
 
@@ -1153,17 +1155,16 @@
 
     <!--
         =========================================================
-        SELF‑RECOVERY RUNTIME ARCHITECTURE:
-        runtime-recovery.js enables:
-        - Failure detection
-        - Performance degradation handling
-        - Socket failure recovery
-        - Global error monitoring
-        - Recovery attempts with backoff
-        - Safe mode activation
-        - Runtime stabilization
+        RUNTIME DIAGNOSTICS & TELEMETRY:
+        runtime-diagnostics.js enables:
+        - Runtime snapshots capture
+        - Health monitoring
+        - State logging
+        - Export capabilities
+        - Runtime observability
+        - Enterprise monitoring support
         
-        This transforms the platform into a Resilient AI Runtime Environment.
+        This creates a fully observable Intelligent Runtime Infrastructure.
         =========================================================
     -->
 
