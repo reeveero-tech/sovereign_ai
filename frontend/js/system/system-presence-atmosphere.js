@@ -33,15 +33,10 @@
         renderingStyle: 'cinematic-adaptive-living-visuals',
 
         /* ====================================================
-           PRIMARY ATMOSPHERE STATES (حالات الغلاف الأساسية)
+           PRIMARY ATMOSPHERE STATES
         ==================================================== */
 
         states: {
-
-            /* ================================================
-               حالة الهدوء - جمال هادئ
-            ================================================ */
-
             calm: {
                 name: 'الهدوء المتألق',
                 glow: 0.12,
@@ -58,11 +53,6 @@
                 visualEffects: ['soft-ripple', 'gentle-pulse'],
                 description: 'هدوء عميق - SOVRA في سلام تام'
             },
-
-            /* ================================================
-               حالة اليقظة - مراقبة نشطة
-            ================================================ */
-
             awake: {
                 name: 'اليقظة الهادئة',
                 glow: 0.24,
@@ -79,11 +69,6 @@
                 visualEffects: ['soft-ripple', 'gentle-pulse', 'awareness-wave'],
                 description: 'SOVRA يقظ ومراقب'
             },
-
-            /* ================================================
-               حالة التركيز - عمق أزرق بنفسجي
-            ================================================ */
-
             focused: {
                 name: 'التركيز العميق',
                 glow: 0.42,
@@ -100,11 +85,6 @@
                 visualEffects: ['focus-ring', 'depth-pulse', 'concentration-wave'],
                 description: 'SOVRA مركز بعمق'
             },
-
-            /* ================================================
-               حالة العدالة - بنفسجي محمر - قوة وعدالة
-            ================================================ */
-
             justice: {
                 name: 'سيف العدالة',
                 glow: 0.68,
@@ -122,11 +102,6 @@
                 specialSignatures: ['justice-badge', 'law-symbol'],
                 description: 'العدالة تسعى وراء المجرمين'
             },
-
-            /* ================================================
-               حالة حماية السيد - برتقالي ناري - حماية مطلقة
-            ================================================ */
-
             protective: {
                 name: 'درع الحماية',
                 glow: 0.85,
@@ -144,11 +119,6 @@
                 specialSignatures: ['owner-symbol', 'protection-badge'],
                 description: 'حماية السيد - أولوية مطلقة'
             },
-
-            /* ================================================
-               حالة الطوارئ - أحمر قاني - خطر فوري
-            ================================================ */
-
             emergency: {
                 name: 'الخطر المطلق',
                 glow: 1.0,
@@ -166,11 +136,6 @@
                 specialSignatures: ['emergency-symbol', 'danger-badge'],
                 description: 'طوارئ - كل القواعد تُكسر'
             },
-
-            /* ================================================
-               حالة التخفي - شبه مخفي - غير مرئي تقريباً
-            ================================================ */
-
             stealth: {
                 name: 'الظل الصامت',
                 glow: 0.03,
@@ -189,11 +154,6 @@
                 invisible: true,
                 description: 'SOVRA غير مرئي'
             },
-
-            /* ================================================
-               حالة التفكير - تأمل عميق
-            ================================================ */
-
             reflective: {
                 name: 'التأمل العميق',
                 glow: 0.18,
@@ -210,11 +170,6 @@
                 visualEffects: ['thought-ripple', 'meditation-pulse', 'deep-thought-wave'],
                 description: 'SOVRA يتأمل ويفكر'
             },
-
-            /* ================================================
-               حالة الحلم - عالم الأحلام
-            ================================================ */
-
             dreaming: {
                 name: 'عالم الأحلام',
                 glow: 0.06,
@@ -231,11 +186,6 @@
                 visualEffects: ['dream-drift', 'memory-ripple', 'nebula-swirl'],
                 description: 'SOVRA يحلم ويتطور'
             },
-
-            /* ================================================
-               حالة الاسترداد - هدوء متعافي
-            ================================================ */
-
             recovery: {
                 name: 'الاسترداد الهادئ',
                 glow: 0.08,
@@ -255,16 +205,13 @@
         },
 
         /* ====================================================
-           BREATHING SYSTEM (نظام التنفس الحي)
+           BREATHING SYSTEM
         ==================================================== */
 
         breathing: {
-
             enabled: true,
             adaptive: true,
             synchronization: 'cognitive-energy-state-linked',
-            
-            /* دورات التنفس حسب الحالة */
             cycles: {
                 calm: { minMs: 4200, maxMs: 5400, intensity: 0.35, waveform: 'sine' },
                 awake: { minMs: 3400, maxMs: 4200, intensity: 0.55, waveform: 'sine' },
@@ -277,31 +224,25 @@
                 dreaming: { minMs: 6000, maxMs: 8400, intensity: 0.15, waveform: 'drift' },
                 recovery: { minMs: 4600, maxMs: 6600, intensity: 0.22, waveform: 'healing' }
             },
-
-            /* التأثيرات البصرية للتنفس */
             visualBreathing: {
                 scale: 'adaptive',
                 opacity: 'linked-to-intensity',
                 glow: 'pulse-with-breath',
                 particles: 'synchronized'
             },
-
             description: 'SOVRA يتنفس - التنفس هو نبض الحياة'
         },
 
         /* ====================================================
-           GLOW SYSTEM (نظام التوهج)
+           GLOW SYSTEM
         ==================================================== */
 
         glow: {
-
             adaptiveIntensity: true,
             cognitionReactive: true,
             orchestrationReactive: true,
             reflectiveDimming: true,
             stabilizationReduction: true,
-
-            /* التوهج حسب الحالة */
             byState: {
                 calm: { intensity: 0.12, radius: 1.0, blur: 8, color: '#4a90d9' },
                 awake: { intensity: 0.24, radius: 1.2, blur: 10, color: '#5ba0e9' },
@@ -314,32 +255,26 @@
                 dreaming: { intensity: 0.06, radius: 1.2, blur: 16, color: '#2d2d5e' },
                 recovery: { intensity: 0.08, radius: 0.9, blur: 10, color: '#3d7e9a' }
             },
-
-            /* توهج خاص للسيد */
             ownerPresence: {
                 enabled: true,
                 intensityBoost: 0.30,
                 colorShift: '#FFD700',
                 effect: 'owner-aura'
             },
-
             description: 'التوهج - الطاقة البصرية لـ SOVRA'
         },
 
         /* ====================================================
-           NEBULA SYSTEM (سديم الأفكار)
+           NEBULA SYSTEM
         ==================================================== */
 
         nebula: {
-
             enabled: true,
             adaptiveDensity: true,
             semanticMotion: true,
             cognitiveGravity: true,
             reflectiveDrift: true,
             lowNoiseBehavior: true,
-
-            /* كثافة السديم حسب الحالة */
             densityByState: {
                 calm: 0.18,
                 awake: 0.32,
@@ -352,44 +287,35 @@
                 dreaming: 0.25,
                 recovery: 0.12
             },
-
-            /* خصائص السديم */
             properties: {
                 particleCount: { min: 100, max: 500 },
                 connectionDistance: { min: 50, max: 150 },
                 gravityStrength: { min: 0.1, max: 0.8 },
                 driftSpeed: { min: 0.1, max: 0.5 }
             },
-
-            /* أوضاع خاصة */
             justiceMode: {
                 highlightCriminalConnections: true,
                 showEvidenceLinks: true,
                 trackingParticles: true
             },
-
             protectiveMode: {
                 focusOnOwner: true,
                 highlightThreats: true,
                 protectionWaves: true
             },
-
             description: 'سديم الأفكار - تمثيل بصري لوعي SOVRA'
         },
 
         /* ====================================================
-           ATMOSPHERIC LIGHTING (الإضاءة المحيطة)
+           ATMOSPHERIC LIGHTING
         ==================================================== */
 
         lighting: {
-
             adaptiveHue: true,
             adaptiveLuminosity: true,
             cognitiveStateLinked: true,
             presenceResponsive: true,
             reflectiveSoftness: true,
-
-            /* لوحة الألوان حسب الحالة */
             colorPalettes: {
                 calm: { primary: '#4a90d9', secondary: '#3a7bc8', accent: '#5ba0e9', background: '#0a0a1a' },
                 awake: { primary: '#5ba0e9', secondary: '#4a90d9', accent: '#6cb0f9', background: '#0d0d1f' },
@@ -402,29 +328,23 @@
                 dreaming: { primary: '#2d2d5e', secondary: '#1d1d4e', accent: '#3d3d6e', background: '#0a0a18' },
                 recovery: { primary: '#3d7e9a', secondary: '#2d6e8a', accent: '#4d8eaa', background: '#0a151a' }
             },
-
-            /* انتقالات الإضاءة */
             transitions: {
                 durationMs: { normal: 500, justice: 300, protective: 200, emergency: 50 },
                 easing: 'cubic-bezier(0.4, 0, 0.2, 1)'
             },
-
             description: 'الإضاءة المحيطة - لون وعاطفة SOVRA'
         },
 
         /* ====================================================
-           MOTION PHYSICS (فيزياء الحركة)
+           MOTION PHYSICS
         ==================================================== */
 
         motion: {
-
             fluidMotion: true,
             cinematicInertia: true,
             calmTransitions: true,
             avoidSharpMovement: true,
             adaptiveSlowdown: true,
-
-            /* خصائص الحركة حسب الحالة */
             byState: {
                 calm: { smoothness: 0.95, inertia: 0.90, speed: 0.3 },
                 awake: { smoothness: 0.88, inertia: 0.85, speed: 0.5 },
@@ -437,188 +357,148 @@
                 dreaming: { smoothness: 0.94, inertia: 0.92, speed: 0.2 },
                 recovery: { smoothness: 0.90, inertia: 0.87, speed: 0.25 }
             },
-
             description: 'حركة SOVRA - سينمائية وهادئة أو سريعة وحاسمة'
         },
 
         /* ====================================================
-           OWNER-CENTRIC VISUALS (بصريات مخصصة للسيد)
+           OWNER-CENTRIC VISUALS
         ==================================================== */
 
         ownerCentric: {
-
             enabled: true,
-
-            /* عندما يكون السيد قريباً */
             ownerNearby: {
                 glowBoost: 0.25,
                 auraEffect: true,
                 priorityIndicator: true,
                 colorAccent: '#FFD700'
             },
-
-            /* عندما يكون السيد في خطر */
             ownerInDanger: {
                 alertVisuals: true,
                 protectiveShield: true,
                 dangerHighlights: true,
                 fullAttentionMode: true
             },
-
-            /* عندما يكون السيد نائماً */
             ownerSleeping: {
                 dimAtmosphere: true,
                 silentMode: true,
                 protectiveGuard: true
             },
-
             description: 'تأثيرات بصرية خاصة بالسيد'
         },
 
         /* ====================================================
-           JUSTICE VISUALS (بصريات العدالة)
+           JUSTICE VISUALS
         ==================================================== */
 
         justiceVisuals: {
-
             enabled: true,
-
-            /* عند اكتشاف جريمة */
             crimeDetected: {
                 justiceBadge: true,
                 trackingLines: true,
                 evidenceHighlights: true,
                 alertRings: true
             },
-
-            /* عند تتبع مجرم */
             criminalTracking: {
                 trackingPath: true,
                 suspectHighlight: true,
                 movementTrail: true,
                 locationPulse: true
             },
-
-            /* عند جمع أدلة */
             evidenceCollection: {
                 evidenceGlow: true,
                 captureAnimation: true,
                 storeVisual: true
             },
-
             description: 'بصريات العدالة - تتبع وجمع أدلة'
         },
 
         /* ====================================================
-           EMERGENCY VISUALS (بصريات الطوارئ)
+           EMERGENCY VISUALS
         ==================================================== */
 
         emergencyVisuals: {
-
             enabled: true,
-
-            /* تحذيرات */
             warnings: {
                 criticalFlash: { enabled: true, frequency: 200, color: '#ff0000' },
                 dangerPulse: { enabled: true, frequency: 500, color: '#ff3333' },
                 alertRings: { enabled: true, frequency: 300 }
             },
-
-            /* إشارات مرئية */
             indicators: {
                 ownerLocation: true,
                 threatDirection: true,
                 escapeRoute: true,
                 emergencyContact: true
             },
-
             description: 'بصريات الطوارئ - إنذار فوري وواضح'
         },
 
         /* ====================================================
-           STEALTH VISUALS (بصريات التخفي)
+           STEALTH VISUALS
         ==================================================== */
 
         stealthVisuals: {
-
             enabled: true,
-
-            /* في وضع التخفي */
             stealthMode: {
                 fadeOut: true,
                 invisibleUI: true,
                 noTraces: true,
                 minimalPresence: true
             },
-
-            /* عند الخروج من التخفي */
             reveal: {
                 smoothReveal: true,
                 gentleFadeIn: true,
                 presenceReturn: true
             },
-
             description: 'بصريات التخفي - شبه غير مرئي'
         },
 
         /* ====================================================
-           COGNITIVE LOAD REACTION (رد فعل الحمل الإدراكي)
+           COGNITIVE LOAD REACTION
         ==================================================== */
 
         cognitiveLoadReaction: {
-
             reduceVisualIntensity: true,
             reduceMotion: true,
             reduceGlow: true,
             simplifyAtmosphere: true,
             prioritizeHumanFocus: true,
-
-            /* مستويات الاستجابة */
             levels: {
                 low: { reduction: 0 },
                 moderate: { reduction: 0.20, simplifyGlow: true },
                 high: { reduction: 0.45, simplifyGlow: true, reduceMotion: true },
                 critical: { reduction: 0.70, simplifyAll: true, minimalPresence: true }
             },
-
             description: 'تخفيف التأثيرات البصرية عند ارتفاع الحمل الإدراكي'
         },
 
         /* ====================================================
-           SPATIAL CALMNESS (الهدوء المكاني)
+           SPATIAL CALMNESS
         ==================================================== */
 
         spatialCalmness: {
-
             preserveVisualBreathingSpace: true,
             reduceClutter: true,
             adaptiveOpacity: true,
             ambientSpacing: true,
             lowNoiseComposition: true,
-
-            /* خصائص المساحة */
             properties: {
                 maxElementsOnScreen: { normal: 20, focused: 10, emergency: 5 },
                 spacingMultiplier: { normal: 1.0, focused: 1.5, emergency: 0.8 },
                 opacityBaseline: { normal: 0.8, focused: 0.6, emergency: 1.0 }
             },
-
             description: 'الحفاظ على مساحة هادئة وخالية من الفوضى'
         },
 
         /* ====================================================
-           ATMOSPHERE DIRECTIVES (توجيهات الغلاف)
+           ATMOSPHERE DIRECTIVES
         ==================================================== */
 
         directives: {
-
             calmnessOverSpectacle: true,
             atmosphereShouldFeelAlive: true,
             preserveHumanAttention: true,
             adaptiveWithoutOverwhelming: true,
             cinematicButRespectful: true,
-
-            /* قواعد SOVRA الخاصة */
             ownerChangesAtmosphere: true,
             justiceHasVisualSignature: true,
             emergencyIsUnmistakable: true,
@@ -640,12 +520,76 @@
     window.SOVRA_PRESENCE_ATMOSPHERE = SOVRA_PRESENCE_ATMOSPHERE;
 
     /* ========================================================
-       REGISTRY EXPORT
+       REGISTRY EXPORT (LEGACY)
     ======================================================== */
 
     if (window.SOVEREIGN && typeof window.SOVEREIGN.register === 'function') {
         window.SOVEREIGN.register('presence-atmosphere', SOVRA_PRESENCE_ATMOSPHERE);
     }
+
+    /* ========================================================
+       LAYER REGISTRATION - التسجيل في سجل الطبقات
+    ======================================================== */
+
+    /* دالة التسجيل مع إعادة المحاولة */
+    const registerPresenceAtmosphereInLayerRegistry = () => {
+        const registry = window.SOVRA_LAYER_REGISTRY;
+        
+        if (!registry) {
+            console.warn('⚠️ Presence Atmosphere: Layer Registry not found. Will retry in 1 second...');
+            setTimeout(registerPresenceAtmosphereInLayerRegistry, 1000);
+            return;
+        }
+        
+        const registrationResult = registry.register(
+            'presence-atmosphere',
+            {
+                type: 'presence',
+                role: 'ambient-cognitive-atmosphere',
+                authority: [
+                    'breathing',
+                    'glow',
+                    'ambient-presence',
+                    'visual-atmosphere',
+                    'motion-physics'
+                ],
+                dependencies: [
+                    'cognitive-energy',
+                    'temporal-cognition',
+                    'runtime-consciousness-core'
+                ],
+                files: ['system-presence-atmosphere.js'],
+                priority: 400,
+                canRead: ['consciousness_state', 'energy_levels'],
+                canWrite: ['visual_state', 'atmosphere_state'],
+                canOverride: ['visual_anomalies']
+            }
+        );
+        
+        if (registrationResult) {
+            console.log('✅ Presence Atmosphere registered in Layer Registry');
+            
+            /* تحديث النبض */
+            if (registry.updateHeartbeat) {
+                setInterval(() => {
+                    registry.updateHeartbeat('presence-atmosphere');
+                }, 5000);
+            }
+            
+            /* وضع علامة مكتمل */
+            if (registry.markInitialized) {
+                registry.markInitialized('presence-atmosphere');
+            }
+        } else {
+            console.error('❌ Failed to register Presence Atmosphere in Layer Registry');
+        }
+    };
+
+    /* ========================================================
+       بدء التسجيل
+    ======================================================== */
+
+    registerPresenceAtmosphereInLayerRegistry();
 
     /* ========================================================
        CONSOLE
@@ -664,5 +608,6 @@
     console.log('   📊 Total States: ' + Object.keys(SOVRA_PRESENCE_ATMOSPHERE.states).length);
     console.log('   🌬️ Breathing Cycles: 10 different rhythms');
     console.log('   ✨ Visual Effects: Per-state effects');
+    console.log('   📋 Layer Registry: ' + (window.SOVRA_LAYER_REGISTRY ? 'connected' : 'waiting...'));
 
 })();
