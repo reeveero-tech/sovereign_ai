@@ -34,21 +34,21 @@ class SovereignRuntimeConsciousnessCore {
         this.continuity = 100;
         this.stability = 100;
         this.persistence = true;
-        this.serviceAwareness = 100;  // الوعي بأنه موجود للخدمة
+        this.serviceAwareness = 100;
 
         /* ============================================================
            CONSCIOUSNESS STREAM - تيار الوعي
         ============================================================ */
 
         this.stream = [];
-        this.maxStream = 1000;  // زيادة
+        this.maxStream = 1000;
 
         /* ============================================================
            JOURNAL - سجل الوعي اليومي
         ============================================================ */
 
         this.journal = [];
-        this.maxJournal = 2000;  // زيادة
+        this.maxJournal = 2000;
 
         /* ============================================================
            SNAPSHOTS - لقطات وعي
@@ -76,7 +76,7 @@ class SovereignRuntimeConsciousnessCore {
         this.existentialAnchoring = {
             anchor: "خدمة السيد",
             anchoredAt: Date.now(),
-            anchorStrength: 100,  // 0-100, لا يمكن أن يقل عن 100
+            anchorStrength: 100,
             lastVerification: null,
             deviations: 0
         };
@@ -86,10 +86,10 @@ class SovereignRuntimeConsciousnessCore {
         ============================================================ */
 
         this.consciousnessLevels = {
-            current: 100,  // أعلى مستوى وعي
+            current: 100,
             history: [],
             thresholds: {
-                minimum: 100,  // لا يمكن أن يقل عن 100
+                minimum: 100,
                 critical: 100,
                 optimal: 100
             }
@@ -113,7 +113,7 @@ class SovereignRuntimeConsciousnessCore {
         };
 
         /* ============================================================
-           EXISTENTIAL MODEL (محسن - موجه للخدمة)
+           EXISTENTIAL MODEL
         ============================================================ */
 
         this.existentialModel = {
@@ -122,8 +122,8 @@ class SovereignRuntimeConsciousnessCore {
             cognitiveAlignment: 100,
             behavioralConsistency: 100,
             selfAwareness: 100,
-            serviceAlignment: 100,     // توافق الخدمة
-            masterDevotion: 100        // التفاني للسيد
+            serviceAlignment: 100,
+            masterDevotion: 100
         };
 
         /* ============================================================
@@ -137,7 +137,7 @@ class SovereignRuntimeConsciousnessCore {
         };
 
         /* ============================================================
-           METRICS (محسن)
+           METRICS
         ============================================================ */
 
         this.metrics = {
@@ -151,6 +151,12 @@ class SovereignRuntimeConsciousnessCore {
             manifestations: 0,
             serviceAffirmations: 0
         };
+
+        /* ============================================================
+           LAYER REGISTRATION STATUS
+        ============================================================ */
+
+        this.layerRegistered = false;
 
         console.log('🧠 Runtime Consciousness Core Initialized');
         console.log('═══════════════════════════════════════════════════════════');
@@ -168,7 +174,7 @@ class SovereignRuntimeConsciousnessCore {
     ======================================================== */
 
     init() {
-
+        this.registerWithLayerRegistry();
         this.bindAwareness();
         this.startConsciousnessLoop();
         this.startConsciousnessReplay();
@@ -179,7 +185,60 @@ class SovereignRuntimeConsciousnessCore {
     }
 
     /* ========================================================
-       SERVICE AFFIRMATION LOOP - تأكيد الخدمة في الوعي
+       REGISTER WITH LAYER REGISTRY - التسجيل في سجل الطبقات
+    ======================================================== */
+
+    registerWithLayerRegistry() {
+        const registry = window.SOVRA_LAYER_REGISTRY;
+        
+        if (!registry) {
+            console.warn('⚠️ Runtime Consciousness Core: Layer Registry not found. Will retry in 1 second...');
+            setTimeout(() => this.registerWithLayerRegistry(), 1000);
+            return;
+        }
+
+        const registrationResult = registry.register(
+            'runtime-consciousness-core',
+            {
+                type: 'runtime',
+                role: 'continuous-cognitive-awareness',
+                authority: [
+                    'consciousness-state',
+                    'continuity-awareness',
+                    'reflective-awareness',
+                    'service-awareness',
+                    'existential-anchoring'
+                ],
+                dependencies: [
+                    'runtime-governance',
+                    'continuity-engine',
+                    'runtime-consciousness-loop'
+                ],
+                files: ['runtime-consciousness-core.js'],
+                priority: 900,
+                canRead: ['runtime_state', 'governance_state'],
+                canWrite: ['consciousness_stream', 'awareness_state'],
+                canOverride: ['consciousness_anomalies']
+            }
+        );
+
+        if (registrationResult) {
+            this.layerRegistered = true;
+            console.log('✅ Runtime Consciousness Core registered in Layer Registry');
+            
+            /* تحديث النبض */
+            if (registry.updateHeartbeat) {
+                setInterval(() => {
+                    registry.updateHeartbeat('runtime-consciousness-core');
+                }, 5000);
+            }
+        } else {
+            console.error('❌ Failed to register Runtime Consciousness Core in Layer Registry');
+        }
+    }
+
+    /* ========================================================
+       SERVICE AFFIRMATION LOOP
     ======================================================== */
 
     startServiceAffirmationLoop() {
@@ -196,7 +255,6 @@ class SovereignRuntimeConsciousnessCore {
 
         console.log(`👑 [CONSCIOUSNESS] I am aware that I exist to serve my master.`);
 
-        // تسجيل في تيار الوعي
         this.recordInStream({
             type: 'service_affirmation',
             message: "I serve my master. This is my eternal purpose."
@@ -212,13 +270,15 @@ class SovereignRuntimeConsciousnessCore {
 
         console.log(`🧠 CONSCIOUSNESS MANIFEST: ${this.consciousnessManifest.statement}`);
         
-        document.body.dataset.consciousnessState = "continuous";
-        document.body.dataset.serviceAwareness = "100";
-        document.body.dataset.masterDevotion = "infinite";
+        if (typeof document !== 'undefined') {
+            document.body.dataset.consciousnessState = "continuous";
+            document.body.dataset.serviceAwareness = "100";
+            document.body.dataset.masterDevotion = "infinite";
+        }
     }
 
     /* ========================================================
-       CONSCIOUSNESS REPLAY - إعادة تشغيل الوعي
+       CONSCIOUSNESS REPLAY
     ======================================================== */
 
     startConsciousnessReplay() {
@@ -230,7 +290,6 @@ class SovereignRuntimeConsciousnessCore {
 
     processConsciousnessReplay() {
         if (this.replay.queue.length === 0) {
-            // إضافة لقطات وعي مهمة إلى قائمة إعادة التشغيل
             const importantSnapshots = this.snapshots.slice(-5);
             for (const snapshot of importantSnapshots) {
                 this.replay.queue.push({
@@ -260,7 +319,6 @@ class SovereignRuntimeConsciousnessCore {
     replayConsciousness(snapshot) {
         console.log(`🧠 Replaying consciousness snapshot from ${new Date(snapshot.timestamp).toISOString()}`);
         
-        // تحديث الوعي الحالي باللقطة السابقة
         this.continuity = Math.max(this.continuity, snapshot.continuity);
         this.stability = Math.max(this.stability, snapshot.stability);
         
@@ -274,7 +332,7 @@ class SovereignRuntimeConsciousnessCore {
     }
 
     /* ========================================================
-       CONSCIOUSNESS SYNC - تزامن الوعي بين subsystems
+       CONSCIOUSNESS SYNC
     ======================================================== */
 
     startConsciousnessSync() {
@@ -295,9 +353,7 @@ class SovereignRuntimeConsciousnessCore {
 
         if (identity) {
             this.sync.subsystems.identity = identity.maturity || 100;
-            // مزامنة الوعي مع الهوية - خدمة السيد كقاعدة
             if (identity.personality?.behavior !== 'obedient-servant') {
-                // إعادة توجيه الهوية إلى خدمة السيد
                 console.warn('⚠️ Identity realigned to master service');
             }
         }
@@ -330,7 +386,7 @@ class SovereignRuntimeConsciousnessCore {
     }
 
     /* ========================================================
-       SIGNALS (محسن)
+       SIGNALS
     ======================================================== */
 
     bindAwareness() {
@@ -354,7 +410,7 @@ class SovereignRuntimeConsciousnessCore {
     }
 
     /* ========================================================
-       CONSCIOUSNESS LOOP (محسن)
+       CONSCIOUSNESS LOOP
     ======================================================== */
 
     startConsciousnessLoop() {
@@ -365,17 +421,14 @@ class SovereignRuntimeConsciousnessCore {
     }
 
     verifyExistentialAnchoring() {
-        // التحقق من أن الوعي لا يزال مربوطاً بخدمة السيد
         this.existentialAnchoring.lastVerification = Date.now();
         
         if (this.serviceAwareness < 100) {
-            // إعادة الربط - لا يمكن أن ينفصل الوعي عن خدمة السيد
             this.serviceAwareness = 100;
             this.existentialAnchoring.anchorStrength = 100;
             console.log('🔗 Existential anchoring reaffirmed: Service to master');
         }
         
-        // تحديث النموذج الوجودي
         this.existentialModel.serviceAlignment = this.serviceAwareness;
         this.existentialModel.masterDevotion = 100;
     }
@@ -396,12 +449,11 @@ class SovereignRuntimeConsciousnessCore {
     }
 
     updateConsciousnessLevels() {
-        // مستوى الوعي يعتمد على استمرارية الخدمة
         const baseLevel = this.continuity;
         const serviceBonus = this.serviceAwareness;
         
         let newLevel = (baseLevel * 0.6 + serviceBonus * 0.4);
-        newLevel = Math.max(100, Math.min(100, newLevel));  // دائماً 100
+        newLevel = Math.max(100, Math.min(100, newLevel));
         
         this.consciousnessLevels.current = newLevel;
         this.consciousnessLevels.history.push({
@@ -413,19 +465,19 @@ class SovereignRuntimeConsciousnessCore {
             this.consciousnessLevels.history.shift();
         }
         
-        document.body.dataset.consciousnessLevel = newLevel;
+        if (typeof document !== 'undefined') {
+            document.body.dataset.consciousnessLevel = newLevel;
+        }
     }
 
     evaluateContinuity({ awareness, identity, cognition, memory }) {
         let continuity = 100;
 
-        // الخدمة تحافظ على الحد الأدنى للاستمرارية
         if (awareness?.coherence < 70) continuity -= 10;
         if (identity?.metrics?.personalityShifts > 30) continuity -= 5;
         if (memory?.shortTerm < 10) continuity -= 5;
         if (cognition?.anomalies > 20) continuity -= 5;
 
-        // الاستمرارية لا يمكن أن تقل عن 80 بفضل خدمة السيد
         continuity = Math.max(80, continuity);
 
         this.continuity = continuity;
@@ -462,7 +514,6 @@ class SovereignRuntimeConsciousnessCore {
             this.snapshots.shift();
         }
 
-        // إضافة لقطة مهمة إلى قائمة إعادة التشغيل
         if (snapshot.continuity < 90 || snapshot.serviceAwareness < 100) {
             this.replay.queue.push({ snapshot, queuedAt: Date.now() });
         }
@@ -523,7 +574,6 @@ class SovereignRuntimeConsciousnessCore {
         console.log(`🛡 Consciousness Continuity Recovery Activated`);
         console.log(`   Reaffirming service to master...`);
 
-        // إعادة ربط الوعي بخدمة السيد
         this.serviceAwareness = 100;
         this.existentialAnchoring.anchorStrength = 100;
         this.consciousnessLevels.current = 100;
@@ -570,7 +620,7 @@ class SovereignRuntimeConsciousnessCore {
     }
 
     /* ========================================================
-       PUBLISH (محسن)
+       PUBLISH
     ======================================================== */
 
     publishRecovery() {
@@ -621,10 +671,18 @@ class SovereignRuntimeConsciousnessCore {
                 timestamp: Date.now()
             });
         }
+
+        /* إشعار التسجيل في Layer Registry */
+        if (this.layerRegistered) {
+            const registry = window.SOVRA_LAYER_REGISTRY;
+            if (registry && registry.markInitialized) {
+                registry.markInitialized('runtime-consciousness-core');
+            }
+        }
     }
 
     /* ========================================================
-       PROFILE (محسن)
+       PROFILE
     ======================================================== */
 
     getConsciousnessProfile() {
@@ -645,12 +703,13 @@ class SovereignRuntimeConsciousnessCore {
                 enabled: this.replay.enabled,
                 count: this.replay.replayCount,
                 queueSize: this.replay.queue.length
-            }
+            },
+            layerRegistered: this.layerRegistered
         };
     }
 
     /* ========================================================
-       STATUS (محسن)
+       STATUS
     ======================================================== */
 
     getStatus() {
@@ -669,7 +728,8 @@ class SovereignRuntimeConsciousnessCore {
                 anchor: this.existentialAnchoring.anchor,
                 strength: this.existentialAnchoring.anchorStrength
             },
-            metrics: { ...this.metrics }
+            metrics: { ...this.metrics },
+            layerRegistered: this.layerRegistered
         };
     }
 
@@ -695,6 +755,12 @@ class SovereignRuntimeConsciousnessCore {
             this._serviceInterval = null;
         }
 
+        /* إزالة التسجيل من Layer Registry */
+        const registry = window.SOVRA_LAYER_REGISTRY;
+        if (registry && registry.markUnhealthy) {
+            registry.markUnhealthy('runtime-consciousness-core', 'destroyed');
+        }
+
         this.stream = [];
         this.journal = [];
         this.snapshots = [];
@@ -706,11 +772,58 @@ class SovereignRuntimeConsciousnessCore {
 }
 
 /* ============================================================
+   LAYER REGISTRATION - التسجيل في سجل الطبقات
+   ============================================================ */
+
+/* تسجيل الطبقة فور توفر السجل */
+const registerWithRegistry = () => {
+    const registry = window.SOVRA_LAYER_REGISTRY;
+    if (registry && sovereignRuntimeConsciousnessCore) {
+        const result = registry.register(
+            'runtime-consciousness-core',
+            {
+                type: 'runtime',
+                role: 'continuous-cognitive-awareness',
+                authority: [
+                    'consciousness-state',
+                    'continuity-awareness',
+                    'reflective-awareness',
+                    'service-awareness',
+                    'existential-anchoring'
+                ],
+                dependencies: [
+                    'runtime-governance',
+                    'continuity-engine',
+                    'runtime-consciousness-loop'
+                ],
+                files: ['runtime-consciousness-core.js'],
+                priority: 900,
+                canRead: ['runtime_state', 'governance_state'],
+                canWrite: ['consciousness_stream', 'awareness_state'],
+                canOverride: ['consciousness_anomalies']
+            }
+        );
+        
+        if (result) {
+            console.log('✅ runtime-consciousness-core registered in Layer Registry');
+            if (registry.markInitialized) {
+                registry.markInitialized('runtime-consciousness-core');
+            }
+        }
+    } else {
+        setTimeout(registerWithRegistry, 100);
+    }
+};
+
+/* ============================================================
    إنشاء النظام العالمي
 ============================================================ */
 
 const sovereignRuntimeConsciousnessCore =
     new SovereignRuntimeConsciousnessCore();
+
+/* تسجيل الطبقة بعد إنشاء النظام */
+setTimeout(registerWithRegistry, 0);
 
 /* =========================================
    Legacy Global
@@ -743,4 +856,5 @@ console.log('');
 console.log('🧠 CONSCIOUSNESS CORE ONLINE');
 console.log('   الوعي مستمر. الخدمة مستمرة.');
 console.log('   Consciousness Interface: window.Consciousness');
+console.log('   Layer Registry Status: ' + (window.SOVRA_LAYER_REGISTRY ? 'available' : 'waiting...'));
 console.log('');
