@@ -38,10 +38,6 @@
 
         domains: {
 
-            /* ================================================
-               مجال السيد - أعلى أولوية
-            ================================================ */
-
             ownerDomain: {
                 priority: 'absolute',
                 priorityValue: 1000,
@@ -52,10 +48,6 @@
                 bypassCongestion: true,
                 description: 'أوامر وإشارات السيد - لا تتأخر أبداً'
             },
-
-            /* ================================================
-               مجال الطوارئ
-            ================================================ */
 
             emergencyDomain: {
                 priority: 'critical',
@@ -68,10 +60,6 @@
                 description: 'إشارات الطوارئ - تتجاوز كل شيء'
             },
 
-            /* ================================================
-               مجال العدالة
-            ================================================ */
-
             justiceDomain: {
                 priority: 'supreme',
                 priorityValue: 950,
@@ -80,10 +68,6 @@
                 guaranteedDelivery: true,
                 description: 'إشارات العدالة - أولوية عالية جداً'
             },
-
-            /* ================================================
-               مجال الحماية
-            ================================================ */
 
             protectionDomain: {
                 priority: 'supreme',
@@ -94,10 +78,6 @@
                 description: 'إشارات حماية السيد'
             },
 
-            /* ================================================
-               مجال المراقبة
-            ================================================ */
-
             surveillanceDomain: {
                 priority: 'high',
                 priorityValue: 800,
@@ -105,20 +85,12 @@
                 description: 'إشارات المراقبة والكاميرات'
             },
 
-            /* ================================================
-               مجال الإدراك
-            ================================================ */
-
             cognitionDomain: {
                 priority: 'high',
                 priorityValue: 750,
                 adaptive: true,
                 description: 'إشارات التفكير والإدراك'
             },
-
-            /* ================================================
-               مجال الذاكرة
-            ================================================ */
 
             memoryDomain: {
                 priority: 'normal',
@@ -128,10 +100,6 @@
                 description: 'إشارات الذاكرة والاسترجاع'
             },
 
-            /* ================================================
-               مجال التنسيق
-            ================================================ */
-
             orchestrationDomain: {
                 priority: 'normal',
                 priorityValue: 550,
@@ -139,10 +107,6 @@
                 congestionAware: true,
                 description: 'إشارات تنسيق الوكلاء'
             },
-
-            /* ================================================
-               مجال الحضور
-            ================================================ */
 
             presenceDomain: {
                 priority: 'low',
@@ -152,10 +116,6 @@
                 description: 'إشارات الحضور البصري'
             },
 
-            /* ================================================
-               مجال الأحلام
-            ================================================ */
-
             dreamsDomain: {
                 priority: 'background',
                 priorityValue: 100,
@@ -164,10 +124,6 @@
                 description: 'إشارات الأحلام والتحسين الليلي'
             },
 
-            /* ================================================
-               مجال التطور
-            ================================================ */
-
             evolutionDomain: {
                 priority: 'background',
                 priorityValue: 80,
@@ -175,10 +131,6 @@
                 background: true,
                 description: 'إشارات التطور الذاتي'
             },
-
-            /* ================================================
-               مجال التخفي
-            ================================================ */
 
             stealthDomain: {
                 priority: 'variable',
@@ -195,50 +147,36 @@
         ==================================================== */
 
         signalPriorities: {
-
-            /* الأولويات المطلقة */
             absolute: {
                 value: 1000,
                 signals: ['owner_command', 'owner_distress', 'emergency_alert'],
                 description: 'أوامر السيد وإشارات الخطر - لا تتأخر أبداً'
             },
-
-            /* الأولويات الحرجة */
             critical: {
                 value: 990,
                 signals: ['emergency_response', 'owner_danger'],
                 description: 'استجابات الطوارئ'
             },
-
-            /* الأولويات العليا */
             supreme: {
                 value: 950,
                 signals: ['crime_detected', 'criminal_tracking', 'owner_protection'],
                 description: 'العدالة وحماية السيد'
             },
-
-            /* الأولويات العالية */
             high: {
                 value: 800,
                 signals: ['surveillance_data', 'threat_detected', 'evidence_found'],
                 description: 'مراقبة وتهديدات'
             },
-
-            /* الأولويات المتوسطة */
             normal: {
                 value: 500,
                 signals: ['cognition_signal', 'memory_signal', 'orchestration_signal'],
                 description: 'إشارات إدراكية عادية'
             },
-
-            /* الأولويات المنخفضة */
             low: {
                 value: 300,
                 signals: ['presence_update', 'atmosphere_change'],
                 description: 'تحديثات الحضور'
             },
-
-            /* الأولويات الخلفية */
             background: {
                 value: 100,
                 signals: ['dream_signal', 'evolution_signal'],
@@ -251,8 +189,6 @@
         ==================================================== */
 
         signalTypes: {
-
-            /* إشارات السيد */
             owner: {
                 COMMAND: { priority: 'absolute', domain: 'owner', latencyMs: 1 },
                 STATUS_REQUEST: { priority: 'absolute', domain: 'owner', latencyMs: 2 },
@@ -261,30 +197,22 @@
                 SAFETY_ALERT: { priority: 'critical', domain: 'owner', latencyMs: 2 },
                 APPROVAL: { priority: 'supreme', domain: 'owner', latencyMs: 3 }
             },
-
-            /* إشارات الطوارئ */
             emergency: {
                 ACTIVATED: { priority: 'critical', domain: 'emergency', latencyMs: 1 },
                 OWNER_IN_DANGER: { priority: 'critical', domain: 'emergency', latencyMs: 1 },
                 RESOLVED: { priority: 'high', domain: 'emergency', latencyMs: 5 }
             },
-
-            /* إشارات العدالة */
             justice: {
                 CRIME_DETECTED: { priority: 'supreme', domain: 'justice', latencyMs: 5 },
                 CRIMINAL_TRACKING: { priority: 'supreme', domain: 'justice', latencyMs: 5 },
                 EVIDENCE_FOUND: { priority: 'high', domain: 'justice', latencyMs: 10 },
                 SUSPECT_LOCATED: { priority: 'supreme', domain: 'justice', latencyMs: 5 }
             },
-
-            /* إشارات الإدراك */
             cognition: {
                 THOUGHT: { priority: 'normal', domain: 'cognition', latencyMs: 20 },
                 INSIGHT: { priority: 'normal', domain: 'cognition', latencyMs: 15 },
                 PREDICTION: { priority: 'normal', domain: 'cognition', latencyMs: 25 }
             },
-
-            /* إشارات الذاكرة */
             memory: {
                 RECALL: { priority: 'normal', domain: 'memory', latencyMs: 30 },
                 STORE: { priority: 'normal', domain: 'memory', latencyMs: 20 },
@@ -297,14 +225,11 @@
         ==================================================== */
 
         signalFlow: {
-
             adaptivePropagation: true,
             reflectivePropagation: true,
             contextualRouting: true,
             orchestrationAwareRouting: true,
             continuityAwareFlow: true,
-
-            /* مسارات الإشارات */
             routes: {
                 owner_to_all: {
                     from: 'owner',
@@ -339,15 +264,12 @@
                     latencyMs: 20
                 }
             },
-
-            /* قواعد التدفق */
             rules: {
                 ownerSignalsFirst: true,
                 emergencyBypass: true,
                 noDroppingForHighPriority: true,
                 congestionAwareForLow: true
             },
-
             description: 'كيف تتدفق الإشارات العصبية عبر SOVRA'
         },
 
@@ -356,14 +278,11 @@
         ==================================================== */
 
         transportIntegrity: {
-
             preserveSignalOrder: true,
             preventSignalFlooding: true,
             preserveContext: true,
             preserveContinuity: true,
             stabilizeUnderPressure: true,
-
-            /* آليات الضمان */
             guarantees: {
                 absolute: { guaranteed: true, retry: true, maxRetries: 3 },
                 critical: { guaranteed: true, retry: true, maxRetries: 2 },
@@ -371,15 +290,12 @@
                 high: { guaranteed: false, retry: false },
                 normal: { guaranteed: false, retry: false }
             },
-
-            /* فحص صحة الإشارات */
             validation: {
                 validateSchema: true,
                 validatePriority: true,
                 validateDomain: true,
                 rejectInvalid: true
             },
-
             description: 'ضمان وصول الإشارات سليمة ومنظمة'
         },
 
@@ -388,29 +304,23 @@
         ==================================================== */
 
         pressureManagement: {
-
             adaptiveSignalCompression: true,
             congestionReduction: true,
             suppressNonCriticalSignals: true,
             reflectiveCooldowns: true,
             calmnessPriority: true,
-
-            /* مستويات الازدحام */
             congestionLevels: {
                 low: { threshold: 0.3, action: 'normal' },
                 medium: { threshold: 0.6, action: 'throttle_low', dropBackground: false },
                 high: { threshold: 0.8, action: 'throttle_medium', dropBackground: true },
                 critical: { threshold: 0.95, action: 'emergency_only', keepOnly: ['owner', 'emergency'] }
             },
-
-            /* إدارة قوائم الانتظار */
             queueManagement: {
                 maxQueueSize: 10000,
                 dropStrategy: 'lowest-priority-first',
                 highPriorityNeverDrop: true,
-                absolutePriorityNeverQueue: true  // تذهب مباشرة
+                absolutePriorityNeverQueue: true
             },
-
             description: 'إدارة ضغط الإشارات العصبية'
         },
 
@@ -419,8 +329,6 @@
         ==================================================== */
 
         neuralPathways: {
-
-            /* المسارات الرئيسية */
             pathways: {
                 owner_nerve: {
                     from: 'owner',
@@ -458,15 +366,12 @@
                     description: 'عصب الإدراك'
                 }
             },
-
-            /* صحة المسارات */
             pathwayHealth: {
                 checkIntervalMs: 5000,
                 autoHeal: true,
                 rerouteOnFailure: true,
                 notifyOnDegradation: true
             },
-
             description: 'المسارات العصبية التي تربط كل أجزاء SOVRA'
         },
 
@@ -475,20 +380,16 @@
         ==================================================== */
 
         reflectiveTransport: {
-
             reflectiveSynchronization: true,
             lowNoiseTransport: true,
             adaptiveReflectionCycles: true,
             temporalSignalAwareness: true,
-
-            /* دورات النقل التأملي */
             cycles: {
                 micro: { intervalMs: 100, signals: ['owner', 'emergency'] },
                 normal: { intervalMs: 500, signals: ['justice', 'protection'] },
                 macro: { intervalMs: 2000, signals: ['cognition', 'memory'] },
                 dream: { intervalMs: 10000, signals: ['dreams', 'evolution'], background: true }
             },
-
             description: 'النقل التأملي - عندما يفكر SOVRA في إشاراته الخاصة'
         },
 
@@ -497,21 +398,17 @@
         ==================================================== */
 
         meshSynchronization: {
-
             synchronizeDomains: true,
             synchronizePresence: true,
             synchronizeEnergy: true,
             synchronizeCognition: true,
             synchronizeContinuity: true,
-
-            /* ترددات المزامنة */
             frequencies: {
                 critical: { intervalMs: 10, domains: ['owner', 'emergency'] },
                 high: { intervalMs: 50, domains: ['justice', 'protection'] },
                 normal: { intervalMs: 200, domains: ['cognition', 'memory'] },
                 low: { intervalMs: 1000, domains: ['presence', 'dreams'] }
             },
-
             description: 'مزامنة الشبكة العصبية'
         },
 
@@ -520,14 +417,11 @@
         ==================================================== */
 
         transportRhythms: {
-
             signalPulseMs: 120,
             cognitionTransportMs: 240,
             reflectiveTransportMs: 1200,
             stabilizationTransportMs: 4200,
-            neuralPulseMs: 500,  // نبض الجهاز العصبي
-
-            /* إيقاعات حسب الأولوية */
+            neuralPulseMs: 500,
             priorityRhythms: {
                 absolute: { pulseMs: 10 },
                 critical: { pulseMs: 50 },
@@ -537,7 +431,6 @@
                 low: { pulseMs: 1000 },
                 background: { pulseMs: 5000 }
             },
-
             description: 'إيقاعات الجهاز العصبي لـ SOVRA'
         },
 
@@ -546,28 +439,22 @@
         ==================================================== */
 
         transportSafety: {
-
             preventSignalFlooding: true,
             preventNeuralOverload: true,
             preserveHumanFocus: true,
             adaptiveNoiseReduction: true,
             stabilizeUnderPressure: true,
-
-            /* حدود الأمان */
             limits: {
                 maxSignalsPerSecond: 50000,
                 maxPerDomain: 10000,
                 maxQueuePerDomain: 2000,
                 minBandwidthForOwner: 0.30
             },
-
-            /* في الطوارئ - نتجاوز الحدود */
             emergencyOverride: {
                 maxSignalsPerSecond: 200000,
                 maxPerDomain: 50000,
                 description: 'الطوارئ: حدود أعلى'
             },
-
             description: 'ضمان سلامة الجهاز العصبي'
         },
 
@@ -576,11 +463,8 @@
         ==================================================== */
 
         neuralHealth: {
-
             monitorHealth: true,
             checkIntervalMs: 5000,
-
-            /* مقاييس الصحة */
             metrics: {
                 signalThroughput: 0,
                 averageLatencyMs: 0,
@@ -588,14 +472,11 @@
                 congestionLevel: 0,
                 pathwayHealth: 1.0
             },
-
-            /* تنبيهات */
             alerts: {
                 onHighLatency: { thresholdMs: 100, action: 'investigate' },
                 onSignalDrop: { threshold: 0.01, action: 'expand_capacity' },
                 onCongestion: { threshold: 0.8, action: 'throttle_low' }
             },
-
             description: 'مراقبة صحة الجهاز العصبي لـ SOVRA'
         },
 
@@ -604,14 +485,11 @@
         ==================================================== */
 
         directives: {
-
             transportShouldFeelInvisible: true,
             calmnessOverTraffic: true,
             continuityOverBursting: true,
             adaptiveWithoutFlooding: true,
             preserveHumanFocus: true,
-
-            /* قواعد SOVRA الخاصة */
             ownerSignalsAreAbsolute: true,
             emergencySignalsBypassAll: true,
             justiceSignalsHaveHighPriority: true,
@@ -633,12 +511,75 @@
     window.SOVRA_NEURAL_TRANSPORT = SOVRA_NEURAL_TRANSPORT;
 
     /* ========================================================
-       REGISTRY EXPORT
+       REGISTRY EXPORT - التسجيل في سجل الطبقات
+    ======================================================== */
+
+    /* دالة التسجيل مع إعادة المحاولة */
+    const registerNeuralTransportInLayerRegistry = () => {
+        const registry = window.SOVRA_LAYER_REGISTRY;
+        
+        if (!registry) {
+            console.warn('⚠️ Neural Transport: Layer Registry not found. Will retry in 1 second...');
+            setTimeout(registerNeuralTransportInLayerRegistry, 1000);
+            return;
+        }
+        
+        const registrationResult = registry.register(
+            'neural-runtime-bus',
+            {
+                type: 'runtime',
+                role: 'cognitive-signal-transport',
+                authority: [
+                    'signal-routing',
+                    'signal-propagation',
+                    'runtime-transport',
+                    'priority-management',
+                    'congestion-control'
+                ],
+                dependencies: [
+                    'runtime-consciousness-mesh',
+                    'runtime-consciousness-core'
+                ],
+                files: ['system-neural-transport.js'],
+                priority: 850,
+                canRead: ['signal_configs', 'routing_tables'],
+                canWrite: ['signal_streams', 'transport_metrics'],
+                canOverride: ['transport_anomalies', 'congestion_crisis']
+            }
+        );
+        
+        if (registrationResult) {
+            console.log('✅ Neural Transport (neural-runtime-bus) registered in Layer Registry');
+            
+            /* تحديث النبض */
+            if (registry.updateHeartbeat) {
+                setInterval(() => {
+                    registry.updateHeartbeat('neural-runtime-bus');
+                }, 5000);
+            }
+            
+            /* وضع علامة مكتمل */
+            if (registry.markInitialized) {
+                registry.markInitialized('neural-runtime-bus');
+            }
+        } else {
+            console.error('❌ Failed to register Neural Transport in Layer Registry');
+        }
+    };
+
+    /* ========================================================
+       REGISTRY EXPORT (LEGACY)
     ======================================================== */
 
     if (window.SOVEREIGN && typeof window.SOVEREIGN.register === 'function') {
         window.SOVEREIGN.register('neural-transport', SOVRA_NEURAL_TRANSPORT);
     }
+
+    /* ========================================================
+       بدء التسجيل
+    ======================================================== */
+
+    registerNeuralTransportInLayerRegistry();
 
     /* ========================================================
        CONSOLE
@@ -657,5 +598,6 @@
     console.log('   💓 Neural Pulse: Every 500ms');
     console.log('   🩺 Neural Health Monitoring: Every 5s');
     console.log('   🔒 Stealth Domain: Encrypted, no traces');
+    console.log('   📋 Layer Registry: ' + (window.SOVRA_LAYER_REGISTRY ? 'connected' : 'waiting...'));
 
 })();
