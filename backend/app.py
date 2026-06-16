@@ -26,12 +26,20 @@ from datetime import datetime
 from typing import Dict, Any, List, Optional, Union
 from enum import Enum
 
+import os
+import pathlib
+
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Depends, status, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, validator
 import uvicorn
+
+# مسار مجلد الواجهة الأمامية
+_BACKEND_DIR = pathlib.Path(__file__).parent
+_PROJECT_ROOT = _BACKEND_DIR.parent
+FRONTEND_DIR = _PROJECT_ROOT / "frontend"
 
 # استيراد Orchestrator وجميع المكونات
 from orchestrator import get_orchestrator, SovereignOrchestrator, CycleResult, OrchestratorMode
@@ -67,13 +75,8 @@ logger = logging.getLogger(__name__)
 # مفتاح السيد (للمصادقة)
 SOVEREIGN_API_KEY = secrets.token_hex(32)
 
-# إعدادات CORS (السماح بالاتصال من واجهات أمامية مختلفة)
-ALLOWED_ORIGINS = [
-    "http://localhost:3000",
-    "http://localhost:8000",
-    "http://127.0.0.1:8000",
-    "https://sovereign-ai.example.com",
-]
+# إعدادات CORS (السماح بالاتصال من جميع المصادر)
+ALLOWED_ORIGINS = ["*"]
 
 # ============================================================
 # نماذج البيانات (Data Models)
@@ -213,7 +216,7 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -225,85 +228,11 @@ app.include_router(get_api_router())
 
 @app.get("/", response_class=HTMLResponse)
 async def root():
-    """الصفحة الرئيسية - ترحيب بالذكاء السيادي"""
-    return """
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <title>Sovereign AI - الذكاء السيادي</title>
-        <meta charset="utf-8">
-        <style>
-            body {
-                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-                max-width: 800px;
-                margin: 50px auto;
-                padding: 20px;
-                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                color: white;
-            }
-            .container {
-                background: rgba(255,255,255,0.1);
-                backdrop-filter: blur(10px);
-                border-radius: 20px;
-                padding: 40px;
-                text-align: center;
-            }
-            h1 {
-                font-size: 3em;
-                margin-bottom: 20px;
-            }
-            .status {
-                background: rgba(0,0,0,0.3);
-                padding: 10px;
-                border-radius: 10px;
-                margin: 20px 0;
-            }
-            .links {
-                display: flex;
-                justify-content: center;
-                gap: 20px;
-                margin-top: 30px;
-            }
-            a {
-                color: white;
-                text-decoration: none;
-                background: rgba(0,0,0,0.3);
-                padding: 10px 20px;
-                border-radius: 10px;
-                transition: all 0.3s;
-            }
-            a:hover {
-                background: rgba(0,0,0,0.5);
-                transform: translateY(-2px);
-            }
-            code {
-                background: rgba(0,0,0,0.3);
-                padding: 2px 6px;
-                border-radius: 5px;
-            }
-        </style>
-    </head>
-    <body>
-        <div class="container">
-            <h1>🧠 Sovereign AI</h1>
-            <p>الذكاء السيادي - خادمك الأمين</p>
-            <div class="status">
-                <strong>✅ النظام يعمل</strong><br>
-                <small>الذكاء السيادي جاهز لخدمتك</small>
-            </div>
-            <div class="links">
-                <a href="/docs">📖 التوثيق (Swagger)</a>
-                <a href="/redoc">📚 التوثيق (ReDoc)</a>
-                <a href="/health">🏥 فحص الصحة</a>
-                <a href="/status">📊 حالة النظام</a>
-            </div>
-            <p style="margin-top: 30px; font-size: 12px;">
-                🔑 مفتاح API للسيد: <code>احفظ هذا المفتاح في مكان آمن</code>
-            </p>
-        </div>
-    </body>
-    </html>
-    """
+    """الصفحة الرئيسية - تقديم واجهة SOVRA الأمامية"""
+    frontend_index = FRONTEND_DIR / "index.html"
+    if frontend_index.exists():
+        return HTMLResponse(content=frontend_index.read_text(encoding="utf-8"))
+    return HTMLResponse(content="<h1>Sovereign AI</h1><p>Frontend not found</p>")
 
 
 @app.get("/health")
@@ -831,6 +760,19 @@ async def run_orchestrator_cycle(input_data: Dict[str, Any] = None):
         "timestamp": time.time()
     }
 
+
+# ============================================================
+# تقديم الملفات الثابتة للواجهة الأمامية
+# ============================================================
+
+if (FRONTEND_DIR / "css").exists():
+    app.mount("/css", StaticFiles(directory=str(FRONTEND_DIR / "css")), name="css")
+
+if (FRONTEND_DIR / "js").exists():
+    app.mount("/js", StaticFiles(directory=str(FRONTEND_DIR / "js")), name="js")
+
+if (FRONTEND_DIR / "ui").exists():
+    app.mount("/ui", StaticFiles(directory=str(FRONTEND_DIR / "ui")), name="ui")
 
 # ============================================================
 # تشغيل الخادم (عند تنفيذ الملف مباشرة)

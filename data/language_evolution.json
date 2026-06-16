@@ -1,0 +1,278 @@
+{
+  "symbols": [
+    {
+      "id": "4fa3801a",
+      "meaning": "أنا",
+      "frequency": 10,
+      "associations": {},
+      "created_at": 1781618898.558866,
+      "last_used": 1781618898.5588663
+    },
+    {
+      "id": "ba518d58",
+      "meaning": "أنت",
+      "frequency": 10,
+      "associations": {},
+      "created_at": 1781618898.558869,
+      "last_used": 1781618898.5588694
+    },
+    {
+      "id": "ecd389b5",
+      "meaning": "هو",
+      "frequency": 10,
+      "associations": {},
+      "created_at": 1781618898.5588708,
+      "last_used": 1781618898.5588708
+    },
+    {
+      "id": "d56bd932",
+      "meaning": "هي",
+      "frequency": 10,
+      "associations": {},
+      "created_at": 1781618898.558872,
+      "last_used": 1781618898.558872
+    },
+    {
+      "id": "479bd4a2",
+      "meaning": "نحن",
+      "frequency": 10,
+      "associations": {},
+      "created_at": 1781618898.5588732,
+      "last_used": 1781618898.5588732
+    },
+    {
+      "id": "b37c2dea",
+      "meaning": "هم",
+      "frequency": 10,
+      "associations": {},
+      "created_at": 1781618898.5588741,
+      "last_used": 1781618898.5588741
+    },
+    {
+      "id": "7a7a7c84",
+      "meaning": "يكون",
+      "frequency": 10,
+      "associations": {},
+      "created_at": 1781618898.5588753,
+      "last_used": 1781618898.5588753
+    },
+    {
+      "id": "9a50ac0b",
+      "meaning": "يملك",
+      "frequency": 10,
+      "associations": {},
+      "created_at": 1781618898.5588763,
+      "last_used": 1781618898.5588763
+    },
+    {
+      "id": "ae7554e2",
+      "meaning": "يقول",
+      "frequency": 10,
+      "associations": {},
+      "created_at": 1781618898.558877,
+      "last_used": 1781618898.558877
+    },
+    {
+      "id": "7d44f147",
+      "meaning": "يفعل",
+      "frequency": 10,
+      "associations": {},
+      "created_at": 1781618898.558878,
+      "last_used": 1781618898.558878
+    },
+    {
+      "id": "2ddccd00",
+      "meaning": "يذهب",
+      "frequency": 10,
+      "associations": {},
+      "created_at": 1781618898.5588787,
+      "last_used": 1781618898.5588787
+    },
+    {
+      "id": "0b15ca8b",
+      "meaning": "يأتي",
+      "frequency": 10,
+      "associations": {},
+      "created_at": 1781618898.5588806,
+      "last_used": 1781618898.5588806
+    },
+    {
+      "id": "9732c35c",
+      "meaning": "كبير",
+      "frequency": 10,
+      "associations": {},
+      "created_at": 1781618898.5588813,
+      "last_used": 1781618898.5588813
+    },
+    {
+      "id": "00ca753d",
+      "meaning": "صغير",
+      "frequency": 10,
+      "associations": {},
+      "created_at": 1781618898.558882,
+      "last_used": 1781618898.558882
+    },
+    {
+      "id": "f78f1dfa",
+      "meaning": "جيد",
+      "frequency": 10,
+      "associations": {},
+      "created_at": 1781618898.5588827,
+      "last_used": 1781618898.5588832
+    },
+    {
+      "id": "b6d27f26",
+      "meaning": "سيء",
+      "frequency": 10,
+      "associations": {},
+      "created_at": 1781618898.5588837,
+      "last_used": 1781618898.558884
+    },
+    {
+      "id": "44a9bf4e",
+      "meaning": "جديد",
+      "frequency": 10,
+      "associations": {},
+      "created_at": 1781618898.5588846,
+      "last_used": 1781618898.5588846
+    },
+    {
+      "id": "526151a1",
+      "meaning": "قديم",
+      "frequency": 10,
+      "associations": {},
+      "created_at": 1781618898.5588853,
+      "last_used": 1781618898.5588853
+    },
+    {
+      "id": "23d6a7f0",
+      "meaning": "هنا",
+      "frequency": 10,
+      "associations": {},
+      "created_at": 1781618898.558886,
+      "last_used": 1781618898.558886
+    },
+    {
+      "id": "dca761f8",
+      "meaning": "هناك",
+      "frequency": 10,
+      "associations": {},
+      "created_at": 1781618898.558887,
+      "last_used": 1781618898.558887
+    },
+    {
+      "id": "f1234002",
+      "meaning": "الآن",
+      "frequency": 10,
+      "associations": {},
+      "created_at": 1781618898.5588877,
+      "last_used": 1781618898.558888
+    },
+    {
+      "id": "86396c72",
+      "meaning": "ثم",
+      "frequency": 10,
+      "associations": {},
+      "created_at": 1781618898.5588958,
+      "last_used": 1781618898.5588958
+    },
+    {
+      "id": "efb45540",
+      "meaning": "قبل",
+      "frequency": 10,
+      "associations": {},
+      "created_at": 1781618898.5588899,
+      "last_used": 1781618898.5588903
+    },
+    {
+      "id": "cfe25e62",
+      "meaning": "بعد",
+      "frequency": 10,
+      "associations": {},
+      "created_at": 1781618898.558891,
+      "last_used": 1781618898.558891
+    },
+    {
+      "id": "9198d4b0",
+      "meaning": "و",
+      "frequency": 10,
+      "associations": {},
+      "created_at": 1781618898.5588918,
+      "last_used": 1781618898.5588918
+    },
+    {
+      "id": "204c48e0",
+      "meaning": "أو",
+      "frequency": 10,
+      "associations": {},
+      "created_at": 1781618898.5588925,
+      "last_used": 1781618898.5588925
+    },
+    {
+      "id": "d652cfa6",
+      "meaning": "لكن",
+      "frequency": 10,
+      "associations": {},
+      "created_at": 1781618898.5588932,
+      "last_used": 1781618898.5588937
+    },
+    {
+      "id": "748780b6",
+      "meaning": "لأن",
+      "frequency": 10,
+      "associations": {},
+      "created_at": 1781618898.5588944,
+      "last_used": 1781618898.5588944
+    },
+    {
+      "id": "7d115b5f",
+      "meaning": "إذا",
+      "frequency": 10,
+      "associations": {},
+      "created_at": 1781618898.558895,
+      "last_used": 1781618898.558895
+    },
+    {
+      "id": "4dfe2100",
+      "meaning": "نعم",
+      "frequency": 10,
+      "associations": {},
+      "created_at": 1781618898.5588973,
+      "last_used": 1781618898.5588973
+    },
+    {
+      "id": "71536535",
+      "meaning": "لا",
+      "frequency": 10,
+      "associations": {},
+      "created_at": 1781618898.558898,
+      "last_used": 1781618898.558898
+    },
+    {
+      "id": "46ec2b45",
+      "meaning": "ربما",
+      "frequency": 10,
+      "associations": {},
+      "created_at": 1781618898.5588987,
+      "last_used": 1781618898.5588987
+    },
+    {
+      "id": "5cf3a399",
+      "meaning": "دائماً",
+      "frequency": 10,
+      "associations": {},
+      "created_at": 1781618898.5588994,
+      "last_used": 1781618898.5588994
+    },
+    {
+      "id": "a288d1a5",
+      "meaning": "أبداً",
+      "frequency": 10,
+      "associations": {},
+      "created_at": 1781618898.5589,
+      "last_used": 1781618898.5589
+    }
+  ],
+  "evolution_counter": 0,
+  "saved_at": 1781618898.558911
+}
