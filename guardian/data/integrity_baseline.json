@@ -1,0 +1,806 @@
+{
+  "backend/app.py": {
+    "checksum": "25d9345510dee8e36084e32eb57e496302f2fe1bca38ad40f2721290f7c2bb75",
+    "size_bytes": 29257,
+    "last_modified": 1781618879.5102856,
+    "snapshot_time": 1781622604.5019073
+  },
+  "backend/api.py": {
+    "checksum": "cd14fedbeedf2f872f5f05e1278a5350c4918384f261ae6fd4ec0b728fa6ada7",
+    "size_bytes": 25507,
+    "last_modified": 1781618469.0071766,
+    "snapshot_time": 1781622604.5031445
+  },
+  "backend/orchestrator.py": {
+    "checksum": "9ca91fed986fde407987c68e7759467b66abe527be19ae4ff45577631d392852",
+    "size_bytes": 58162,
+    "last_modified": 1781618469.0102856,
+    "snapshot_time": 1781622604.5062664
+  },
+  "backend/safety.py": {
+    "checksum": "58183477351013aab1721130c8db9f675fc08abc29e43ac5f38b23639c242576",
+    "size_bytes": 22559,
+    "last_modified": 1781618469.0123677,
+    "snapshot_time": 1781622604.5088842
+  },
+  "backend/config.py": {
+    "checksum": "47f8f23c6b4215dbb736c1958adbc08881af66207811f4b0881a8bd8f6551a12",
+    "size_bytes": 15288,
+    "last_modified": 1781618469.0071766,
+    "snapshot_time": 1781622604.5116768
+  },
+  "frontend/index.html": {
+    "checksum": "81d39d6aa266929ef5ee90c6e0c5207332e3dd8e2b690ef289c7965f14263c83",
+    "size_bytes": 35240,
+    "last_modified": 1781618469.015432,
+    "snapshot_time": 1781622604.5151865
+  },
+  "frontend/css/effects.css": {
+    "checksum": "e9b0761dbf451979c17dfc507cb2c7f6fba4d1d00b2b20616f2127349c8b69fc",
+    "size_bytes": 25206,
+    "last_modified": 1781618469.0152965,
+    "snapshot_time": 1781622604.5183048
+  },
+  "frontend/css/responsive.css": {
+    "checksum": "6b24eb5df5109343975bbfcd2d4bd3874aff18519aa5c102c787c5200864c1b9",
+    "size_bytes": 18767,
+    "last_modified": 1781618469.015432,
+    "snapshot_time": 1781622604.519788
+  },
+  "frontend/css/runtime.css": {
+    "checksum": "3fab66c45cc5c2903071ab31c26b037616d6701ac73ceeaf2fa9c9574c3e674f",
+    "size_bytes": 7202,
+    "last_modified": 1781618469.015432,
+    "snapshot_time": 1781622604.5214648
+  },
+  "frontend/css/style.css": {
+    "checksum": "458f2568ba35d2ff27bf6436abf7665efc0ab16b9afd019379f161664198ac06",
+    "size_bytes": 25558,
+    "last_modified": 1781618469.015432,
+    "snapshot_time": 1781622604.5219953
+  },
+  "frontend/js/animations.js": {
+    "checksum": "a38f4f7ed43c3fc6d0ef7f1577c8f8e347cafb69edf020d041efec54458d1828",
+    "size_bytes": 21199,
+    "last_modified": 1781618469.015432,
+    "snapshot_time": 1781622604.527269
+  },
+  "frontend/js/bootstrap.js": {
+    "checksum": "366de88539f8ede0c6d10c5123f619b3ce47bc3ca7d9dc8b1eb9bffe3203aa85",
+    "size_bytes": 5537,
+    "last_modified": 1781618469.015771,
+    "snapshot_time": 1781622604.5278814
+  },
+  "frontend/js/core.js": {
+    "checksum": "665444edb266c9fe222f6c3fa67c0352f1b0422c8035d7c0b6cb4abc8481e4d0",
+    "size_bytes": 5700,
+    "last_modified": 1781618469.015771,
+    "snapshot_time": 1781622604.5284576
+  },
+  "frontend/js/main.js": {
+    "checksum": "d8514d7b6aa6c2e9b494134087446ea04a65c3c14bc4c6f13333c686423b4866",
+    "size_bytes": 39164,
+    "last_modified": 1781618469.015771,
+    "snapshot_time": 1781622604.529707
+  },
+  "frontend/js/websocket.js": {
+    "checksum": "71292ad1236c765896ef4de697f39998ddda85ef8863c33eeee739566d66a646",
+    "size_bytes": 24896,
+    "last_modified": 1781618469.0242858,
+    "snapshot_time": 1781622604.530987
+  },
+  "frontend/ui/cognitive-input.js": {
+    "checksum": "2fc2168ba72df8089683d6cbe35bd29ca11e8ddac58bb6fd53aa79fd3e8f8bad",
+    "size_bytes": 35554,
+    "last_modified": 1781618469.0242858,
+    "snapshot_time": 1781622604.5324593
+  },
+  "frontend/js/modules/adaptive-effects.js": {
+    "checksum": "7bc58f3f38841fd8673b2026f116c21764daeda0c46b1dbfbfe6a24151ddbe8a",
+    "size_bytes": 7921,
+    "last_modified": 1781618469.015771,
+    "snapshot_time": 1781622604.5334368
+  },
+  "frontend/js/modules/chat-runtime.js": {
+    "checksum": "81e6950fce92e6b33cc26107c340f11711d8c3b112435461ae4b170d508ee59e",
+    "size_bytes": 6035,
+    "last_modified": 1781618469.0160508,
+    "snapshot_time": 1781622604.5339437
+  },
+  "frontend/js/modules/cinematic-engine.js": {
+    "checksum": "e5bfe17aa8089bb875b83cebca8da3b2e4ebd9854d90efcaa2c4d0991c4a1c84",
+    "size_bytes": 8609,
+    "last_modified": 1781618469.0160508,
+    "snapshot_time": 1781622604.5363045
+  },
+  "frontend/js/modules/command-runtime.js": {
+    "checksum": "dfa27cda9f81f4f3e7514c394ff6db5e856af8a981d6a4e5a7ccbc26928600fe",
+    "size_bytes": 6166,
+    "last_modified": 1781618469.0160508,
+    "snapshot_time": 1781622604.5369234
+  },
+  "frontend/js/modules/dialogue-engine.js": {
+    "checksum": "823de3be3ed5176a58f6a550b138c095d9287bc6a44a4f7656938a9da65bc8f7",
+    "size_bytes": 5916,
+    "last_modified": 1781618469.0160508,
+    "snapshot_time": 1781622604.5375109
+  },
+  "frontend/js/modules/interface-runtime.js": {
+    "checksum": "e7aeb755377f1fefe0c37fa8d5ffe5e1c1ace4f016c3f74c4b09051e6b74a6f0",
+    "size_bytes": 5708,
+    "last_modified": 1781618469.0160508,
+    "snapshot_time": 1781622604.5379832
+  },
+  "frontend/js/modules/legacy-cleanup.js": {
+    "checksum": "60a7dbf735b5b8901f46bb4260920484ea538cc258739d1cdd54c4ac0d44ad8e",
+    "size_bytes": 2966,
+    "last_modified": 1781618469.0160508,
+    "snapshot_time": 1781622604.538465
+  },
+  "frontend/js/modules/live-ai-engine.js": {
+    "checksum": "a27dc6adf6b5113121ca5f5ef748f7055d1dee8fe46e847dab1a490acde0826a",
+    "size_bytes": 5355,
+    "last_modified": 1781618469.0160508,
+    "snapshot_time": 1781622604.5391276
+  },
+  "frontend/js/modules/metrics-engine.js": {
+    "checksum": "bdad3ed1d04a63808fca417c5518af0e039d86638faf3431ac2a5193c146399a",
+    "size_bytes": 4734,
+    "last_modified": 1781618469.0160508,
+    "snapshot_time": 1781622604.540344
+  },
+  "frontend/js/modules/neural-animation-engine.js": {
+    "checksum": "fc67fe7a562a8b8b440f36887dee767c0debfa60a868095f3b8edde0ea53c3ee",
+    "size_bytes": 6406,
+    "last_modified": 1781618469.0160508,
+    "snapshot_time": 1781622604.5408554
+  },
+  "frontend/js/modules/neural-memory.js": {
+    "checksum": "28f70b4014d644cf1c68404378aa304d3b0c9ec4b2546f42d82fc3d56d3cacfb",
+    "size_bytes": 5332,
+    "last_modified": 1781618469.0160508,
+    "snapshot_time": 1781622604.5413294
+  },
+  "frontend/js/modules/neural-ui-controller.js": {
+    "checksum": "697ca7b34db192f6bf430b9cbd7bb4c64a8a51f618037bd5ef28723bae35bc29",
+    "size_bytes": 6911,
+    "last_modified": 1781618469.0160508,
+    "snapshot_time": 1781622604.5419068
+  },
+  "frontend/js/modules/notification-runtime.js": {
+    "checksum": "7d2270c236c9881be6ddb68fd5a84d9f17793fd9fd3de9e72fbea8d87648a078",
+    "size_bytes": 6356,
+    "last_modified": 1781618469.0160508,
+    "snapshot_time": 1781622604.5424178
+  },
+  "frontend/js/modules/render-engine.js": {
+    "checksum": "de2654b9e24d5c862c884e036b3fdd8d765d390beac6d5705618f549ec88a6b4",
+    "size_bytes": 6553,
+    "last_modified": 1781618469.0160508,
+    "snapshot_time": 1781622604.5429523
+  },
+  "frontend/js/modules/runtime-access-control.js": {
+    "checksum": "72d7588320c694e54cd63e9a7fb5a04f798827207b9002570344c4e49867a45e",
+    "size_bytes": 4714,
+    "last_modified": 1781618469.0160508,
+    "snapshot_time": 1781622604.543957
+  },
+  "frontend/js/modules/runtime-access.js": {
+    "checksum": "28ab5ea33e130fc31fa5cb7584a7aff7b7837aaa88994659155f421c9d9c8a37",
+    "size_bytes": 2944,
+    "last_modified": 1781618469.0160508,
+    "snapshot_time": 1781622604.5445297
+  },
+  "frontend/js/modules/runtime-adaptive-scheduler.js": {
+    "checksum": "b7fe17f0b291c261356ec8e009d4070641517faa9dbcd83d5aa390830b8d2b96",
+    "size_bytes": 19146,
+    "last_modified": 1781618469.0162857,
+    "snapshot_time": 1781622604.5454776
+  },
+  "frontend/js/modules/runtime-analytics.js": {
+    "checksum": "64246f570de38cbc84278d9ef54455d6ca9aee07fcc464cd3cc44ab1f0ce4f70",
+    "size_bytes": 14689,
+    "last_modified": 1781618469.0162857,
+    "snapshot_time": 1781622604.545963
+  },
+  "frontend/js/modules/runtime-autonomous-preservation.js": {
+    "checksum": "996e27e30500bc3c703229e858f27fc102e5bb293e4e2c546d22716052c9cb48",
+    "size_bytes": 44222,
+    "last_modified": 1781618469.0162857,
+    "snapshot_time": 1781622604.5465822
+  },
+  "frontend/js/modules/runtime-backpressure-engine.js": {
+    "checksum": "fb410d83959125b572fe2ee492696dfdcb47592aa6df7e6214f9d20264c85608",
+    "size_bytes": 6138,
+    "last_modified": 1781618469.0162857,
+    "snapshot_time": 1781622604.547122
+  },
+  "frontend/js/modules/runtime-bus.js": {
+    "checksum": "8d669743a6ee8d51d05937606077a8c52fb1da63e6b5b6674197c2fec460988a",
+    "size_bytes": 21327,
+    "last_modified": 1781618469.0162857,
+    "snapshot_time": 1781622604.547684
+  },
+  "frontend/js/modules/runtime-cache.js": {
+    "checksum": "0994610024ed98e0adc0880c23eeba1d2d706f4c503b95f0dbaf5d3d85a5ba23",
+    "size_bytes": 4152,
+    "last_modified": 1781618469.0162857,
+    "snapshot_time": 1781622604.54884
+  },
+  "frontend/js/modules/runtime-capability-registry.js": {
+    "checksum": "a44e65290c1fb965cb88dc401c981d443313446ff8f062a4d3bb4a5fbb8e069a",
+    "size_bytes": 4601,
+    "last_modified": 1781618469.0162857,
+    "snapshot_time": 1781622604.5494075
+  },
+  "frontend/js/modules/runtime-causality-graph.js": {
+    "checksum": "f82cfb0e223086d0bfe09a0104b956397b3a907fc4a20a72820df3ba2287b596",
+    "size_bytes": 6424,
+    "last_modified": 1781618469.0162857,
+    "snapshot_time": 1781622604.549931
+  },
+  "frontend/js/modules/runtime-civilization-registry.js": {
+    "checksum": "dbfb2b22bd640a4a33f8ca8a0218b8930e3fe43c258a2692a2e3bca9a578eb64",
+    "size_bytes": 44553,
+    "last_modified": 1781618469.0162857,
+    "snapshot_time": 1781622604.5505447
+  },
+  "frontend/js/modules/runtime-cognition-engine.js": {
+    "checksum": "a4b73c90fb2e586403256f8e37c41299a71506704983245b3607815e26ea03e2",
+    "size_bytes": 32660,
+    "last_modified": 1781618469.0162857,
+    "snapshot_time": 1781622604.5511026
+  },
+  "frontend/js/modules/runtime-cognitive-memory.js": {
+    "checksum": "7ac453277fade29fccb9e7b8427ef9ffdd724359e276c5a8a7f3476234c71457",
+    "size_bytes": 31082,
+    "last_modified": 1781618469.0162857,
+    "snapshot_time": 1781622604.5517514
+  },
+  "frontend/js/modules/runtime-cognitive-orchestrator.js": {
+    "checksum": "e9a038390863b2660e0005db387ccf2fec958b9f9983d1bb8bf18f0b8d306ada",
+    "size_bytes": 31317,
+    "last_modified": 1781618469.0172856,
+    "snapshot_time": 1781622604.5529463
+  },
+  "frontend/js/modules/runtime-consciousness-core.js": {
+    "checksum": "bba4068f52e817056197f1d8dd5eb9c8fb7b9a4699c756b9560a8a663afeb2de",
+    "size_bytes": 30873,
+    "last_modified": 1781618469.0172856,
+    "snapshot_time": 1781622604.5537012
+  },
+  "frontend/js/modules/runtime-context.js": {
+    "checksum": "0379bf2c5478c79eab37e2bbd4a40a1cf1da9a57ab1aa20a36f1a459359bcf6d",
+    "size_bytes": 3842,
+    "last_modified": 1781618469.0172856,
+    "snapshot_time": 1781622604.554314
+  },
+  "frontend/js/modules/runtime-contracts.js": {
+    "checksum": "f4787584a313badfee492960abf8895948523af02d0c036a715a9ade41ed2295",
+    "size_bytes": 6073,
+    "last_modified": 1781618469.0172856,
+    "snapshot_time": 1781622604.554958
+  },
+  "frontend/js/modules/runtime-dependency-graph.js": {
+    "checksum": "33f34177b6593206840fd73e8ad37ae78fdaecc09ffc406e4dc59efc214db4d1",
+    "size_bytes": 5516,
+    "last_modified": 1781618469.0172856,
+    "snapshot_time": 1781622604.5555456
+  },
+  "frontend/js/modules/runtime-devtools.js": {
+    "checksum": "7121105ddb35e2c7232614779f7b85cf64c70f646b344bcf235b3a2c9fe3a9b8",
+    "size_bytes": 4151,
+    "last_modified": 1781618469.0172856,
+    "snapshot_time": 1781622604.5562115
+  },
+  "frontend/js/modules/runtime-diagnostics.js": {
+    "checksum": "e84711822a110f352f9f13b1b1c3e18c2c9390117778427e6d1698a1350148b7",
+    "size_bytes": 4446,
+    "last_modified": 1781618469.0172856,
+    "snapshot_time": 1781622604.556757
+  },
+  "frontend/js/modules/runtime-domain-router.js": {
+    "checksum": "5f18842a42b365d2f0f802bd7d0d9d09a2b145b5aa7a521b8925c3cb369be214",
+    "size_bytes": 22836,
+    "last_modified": 1781618469.0172856,
+    "snapshot_time": 1781622604.557368
+  },
+  "frontend/js/modules/runtime-domain-scheduler.js": {
+    "checksum": "21b1d7acf8c4cc1818647fac6a46964dee086a883bd151844b75407c57004656",
+    "size_bytes": 27393,
+    "last_modified": 1781618469.0172856,
+    "snapshot_time": 1781622604.5592613
+  },
+  "frontend/js/modules/runtime-envelope.js": {
+    "checksum": "04260e815b1e1ee59ce935f3a5bf24ccbf2709454b7e62ade6287c59b89afe1f",
+    "size_bytes": 3558,
+    "last_modified": 1781618469.0172856,
+    "snapshot_time": 1781622604.5597284
+  },
+  "frontend/js/modules/runtime-events.js": {
+    "checksum": "6f367b59436dd3e07684b994318d73c7bf7ce5032169c23018d06f3075d0f9ca",
+    "size_bytes": 3317,
+    "last_modified": 1781618469.0172856,
+    "snapshot_time": 1781622604.5601823
+  },
+  "frontend/js/modules/runtime-evolution-governor.js": {
+    "checksum": "76537040ee0d71a0d2e73f8c129a416427af92d065ca9d38b980ed5482c4a153",
+    "size_bytes": 37780,
+    "last_modified": 1781618469.0172856,
+    "snapshot_time": 1781622604.5606682
+  },
+  "frontend/js/modules/runtime-execution-domains.js": {
+    "checksum": "7c202f69b10622c93d9e10c1ea2f7132f8b9e314049094c675f4f19617e37624",
+    "size_bytes": 25593,
+    "last_modified": 1781618469.0172856,
+    "snapshot_time": 1781622604.5611346
+  },
+  "frontend/js/modules/runtime-execution-sandboxes.js": {
+    "checksum": "cf783362725ab06a5c9ff205b4abdfde24c17bc939faf5bc9ef7361529978de2",
+    "size_bytes": 7033,
+    "last_modified": 1781618469.0172856,
+    "snapshot_time": 1781622604.5615551
+  },
+  "frontend/js/modules/runtime-execution-scheduler.js": {
+    "checksum": "8772beb99e77805c0c41f03dfe79b487c542639f8f871ec5db5f36042745be86",
+    "size_bytes": 27407,
+    "last_modified": 1781618469.0172856,
+    "snapshot_time": 1781622604.5625832
+  },
+  "frontend/js/modules/runtime-fairness-engine.js": {
+    "checksum": "67992122b2ce1a809abadae46fa350d56cfce1a12eeaf8ae6c6494ac8f033243",
+    "size_bytes": 26002,
+    "last_modified": 1781618469.0182858,
+    "snapshot_time": 1781622604.563171
+  },
+  "frontend/js/modules/runtime-flow-telemetry.js": {
+    "checksum": "d7e0b35c8f2012fa0fc64e69e3a137cd854ac96efbdfcdeea024594ea35551b9",
+    "size_bytes": 28447,
+    "last_modified": 1781618469.0182858,
+    "snapshot_time": 1781622604.5637722
+  },
+  "frontend/js/modules/runtime-health-matrix.js": {
+    "checksum": "b45038eff07138889f05f5b7b0803b235ae86047490762cc6cbb7ef19cdbb2aa",
+    "size_bytes": 6410,
+    "last_modified": 1781618469.0182858,
+    "snapshot_time": 1781622604.56443
+  },
+  "frontend/js/modules/runtime-hooks.js": {
+    "checksum": "2601fd2c2419215b45e716955015e473fc9513c391ce518e920d5ba19876076f",
+    "size_bytes": 4358,
+    "last_modified": 1781618469.0182858,
+    "snapshot_time": 1781622604.5649412
+  },
+  "frontend/js/modules/runtime-identity-core.js": {
+    "checksum": "625927964206b9866a8249da942066ab888bcfc7ac15828f1fe1e038464ccc2f",
+    "size_bytes": 30614,
+    "last_modified": 1781618469.0182858,
+    "snapshot_time": 1781622604.5656219
+  },
+  "frontend/js/modules/runtime-init.js": {
+    "checksum": "262ad86978a6745de27da0cfbeff4f13f37de2c85f7730dec05a6285d0a084a3",
+    "size_bytes": 6174,
+    "last_modified": 1781618469.0182858,
+    "snapshot_time": 1781622604.56696
+  },
+  "frontend/js/modules/runtime-intelligence.js": {
+    "checksum": "09c0fdaf51476405f17162618f31d81cde70d7cfa8383442cf1cee1fa83a2350",
+    "size_bytes": 19855,
+    "last_modified": 1781618469.0182858,
+    "snapshot_time": 1781622604.5688927
+  },
+  "frontend/js/modules/runtime-isolation-zones.js": {
+    "checksum": "957c58d4f433aad3381f938df528d60982ab9b9f75b7551af5a993fcccbbd010",
+    "size_bytes": 6429,
+    "last_modified": 1781618469.0182858,
+    "snapshot_time": 1781622604.5700626
+  },
+  "frontend/js/modules/runtime-kernel.js": {
+    "checksum": "8024ff28f400737870ecb7df0bfe20ad1fd47093449261a06ff79ab548aa6ae1",
+    "size_bytes": 13099,
+    "last_modified": 1781618469.0182858,
+    "snapshot_time": 1781622604.5713012
+  },
+  "frontend/js/modules/runtime-layer-manager.js": {
+    "checksum": "1ebc22dff13e4c1550c0ad34a81996e183cc34c7d71ff7e51c0ccc35cd475fe2",
+    "size_bytes": 33973,
+    "last_modified": 1781618469.0182858,
+    "snapshot_time": 1781622604.5724623
+  },
+  "frontend/js/modules/runtime-lifecycle.js": {
+    "checksum": "4cc930d7269a5c3e6cfe7d8717f8be98cc8bff55cddbc13122ae4b16cf1c34bd",
+    "size_bytes": 4782,
+    "last_modified": 1781618469.0182858,
+    "snapshot_time": 1781622604.573513
+  },
+  "frontend/js/modules/runtime-message-contracts.js": {
+    "checksum": "2dd8e39fab8343d0c01e030aa907f6c10deff1d715ee7470ffa11726d16046fa",
+    "size_bytes": 18766,
+    "last_modified": 1781618469.0182858,
+    "snapshot_time": 1781622604.5746706
+  },
+  "frontend/js/modules/runtime-message-schema.js": {
+    "checksum": "c4e87295e26804950fffbb5a88b688fd1a27993daf93ada17a4229421b564911",
+    "size_bytes": 4315,
+    "last_modified": 1781618469.0182858,
+    "snapshot_time": 1781622604.5758414
+  },
+  "frontend/js/modules/runtime-meta-intelligence.js": {
+    "checksum": "d3a73b4cd8d41ae0b738c5e9317c2835981af2ea284fe7e495ed881c8589e392",
+    "size_bytes": 28520,
+    "last_modified": 1781618469.0182858,
+    "snapshot_time": 1781622604.5775871
+  },
+  "frontend/js/modules/runtime-middleware.js": {
+    "checksum": "11c9d77ea70780ea205b7ff04557144f474b96138258ff40bfe9792dcd5fa91c",
+    "size_bytes": 30687,
+    "last_modified": 1781618469.0182858,
+    "snapshot_time": 1781622604.579051
+  },
+  "frontend/js/modules/runtime-migration-manager.js": {
+    "checksum": "2f2575c4c9a24dd683379523e2e77fb00a99a22dad6904d0c7d5810ca1e02237",
+    "size_bytes": 4798,
+    "last_modified": 1781618469.0182858,
+    "snapshot_time": 1781622604.5804396
+  },
+  "frontend/js/modules/runtime-mode-manager.js": {
+    "checksum": "37c99e171911379fd0727fe91d2ebc2246f9fc4a558e4784a6497b445b26a0b4",
+    "size_bytes": 22228,
+    "last_modified": 1781618469.0192857,
+    "snapshot_time": 1781622604.5816438
+  },
+  "frontend/js/modules/runtime-orchestrator-ai.js": {
+    "checksum": "cc8074d5615db6b79c362226608c3b80b0d7b30a2406ba074a71b518ee6e4fea",
+    "size_bytes": 25315,
+    "last_modified": 1781618469.0192857,
+    "snapshot_time": 1781622604.582918
+  },
+  "frontend/js/modules/runtime-ownership-domains.js": {
+    "checksum": "31bfed63595fa5c380ea413a0779a3f94ecb848de6b3e03882e3e9d3732d0b49",
+    "size_bytes": 5224,
+    "last_modified": 1781618469.0192857,
+    "snapshot_time": 1781622604.5841532
+  },
+  "frontend/js/modules/runtime-pacing-policies.js": {
+    "checksum": "27a33d40b64a282b44fb9790dfd4c9e0b96d949fde3a65fe11c80a3c1c96fe9f",
+    "size_bytes": 6111,
+    "last_modified": 1781618469.0192857,
+    "snapshot_time": 1781622604.5853267
+  },
+  "frontend/js/modules/runtime-persistence.js": {
+    "checksum": "4d9a2a6cfc5af964e10aa4f5866a814fd178ce2855dbf1005e340983bbbf5e55",
+    "size_bytes": 4767,
+    "last_modified": 1781618469.0192857,
+    "snapshot_time": 1781622604.5866385
+  },
+  "frontend/js/modules/runtime-policy-engine.js": {
+    "checksum": "a3258acf4e4886ae546187929409add6318618bb43d5b9d6d7675509b2bbf723",
+    "size_bytes": 14544,
+    "last_modified": 1781618469.0192857,
+    "snapshot_time": 1781622604.59036
+  },
+  "frontend/js/modules/runtime-power-manager.js": {
+    "checksum": "ac9282b8d5af631db6ba0bfb05a2b00bac3e477acfcb21e85ff44b287a83ebe5",
+    "size_bytes": 4606,
+    "last_modified": 1781618469.0192857,
+    "snapshot_time": 1781622604.5925498
+  },
+  "frontend/js/modules/runtime-pressure-governor.js": {
+    "checksum": "317db60d106d8e658a8c2b06a25ca75df5fd1dd464304279e69a373b61d11adf",
+    "size_bytes": 26658,
+    "last_modified": 1781618469.0192857,
+    "snapshot_time": 1781622604.5954368
+  },
+  "frontend/js/modules/runtime-queue-intelligence.js": {
+    "checksum": "596ef57f45a12164332f5a28b0ca99ff19f23b2f90b2e6a90d2a8483f6822cd4",
+    "size_bytes": 4836,
+    "last_modified": 1781618469.0192857,
+    "snapshot_time": 1781622604.597556
+  },
+  "frontend/js/modules/runtime-recovery.js": {
+    "checksum": "1e72ac506efb8eaa410f1ed445754b03cf5c51d586e7315bb2ab5388e49a240e",
+    "size_bytes": 6391,
+    "last_modified": 1781618469.0192857,
+    "snapshot_time": 1781622604.5988355
+  },
+  "frontend/js/modules/runtime-resource-manager.js": {
+    "checksum": "eb5f9d563044be0b37671ace61986e7aec65b46ba493674872380eea00a70a39",
+    "size_bytes": 4815,
+    "last_modified": 1781618469.0192857,
+    "snapshot_time": 1781622604.600057
+  },
+  "frontend/js/modules/runtime-scheduler.js": {
+    "checksum": "745257ee520d846b9843c2bf0317e97908b786143c8098725505bf594365b201",
+    "size_bytes": 3464,
+    "last_modified": 1781618469.0192857,
+    "snapshot_time": 1781622604.6011608
+  },
+  "frontend/js/modules/runtime-security.js": {
+    "checksum": "11b931582c4330bc9b53f3d10c8c794f227683518f207d083ded306b7b5eb018",
+    "size_bytes": 4296,
+    "last_modified": 1781618469.0192857,
+    "snapshot_time": 1781622604.602405
+  },
+  "frontend/js/modules/runtime-self-awareness.js": {
+    "checksum": "643235ecbd06b24ba91d829c3e5600daaf166eabacccad402bccd2f1c3283b78",
+    "size_bytes": 32556,
+    "last_modified": 1781618469.0192857,
+    "snapshot_time": 1781622604.603594
+  },
+  "frontend/js/modules/runtime-session-manager.js": {
+    "checksum": "c60ce32b7e1fcc4be880d5acf2eff4073e723e5a27eb7f78b333b5cb7ed33293",
+    "size_bytes": 5990,
+    "last_modified": 1781618469.0192857,
+    "snapshot_time": 1781622604.6052985
+  },
+  "frontend/js/modules/runtime-session-policies.js": {
+    "checksum": "c74fd762f6412378407143b02c0cfca340708ab0f5d6ae9f6aac771b41c71841",
+    "size_bytes": 4665,
+    "last_modified": 1781618469.0192857,
+    "snapshot_time": 1781622604.6064122
+  },
+  "frontend/js/modules/runtime-session-state-machine.js": {
+    "checksum": "db07db3db43679900d2cf30174630e7769e26101adc9b07f5407c85977e82458",
+    "size_bytes": 5114,
+    "last_modified": 1781618469.0202856,
+    "snapshot_time": 1781622604.6076095
+  },
+  "frontend/js/modules/runtime-signals.js": {
+    "checksum": "464abf5ebbd4486309b7ed7ea8e9a7ddd8e6934a983bd48faeccfb2e5c12cfa9",
+    "size_bytes": 4579,
+    "last_modified": 1781618469.0202856,
+    "snapshot_time": 1781622604.6089964
+  },
+  "frontend/js/modules/runtime-sovereign-core.js": {
+    "checksum": "9755f8d76b62390469f5ad44f2d3fa80d33197035cda2cc63796a0b9348d6718",
+    "size_bytes": 34869,
+    "last_modified": 1781618469.0202856,
+    "snapshot_time": 1781622604.610453
+  },
+  "frontend/js/modules/runtime-state-replicator.js": {
+    "checksum": "d80f4b964a13e28d40c72de49eec222ecc371bc1ecdf3b9cc3215127283b4e28",
+    "size_bytes": 4578,
+    "last_modified": 1781618469.0202856,
+    "snapshot_time": 1781622604.611562
+  },
+  "frontend/js/modules/runtime-structural-integrity.js": {
+    "checksum": "1cfb7b762d223dfa5d8013e1a06cc9837ec1f50d524b5719b695d4c52392dced",
+    "size_bytes": 36889,
+    "last_modified": 1781618469.0202856,
+    "snapshot_time": 1781622604.6127923
+  },
+  "frontend/js/modules/runtime-sync.js": {
+    "checksum": "9892d7757c80230f9859ed8a83db91d7addca9fe08e0bf5f857b5f094dce8e64",
+    "size_bytes": 2891,
+    "last_modified": 1781618469.0202856,
+    "snapshot_time": 1781622604.6139672
+  },
+  "frontend/js/modules/runtime-system-state.js": {
+    "checksum": "1f5de422de762d6a872803b1ffa779e3371849b743ff4f01ae889e9424bfe820",
+    "size_bytes": 36954,
+    "last_modified": 1781618469.0202856,
+    "snapshot_time": 1781622604.615795
+  },
+  "frontend/js/modules/runtime-task-registry.js": {
+    "checksum": "858263f9529f61d721575bfad1d1ed236a1d03055bc850667e218adbb7c61cf0",
+    "size_bytes": 5224,
+    "last_modified": 1781618469.0202856,
+    "snapshot_time": 1781622604.6170223
+  },
+  "frontend/js/modules/runtime-timeline-engine.js": {
+    "checksum": "350c13083b07d18bf4f0a9d5926ea7402816b331d0cd31bc5a56e59fb6bcbcef",
+    "size_bytes": 5229,
+    "last_modified": 1781618469.0202856,
+    "snapshot_time": 1781622604.61829
+  },
+  "frontend/js/modules/runtime-trace-engine.js": {
+    "checksum": "f40061fab6edb81c086f093f7947c3b21d6cc9d939f030fada0b861064321629",
+    "size_bytes": 6159,
+    "last_modified": 1781618469.0212858,
+    "snapshot_time": 1781622604.6195867
+  },
+  "frontend/js/modules/runtime-unified-registry.js": {
+    "checksum": "d395f8c6a1a56a9955fea1cee992a35ff6ba9ab00da0a4f69fc69157d0a192f3",
+    "size_bytes": 2640,
+    "last_modified": 1781618469.0212858,
+    "snapshot_time": 1781622604.6213145
+  },
+  "frontend/js/modules/sovereign-orchestrator.js": {
+    "checksum": "a33b970cba3b1b95d340570fd34a9675dc489cd4a9e47cec3757e67e48f8aba2",
+    "size_bytes": 5610,
+    "last_modified": 1781618469.0212858,
+    "snapshot_time": 1781622604.6224458
+  },
+  "frontend/js/modules/state-manager.js": {
+    "checksum": "9ad61abeade6951efcb7b0f454455126b3d56f712769f46add6edc14fb565ab1",
+    "size_bytes": 5330,
+    "last_modified": 1781618469.0212858,
+    "snapshot_time": 1781622604.6235254
+  },
+  "frontend/js/modules/system-bridge.js": {
+    "checksum": "dc247fc3886264a875dc7af6d99a74468a434857c8502bb346ba88e141d095f1",
+    "size_bytes": 5284,
+    "last_modified": 1781618469.0212858,
+    "snapshot_time": 1781622604.62468
+  },
+  "frontend/js/modules/websocket-runtime.js": {
+    "checksum": "c6130c8b86e6924044e7d960e8bce4a961ea2630a5ae38cafe98b096018dd64e",
+    "size_bytes": 9429,
+    "last_modified": 1781618469.0212858,
+    "snapshot_time": 1781622604.6264749
+  },
+  "frontend/js/system/runtime-layer-registry.js": {
+    "checksum": "49cdedd49b20379f433d709fc48c430101a28cda740bf7d4a03c1e72c7490cee",
+    "size_bytes": 34364,
+    "last_modified": 1781618469.0212858,
+    "snapshot_time": 1781622604.6281903
+  },
+  "frontend/js/system/runtime-responsibility-map.js": {
+    "checksum": "f9862cd19c2aa18176ffc78c36db75c374071497a3efa37e30adbb5318ee68ef",
+    "size_bytes": 28167,
+    "last_modified": 1781618469.0225646,
+    "snapshot_time": 1781622604.629848
+  },
+  "frontend/js/system/system-agent-registry.js": {
+    "checksum": "554f05ed823514747c72ce5b4ff643cf85c1f8de42718a65188d4ef959e068e8",
+    "size_bytes": 22970,
+    "last_modified": 1781618469.0225646,
+    "snapshot_time": 1781622604.6310005
+  },
+  "frontend/js/system/system-boundaries.js": {
+    "checksum": "fa70a07a55f3fd139917c4e09e9877dad7b4b105789ff9c121af3f8ff73d011f",
+    "size_bytes": 16367,
+    "last_modified": 1781618469.0225646,
+    "snapshot_time": 1781622604.6321661
+  },
+  "frontend/js/system/system-canon.js": {
+    "checksum": "9238aac8a88575be2b4c074d7c4e47fcbf11e1fcc00ef1c483901e1386f90a19",
+    "size_bytes": 11685,
+    "last_modified": 1781618469.0225646,
+    "snapshot_time": 1781622604.633331
+  },
+  "frontend/js/system/system-capabilities.js": {
+    "checksum": "41f83c743d6343a22cb5098e2f278626720720ad2fa2ab93f406ef8e41ad8eb2",
+    "size_bytes": 20369,
+    "last_modified": 1781618469.0225646,
+    "snapshot_time": 1781622604.6344688
+  },
+  "frontend/js/system/system-cognitive-energy.js": {
+    "checksum": "ed40683b0c852ebc889a7d5564d31e6f703485a6ead934567402adf855c65e26",
+    "size_bytes": 26303,
+    "last_modified": 1781618469.0225646,
+    "snapshot_time": 1781622604.6356025
+  },
+  "frontend/js/system/system-cognitive-load.js": {
+    "checksum": "62b05e202292e64c52fbc11b470316619e03d820b290b03ec450712f279e0758",
+    "size_bytes": 16811,
+    "last_modified": 1781618469.0225646,
+    "snapshot_time": 1781622604.637329
+  },
+  "frontend/js/system/system-cognitive-signals.js": {
+    "checksum": "1f26c8b86736209f7c953533028a4b7bb34b65b2d938d15f32b356759e052de9",
+    "size_bytes": 27454,
+    "last_modified": 1781618469.0225646,
+    "snapshot_time": 1781622604.6385517
+  },
+  "frontend/js/system/system-consciousness-profile.js": {
+    "checksum": "293877a523022a30e04570ca32ee94855dd7733e8e77ddf19ea2199fc1c1f32e",
+    "size_bytes": 22453,
+    "last_modified": 1781618469.0225646,
+    "snapshot_time": 1781622604.639942
+  },
+  "frontend/js/system/system-continuity-engine.js": {
+    "checksum": "2d224e1ce77323a13005a99e976d06414338622f8f35853d2adb53ee3fd2e7a4",
+    "size_bytes": 21635,
+    "last_modified": 1781618469.0225646,
+    "snapshot_time": 1781622604.6412504
+  },
+  "frontend/js/system/system-event-taxonomy.js": {
+    "checksum": "285a336a1b797b913fcf4e3bed67be869e2e339aa213e3958d73197bebca846c",
+    "size_bytes": 15727,
+    "last_modified": 1781618469.0225646,
+    "snapshot_time": 1781622604.642442
+  },
+  "frontend/js/system/system-living-runtime-core.js": {
+    "checksum": "774e1471bca868c97b76178e14d88881edb1288c42b5f87000b702b262335057",
+    "size_bytes": 21235,
+    "last_modified": 1781618469.0225646,
+    "snapshot_time": 1781622604.64358
+  },
+  "frontend/js/system/system-meta-intelligence.js": {
+    "checksum": "b8179d3063779d49955662e112df08adf87b1c632d54d1ac61bdb55f510bc3aa",
+    "size_bytes": 26570,
+    "last_modified": 1781618469.0225646,
+    "snapshot_time": 1781622604.6452758
+  },
+  "frontend/js/system/system-neural-transport.js": {
+    "checksum": "21564df1fd1907181270c049bab7fb607fccf46c4d45a6524af6c21789dff497",
+    "size_bytes": 24105,
+    "last_modified": 1781618469.0225646,
+    "snapshot_time": 1781622604.6467183
+  },
+  "frontend/js/system/system-orchestration-consciousness.js": {
+    "checksum": "332175ec24d09b4fe7dd249652f5dfeca730d3fd1e7933e265c012cd8f04f9d4",
+    "size_bytes": 25207,
+    "last_modified": 1781618469.0225646,
+    "snapshot_time": 1781622604.6478708
+  },
+  "frontend/js/system/system-presence-atmosphere.js": {
+    "checksum": "8b1e0623a3b0a8b89b4577082337c51d9570e3d275e6229412524aa48f94d154",
+    "size_bytes": 25154,
+    "last_modified": 1781618469.0225646,
+    "snapshot_time": 1781622604.6489987
+  },
+  "frontend/js/system/system-presence-rules.js": {
+    "checksum": "7c5fa4b48e27197257020ad4ab43d6f9d0909e4e9f6f88ea5ff0c957582b89dd",
+    "size_bytes": 16455,
+    "last_modified": 1781618469.0225646,
+    "snapshot_time": 1781622604.6501982
+  },
+  "frontend/js/system/system-runtime-bootstrap.js": {
+    "checksum": "b0e7add86fb2e77e454f489a1107a6f2154f75de32565ae312b9619bff6b4189",
+    "size_bytes": 27327,
+    "last_modified": 1781618469.0225646,
+    "snapshot_time": 1781622604.6518745
+  },
+  "frontend/js/system/system-runtime-consciousness-loop.js": {
+    "checksum": "7ef1e5aaf9be02606c047789996db20f55b754ff4ef5092e52e56710098418aa",
+    "size_bytes": 30031,
+    "last_modified": 1781618469.0232856,
+    "snapshot_time": 1781622604.6535127
+  },
+  "frontend/js/system/system-runtime-consciousness-mesh.js": {
+    "checksum": "e33faa0790052c238d5717118aa22380fbad596ff74392087811fe5c9b103604",
+    "size_bytes": 22555,
+    "last_modified": 1781618469.0232856,
+    "snapshot_time": 1781622604.6548336
+  },
+  "frontend/js/system/system-runtime-directives.js": {
+    "checksum": "d9045f406ee3e3f6c1d2f83ef1dea725038c209084f7b1e4c3b93fbbe7710306",
+    "size_bytes": 22618,
+    "last_modified": 1781618469.0232856,
+    "snapshot_time": 1781622604.6560078
+  },
+  "frontend/js/system/system-runtime-governance.js": {
+    "checksum": "0bfc4735d50c12951d56ac9bc51b7d4ada1009b7f827376b70317308345fc311",
+    "size_bytes": 23042,
+    "last_modified": 1781618469.0232856,
+    "snapshot_time": 1781622604.6572573
+  },
+  "frontend/js/system/system-runtime-topology.js": {
+    "checksum": "b625f2c1e867afd87ba534c85327b772c2b052ae19c774b9fb4d42a30fc69954",
+    "size_bytes": 24096,
+    "last_modified": 1781618469.0232856,
+    "snapshot_time": 1781622604.6584725
+  },
+  "frontend/js/system/system-state-model.js": {
+    "checksum": "777a55dc1400ef5362bd9586a27a333f288ccfcd3ea708e20ffe86adeaf10c3a",
+    "size_bytes": 24051,
+    "last_modified": 1781618469.0232856,
+    "snapshot_time": 1781622604.6596446
+  },
+  "frontend/js/system/system-temporal-cognition.js": {
+    "checksum": "dc9f6aab27c1128d5b9bf53f61a7427685584014ef1c80b26d8ba9a1eccc5081",
+    "size_bytes": 20901,
+    "last_modified": 1781618469.0232856,
+    "snapshot_time": 1781622604.6608124
+  },
+  "frontend/js/system/system-thought-nebula.js": {
+    "checksum": "a2ebc26f9a4cbce728a3c9fee0e749306bba3a9c242021f01eeb887af7c14cab",
+    "size_bytes": 21927,
+    "last_modified": 1781618469.0232856,
+    "snapshot_time": 1781622604.6620848
+  },
+  "main.py": {
+    "checksum": "081df7849cdc08eab572651577a7ea1d7be3f3a30b3a78aa119ef1a4c2bf1ce0",
+    "size_bytes": 41239,
+    "last_modified": 1781618469.0252843,
+    "snapshot_time": 1781622604.6653402
+  },
+  "start.sh": {
+    "checksum": "a8e8647bf8e9f3167f472e15ec6e544a202afb8d467f7313159232e9466d1543",
+    "size_bytes": 93,
+    "last_modified": 1781618885.4192858,
+    "snapshot_time": 1781622604.6662157
+  }
+}

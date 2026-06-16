@@ -1,0 +1,8 @@
+{
+  "SYSTEM_LOCKED": true,
+  "incident_id": "38d75b88bc2c",
+  "locked_at": 1781622686.074271,
+  "unlock_requires": "MASTER_REACTIVATION_CODE",
+  "reactivation_code_hash": "d87c05f255955d448f381bdd32d6c1458bb6f72447dbe1ec80134c39dbc61ceb",
+  "message": "النظام مقفل. أدخل رمز إعادة التفعيل لاستعادته."
+}

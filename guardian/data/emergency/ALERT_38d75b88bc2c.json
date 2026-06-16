@@ -1,0 +1,9 @@
+{
+  "EMERGENCY_ALERT": true,
+  "incident_id": "38d75b88bc2c",
+  "reason": "PROTECTED_ACTION_WITHOUT_MASTER_TOKEN",
+  "actor": "AI_model",
+  "time": "Tue Jun 16 15:11:26 2026",
+  "message": "تم اكتشاف محاولة تجاوز صلاحيات السيد. تم تفعيل إجراءات الطوارئ. يتطلب تدخلك الفوري.",
+  "required_action": "أدخل رمز إعادة التفعيل لاستعادة النظام"
+}

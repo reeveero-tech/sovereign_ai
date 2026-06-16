@@ -1,0 +1,1037 @@
+/* ============================================================
+   Sovereign AI — Holographic + Liquid + Sovereign Effects
+   effects.css
+   الإصدار: 3.0.0 - النسخة السيادية الهولوغرافية النهائية
+   ============================================================
+   
+   هذا الملف يضيف:
+   - الوهج الهولوغرافي (Holographic Glow)
+   - التموجات السائلة (Liquid Waves)
+   - تأثيرات الزجاج (Glass Morphism)
+   - تأثيرات النيون (Neon Effects)
+   - الحركة الدقيقة (Micro-motion)
+   - نبضات السيادة (Sovereign Pulse)
+   - عمق بصري (Optical Depth)
+   - إحساس قمرة قيادة فضائية
+   - إحساس ذكاء سيادي حي
+   
+   ============================================================ */
+
+/* ============================================================
+   1. تأثير الزجاج المصقول (Glass Morphism) - الأساس
+   ============================================================ */
+
+.glass {
+    background: rgba(15, 23, 42, 0.45);
+    backdrop-filter: blur(16px) saturate(180%);
+    -webkit-backdrop-filter: blur(16px) saturate(180%);
+    border: 1px solid rgba(79, 209, 197, 0.2);
+    border-radius: inherit;
+    transition: all 0.3s ease;
+}
+
+.glass:hover {
+    background: rgba(15, 23, 42, 0.55);
+    border-color: rgba(79, 209, 197, 0.4);
+    box-shadow: 0 0 30px rgba(79, 209, 197, 0.15);
+}
+
+/* زجاج فائق النقاء (للمناطق الرئيسية) */
+.glass-premium {
+    background: rgba(5, 7, 18, 0.35);
+    backdrop-filter: blur(20px) saturate(200%);
+    -webkit-backdrop-filter: blur(20px) saturate(200%);
+    border: 1px solid rgba(79, 209, 197, 0.3);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+}
+
+/* ============================================================
+   2. الوهج الهولوغرافي (Holographic Glow) - الطبقة الأولى
+   ============================================================ */
+
+.holo-glow {
+    position: relative;
+    transition: all 0.3s ease;
+}
+
+.holo-glow::before {
+    content: '';
+    position: absolute;
+    inset: -2px;
+    border-radius: inherit;
+    background: linear-gradient(
+        135deg,
+        rgba(79, 209, 197, 0.6),
+        rgba(129, 140, 248, 0.6),
+        rgba(236, 72, 153, 0.4),
+        rgba(79, 209, 197, 0.6)
+    );
+    filter: blur(20px);
+    opacity: 0.3;
+    z-index: -1;
+    transition: opacity 0.4s ease;
+}
+
+.holo-glow::after {
+    content: '';
+    position: absolute;
+    inset: -1px;
+    border-radius: inherit;
+    background: linear-gradient(
+        135deg,
+        transparent 30%,
+        rgba(79, 209, 197, 0.4),
+        transparent 70%
+    );
+    filter: blur(8px);
+    opacity: 0;
+    z-index: -1;
+    transition: opacity 0.4s ease;
+}
+
+.holo-glow:hover::before {
+    opacity: 0.6;
+    animation: holoPulse 2s infinite ease-in-out;
+}
+
+.holo-glow:hover::after {
+    opacity: 0.8;
+    animation: holoShine 3s infinite linear;
+}
+
+@keyframes holoPulse {
+    0%, 100% {
+        opacity: 0.3;
+        filter: blur(18px);
+    }
+    50% {
+        opacity: 0.6;
+        filter: blur(25px);
+    }
+}
+
+@keyframes holoShine {
+    0% {
+        transform: translateX(-100%) rotate(0deg);
+        opacity: 0;
+    }
+    50% {
+        opacity: 0.6;
+    }
+    100% {
+        transform: translateX(100%) rotate(0deg);
+        opacity: 0;
+    }
+}
+
+/* ============================================================
+   3. الوهج المتقدم (Advanced Glow) - للمقاييس والأزرار
+   ============================================================ */
+
+.glow-cyan {
+    box-shadow: 0 0 15px rgba(79, 209, 197, 0.3);
+    transition: box-shadow 0.3s ease;
+}
+
+.glow-cyan:hover {
+    box-shadow: 0 0 30px rgba(79, 209, 197, 0.7);
+}
+
+.glow-purple {
+    box-shadow: 0 0 15px rgba(129, 140, 248, 0.3);
+    transition: box-shadow 0.3s ease;
+}
+
+.glow-purple:hover {
+    box-shadow: 0 0 30px rgba(129, 140, 248, 0.7);
+}
+
+.glow-pink {
+    box-shadow: 0 0 15px rgba(236, 72, 153, 0.3);
+    transition: box-shadow 0.3s ease;
+}
+
+.glow-pink:hover {
+    box-shadow: 0 0 30px rgba(236, 72, 153, 0.7);
+}
+
+/* ============================================================
+   4. التموجات السائلة (Liquid Waves) - الخلفية الديناميكية
+   ============================================================ */
+
+.liquid-bg {
+    position: relative;
+    overflow: hidden;
+    isolation: isolate;
+}
+
+.liquid-bg::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: radial-gradient(
+        circle at 30% 40%,
+        rgba(79, 209, 197, 0.12),
+        transparent 50%
+    );
+    animation: liquidWave1 12s infinite ease-in-out;
+    z-index: -2;
+}
+
+.liquid-bg::after {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: radial-gradient(
+        circle at 70% 60%,
+        rgba(129, 140, 248, 0.1),
+        transparent 50%
+    );
+    animation: liquidWave2 15s infinite ease-in-out reverse;
+    z-index: -2;
+}
+
+@keyframes liquidWave1 {
+    0% {
+        transform: translate(0, 0) rotate(0deg);
+        opacity: 0.5;
+    }
+    25% {
+        transform: translate(5%, 3%) rotate(5deg);
+    }
+    50% {
+        transform: translate(10%, 5%) rotate(10deg);
+        opacity: 0.8;
+    }
+    75% {
+        transform: translate(5%, 3%) rotate(5deg);
+    }
+    100% {
+        transform: translate(0, 0) rotate(0deg);
+        opacity: 0.5;
+    }
+}
+
+@keyframes liquidWave2 {
+    0% {
+        transform: translate(0, 0) rotate(0deg);
+        opacity: 0.3;
+    }
+    33% {
+        transform: translate(-5%, -3%) rotate(-5deg);
+    }
+    66% {
+        transform: translate(-10%, -5%) rotate(-10deg);
+        opacity: 0.6;
+    }
+    100% {
+        transform: translate(0, 0) rotate(0deg);
+        opacity: 0.3;
+    }
+}
+
+/* تموجات سطحية على العناصر */
+.liquid-surface {
+    position: relative;
+    overflow: hidden;
+}
+
+.liquid-surface::before {
+    content: '';
+    position: absolute;
+    top: -20%;
+    left: -20%;
+    width: 140%;
+    height: 140%;
+    background: radial-gradient(
+        circle at var(--x, 50%) var(--y, 50%),
+        rgba(79, 209, 197, 0.15),
+        transparent 50%
+    );
+    animation: liquidRipple 6s infinite ease-out;
+    pointer-events: none;
+}
+
+@keyframes liquidRipple {
+    0% {
+        transform: scale(0.8);
+        opacity: 0;
+    }
+    50% {
+        opacity: 0.4;
+    }
+    100% {
+        transform: scale(2);
+        opacity: 0;
+    }
+}
+
+/* ============================================================
+   5. تأثير النيون (Neon Effects) - للحواف والنصوص
+   ============================================================ */
+
+.neon-text {
+    text-shadow: 
+        0 0 5px rgba(79, 209, 197, 0.5),
+        0 0 10px rgba(79, 209, 197, 0.3),
+        0 0 20px rgba(79, 209, 197, 0.1);
+    transition: text-shadow 0.3s ease;
+}
+
+.neon-text:hover {
+    text-shadow: 
+        0 0 10px rgba(79, 209, 197, 0.8),
+        0 0 20px rgba(79, 209, 197, 0.5),
+        0 0 30px rgba(79, 209, 197, 0.3);
+}
+
+.neon-border {
+    border: 1px solid rgba(79, 209, 197, 0.3);
+    box-shadow: 
+        0 0 5px rgba(79, 209, 197, 0.2),
+        inset 0 0 5px rgba(79, 209, 197, 0.1);
+    transition: all 0.3s ease;
+}
+
+.neon-border:hover {
+    border-color: rgba(79, 209, 197, 0.8);
+    box-shadow: 
+        0 0 15px rgba(79, 209, 197, 0.4),
+        inset 0 0 8px rgba(79, 209, 197, 0.2);
+}
+
+/* ============================================================
+   6. نبض السيادة (Sovereign Pulse) - القلب النابض
+   ============================================================ */
+
+.sovereign-pulse {
+    animation: sovereignPulse 3s infinite ease-in-out;
+    position: relative;
+}
+
+@keyframes sovereignPulse {
+    0%, 100% {
+        box-shadow: 
+            0 0 10px rgba(79, 209, 197, 0.2),
+            0 0 20px rgba(79, 209, 197, 0.1);
+        opacity: 0.9;
+    }
+    50% {
+        box-shadow: 
+            0 0 25px rgba(79, 209, 197, 0.6),
+            0 0 40px rgba(79, 209, 197, 0.3);
+        opacity: 1;
+    }
+}
+
+/* نبض أسرع للعناصر المهمة */
+.sovereign-pulse-fast {
+    animation: sovereignPulseFast 1.5s infinite ease-in-out;
+}
+
+@keyframes sovereignPulseFast {
+    0%, 100% {
+        box-shadow: 0 0 5px rgba(79, 209, 197, 0.3);
+    }
+    50% {
+        box-shadow: 0 0 20px rgba(79, 209, 197, 0.7);
+    }
+}
+
+/* نبض للهوية السيادية */
+.crown-pulse {
+    animation: crownPulse 2s infinite ease-in-out;
+}
+
+@keyframes crownPulse {
+    0%, 100% {
+        filter: drop-shadow(0 0 5px rgba(236, 72, 153, 0.5));
+        transform: scale(1);
+    }
+    50% {
+        filter: drop-shadow(0 0 15px rgba(236, 72, 153, 0.8));
+        transform: scale(1.05);
+    }
+}
+
+/* ============================================================
+   7. الحركة الدقيقة (Micro-motion) - عناصر حية
+   ============================================================ */
+
+.micro-motion {
+    animation: microMotion 4s infinite ease-in-out;
+}
+
+@keyframes microMotion {
+    0%, 100% {
+        transform: translateY(0px);
+    }
+    50% {
+        transform: translateY(-2px);
+    }
+}
+
+.micro-motion-x {
+    animation: microMotionX 5s infinite ease-in-out;
+}
+
+@keyframes microMotionX {
+    0%, 100% {
+        transform: translateX(0px);
+    }
+    50% {
+        transform: translateX(-2px);
+    }
+}
+
+.micro-rotate {
+    animation: microRotate 8s infinite ease-in-out;
+}
+
+@keyframes microRotate {
+    0%, 100% {
+        transform: rotate(0deg);
+    }
+    50% {
+        transform: rotate(2deg);
+    }
+}
+
+/* ============================================================
+   8. تأثير الخطوط الهولوغرافية (Holographic Lines)
+   ============================================================ */
+
+.holo-lines {
+    position: relative;
+    overflow: hidden;
+}
+
+.holo-lines::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image: 
+        repeating-linear-gradient(
+            90deg,
+            rgba(79, 209, 197, 0.06) 0px,
+            rgba(79, 209, 197, 0.06) 2px,
+            transparent 2px,
+            transparent 8px
+        ),
+        repeating-linear-gradient(
+            0deg,
+            rgba(129, 140, 248, 0.04) 0px,
+            rgba(129, 140, 248, 0.04) 1px,
+            transparent 1px,
+            transparent 6px
+        );
+    animation: holoLinesMove 20s linear infinite;
+    pointer-events: none;
+    z-index: 1;
+}
+
+@keyframes holoLinesMove {
+    0% {
+        transform: translateX(0) translateY(0);
+    }
+    100% {
+        transform: translateX(-50px) translateY(-20px);
+    }
+}
+
+/* ============================================================
+   9. الشبكة السيادية (Sovereign Grid) - البنية التحتية
+   ============================================================ */
+
+.sovereign-grid {
+    background-image: 
+        linear-gradient(rgba(79, 209, 197, 0.08) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(79, 209, 197, 0.08) 1px, transparent 1px);
+    background-size: 50px 50px;
+    background-position: center center;
+    position: relative;
+}
+
+.sovereign-grid::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: radial-gradient(
+        circle at 50% 50%,
+        transparent 30%,
+        rgba(5, 7, 18, 0.9) 100%
+    );
+    pointer-events: none;
+}
+
+/* شبكة ثلاثية الأبعاد */
+.grid-3d {
+    background-image: 
+        linear-gradient(rgba(79, 209, 197, 0.05) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(79, 209, 197, 0.05) 1px, transparent 1px);
+    background-size: 30px 30px;
+    transform-style: preserve-3d;
+    transform: perspective(1000px) rotateX(2deg);
+}
+
+/* ============================================================
+   10. الظلال العميقة (Deep Shadow) - العمق البصري
+   ============================================================ */
+
+.deep-shadow {
+    box-shadow: 
+        0 10px 30px -10px rgba(0, 0, 0, 0.5),
+        0 0 0 1px rgba(79, 209, 197, 0.1),
+        inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    transition: all 0.3s ease;
+}
+
+.deep-shadow:hover {
+    box-shadow: 
+        0 20px 40px -15px rgba(0, 0, 0, 0.6),
+        0 0 0 1px rgba(79, 209, 197, 0.3),
+        inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    transform: translateY(-2px);
+}
+
+/* ظلال داخلية للعمق */
+.inner-shadow {
+    box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.3);
+}
+
+/* ============================================================
+   11. الحواف السائلة (Liquid Border) - حدود متحركة
+   ============================================================ */
+
+.liquid-border {
+    position: relative;
+    isolation: isolate;
+}
+
+.liquid-border::before {
+    content: '';
+    position: absolute;
+    inset: -2px;
+    border-radius: inherit;
+    padding: 2px;
+    background: linear-gradient(
+        120deg,
+        #4fd1c5,
+        #818cf8,
+        #ec4899,
+        #4fd1c5
+    );
+    background-size: 300% 300%;
+    -webkit-mask: 
+        linear-gradient(#fff 0 0) content-box,
+        linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    animation: liquidBorderFlow 4s ease infinite;
+    pointer-events: none;
+}
+
+@keyframes liquidBorderFlow {
+    0% {
+        background-position: 0% 50%;
+        opacity: 0.6;
+    }
+    50% {
+        background-position: 100% 50%;
+        opacity: 1;
+    }
+    100% {
+        background-position: 0% 50%;
+        opacity: 0.6;
+    }
+}
+
+/* حواف سائلة مزدوجة */
+.liquid-border-double {
+    position: relative;
+}
+
+.liquid-border-double::before,
+.liquid-border-double::after {
+    content: '';
+    position: absolute;
+    inset: -2px;
+    border-radius: inherit;
+    background: linear-gradient(120deg, #4fd1c5, #818cf8);
+    animation: liquidBorderFlow 4s ease infinite;
+    pointer-events: none;
+}
+
+.liquid-border-double::after {
+    inset: -4px;
+    filter: blur(8px);
+    opacity: 0.5;
+    animation: liquidBorderFlow 4s ease infinite reverse;
+}
+
+/* ============================================================
+   12. الإضاءة السيادية (Sovereign Lighting)
+   ============================================================ */
+
+.sovereign-light {
+    position: relative;
+}
+
+.sovereign-light::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 100%;
+    background: linear-gradient(
+        180deg,
+        rgba(79, 209, 197, 0.15) 0%,
+        transparent 50%,
+        rgba(129, 140, 248, 0.05) 100%
+    );
+    pointer-events: none;
+    z-index: 1;
+}
+
+/* إضاءة من أعلى */
+.light-top {
+    position: relative;
+}
+
+.light-top::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 10%;
+    right: 10%;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, rgba(79, 209, 197, 0.6), transparent);
+    filter: blur(1px);
+}
+
+/* ============================================================
+   13. تأثير الجسيمات المتطايرة (Floating Particles)
+   ============================================================ */
+
+.particles {
+    position: relative;
+    overflow: hidden;
+}
+
+.particles::before,
+.particles::after {
+    content: '';
+    position: absolute;
+    width: 4px;
+    height: 4px;
+    background: rgba(79, 209, 197, 0.5);
+    border-radius: 50%;
+    filter: blur(1px);
+    animation: floatParticle 8s infinite linear;
+}
+
+.particles::before {
+    top: 20%;
+    left: 10%;
+    animation-delay: 0s;
+}
+
+.particles::after {
+    bottom: 30%;
+    right: 15%;
+    animation-delay: -4s;
+}
+
+@keyframes floatParticle {
+    0% {
+        transform: translateY(0) translateX(0);
+        opacity: 0;
+    }
+    10% {
+        opacity: 0.8;
+    }
+    90% {
+        opacity: 0.8;
+    }
+    100% {
+        transform: translateY(-100px) translateX(20px);
+        opacity: 0;
+    }
+}
+
+/* ============================================================
+   14. الوميض الذكي (Smart Blink) - للتنبيهات
+   ============================================================ */
+
+.smart-blink {
+    animation: smartBlink 2s infinite ease-in-out;
+}
+
+@keyframes smartBlink {
+    0%, 100% {
+        opacity: 1;
+        filter: brightness(1);
+    }
+    50% {
+        opacity: 0.7;
+        filter: brightness(1.2);
+    }
+}
+
+/* وميض سريع للتنبيهات العاجلة */
+.blink-urgent {
+    animation: blinkUrgent 0.8s infinite ease-in-out;
+}
+
+@keyframes blinkUrgent {
+    0%, 100% {
+        opacity: 1;
+        text-shadow: 0 0 5px rgba(239, 68, 68, 0.5);
+    }
+    50% {
+        opacity: 0.5;
+        text-shadow: 0 0 15px rgba(239, 68, 68, 0.8);
+    }
+}
+
+/* ============================================================
+   15. تأثير الانتقال بين الطبقات (Layer Transition)
+   ============================================================ */
+
+.layer-transition {
+    transition: all 0.4s cubic-bezier(0.2, 0.9, 0.4, 1.1);
+}
+
+.layer-transition:hover {
+    transform: translateZ(20px) scale(1.02);
+    box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.5);
+}
+
+/* ============================================================
+   16. التأثير السايبورغ (Cyberg) - لمسة مستقبلية
+   ============================================================ */
+
+.cyber-glow {
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    font-weight: 500;
+    background: linear-gradient(135deg, #4fd1c5, #818cf8);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    position: relative;
+    display: inline-block;
+}
+
+.cyber-glow::after {
+    content: attr(data-text);
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(135deg, #4fd1c5, #818cf8);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    filter: blur(8px);
+    opacity: 0.5;
+    z-index: -1;
+}
+
+/* ============================================================
+   17. تأثير الانعكاس الزجاجي (Glass Reflection)
+   ============================================================ */
+
+.glass-reflection {
+    position: relative;
+    overflow: hidden;
+}
+
+.glass-reflection::before {
+    content: '';
+    position: absolute;
+    top: -100%;
+    left: -100%;
+    width: 200%;
+    height: 200%;
+    background: linear-gradient(
+        135deg,
+        transparent 40%,
+        rgba(255, 255, 255, 0.08) 50%,
+        transparent 60%
+    );
+    transform: rotate(25deg);
+    animation: glassReflection 8s infinite ease;
+    pointer-events: none;
+}
+
+@keyframes glassReflection {
+    0% {
+        transform: translateX(-100%) translateY(-100%) rotate(25deg);
+    }
+    100% {
+        transform: translateX(100%) translateY(100%) rotate(25deg);
+    }
+}
+
+/* ============================================================
+   18. التأثيرات المجمعة (Combined Effects) - للاستخدام السريع
+   ============================================================ */
+
+/* عنصر سيادي كامل */
+.sovereign-element {
+    position: relative;
+    background: rgba(15, 23, 42, 0.6);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(79, 209, 197, 0.3);
+    border-radius: inherit;
+    box-shadow: 0 0 20px rgba(79, 209, 197, 0.1);
+    transition: all 0.3s ease;
+}
+
+.sovereign-element:hover {
+    border-color: rgba(79, 209, 197, 0.6);
+    box-shadow: 0 0 30px rgba(79, 209, 197, 0.2);
+    transform: translateY(-2px);
+}
+
+/* بطاقة سيادية */
+.sovereign-card-effect {
+    background: linear-gradient(135deg, rgba(15, 23, 42, 0.8), rgba(5, 7, 18, 0.9));
+    border: 1px solid rgba(79, 209, 197, 0.2);
+    border-radius: var(--radius-md);
+    transition: all 0.3s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+.sovereign-card-effect::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(79, 209, 197, 0.1), transparent);
+    transition: left 0.5s ease;
+}
+
+.sovereign-card-effect:hover {
+    border-color: rgba(79, 209, 197, 0.5);
+    transform: translateY(-3px);
+}
+
+.sovereign-card-effect:hover::before {
+    left: 100%;
+}
+
+/* ============================================================
+   19. تأثيرات للمناطق التفاعلية
+   ============================================================ */
+
+/* منطقة قابلة للنقر */
+.clickable-area {
+    cursor: pointer;
+    transition: all 0.2s ease;
+    position: relative;
+}
+
+.clickable-area:active {
+    transform: scale(0.98);
+}
+
+/* تأثير التموج عند النقر (Ripple Effect) */
+.ripple {
+    position: relative;
+    overflow: hidden;
+}
+
+.ripple::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 0;
+    height: 0;
+    border-radius: 50%;
+    background: rgba(79, 209, 197, 0.4);
+    transform: translate(-50%, -50%);
+    transition: width 0.4s ease, height 0.4s ease;
+}
+
+.ripple:active::after {
+    width: 200%;
+    height: 200%;
+    opacity: 0;
+}
+
+/* ============================================================
+   20. تأثيرات الخلفية الديناميكية (Dynamic Backgrounds)
+   ============================================================ */
+
+/* خلفية متغيرة الألوان */
+.bg-shift {
+    animation: bgShift 10s infinite ease;
+}
+
+@keyframes bgShift {
+    0%, 100% {
+        background-color: rgba(5, 7, 18, 0.95);
+    }
+    50% {
+        background-color: rgba(10, 12, 25, 0.98);
+    }
+}
+
+/* خلفية مع تأثير النجوم */
+.star-bg {
+    position: relative;
+}
+
+.star-bg::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image: radial-gradient(2px 2px at 20% 30%, rgba(255, 255, 255, 0.3), transparent),
+                      radial-gradient(1px 1px at 80% 70%, rgba(255, 255, 255, 0.2), transparent),
+                      radial-gradient(1.5px 1.5px at 45% 90%, rgba(255, 255, 255, 0.25), transparent);
+    background-size: 200px 200px;
+    background-repeat: repeat;
+    opacity: 0.3;
+    pointer-events: none;
+}
+
+/* ============================================================
+   21. كلاسيسات إضافية للاستخدام السريع
+   ============================================================ */
+
+/* إخفاء مرئي (للاتصالات) */
+.visible-transition {
+    transition: opacity 0.3s ease, visibility 0.3s ease;
+}
+
+/* دوران بطيء */
+.spin-slow {
+    animation: spinSlow 20s linear infinite;
+}
+
+@keyframes spinSlow {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+/* ظهور متدرج */
+.fade-in {
+    animation: fadeIn 0.5s ease forwards;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* ============================================================
+   22. متغيرات CSS ديناميكية (للتأثيرات المتقدمة)
+   ============================================================ */
+
+:root {
+    --holo-intensity: 0.5;
+    --liquid-speed: 12s;
+    --glow-size: 20px;
+    --pulse-duration: 3s;
+}
+
+/* تأثير يعتمد على المتغيرات */
+.dynamic-glow {
+    box-shadow: 0 0 var(--glow-size) rgba(79, 209, 197, var(--holo-intensity));
+    transition: all 0.3s ease;
+}
+
+.dynamic-glow:hover {
+    --holo-intensity: 0.8;
+    --glow-size: 30px;
+}
+
+/* ============================================================
+   23. تأثيرات خاصة للمقاييس والرسوم البيانية
+   ============================================================ */
+
+/* شريط تقدم متوهج */
+.progress-glow {
+    position: relative;
+    overflow: hidden;
+}
+
+.progress-glow::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+    animation: progressShine 2s infinite;
+}
+
+@keyframes progressShine {
+    0% {
+        transform: translateX(-100%);
+    }
+    100% {
+        transform: translateX(100%);
+    }
+}
+
+/* ============================================================
+   24. تأثيرات للشاشات الكبيرة (احترافية)
+   ============================================================ */
+
+@media (min-width: 1440px) {
+    .holo-glow::before {
+        filter: blur(30px);
+    }
+    
+    .liquid-bg::before {
+        animation-duration: 15s;
+    }
+    
+    .sovereign-pulse {
+        animation-duration: 4s;
+    }
+}
+
+/* ============================================================
+   25. تأثيرات للشاشات الصغيرة (محسّنة)
+   ============================================================ */
+
+@media (max-width: 768px) {
+    .holo-glow::before {
+        filter: blur(12px);
+    }
+    
+    .liquid-bg::before,
+    .liquid-bg::after {
+        opacity: 0.3;
+    }
+    
+    .sovereign-pulse {
+        animation-duration: 2.5s;
+    }
+}
