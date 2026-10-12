@@ -410,11 +410,11 @@ async def sovereign_command(command: SovereignCommand):
             )
         
         elif cmd == "get_status":
-            status = orchestrator.get_status()
+            system_status = orchestrator.get_status()
             return SovereignCommandResponse(
                 success=True,
                 message="حالة النظام",
-                data=status,
+                data=system_status,
                 timestamp=time.time()
             )
         

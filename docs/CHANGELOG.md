@@ -79,9 +79,13 @@
 
 ### أُنجز لاحقاً
 - **R-301**: دمج NexusCore في النواة (قرار D-012) — `orchestrator._load_nexus()` يحمّل 46 مكوّناً فرعياً، `/components/nexus` يعمل، `/health` سليم.
+- **R-401**: 15 اختباراً أساسياً (tests/) — إقلاع + API + صياغة. كشف خطأ `status` في `/sovereign/command` (D-013).
+- **R-402**: CI/CD (GitHub Actions) + بوابة الدفعة الذرية.
+- **R-403**: توثيق حي (Swagger/ReDoc/OpenAPI) + API.md محدثة.
 
 ### قرارات
 - **D-010**: إعادة التوصيف بصدق — لا LLM الآن.
 - **D-011**: أرشفة backend/biological المكسور.
 - **D-012**: دمج NexusCore في النواة.
+- **D-013**: إصلاح خطأ `status` (تظليل متغير) في `/sovereign/command` — كشفه R-401.
 - كل الأخطاء المكتشفة موثقة في PROJECT_STATE.md و RISKS.md، وتُعالج في M1.

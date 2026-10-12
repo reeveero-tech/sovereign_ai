@@ -1,0 +1,60 @@
+name: CI — Quality Gates (M4)
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    name: Tests + Atomic Batch Gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run test suite
+        run: |
+          python -m pytest tests/ -v
+
+      - name: Atomic batch gate — docs must change with code
+        if: github.event_name == 'pull_request'
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          python - << 'EOF'
+          import os, subprocess, sys
+
+          base = os.environ["BASE"]
+          head = os.environ["HEAD"]
+          changed = subprocess.run(
+              ["git", "diff", "--name-only", base, head],
+              capture_output=True, text=True
+          ).stdout.splitlines()
+
+          code_files = [f for f in changed if f.startswith(("backend/", "frontend/", "nexus/", "main.py", "start.sh", "Dockerfile"))]
+          if not code_files:
+              print("✅ No code changed — gate not required.")
+              sys.exit(0)
+
+          required_docs = ["docs/ROADMAP.md", "docs/PROJECT_STATE.md"]
+          missing = [d for d in required_docs if d not in changed]
+          if missing:
+              print(f"❌ Atomic batch gate FAILED: code changed but these docs did not: {missing}")
+              print("   Rule: any code change must update ROADMAP.md + PROJECT_STATE.md in the SAME batch.")
+              sys.exit(1)
+
+          print(f"✅ Atomic batch gate passed — {len(code_files)} code files + docs updated together.")
+          EOF

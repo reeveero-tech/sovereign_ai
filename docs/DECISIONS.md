@@ -74,6 +74,12 @@
 - **الأثر**: DOMAIN.md، PROJECT_CHARTER.md، OPEN_QUESTIONS (س-9) حُدثت.
 
 
+
+### D-013 — إصلاح خطأ تظليل المتغير status (R-401)
+- **التاريخ**: 2026-10-13
+- **القرار**: إصلاح `UnboundLocalError` في `/sovereign/command` — المتغير المحلي `status` كان يظلل وحدة `fastapi.status`، فكان أي طلب بمفتاح خاطئ ينهار بدلاً من إرجاع 401. أُعيدت التسمية إلى `system_status`.
+- **السياق**: كشفه اختبار R-401 (`test_sovereign_command_wrong_api_key`).
+- **الأثر**: `/sovereign/command` يعيد 401 لمفتاح خاطئ بدلاً من 500.
 ### D-012 — دمج NexusCore في النواة (R-301)
 - **التاريخ**: 2026-10-12
 - **القرار**: دمج منصة NexusCore (71 ملفاً) في النواة كمكوّن orchestrator. `orchestrator._load_nexus()` يحمّل `initialize_nexus()`، ويُكشف عبر `/components/nexus`.

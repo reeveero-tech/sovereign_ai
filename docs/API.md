@@ -1,11 +1,12 @@
 # API.md — الواجهات البرمجية
 
-> كل نقاط API في النواة، كما رُصدت في مسح M0.
-> آخر تحديث: 2026-10-12 (الدفعة M0)
+> كل نقاط API في النواة، كما رُصدت في مسح M0 + تحديث M4 (R-403).
+> آخر تحديث: 2026-10-13 (الدفعة M4)
+> **توثيق حي**: Swagger على `/docs`، ReDoc على `/redoc`، OpenAPI على `/openapi.json` (26 مساراً).
 
 ---
 
-## 1) النواة (backend/app.py) — 16 مساراً
+## 1) النواة (backend/app.py) — 26 مساراً (OpenAPI)
 
 ### عام
 | الطريقة | المسار | الوصف | المصادقة |
@@ -31,7 +32,14 @@
 | الطريقة | المسار | الوصف | المصادقة |
 |---|---|---|---|
 | POST | `/orchestrator/cycle` | 🔴 تشغيل دورة (بلا مصادقة) | لا (خطر — R-108) |
-| GET | `/components/*` | مكوّنات | لا |
+| GET | `/components/consciousness` | حالة الوعي | لا |
+| GET | `/components/memory` | حالة الذاكرة | لا |
+| GET | `/components/predictive` | حالة التنبؤ | لا |
+| GET | `/components/simulation` | حالة المحاكاة | لا |
+| GET | `/components/sovereign` | حالة السيادة | لا |
+| GET | `/components/quantum` | حالة الكم | لا |
+| GET | `/components/nexus` | حالة NexusCore المدمجة (R-301) | لا |
+| GET | `/components/defense` | حالة الدفاع | لا |
 
 ---
 
