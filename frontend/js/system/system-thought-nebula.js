@@ -583,3 +583,58 @@
             enabled: true,
 
               
+            /* أنماط الأحلام */
+            dreamPatterns: {
+                memoryEcho: { intensity: 0.3, drift: 'slow', color: '#7a5aa0' },
+                futureSimulation: { intensity: 0.4, drift: 'medium', color: '#5a8aa0' },
+                emotionalResonance: { intensity: 0.35, drift: 'slow', color: '#a05a7a' },
+                ownerReflection: { intensity: 0.5, drift: 'gentle', color: '#d4a017' }
+            },
+
+            /* دمج الأحلام مع الذاكرة */
+            dreamMemoryFusion: {
+                mergeEpisodic: true,
+                reinforceSemantic: true,
+                pruneWeakConnections: true,
+                consolidateDuringSleep: true
+            },
+
+            /* تأثير الأحلام على الإدراك */
+            cognitiveInfluence: {
+                creativityBoost: 0.3,
+                insightGeneration: 0.25,
+                patternRecognition: 0.35,
+                problemSolving: 0.2
+            },
+
+            description: 'سديم الأحلام - معالجة الذكريات والتوقعات أثناء الراحة'
+        },
+
+        /* ====================================================
+           REGISTRATION
+        ==================================================== */
+
+        /* إجمالي الأقسام */
+        sectionCount: 12
+    };
+
+    /* ========================================================
+       EXPORT
+    ======================================================== */
+
+    window.SOVRA_THOUGHT_NEBULA = SOVRA_THOUGHT_NEBULA;
+
+    if (window.SOVEREIGN && typeof window.SOVEREIGN.register === 'function') {
+        window.SOVEREIGN.register('thought-nebula', SOVRA_THOUGHT_NEBULA);
+    }
+
+    /* ========================================================
+       CONSOLE
+    ======================================================== */
+
+    console.log('🌌 SOVRA Thought Nebula v2.0 Initialized');
+    console.log('   🧠 Cognitive Visualization: ACTIVE');
+    console.log('   🌠 Total Sections: ' + Object.keys(SOVRA_THOUGHT_NEBULA).length);
+    console.log('   💭 Dream Nebula: ENABLED');
+
+})();

@@ -771,8 +771,11 @@ class SimulationEnvironmentManager:
                 "active_parameter_set": self.active_parameter_set,
                 "saved_at": time.time()
             }
-            with open(ENV_STATE_FILE, 'w', encoding='utf-8') as f:
+            # M1: كتابة ذرية عبر ملف مؤقت لتجنب قراءة ملف نصف مكتوب
+            tmp = ENV_STATE_FILE.with_suffix('.json.tmp')
+            with open(tmp, 'w', encoding='utf-8') as f:
                 json.dump(state, f, ensure_ascii=False, indent=2)
+            tmp.replace(ENV_STATE_FILE)
         except Exception as e:
             logger.error(f"خطأ في حفظ حالة مدير البيئات: {e}")
     

@@ -20,7 +20,7 @@ import math
 import threading
 import hashlib
 from dataclasses import dataclass, field
-from typing import Dict, Any, List, Optional, Tuple, Set
+from typing import Dict, Any, List, Optional, Tuple, Set, Callable
 from collections import deque, defaultdict
 from enum import Enum
 import statistics
@@ -216,53 +216,55 @@ class MemoryWatcher:
     6. شفاء ذاتي عند اكتشاف التلف
     """
     # -------------------------
-# RESET — إعادة تهيئة كاملة للمراقب الذاتي
-# -------------------------
-def reset(self):
-    """
-    إعادة تهيئة كاملة للمراقب الذاتي.
+    # RESET — إعادة تهيئة كاملة للمراقب الذاتي
+    # -------------------------
+    def reset(self):
+        """
+        إعادة تهيئة كاملة للمراقب الذاتي.
     
-    يمسح:
-    - سجل الشذوذ (anomalies)
-    - سجل الصحة (health history)
-    - الملف الطبيعي (baseline)
-    - حالة التهديد (threat level)
-    """
-    logger.info("🔄 إعادة تهيئة المراقب الذاتي...")
+        يمسح:
+        - سجل الشذوذ (anomalies)
+        - سجل الصحة (health history)
+        - الملف الطبيعي (baseline)
+        - حالة التهديد (threat level)
+        """
+        logger.info("🔄 إعادة تهيئة المراقب الذاتي...")
     
-    # إعادة تعيين سجل الشذوذ
-    self._anomalies = []
-    self._anomaly_history.clear()
+        # إعادة تعيين سجل الشذوذ
+        self._anomalies = []
+        self._anomaly_history.clear()
     
-    # إعادة تعيين سجل الصحة
-    self._health_history.clear()
+        # إعادة تعيين سجل الصحة
+        self._health_history.clear()
     
-    # إعادة تعيين حالة التهديد
-    self._threat_level = THREAT_LEVEL_NONE
-    self._stress_mode = False
-    self._check_interval = CHECK_INTERVAL_NORMAL
+        # إعادة تعيين حالة التهديد
+        self._threat_level = THREAT_LEVEL_NONE
+        self._stress_mode = False
+        self._check_interval = CHECK_INTERVAL_NORMAL
     
-    # إعادة تعيين البصمة
-    self._last_fingerprint = None
-    self._last_check = 0
+        # إعادة تعيين البصمة
+        self._last_fingerprint = None
+        # M1: ذاكرة مؤقتة لنتيجة get_status
+        self._status_cache = None
+        self._last_check = 0
     
-    # إعادة تعيين الملف الطبيعي (baseline)
-    self._baseline = BaselineProfile()
-    self._baseline_samples.clear()
+        # إعادة تعيين الملف الطبيعي (baseline)
+        self._baseline = BaselineProfile()
+        self._baseline_samples.clear()
     
-    # إعادة تحميل الفهرس
-    self._index = self._load_index()
+        # إعادة تحميل الفهرس
+        self._index = self._load_index()
     
-    # تسجيل حدث إعادة التهيئة
-    self.core.append_event(
-        event_type="defense::watcher_reset",
-        payload={
-            "timestamp": time.time(),
-            "status": "memory_watcher_reset"
-        }
-    )
+        # تسجيل حدث إعادة التهيئة
+        self.core.append_event(
+            event_type="defense::watcher_reset",
+            payload={
+                "timestamp": time.time(),
+                "status": "memory_watcher_reset"
+            }
+        )
     
-    logger.info("✅ إعادة تهيئة المراقب الذاتي اكتملت")
+        logger.info("✅ إعادة تهيئة المراقب الذاتي اكتملت")
     def __init__(self):
         self.core = get_core()
         self.store = get_store()
@@ -272,6 +274,8 @@ def reset(self):
         # حالة المراقبة
         self._last_fingerprint: Optional[str] = None
         self._last_check: float = 0
+        # M1: ذاكرة مؤقتة لنتيجة get_status
+        self._status_cache = None
         self._check_interval = CHECK_INTERVAL_NORMAL
         self._stress_mode = False
         
@@ -841,10 +845,14 @@ def reset(self):
     
     def get_status(self) -> Dict[str, Any]:
         """الحالة الحالية للنظام (للـ API)"""
+        # M1: تخزين مؤقت قصير — get_status يُستدعى عدة مرات داخل دورة الاستبطان الواحدة
+        now = time.time()
+        if self._status_cache is not None and (now - self._status_cache["ts"]) < 2.0:
+            return self._status_cache["data"]
         snapshot = self.generate_report()
         active_anomalies = [a for a in self._anomalies if not a.resolved]
         
-        return {
+        result = {
             "health": {
                 "overall": snapshot.overall_health,
                 "status": HealthStatus.EXCELLENT if snapshot.overall_health >= 0.9 else
@@ -875,6 +883,8 @@ def reset(self):
             "timestamp": snapshot.timestamp,
             "fingerprint": snapshot.fingerprint[:32]
         }
+        self._status_cache = {"ts": time.time(), "data": result}
+        return result
     
     def stop(self):
         """إيقاف المراقب الذاتي"""

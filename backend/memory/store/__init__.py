@@ -368,6 +368,8 @@ class SolidMemoryStore:
     
     تخزن جميع أنواع الذاكرة بشكل دائم، مشفر، ومتكامل.
     """
+    # M1: تعريض FILE_MAP كخاصية صنف (كانت متاحة فقط كمتغير وحدة)
+    FILE_MAP = FILE_MAP
     
     def __init__(self):
         self.core = get_core()

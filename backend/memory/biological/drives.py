@@ -157,6 +157,8 @@ class SovereignDrives:
         
         # مستوى الدوافع
         self.drive_level = DRIVE_LEVEL_ADVANCED
+        # M1: ذاكرة مؤقتة لنتيجة get_drive_status
+        self._drive_status_cache = None
         
         # الدوافع النشطة
         self.drives: Dict[str, CognitiveDrive] = {}
@@ -830,10 +832,14 @@ class SovereignDrives:
     
     def get_drive_status(self) -> Dict[str, Any]:
         """الحالة الحالية للدوافع"""
+        # M1: تخزين مؤقت قصير — يُستدعى عدة مرات داخل دورة الاستبطان الواحدة
+        now = time.time()
+        if self._drive_status_cache is not None and (now - self._drive_status_cache["ts"]) < 2.0:
+            return self._drive_status_cache["data"]
         drives = self.update_all_drives()
         dominant = self.get_dominant_drive()
         
-        return {
+        result = {
             "drive_level": self.drive_level,
             "active_drives": drives,
             "dominant_drive": dominant,
@@ -841,6 +847,8 @@ class SovereignDrives:
             "total_satisfaction_events": len(self.satisfaction_events),
             "timestamp": time.time()
         }
+        self._drive_status_cache = {"ts": time.time(), "data": result}
+        return result
     
     def get_drive_history(self, limit: int = 20) -> List[Dict]:
         """سجل الدوافع الأخير"""

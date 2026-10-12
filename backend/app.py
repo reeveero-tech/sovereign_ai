@@ -29,7 +29,7 @@ from enum import Enum
 import os
 import pathlib
 
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Depends, status, BackgroundTasks
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Depends, status, BackgroundTasks, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -73,10 +73,12 @@ logger = logging.getLogger(__name__)
 # ============================================================
 
 # مفتاح السيد (للمصادقة)
-SOVEREIGN_API_KEY = secrets.token_hex(32)
+# M1: يُقرأ من config (SOVEREIGN_KEY من متغير البيئة) بدلاً من توليد عشوائي غير محفوظ
+from config import SOVEREIGN_KEY as SOVEREIGN_API_KEY
 
 # إعدادات CORS (السماح بالاتصال من جميع المصادر)
-ALLOWED_ORIGINS = ["*"]
+# M1: CORS من config (متغير البيئة CORS_ORIGINS) — ليس مفتوحاً دائماً
+from config import CORS_ORIGINS as ALLOWED_ORIGINS
 
 # ============================================================
 # نماذج البيانات (Data Models)
@@ -729,11 +731,13 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str):
 # ============================================================
 
 @app.get("/api-key")
-async def get_api_key():
+async def get_api_key(master_key: str = Query(None, description="مفتاح السيد للتحقق")):
     """
-    الحصول على مفتاح API للسيد (تنبيه: هذا عرضة للخطر في الإنتاج!)
+    الحصول على مفتاح API للسيد.
+    M1: يتطلب مفتاح السيد (SOVEREIGN_KEY) كمعامل للتحقق — لا يُكشف لأي طلب.
     """
-    # في الإنتاج، يجب إخفاء هذا أو حمايته بمصادقة إضافية
+    if not master_key or master_key != SOVEREIGN_API_KEY:
+        raise HTTPException(status_code=403, detail="غير مصرح: مطلوب مفتاح السيد")
     return {
         "api_key": SOVEREIGN_API_KEY,
         "warning": "احفظ هذا المفتاح في مكان آمن. لا تشاركه مع أي شخص.",
@@ -746,8 +750,12 @@ async def run_orchestrator_cycle(input_data: Dict[str, Any] = None):
     """
     تشغيل دورة Orchestrator يدوياً.
     
+    M1: يتطلب مفتاح API في الرأس X-API-Key (كان مفتوحاً بدون مصادقة).
     مفيد للاختبار والتشخيص.
     """
+    api_key = input_data.get("api_key") if input_data else None
+    if not api_key or not verify_api_key(api_key):
+        raise HTTPException(status_code=401, detail="مفتاح API غير صحيح")
     orchestrator = app.state.orchestrator
     result = orchestrator.run_cycle(input_data or {})
     

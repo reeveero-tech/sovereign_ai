@@ -43,7 +43,13 @@ from enum import Enum
 from collections import deque
 
 # إعداد المسار
-sys.path.insert(0, '.')
+# يعمل من الجذر أو من داخل backend (M1)
+import os
+_BACKEND_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'backend')
+if os.path.isdir(_BACKEND_DIR):
+    sys.path.insert(0, _BACKEND_DIR)
+else:
+    sys.path.insert(0, '.')
 
 # استيراد المكونات الرئيسية
 try:

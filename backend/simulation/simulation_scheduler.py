@@ -648,8 +648,11 @@ class SimulationScheduler:
                 "queue_size": len(self._priority_queue),
                 "saved_at": time.time()
             }
-            with open(SCHEDULER_STATE_FILE, 'w', encoding='utf-8') as f:
+            # M1: كتابة ذرية عبر ملف مؤقت لتجنب قراءة ملف نصف مكتوب
+            tmp = SCHEDULER_STATE_FILE.with_suffix('.json.tmp')
+            with open(tmp, 'w', encoding='utf-8') as f:
                 json.dump(state, f, ensure_ascii=False, indent=2)
+            tmp.replace(SCHEDULER_STATE_FILE)
         except Exception as e:
             logger.error(f"خطأ في حفظ حالة المجدول: {e}")
     

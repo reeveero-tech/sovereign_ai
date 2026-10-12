@@ -325,8 +325,8 @@
             
             priorities: {
                 evidence: 'highest',
-                owner-related: 'high',
-                justice-related: 'high',
+                'owner-related': 'high',
+                'justice-related': 'high',
                 normal: 'normal',
                 old: 'low'
             },

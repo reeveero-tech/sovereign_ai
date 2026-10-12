@@ -1,0 +1,66 @@
+# ============================================================
+# SOVRA · .gitignore
+# M1 (R-112): منع تتبع الملفات المؤقتة وبيانات وقت التشغيل
+# ============================================================
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+env/
+
+# بيانات وقت التشغيل (تُنشأ تلقائياً)
+data/sovereign_core/blobs/
+data/sovereign_core/ledger.jsonl
+data/sovereign_core/index.json
+data/sovereign_core/meta.json
+data/sovereign_core/integrity.json
+data/memory_store/
+data/simulation/
+data/config_backup.json
+data/language_evolution.json
+data/nexus_data/
+*.db
+*.sqlite
+*.sqlite3
+
+# مفاتيح وأسرار
+key.secret
+.env
+*.secret
+
+# سجلات
+*.log
+logs/
+nohup.out
+
+# بيئات التطوير
+.replit
+.idea/
+.vscode/
+*.swp
+.DS_Store
+
+# ملفات مؤقتة
+tmp/
+temp/
+*.tmp
+*.bak
+
+# بيانات وقت التشغيل (مجلدات الحالة)
+data/consciousness/
+data/evolution/
+data/identity/
+data/metabolism/
+data/predictive/
+data/quantum/
+data/sovereign/
+data/alignment/
+data/controller/
+data/directives/

@@ -148,6 +148,9 @@ def safe_json_dumps(obj: Any) -> str:
 class FileLock:
     """قفل بسيط للملفات لمنع الوصول المتزامن"""
     
+    # M1: مدة صلاحية القفل — إذا كان القفل أقدم من هذا، يُعتبر قديماً (عملية انهارت)
+    STALE_AFTER_SECONDS = 30.0
+    
     def __init__(self, lock_file: Path, timeout: float = 30.0):
         self.lock_file = lock_file
         self.timeout = timeout
@@ -161,6 +164,17 @@ class FileLock:
                 self._acquired = True
                 break
             except FileExistsError:
+                # M1: كشف الأقفال القديمة (عملية انهارت وتركت القفل)
+                try:
+                    age = time.time() - self.lock_file.stat().st_mtime
+                    if age > self.STALE_AFTER_SECONDS:
+                        logger.warning(f"🧹 إزالة قفل قديم ({age:.0f}s) — عملية سابقة انهارت")
+                        self.lock_file.unlink()
+                        continue
+                except FileNotFoundError:
+                    continue
+                except OSError:
+                    pass
                 if time.time() - start > self.timeout:
                     raise TimeoutError(f"لا يمكن الحصول على القفل: {self.lock_file}")
                 time.sleep(0.1)
@@ -184,13 +198,23 @@ class BlobStore:
     
     def __init__(self, blobs_dir: Path):
         self.blobs_dir = blobs_dir
+        # M1: عدّادات مخزنة لتجنب فحص الدليل الكامل في كل عملية كتابة
+        self._count = 0
+        self._size = 0
+        self._count_loaded = False
+        self._scan()
     
     def _blob_path(self, blob_hash: str) -> Path:
         """مسار blob بناءً على أول حرفين من التجزئة"""
         prefix = blob_hash[:2]
+        return self.blobs_dir / prefix / blob_hash
+    
+    def _ensure_prefix_dir(self, blob_hash: str) -> Path:
+        """إنشاء دليل البادئة عند الكتابة فقط (M1: تجنب mkdir في كل قراءة)"""
+        prefix = blob_hash[:2]
         prefix_dir = self.blobs_dir / prefix
         prefix_dir.mkdir(parents=True, exist_ok=True)
-        return prefix_dir / blob_hash
+        return prefix_dir
     
     def put(self, data: bytes, compress: bool = True) -> str:
         """
@@ -202,6 +226,7 @@ class BlobStore:
         blob_hash = sha256_hash(to_store)
         
         path = self._blob_path(blob_hash)
+        self._ensure_prefix_dir(blob_hash)
         
         # الكتابة الذرية (الكتابة في ملف مؤقت ثم النقل)
         if not path.exists():
@@ -209,6 +234,9 @@ class BlobStore:
             with open(tmp_path, 'wb') as f:
                 f.write(to_store)
             os.replace(tmp_path, path)
+            # M1: تحديث العدّادات المخزنة
+            self._count += 1
+            self._size += len(to_store)
             logger.debug(f"تم تخزين blob جديد: {blob_hash[:16]}... ({len(to_store)} بايت)")
         else:
             logger.debug(f"blob موجود مسبقاً: {blob_hash[:16]}...")
@@ -234,27 +262,45 @@ class BlobStore:
         """حذف blob (نادراً ما يُستخدم، السيادة تعني عدم الحذف)"""
         path = self._blob_path(blob_hash)
         if path.exists():
+            try:
+                size = path.stat().st_size
+            except OSError:
+                size = 0
             path.unlink()
+            # M1: تحديث العدّادات المخزنة
+            self._count = max(0, self._count - 1)
+            self._size = max(0, self._size - size)
             logger.warning(f"تم حذف blob: {blob_hash[:16]}... (هذا نادر في النظام السيادي)")
             return True
         return False
     
-    def size(self) -> int:
-        """الحجم الإجمالي للتخزين بالبايت"""
-        total = 0
+    def _scan(self):
+        """فحص كامل للدليل (مرة واحدة عند التهيئة)"""
+        count = 0
+        size = 0
         for blob_dir in self.blobs_dir.iterdir():
             if blob_dir.is_dir():
                 for blob_file in blob_dir.iterdir():
-                    total += blob_file.stat().st_size
-        return total
+                    count += 1
+                    try:
+                        size += blob_file.stat().st_size
+                    except OSError:
+                        pass
+        self._count = count
+        self._size = size
+        self._count_loaded = True
+    
+    def size(self) -> int:
+        """الحجم الإجمالي للتخزين بالبايت (مخزّن، O(1))"""
+        if not self._count_loaded:
+            self._scan()
+        return self._size
     
     def count(self) -> int:
-        """عدد الـ blobs"""
-        count = 0
-        for blob_dir in self.blobs_dir.iterdir():
-            if blob_dir.is_dir():
-                count += len(list(blob_dir.iterdir()))
-        return count
+        """عدد الـ blobs (مخزّن، O(1))"""
+        if not self._count_loaded:
+            self._scan()
+        return self._count
 
 
 # ============================================================
@@ -395,6 +441,8 @@ class SovereignCore:
 
         # حالة السجل
         self._last_hash = self._load_last_hash()
+        # M1: ذاكرة مؤقتة لنتيجة التحقق من سلامة السجل
+        self._integrity_cache = None
         self._genesis_created = self._load_genesis_status()
         
         logger.info(f"✅ نواة الذاكرة السيادية جاهزة")
@@ -454,7 +502,23 @@ class SovereignCore:
         logger.info("✅ إعادة تهيئة السجل السيادي اكتملت")
     
     def _load_last_hash(self) -> str:
-        """تحميل آخر تجزئة من الميتا أو السجل"""
+        """تحميل آخر تجزئة من السجل (مصدر الحقيقة) أو الميتا"""
+        # M1: السجل هو مصدر الحقيقة — الميتا قد تكون قديمة
+        if self.log_file.exists():
+            try:
+                with open(self.log_file, 'r', encoding='utf-8') as f:
+                    last_hash = "GENESIS"
+                    for line in f:
+                        line = line.strip()
+                        if not line:
+                            continue
+                        last_event = json.loads(line)
+                        last_hash = last_event.get('hash', last_hash)
+                    return last_hash
+            except:
+                pass
+        
+        # إذا لم يوجد سجل، نقرأ من الميتا
         if self.meta_file.exists():
             try:
                 with open(self.meta_file, 'r', encoding='utf-8') as f:
@@ -463,30 +527,7 @@ class SovereignCore:
             except:
                 pass
         
-        # إذا لم توجد ميتا، نقرأ آخر سطر في السجل
-        if self.log_file.exists():
-            try:
-                with open(self.log_file, 'rb') as f:
-                    # انتقل إلى نهاية الملف
-                    f.seek(0, os.SEEK_END)
-                    pos = f.tell()
-                    
-                    # اقرأ للخلف للعثور على آخر سطر
-                    if pos > 0:
-                        pos -= 1
-                        while pos > 0 and f.read(1) != b'\n':
-                            f.seek(pos)
-                            pos -= 1
-                        
-                        last_line = f.readline().decode('utf-8').strip()
-                        if last_line:
-                            last_event = json.loads(last_line)
-                            return last_event.get('hash', 'GENESIS')
-            except:
-                pass
-        
         return 'GENESIS'
-    
     def _load_genesis_status(self) -> bool:
         """التحقق من وجود حدث البداية"""
         if self.meta_file.exists():
@@ -545,6 +586,11 @@ class SovereignCore:
     
     def append_event(self, event_type: EventType, payload: Dict[str, Any],
                      user: Optional[str] = None) -> Dict[str, Any]:
+        # M1: قبول EventType أو سلسلة نصية (كان ينهار على السلاسل)
+        if isinstance(event_type, EventType):
+            event_type_str = event_type.value
+        else:
+            event_type_str = str(event_type)
         """
         إضافة حدث جديد إلى السجل السيادي.
         
@@ -562,12 +608,12 @@ class SovereignCore:
             
             # 3) حساب تجزئة الحدث
             event_hash = self._compute_event_hash(
-                self._last_hash, blob_hash, event_time, event_type.value
+                self._last_hash, blob_hash, event_time, event_type_str
             )
             
             # 4) حساب التوقيع
             signature = self._compute_event_signature(
-                event_hash, self._last_hash, blob_hash, event_time, event_type.value
+                event_hash, self._last_hash, blob_hash, event_time, event_type_str
             )
             
             # 5) بناء حدث السجل
@@ -576,7 +622,7 @@ class SovereignCore:
                 "prev_hash": self._last_hash,
                 "blob": blob_hash,
                 "time": event_time,
-                "type": event_type.value,
+                "type": event_type_str,
                 "signature": signature
             }
             
@@ -592,13 +638,13 @@ class SovereignCore:
             # 8) تحديث الفهرس
             self.index.add_event(
                 event_hash=event_hash,
-                event_type=event_type.value,
+                event_type=event_type_str,
                 event_time=event_time,
                 prev_hash=event["prev_hash"],
                 user=user
             )
             
-            logger.info(f"📝 حدث جديد: {event_type.value} | {event_hash[:16]}... | المستخدم: {user or 'system'}")
+            logger.info(f"📝 حدث جديد: {event_type_str} | {event_hash[:16]}... | المستخدم: {user or 'system'}")
             
             return event
     
@@ -630,7 +676,8 @@ class SovereignCore:
             return {"_error": f"فشل استرجاع الـ payload: {str(e)}"}
     
     def iterate_events(self, reverse: bool = False, 
-                       from_hash: Optional[str] = None) -> Iterator[Dict[str, Any]]:
+                       from_hash: Optional[str] = None,
+                       limit: Optional[int] = None) -> Iterator[Dict[str, Any]]:
         """التكرار عبر الأحداث في السجل"""
         if not self.log_file.exists():
             return
@@ -653,7 +700,12 @@ class SovereignCore:
                     start_index = i + (0 if reverse else 1)
                     break
         
-        for event in events[start_index:]:
+        # M1: دعم حد أقصى لعدد الأحداث
+        end_index = None
+        if limit is not None:
+            end_index = start_index + limit
+        
+        for event in events[start_index:end_index]:
             yield event
     
     def verify_integrity(self, verbose: bool = False) -> IntegrityStatus:
@@ -663,6 +715,12 @@ class SovereignCore:
         - يتحقق من التوقيعات.
         - يتحقق من وجود الـ blobs.
         """
+        # M1: تخزين مؤقت للتحقق — لا نعيد فحص السجل الكامل في كل استعلام حالة
+        # يُعاد التحقق فقط إذا تغيّر السجل (عدد الأحداث أو آخر تجزئة)
+        if not verbose and self._integrity_cache is not None:
+            if self._integrity_cache.get("last_hash") == self._last_hash:
+                return self._integrity_cache["status"]
+        
         logger.info("🔍 بدء التحقق من سلامة السجل...")
         
         if not self.log_file.exists():
@@ -745,6 +803,13 @@ class SovereignCore:
         }
         with open(self.integrity_file, 'w', encoding='utf-8') as f:
             json.dump(integrity_record, f, ensure_ascii=False, indent=2)
+        
+        # M1: حفظ نتيجة التحقق في الذاكرة
+        self._integrity_cache = {
+            "status": IntegrityStatus.VERIFIED,
+            "last_hash": self._last_hash,
+            "checked_at": utc_now_iso()
+        }
         
         logger.info(f"✅ السجل سليم! تم التحقق من {event_count} حدث.")
         return IntegrityStatus.VERIFIED
