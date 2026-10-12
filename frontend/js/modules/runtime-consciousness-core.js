@@ -776,7 +776,7 @@ class SovereignRuntimeConsciousnessCore {
    ============================================================ */
 
 /* تسجيل الطبقة فور توفر السجل */
-const registerWithRegistry = () => {
+const registerConsciousnessCoreWithRegistry = () => {
     const registry = window.SOVRA_LAYER_REGISTRY;
     if (registry && sovereignRuntimeConsciousnessCore) {
         const result = registry.register(
@@ -811,7 +811,7 @@ const registerWithRegistry = () => {
             }
         }
     } else {
-        setTimeout(registerWithRegistry, 100);
+        setTimeout(registerConsciousnessCoreWithRegistry, 100);
     }
 };
 
@@ -823,7 +823,7 @@ const sovereignRuntimeConsciousnessCore =
     new SovereignRuntimeConsciousnessCore();
 
 /* تسجيل الطبقة بعد إنشاء النظام */
-setTimeout(registerWithRegistry, 0);
+setTimeout(registerConsciousnessCoreWithRegistry, 0);
 
 /* =========================================
    Legacy Global

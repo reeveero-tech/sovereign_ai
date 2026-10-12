@@ -31,6 +31,7 @@ import pathlib
 
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Depends, status, BackgroundTasks, Query
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.gzip import GZipMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, validator
@@ -221,6 +222,13 @@ app.add_middleware(
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
+)
+
+# ضغط الاستجابات الكبيرة لتحسين زمن النقل (R-502)
+app.add_middleware(
+    GZipMiddleware,
+    minimum_size=1024,
+    compresslevel=6,
 )
 from api import get_api_router
 app.include_router(get_api_router())
@@ -802,6 +810,12 @@ if (FRONTEND_DIR / "js").exists():
 
 if (FRONTEND_DIR / "ui").exists():
     app.mount("/ui", StaticFiles(directory=str(FRONTEND_DIR / "ui")), name="ui")
+
+if (FRONTEND_DIR / "themes").exists():
+    app.mount("/themes", StaticFiles(directory=str(FRONTEND_DIR / "themes")), name="themes")
+
+if (FRONTEND_DIR / "assets").exists():
+    app.mount("/assets", StaticFiles(directory=str(FRONTEND_DIR / "assets")), name="assets")
 
 # ============================================================
 # تشغيل الخادم (عند تنفيذ الملف مباشرة)

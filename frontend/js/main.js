@@ -998,21 +998,10 @@ if (toggleLiveRefresh) {
 }
 
 // ============================================================
-// 17. الحصول على مفتاح API من الخادم
+// 17. مفاتيح API
 // ============================================================
 
-async function fetchApiKey() {
-    try {
-        const response = await fetch(`${CONFIG.API_BASE_URL}/api-key`);
-        const data = await response.json();
-        if (data.api_key) {
-            CONFIG.API_KEY = data.api_key;
-            addHistoryEvent('info', 'تم استلام مفتاح API');
-        }
-    } catch (error) {
-        addHistoryEvent('warning', 'لا يمكن الحصول على مفتاح API تلقائياً');
-    }
-}
+// لا تُطلب المفاتيح تلقائياً من المتصفح؛ /api-key محمي بمفتاح السيد.
 
 // ============================================================
 // 18. تحسينات التأثيرات الهولوغرافية
@@ -1051,7 +1040,6 @@ function initHolographicEffects() {
 function init() {
     addHistoryEvent('info', 'تم تهيئة الواجهة السيادية');
     
-    fetchApiKey();
     startLiveRefresh();
     initHolographicEffects();
     

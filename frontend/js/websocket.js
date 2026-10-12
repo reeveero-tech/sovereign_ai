@@ -83,9 +83,9 @@ let connectionState = {
 // 3. عناصر DOM للتحديث
 // ============================================================
 
-const wsStatusChip = document.getElementById('ws-status-chip');
-const btnWsConnect = document.getElementById('btn-ws-connect');
-const btnWsDisconnect = document.getElementById('btn-ws-disconnect');
+const websocketStatusChip = document.getElementById('ws-status-chip');
+const wsConnectButton = document.getElementById('btn-ws-connect');
+const wsDisconnectButton = document.getElementById('btn-ws-disconnect');
 
 // ============================================================
 // 4. دوال مساعدة
@@ -104,28 +104,28 @@ function log(message, level = 'info') {
 function updateConnectionUI(isConnected) {
     connectionState.isConnected = isConnected;
     
-    if (wsStatusChip) {
+    if (websocketStatusChip) {
         if (isConnected) {
-            wsStatusChip.innerHTML = '<i class="fas fa-circle"></i> متصل';
-            wsStatusChip.classList.add('online');
-            wsStatusChip.classList.remove('offline');
-            wsStatusChip.classList.remove('connecting');
+            websocketStatusChip.innerHTML = '<i class="fas fa-circle"></i> متصل';
+            websocketStatusChip.classList.add('online');
+            websocketStatusChip.classList.remove('offline');
+            websocketStatusChip.classList.remove('connecting');
         } else if (connectionState.isConnecting) {
-            wsStatusChip.innerHTML = '<i class="fas fa-spinner fa-pulse"></i> جاري الاتصال...';
-            wsStatusChip.classList.add('connecting');
-            wsStatusChip.classList.remove('online');
-            wsStatusChip.classList.remove('offline');
+            websocketStatusChip.innerHTML = '<i class="fas fa-spinner fa-pulse"></i> جاري الاتصال...';
+            websocketStatusChip.classList.add('connecting');
+            websocketStatusChip.classList.remove('online');
+            websocketStatusChip.classList.remove('offline');
         } else {
-            wsStatusChip.innerHTML = '<i class="fas fa-circle"></i> غير متصل';
-            wsStatusChip.classList.add('offline');
-            wsStatusChip.classList.remove('online');
-            wsStatusChip.classList.remove('connecting');
+            websocketStatusChip.innerHTML = '<i class="fas fa-circle"></i> غير متصل';
+            websocketStatusChip.classList.add('offline');
+            websocketStatusChip.classList.remove('online');
+            websocketStatusChip.classList.remove('connecting');
         }
     }
     
     // تحديث الأزرار
-    if (btnWsConnect) btnWsConnect.disabled = isConnected;
-    if (btnWsDisconnect) btnWsDisconnect.disabled = !isConnected;
+    if (wsConnectButton) wsConnectButton.disabled = isConnected;
+    if (wsDisconnectButton) wsDisconnectButton.disabled = !isConnected;
 }
 
 // ============================================================
@@ -614,16 +614,16 @@ function getConnectionState() {
 // 15. ربط الأزرار بوظائف WebSocket
 // ============================================================
 
-if (btnWsConnect) {
-    btnWsConnect.addEventListener('click', () => {
+if (wsConnectButton) {
+    wsConnectButton.addEventListener('click', () => {
         if (!connectionState.isConnected && !connectionState.isConnecting) {
             connectWebSocket();
         }
     });
 }
 
-if (btnWsDisconnect) {
-    btnWsDisconnect.addEventListener('click', () => {
+if (wsDisconnectButton) {
+    wsDisconnectButton.addEventListener('click', () => {
         if (connectionState.isConnected) {
             disconnectWebSocket();
         }

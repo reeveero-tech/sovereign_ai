@@ -89,3 +89,15 @@
 - **D-012**: دمج NexusCore في النواة.
 - **D-013**: إصلاح خطأ `status` (تظليل متغير) في `/sovereign/command` — كشفه R-401.
 - كل الأخطاء المكتشفة موثقة في PROJECT_STATE.md و RISKS.md، وتُعالج في M1.
+
+
+## [M5] — 2026-10-13 — Delivery (R-501/R-502)
+
+### أُنجز
+- **R-501**: QA متصفحياً ناجح (`issue_count: 0`): أُصلحت تصريحات JavaScript المكررة (`registerWithRegistry`, `btnWsConnect`, `btnWsDisconnect`, `wsStatusChip`)؛ أُضيفت mounts للمجلدَين `themes/` و`assets/`؛ وأُلغي طلب `/api-key` غير الموثق تلقائياً من الواجهة مع إبقاء الحماية؛ أُضيف `themes/dark.css` و`assets/logo.svg`.
+- **R-502**: أُضيف `GZipMiddleware` للاستجابات الأكبر من 1,024 بايت. الصفحة الرئيسية: 35,240 → 4,727 بايت مع gzip (86.6% خفض).
+
+### التحقق
+- `python -m pytest tests/ -q`: **15 passed**.
+- Browser QA: لا أخطاء console، لا طلبات فاشلة، لا أخطاء page.
+- قياسات warm: `/health` 3.71ms median، `/status` 1.34ms، `/components/nexus` 1.31ms.
