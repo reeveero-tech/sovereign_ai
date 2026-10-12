@@ -1,0 +1,139 @@
+# ARCHITECTURE.md — البنية المعمارية
+
+> كيف بُني المشروع؟ وصف صادق للبنية الفعلية كما رُصدت في مسح M0.
+> آخر تحديث: 2026-10-12 (الدفعة M0)
+
+---
+
+## 1) نظرة عامة
+
+المشروع يتكون من **نواتين منفصلتين** + نظام طوارئ + بيانات:
+
+1. **النواة الرئيسية (SOVRA)** — `backend/` + `frontend/`: نظام "ذكاء سيادي" تجريبي بواجهة عربية.
+2. **منصة موازية (NexusCore)** — `nexus/`: منصة تحليلات/أتمتة منفصلة، **غير موصولة** بالنواة.
+3. **نظام الطوارئ (guardian)** — `guardian/`: قفل طوارئ + نسخ احتياطي كامل.
+4. **البيانات** — `data/` (blobs مشفرة zlib) + `nexus_data/nexus.db` (SQLite فارغ).
+
+---
+
+## 2) النواة الرئيسية (backend/)
+
+### نقطة الدخول
+- `backend/app.py` — تطبيق FastAPI، 16 مساراً (راجع `API.md`).
+- `backend/api.py` — APIRouter تحت `/api/*` (11 مساراً)، يُدمج في app.py عبر `include_router`.
+- `backend/orchestrator.py` — "العقل المنسق": حلقة دورات، اتخاذ قرار، تنفيذ.
+- `backend/config.py` — الإعدادات من متغيرات البيئة.
+- `backend/safety.py` — طبقة "السيادة": أنواع أفعال تتطلب موافقة السيد.
+
+### الوحدات الفرعية
+| الوحدة | الدور | الملفات |
+|---|---|---|
+| `consciousness/` | "الوعي": حقل، هوية، نموذج ذاتي، وعي، انتباه، استبطان | 6 ملفات |
+| `memory/` | الذاكرة: core, views, compress, encoding + biological/ (غرائز، دوافع، أنماط) + defense/ (دفاعات) + dynamic/ + store/ | ~20 ملف |
+| `predictive/` | التنبؤ: محرك، متحكم، سيناريوهات، محاكاة، إدارة مخاطر | 5 ملفات |
+| `simulation/` | المحاكاة: نواة، بيئة، مجدول، محلل، متحكم | 5 ملفات |
+| `quantum/` | "الكم" (محاكاة مفاهيمية): حالة، حقل، تراكب، انتقال، متحكم | 5 ملفات |
+| `sovereign/` | "السيادة": إرادة، تحكم، توجيهات، مواءمة | 4 ملفات |
+| `biological/` | ⚠️ **مكسور**: `__init__.py` يستورد ملفات غير موجودة → ModuleNotFoundError | 1 ملف |
+
+> ملاحظة: orchestrator يستخدم `memory.biological` (يعمل) وليس `backend/biological` (مكسور).
+
+### كيف يعمل "الذكاء" (الحقيقة)
+- القرارات تُتخذ عبر **قواعد** في `orchestrator._make_decision`: تحليل مخاطر/فرص → `monitor` / `continue` / `explore` / `activate_defense`.
+- `CORE_MODEL_NAME` (Phi-3-mini) معرّف في config لكن **لا يُستورد ولا يوجد في الاعتماديات** — لا يوجد LLM فعلي.
+- "الوعي" و"الكم" و"السيادة" هي **محاكاة مفاهيمية** (فئات/حلقات)، ليست نماذج حقيقية.
+
+---
+
+## 3) الواجهة (frontend/)
+
+- `index.html` — صفحة عربية RTL واحدة، تحمّل **79 ملف JS** عبر `<script defer>`.
+- `js/modules/` — 89 ملف (runtime-*, neural-*, engine-*, إلخ).
+- `js/system/` — 27 ملف (system-*, runtime-layer-registry, إلخ).
+- `css/` + `ui/` (cognitive-input.js).
+- **43 ملف JS غير محمّل** في index.html (كود ميت محتمل — راجع OPEN_QUESTIONS س-6).
+- **ملفان مكسوران** محمّلان: `system-thought-nebula.js` (مقطوع) و `system-runtime-consciousness-loop.js` (خطأ صياغة) — راجع ROADMAP R-101/R-102.
+
+---
+
+## 4) منصة NexusCore (nexus/)
+
+منصة مستقلة كاملة (71 ملف):
+- `core/engine.py` — المحرك الرئيسي (138 سطراً).
+- `analytics/`, `api_gateway/`, `automation/`, `connectors/`, `data_pipeline/`, `decision_engine/`, `encryption/`, `file_manager/`, `forecasting/`, `nlp/`, `performance/`, `resource_manager/`, `security/`, `storage/`, `task_scheduler/`, `user_management/`, `visualization/`, `dashboard/`.
+- `main.py` — `initialize_nexus()` يُستورد بنجاح.
+- **غير موصولة** بالنواة (لا شيء في backend يستورد nexus).
+- `nexus_data/nexus.db` — SQLite (جدولا events, kv_store) — **فارغ** (0 صف).
+
+---
+
+## 5) نظام الطوارئ (guardian/)
+
+- 204 ملف، 4.6MB.
+- `data/emergency/SYSTEM_LOCKED.lock` — قفل نشط: `{"SYSTEM_LOCKED": true, "incident_id": "38d75b88bc2c", "unlock_requires": "MASTER_REACTIVATION_CODE"}`.
+- `ALERT_38d75b88bc2c.json` — سبب القفل: `PROTECTED_ACTION_WITHOUT_MASTER_TOKEN` (محاولة تجاوز صلاحيات السيد).
+- `AI_FROZEN.flag` — تجميد الذكاء الاصطناعي.
+- `emergency_backups/master_backup_20260616_151125/` — نسخة كاملة من backend+frontend (مطابقة للنسخة الحالية في عينة فحصها).
+- `emergency_events.jsonl` — سجل الأحداث الطارئة.
+
+---
+
+## 6) البيانات (data/)
+
+- `data/sovereign_core/blobs/` — 2297 ملف blob (11MB)، **مضغوطة zlib** (فك ضغط عينة أظهر JSON داخلي). تُكتب بواسطة `backend/memory/core.py`.
+- `data/memory_store/backup_1781622498.json` — نسخة ذاكرة فارغة (كل الأقسام `[]`).
+- `data/simulation/` — حالة مجدول/بيئة (فارغة).
+- `data/config_backup.json` — نسخة إعدادات (تتحدث تلقائياً عند كل إقلاع — تُعدّل في git).
+- مجلدات فارغة كثيرة: consciousness, self_model, homeostasis, instincts, quantum, phoenix, sovereign_requests, sovereign_responses, regeneration, stealth, identity.
+
+---
+
+## 7) الملفات الجذرية الشاذة
+
+| الملف | الحقيقة | الحالة |
+|---|---|---|
+| `Fff` (28KB) | نص تعليمات AI | كود ميت |
+| `IDs.py` (61KB) | كود TypeScript/JS بامتداد .py | كود ميت |
+| `encryption.py` (74KB) | "موسوعة تشفير" Python | كود ميت |
+| `investigation.py` (103KB) | نظام CIKMS استخباراتي | كود ميت |
+| `Mr.py` (44KB) | "محرك ولاء" + بروتوكول موت ذاتي | كود ميت |
+| `main.py` (41KB) | نقطة تشغيل بديلة (يجب تشغيله من backend) | نشط جزئياً |
+| `memory/` | نسخة قديمة من polymorphic.py | تكرار |
+| `infrastructure/` | Dockerfile + requirements فارغان (بايت واحد) | فارغ |
+| `attached_assets/` | ملفان نصيان بتعليمات AI | ليسا كوداً |
+
+---
+
+## 8) التشغيل والنشر
+
+| نقطة | المنفذ | الحالة |
+|---|---|---|
+| `start.sh` (Replit) | 5000 | يعمل (من داخل backend) |
+| `fly.toml` (Fly.io) | 8080 | app: sovereign-ai-k20elq, region ams |
+| `Dockerfile` | 8080 | ⚠️ `backend.app:app` يفشل (استيراد نسبي) |
+| `app.py` (مباشر) | 8000 | يعمل |
+| `.replit` | 5000→80 | يعمل |
+
+---
+
+## 9) مخطط التبعيات (ملخص)
+
+```
+frontend/ (JS) ──HTTP/WS──▶ backend/app.py ──▶ orchestrator.py
+                                              ├── consciousness/*
+                                              ├── memory/* (core, biological, defense)
+                                              ├── predictive/*
+                                              ├── simulation/*
+                                              ├── quantum/*
+                                              └── sovereign/*
+nexus/ (منفصلة) ── غير موصولة ──▶ (لا شيء)
+guardian/ ── يراقب/ينسخ ──▶ backend+frontend
+```
+
+---
+
+## 10) سجل التحديثات
+
+| التاريخ | التغيير | الدفعة |
+|---|---|---|
+| 2026-10-12 | إنشاء وثيقة البنية من مسح M0 | M0 |
