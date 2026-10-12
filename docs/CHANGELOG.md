@@ -101,3 +101,10 @@
 - `python -m pytest tests/ -q`: **15 passed**.
 - Browser QA: لا أخطاء console، لا طلبات فاشلة، لا أخطاء page.
 - قياسات warm: `/health` 3.71ms median، `/status` 1.34ms، `/components/nexus` 1.31ms.
+
+
+## [M6] — 2026-10-13 — Continuous Improvement (R-601)
+
+- أُجريت مراجعة دورية لحالات الخارطة وصُححت العدادات: 26 منجزاً، لا بنود قيد التنفيذ أو مقترحة، وبند واحد محجوب.
+- أُعيد تصنيف R-003 إلى `blocked` لأن `git push origin main` فشل بمصادقة GitHub؛ لا تُحتسب الدفعة منشورة دون تحقق remote.
+- أُضيفت قاعدة مراجعة دورية إلى `GOVERNANCE.md` وسُجل القرار D-014.
