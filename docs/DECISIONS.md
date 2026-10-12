@@ -73,6 +73,13 @@
 - **البدائل**: إضافة نموذج حقيقي (يتطلب اعتماديات ثقيلة) — مؤجل لقرار السيد.
 - **الأثر**: DOMAIN.md، PROJECT_CHARTER.md، OPEN_QUESTIONS (س-9) حُدثت.
 
+
+### D-012 — دمج NexusCore في النواة (R-301)
+- **التاريخ**: 2026-10-12
+- **القرار**: دمج منصة NexusCore (71 ملفاً) في النواة كمكوّن orchestrator. `orchestrator._load_nexus()` يحمّل `initialize_nexus()`، ويُكشف عبر `/components/nexus`.
+- **السياق**: NexusCore منصة تحليلات/أتمتة مستقلة (46 مكوّناً فرعياً) كانت غير موصولة بالنواة. قرار السيد: دمج.
+- **البدائل**: عزل (توثيق كمنصة منفصلة) — رُفض. أرشفة — رُفض.
+- **الأثر**: orchestrator.py + app.py حُدثا. ARCHITECTURE.md حُدث. التحقق: `/components/nexus` يعيد 46 مكوّناً، `/health` سليم (23 مكوّناً).
 ### D-011 — أرشفة backend/biological المكسور (R-303)
 - **التاريخ**: 2026-10-12
 - **القرار**: أُرشف `backend/biological/__init__.py` (يستورد 11 وحدة غير موجودة → ModuleNotFoundError). النواة تستخدم `memory.biological` (يعمل).

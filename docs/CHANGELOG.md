@@ -77,10 +77,11 @@
 - **R-302**: القرار D-010 — إعادة التوصيف بصدق: النظام rule-based، لا LLM. DOMAIN.md، PROJECT_CHARTER.md، OPEN_QUESTIONS (س-9) حُدثت.
 - **R-303**: أُرشف `backend/biological/__init__.py` المكسور (يستورد 11 وحدة غير موجودة) → `archive/root_strays/backend_biological_init_duplicate.py`. النواة تستخدم `memory.biological` (يعمل).
 
-### بانتظار قرار السيد
-- **R-301**: مصير منصة NexusCore (142 ملفاً، منصة تحليلات مستقلة غير موصولة بالنواة) — دمج/عزل/أرشفة.
+### أُنجز لاحقاً
+- **R-301**: دمج NexusCore في النواة (قرار D-012) — `orchestrator._load_nexus()` يحمّل 46 مكوّناً فرعياً، `/components/nexus` يعمل، `/health` سليم.
 
 ### قرارات
 - **D-010**: إعادة التوصيف بصدق — لا LLM الآن.
 - **D-011**: أرشفة backend/biological المكسور.
+- **D-012**: دمج NexusCore في النواة.
 - كل الأخطاء المكتشفة موثقة في PROJECT_STATE.md و RISKS.md، وتُعالج في M1.

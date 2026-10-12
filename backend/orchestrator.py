@@ -165,6 +165,7 @@ class SovereignOrchestrator:
         simulation: Any = None,
         sovereign: Any = None,
         quantum: Any = None,
+        nexus: Any = None,
         # إعدادات
         config: Optional[OrchestratorConfig] = None,
         # تسجيل
@@ -210,6 +211,7 @@ class SovereignOrchestrator:
         self.simulation = simulation or self._load_simulation()
         self.sovereign = sovereign or self._load_sovereign()
         self.quantum = quantum or self._load_quantum()
+        self.nexus = nexus or self._load_nexus()
         
         # خلفيات التشغيل
         self._active = True
@@ -422,6 +424,23 @@ class SovereignOrchestrator:
             return controller
         except Exception as e:
             self._update_component_health("quantum_controller", False, str(e))
+            return None
+    
+    def _load_nexus(self) -> Optional[Any]:
+        """تحميل منصة NexusCore (مدمجة في R-301)"""
+        try:
+            import os, sys
+            # nexus/ في جذر المستودع — أضف الجذر إلى مسار الاستيراد
+            _backend_dir = os.path.dirname(os.path.abspath(__file__))
+            _repo_root = os.path.dirname(_backend_dir)
+            if _repo_root not in sys.path:
+                sys.path.insert(0, _repo_root)
+            from nexus.main import initialize_nexus
+            engine = initialize_nexus()
+            self._update_component_health("nexus_engine", True)
+            return engine
+        except Exception as e:
+            self._update_component_health("nexus_engine", False, str(e))
             return None
     
     def _update_component_health(self, name: str, success: bool, error: str = None):

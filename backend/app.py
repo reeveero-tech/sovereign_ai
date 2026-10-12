@@ -610,6 +610,27 @@ async def get_quantum_status():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/components/nexus")
+async def get_nexus_status():
+    """الحصول على حالة منصة NexusCore (مدمجة في R-301)"""
+    try:
+        orchestrator = app.state.orchestrator
+        nexus = getattr(orchestrator, "nexus", None)
+        health = orchestrator.get_component_health().get("nexus_engine", {})
+        return {
+            "nexus": {
+                "loaded": nexus is not None,
+                "health": health,
+                "engine_id": getattr(nexus, "engine_id", None) if nexus else None,
+                "state": getattr(nexus, "state", None).value if nexus and hasattr(getattr(nexus, "state", None), "value") else None,
+                "components": list(getattr(nexus, "components", {}).keys()) if nexus else []
+            },
+            "timestamp": time.time()
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.get("/components/defense")
 async def get_defense_status():
     """الحصول على حالة الدفاع"""

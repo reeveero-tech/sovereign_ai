@@ -10,7 +10,7 @@
 المشروع يتكون من **نواتين منفصلتين** + نظام طوارئ + بيانات:
 
 1. **النواة الرئيسية (SOVRA)** — `backend/` + `frontend/`: نظام "ذكاء سيادي" تجريبي بواجهة عربية.
-2. **منصة موازية (NexusCore)** — `nexus/`: منصة تحليلات/أتمتة منفصلة، **غير موصولة** بالنواة.
+2. **منصة NexusCore** — `nexus/`: منصة تحليلات/أتمتة، **مدمجة في النواة** (R-301) كمكوّن orchestrator.
 3. **نظام الطوارئ (guardian)** — `guardian/`: قفل طوارئ + نسخ احتياطي كامل.
 4. **البيانات** — `data/` (blobs مشفرة zlib) + `nexus_data/nexus.db` (SQLite فارغ).
 
@@ -56,13 +56,13 @@
 
 ---
 
-## 4) منصة NexusCore (nexus/)
+## 4) منصة NexusCore (nexus/) — مدمجة (R-301)
 
-منصة مستقلة كاملة (71 ملف):
+منصة تحليلات/أتمتة كاملة (71 ملف) — **مدمجة في النواة منذ R-301**:
 - `core/engine.py` — المحرك الرئيسي (138 سطراً).
 - `analytics/`, `api_gateway/`, `automation/`, `connectors/`, `data_pipeline/`, `decision_engine/`, `encryption/`, `file_manager/`, `forecasting/`, `nlp/`, `performance/`, `resource_manager/`, `security/`, `storage/`, `task_scheduler/`, `user_management/`, `visualization/`, `dashboard/`.
 - `main.py` — `initialize_nexus()` يُستورد بنجاح.
-- **غير موصولة** بالنواة (لا شيء في backend يستورد nexus).
+- **مدمجة**: `orchestrator._load_nexus()` يحمّل NexusCore كمكوّن (46 مكوّناً فرعياً مسجلاً). يُكشف عبر `/components/nexus`.
 - `nexus_data/nexus.db` — SQLite (جدولا events, kv_store) — **فارغ** (0 صف).
 
 ---
@@ -127,7 +127,7 @@ frontend/ (JS) ──HTTP/WS──▶ backend/app.py ──▶ orchestrator.py
                                               ├── simulation/*
                                               ├── quantum/*
                                               └── sovereign/*
-nexus/ (منفصلة) ── غير موصولة ──▶ (لا شيء)
+nexus/ (مدمجة R-301) ── orchestrator._load_nexus() ──▶ /components/nexus
 guardian/ ── يراقب/ينسخ ──▶ backend+frontend
 ```
 
@@ -139,3 +139,4 @@ guardian/ ── يراقب/ينسخ ──▶ backend+frontend
 |---|---|---|
 | 2026-10-12 | إنشاء وثيقة البنية من مسح M0 | M0 |
 | 2026-10-12 | تحديث: الملفات الشاذة مؤرشفة، المنافذ موحدة (M1/M2) | M1/M2 |
+| 2026-10-12 | تحديث: NexusCore مدمجة في النواة (R-301) | M3 |
