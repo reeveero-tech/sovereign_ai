@@ -281,7 +281,7 @@
 - **ملاحظات**: 71 ملف، تُستورد بنجاح لكن لا تُستخدم.
 
 #### R-302 — توضيح "الذكاء" الحقيقي للنظام
-- **الحالة**: `proposed`
+- **الحالة**: `done`
 - **الهدف**: توثيق أن القرارات حالياً rule-based (لا LLM)، واتخاذ قرار: هل يُضاف نموذج حقيقي أم يُعاد التوصيف بصدق؟
 - **النطاق**: التوثيق + قرار.
 - **خارج النطاق**: بناء نموذج.
@@ -292,8 +292,10 @@
 - **دليل التحقق**: مراجعة.
 - **ملاحظات**: CORE_MODEL_NAME معرف لكن transformers/torch غير موجودة في الاعتماديات ولا يُستورد.
 
+- **إنجاز M3**: القرار D-010 — إعادة التوصيف بصدق (rule-based، لا LLM). DOMAIN.md وPROJECT_CHARTER.md وOPEN_QUESTIONS (س-9) حُدثت.
+
 #### R-303 — إصلاح حزمة backend/biological المكسورة
-- **الحالة**: `proposed`
+- **الحالة**: `done`
 - **الهدف**: إصلاح `backend/biological/__init__.py` (يستورد ملفات غير موجودة → ModuleNotFoundError).
 - **النطاق**: backend/biological/.
 - **خارج النطاق**: لا شيء.
@@ -303,6 +305,8 @@
 - **المخاطر**: منخفضة (المجلد غير مستخدم فعلياً — orchestrator يستخدم memory.biological).
 - **دليل التحقق**: استيراد.
 - **ملاحظات**: orchestrator يستخدم `memory.biological` (يعمل)، بينما `backend/biological` مكسور.
+
+- **إنجاز M3**: أُرشف `backend/biological/__init__.py` المكسور (يستورد 11 وحدة غير موجودة) → `archive/root_strays/backend_biological_init_duplicate.py`. النواة تستخدم `memory.biological` (يعمل).
 
 ---
 
