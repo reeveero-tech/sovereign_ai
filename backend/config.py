@@ -121,21 +121,22 @@ def load_sovereign_key() -> str:
         except:
             pass
     
-    # المصدر 4: مفتاح افتراضي مع تحذير شديد
-    default_key = "مفتاح_افتراضي_غير_آمن_يجب_تغييره_فوراً"
-    
+    # المصدر 4: مفتاح مؤقت عشوائي للتطوير فقط
     if IS_PRODUCTION:
-        # في الإنتاج، نرفض المفتاح الافتراضي
+        # في الإنتاج، نرفض التشغيل دون سر مُدار خارج الكود
         raise ValueError(
             "❌ خطأ أمني خطير: لم يتم تعيين مفتاح السيد في بيئة الإنتاج!\n"
             "قم بتعيين متغير البيئة SOVEREIGN_KEY أو أنشئ ملف key.secret"
         )
-    else:
-        warnings.warn(
-            "⚠️ تحذير أمني: يتم استخدام مفتاح سيد افتراضي غير آمن!\n"
-            "الرجاء تعيين SOVEREIGN_KEY في متغيرات البيئة للإنتاج"
-        )
-        return default_key
+
+    # لا نستخدم قيمة معروفة أو ثابتة حتى في التطوير؛ هذا يمنع إعادة استخدام
+    # سر منشور عند تشغيل نسخة محلية غير مُهيأة.
+    ephemeral_key = secrets.token_urlsafe(32)
+    warnings.warn(
+        "⚠️ لم يتم تعيين SOVEREIGN_KEY؛ تم توليد مفتاح مؤقت عشوائي للتطوير.\n"
+        "عيّن SOVEREIGN_KEY أو أنشئ ملف key.secret قبل أي تشغيل دائم أو إنتاجي."
+    )
+    return ephemeral_key
 
 SOVEREIGN_KEY = load_sovereign_key()
 
@@ -288,9 +289,6 @@ def validate_config() -> List[str]:
             errors.append(f"لا يمكن إنشاء المجلد {dir_path}: {e}")
     
     # التحقق من مفتاح السيد
-    if SOVEREIGN_KEY in ["مفتاح_افتراضي_غير_آمن_يجب_تغييره_فوراً", "مفتاح_السيد_السري_6532_غير_صالح_للانتاج_يجب_تغييره"]:
-        errors.append("⚠️ مفتاح السيد لا يزال افتراضياً! غيّره فوراً")
-    
     if IS_PRODUCTION and len(SOVEREIGN_KEY) < 32:
         errors.append("❌ في بيئة الإنتاج، يجب أن يكون مفتاح السيد بطول 32 حرفاً على الأقل")
     
