@@ -64,3 +64,9 @@ data/sovereign/
 data/alignment/
 data/controller/
 data/directives/
+
+# مجلدات وقت تشغيل فارغة
+cache/
+experiments/
+exports/
+memory/

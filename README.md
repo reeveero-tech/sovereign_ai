@@ -1,4 +1,6 @@
-# Sovereign AI – النسخة التجريبية
+# SOVRA · Sovereign Cognitive Operating System
+
+> الاسم الرسمي: **Sovereign AI (SOVRA)** — نظام تشغيل معرفي سيادي (قرار R-202).
 
 هذا المشروع يمثل نواة "ذكاء سيادي" تجريبي، يعمل على:
 - GitHub (للكود)
@@ -6,7 +8,25 @@
 - Google(للتخزين المشفر)
 - جهاز المستخدم (للسيادة الكاملة لاحقاً)
 
-## هيكل المشروعsovereign_ai/ ├── backend/ │   ├── app.py │   ├── orchestrator.py │   ├── memory.py │   └── safety.py ├── infrastructure/ │   ├── requirements.txt │   └── Dockerfile └── data/
+## هيكل المشروع
+
+```
+sovereign_ai/
+├── backend/          # النواة (FastAPI): app.py, orchestrator.py, api.py, config.py
+│   ├── consciousness/  # الوعي
+│   ├── memory/         # الذاكرة (core, biological, defense, store)
+│   ├── predictive/     # التنبؤ
+│   ├── simulation/     # المحاكاة
+│   ├── quantum/        # الكم
+│   └── sovereign/      # السيادة
+├── frontend/         # الواجهة (RTL عربي)
+├── docs/             # الوثائق الحاكمة (15 ملفاً)
+├── guardian/         # الحارس (أمان/نسخ احتياطي)
+├── archive/          # الملفات المؤرشفة
+├── nexus/            # منصة منفصلة (NexusCore)
+├── main.py           # نقطة تشغيل بديلة
+└── data/             # بيانات وقت التشغيل (غير متتبعة)
+```
 ## الهدف
 بناء عقل سيادي:
 - يتعلم

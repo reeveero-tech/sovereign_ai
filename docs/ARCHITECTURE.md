@@ -88,19 +88,20 @@
 
 ---
 
-## 7) الملفات الجذرية الشاذة
+## 7) الملفات الجذرية الشاذة (بعد M1/M2)
 
 | الملف | الحقيقة | الحالة |
 |---|---|---|
-| `Fff` (28KB) | نص تعليمات AI | كود ميت |
-| `IDs.py` (61KB) | كود TypeScript/JS بامتداد .py | كود ميت |
-| `encryption.py` (74KB) | "موسوعة تشفير" Python | كود ميت |
-| `investigation.py` (103KB) | نظام CIKMS استخباراتي | كود ميت |
-| `Mr.py` (44KB) | "محرك ولاء" + بروتوكول موت ذاتي | كود ميت |
-| `main.py` (41KB) | نقطة تشغيل بديلة (يجب تشغيله من backend) | نشط جزئياً |
-| `memory/` | نسخة قديمة من polymorphic.py | تكرار |
-| `infrastructure/` | Dockerfile + requirements فارغان (بايت واحد) | فارغ |
-| `attached_assets/` | ملفان نصيان بتعليمات AI | ليسا كوداً |
+| `Fff` (28KB) | نص تعليمات AI | ✅ مؤرشف → `archive/root_strays/Fff.txt` (R-110) |
+| `IDs.py` (61KB) | كود TypeScript/JS بامتداد .py | ✅ مؤرشف → `archive/root_strays/IDs.js` (R-110) |
+| `encryption.py` (74KB) | "موسوعة تشفير" Python | ✅ مؤرشف → `archive/root_strays/encryption.py` (R-110) |
+| `investigation.py` (103KB) | نظام CIKMS استخباراتي | ✅ مؤرشف → `archive/root_strays/investigation.py` (R-110) |
+| `Mr.py` (44KB) | "محرك ولاء" + بروتوكول موت ذاتي | ⚠️ أُبقي في مكانه (خطر تدمير ذاتي، D-005) |
+| `main.py` (41KB) | نقطة تشغيل بديلة | نشط (أُصلح في R-105) |
+| `memory/` | نسخة قديمة من polymorphic.py | ✅ أُرشف (R-110) + أُزيلت البقايا (R-201) |
+| `infrastructure/` | Dockerfile + requirements فارغان | ✅ أُرشف (R-110) |
+| `attached_assets/` | ملفان نصيان بتعليمات AI | ✅ أُرشف (R-110) |
+| `dockerignore` (صغير) | تكرار لـ `.dockerignore` بمحتوى مختلف | ✅ أُرشف (R-201) |
 
 ---
 
@@ -108,11 +109,11 @@
 
 | نقطة | المنفذ | الحالة |
 |---|---|---|
-| `start.sh` (Replit) | 5000 | يعمل (من داخل backend) |
+| `start.sh` (Replit) | `PORT` (8000) | ✅ موحد (R-104) |
 | `fly.toml` (Fly.io) | 8080 | app: sovereign-ai-k20elq, region ams |
-| `Dockerfile` | 8080 | ⚠️ `backend.app:app` يفشل (استيراد نسبي) |
-| `app.py` (مباشر) | 8000 | يعمل |
-| `.replit` | 5000→80 | يعمل |
+| `Dockerfile` | 8080 | ✅ أُصلح (R-105): `WORKDIR /app/backend`, `uvicorn app:app` |
+| `app.py` (مباشر) | `PORT` (8000) | ✅ يعمل |
+| `.replit` | `PORT` (8000) | ✅ موحد (R-104) |
 
 ---
 
@@ -137,3 +138,4 @@ guardian/ ── يراقب/ينسخ ──▶ backend+frontend
 | التاريخ | التغيير | الدفعة |
 |---|---|---|
 | 2026-10-12 | إنشاء وثيقة البنية من مسح M0 | M0 |
+| 2026-10-12 | تحديث: الملفات الشاذة مؤرشفة، المنافذ موحدة (M1/M2) | M1/M2 |

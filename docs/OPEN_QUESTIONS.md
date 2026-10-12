@@ -19,6 +19,7 @@
 - **الوضع**: README يقول "Sovereign AI"، الواجهة تقول "SOVRA · Sovereign Cognitive Operating System"، الملفات تستخدم SOVRA.
 - **الخيارات**: توحيد على "SOVRA" / "Sovereign AI" / اسم آخر.
 - **التوصية**: SOVRA (الأقصر والأكثر استخداماً في الكود).
+- **تحديث (M2)**: القرار D-008 — الاسم الرسمي **Sovereign AI (SOVRA)**. README حُدث. التوحيد الكامل في الكود مؤجل.
 
 ### س-3: هل قفل guardian (SYSTEM_LOCKED.lock) مقصود؟
 - **الوضع**: النظام "مقفل" بحدث طارئ بتاريخ 2026-06-16: `PROTECTED_ACTION_WITHOUT_MASTER_TOKEN`، يتطلب `MASTER_REACTIVATION_CODE`.
