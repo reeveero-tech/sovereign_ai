@@ -1111,6 +1111,27 @@ class SovereignOrchestrator:
                            str(record), importance=0.5)
             memory_update["status"] = "stored_in_dynamic"
         
+        # ========================================================
+        # الضغط الأسطوري (R-608) — إحياء memory/compress.py
+        # ضغط دوري للسجل السيادي كل 50 دورة
+        # ========================================================
+        try:
+            if self._stats.get("total_cycles", 0) % 50 == 0:
+                from memory.compress import get_compressor
+                compressor = get_compressor()
+                compression = compressor.compress_from_core(limit=200)
+                memory_update["compression"] = {
+                    "active": True,
+                    "consciousness": compression.get("consciousness", "")[:32],
+                    "dimensions": compression.get("dimensions", []),
+                    "events_compressed": compression.get("events_compressed", 0),
+                    "stats": compressor.get_stats()
+                }
+                self._log("info", "🧬 الضغط الأسطوري: تم ضغط السجل السيادي", 
+                          {"consciousness": compression.get("consciousness", "")[:16]})
+        except Exception as _compress_err:
+            memory_update["compression"] = {"active": False, "error": str(_compress_err)[:100]}
+        
         memory_update["details"] = {"record_size": len(str(record))}
         
         return memory_update

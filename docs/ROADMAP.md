@@ -467,13 +467,30 @@
 - **دليل التحقق**: اختبار تحميل jsdom — 122/122 ملف تُحمَّل، 0 فشل، 40/40 وحدة ميتة في السجل الموحد؛ `node --check` على الملفات الثلاثة المُصلحة؛ `python -m pytest tests/ -q` — 35 passed.
 - **ملاحظات**: أُغلق RF-03 وS-6؛ سُجل القرار D-020.
 
+#### R-608 — إحياء طبقة الأمان الكاملة (Revive Safety Layer)
+- **الحالة**: `done` (2026-10-13)
+- **الهدف**: إحياء طبقة الأمان بكل مكوناتها (أمر السيد): `backend/safety.py` (حارس الأمان SafetyGuard — 520 سطراً)، `nexus/api_gateway/` (REST API لـ NexusCore + RateLimiter)، `memory/compress.py` (الضغط الأسطوري SovereignCompressor) — كانت كلها كوداً ميتاً غير مستورد. بروتوكول الموت الذاتي `Mr.py` يبقى محمياً بالقرار (D-005).
+- **النتيجة**:
+  - **safety.py حيّ**: `SafetyGuard` مربوط في `/chat` (فحص كل رسالة قبل المعالجة — الرسائل الخطيرة تُحجب برد أمني)، في WebSocket (`sir_command` و`chat_message`)، وفي `/sovereign/command` و`/sovereign/reset` (الأوامر الممنوعة تماماً تُحجب حتى للسيد). نقطتان جديدتان: `/security/status` و`/security/log`.
+  - **api_gateway حيّ**: `NexusRouter` مربوط في التطبيق — 6 نقاط جديدة: `/nexus/status`, `/nexus/analyze/text`, `/nexus/ingest`, `/nexus/health`, `/nexus/budget/analyze`, `/nexus/recommendations`. إجمالي المسارات: 37 → 45.
+  - **compress.py حيّ**: أُصلح خطأ بنيوي حقيقي (طريقة `reset` كانت خارج الفئة على العمود 0 — ابتلعت `__init__` و`compress` و`get_stats` كدوال متداخلة، فكانت الفئة بلا أي طرق وتتعطل عند أي استخدام). بعد الإصلاح: الفئة كاملة (6 أبعاد ضغط + `compress_from_core` + `get_stats`). مربوط في `orchestrator._update_memory` — ضغط دوري للسجل السيادي كل 50 دورة.
+  - **حذف النسخ المكررة الأصغر** (أمر السيد: احذف الأصغر وأبقِ الأكبر): حُذف `archive/root_strays/memory_defense_polymorphic_duplicate.py` (756 سطراً — v3.0.0 أقدم) وأُبقي `backend/memory/defense/polymorphic.py` (798 سطراً — v4.0.0 الحية)؛ حُذف `archive/root_strays/backend_biological_init_duplicate.py` (25 سطراً). النسخة الاحتياطية الكبرى في guardian (4.5MB، 204 ملفات) أُبقيت كما هي.
+- **النطاق**: `backend/app.py`, `backend/api.py`, `backend/orchestrator.py`, `backend/memory/compress.py` (إصلاح بنيوي), `tests/test_safety_layer.py` (9 اختبارات جديدة), حذف ملفين مكررين.
+- **خارج النطاق**: لا تغيير في `Mr.py` (محمي D-005)؛ لا تغيير في قفل guardian (D-006)؛ لا حذف للنسخة الاحتياطية الكبرى.
+- **الاعتماديات**: R-607 (إحياء الواجهة)، R-603 (تقييد `/chat`).
+- **معيار القبول**: `SafetyGuard` يفحص كل مدخلات `/chat` وWebSocket؛ الأوامر الممنوعة تماماً تُحجب حتى للسيد؛ نقاط `/nexus/*` الست تعمل؛ الضغط الأسطوري يعمل (اختبار ضغط 3 أحداث → 16 بايت)؛ 44 اختباراً تمر (35 + 9 جديدة).
+- **الوثائق المتأثرة**: `ROADMAP.md`, `PROJECT_STATE.md`, `QUALITY.md`, `RISKS.md`, `CHANGELOG.md`, `DECISIONS.md`, `OPEN_QUESTIONS.md`, `SECURITY.md`.
+- **المخاطر**: منخفضة؛ طبقة الأمان تضيف فحصاً قبل المعالجة (لا تغير منطق الدورة)؛ نقاط `/nexus/*` للقراءة/التحليل فقط؛ الضغط الدوري كل 50 دورة خفيف.
+- **دليل التحقق**: `python -m pytest tests/ -q` — 44 passed؛ اختبار يدوي: رسالة خطيرة في `/chat` → `status: blocked`؛ `/security/status` → `active: True`؛ `/nexus/health` → `200 healthy`؛ ضغط 3 أحداث → وعي 16 بايت.
+- **ملاحظات**: أُغلق RK-04 (نقاط عامة — الآن محمية بطبقة الأمان)؛ سُجل القرار D-021.
+
 ---
 
 ## 3) ملخص الحالة
 
 | الحالة | العدد |
 |---|---|
-| done | 33 (R-001..R-003, R-101..R-112, R-201..R-203, R-301..R-303, R-401..R-403, R-501..R-502, R-601..R-607) |
+| done | 34 (R-001..R-003, R-101..R-112, R-201..R-203, R-301..R-303, R-401..R-403, R-501..R-502, R-601..R-608) |
 | in_progress | 0 |
 | proposed | 0 |
 | blocked | 0 |
@@ -492,3 +509,4 @@
 | 2026-10-13 | R-605: إلغاء تتبع 2233 ملف بيانات وقت تشغيل (قرار R-112 المؤجل) | M6 |
 | 2026-10-13 | R-606: تحسين أداء دورة المنسق (TTL caching + إصلاح عودية + إصلاح سجل + مسار ذيل سريع) | M6 |
 | 2026-10-13 | R-607: إحياء 43 ملف JS ميت (نظام Sovereign Runtime) — ترتيب اعتماديات + إصلاح 3 أخطاء + ربط بـ index.html | M6 |
+| 2026-10-13 | R-608: إحياء طبقة الأمان الكاملة (safety.py + api_gateway + compress.py) — فحص كل المدخلات + 6 نقاط /nexus/* + إصلاح بنيوي للضاغط + حذف نسختين مكررتين أصغر | M6 |

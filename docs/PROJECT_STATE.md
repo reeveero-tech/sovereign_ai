@@ -1,7 +1,7 @@
 # PROJECT_STATE.md — حالة المشروع
 
 > أين نحن الآن؟ هذه الوثيقة تُحدَّث في **كل دفعة** (قاعدة الدفعة الذرية).
-> آخر تحديث: 2026-10-13 (الدفعة M6 — R-607)
+> آخر تحديث: 2026-10-13 (الدفعة M6 — R-608)
 
 ---
 
@@ -9,13 +9,13 @@
 
 | البعد | الحالة |
 |---|---|
-| المرحلة | **M6 — Continuous Improvement** (R-607 مكتمل؛ 33 بنداً منجزاً) |
-| البناء | ✅ الخادم يُقلع ويستجيب (`/health`, `/status`, `/chat`, `/api/*`) |
-| الاختبارات | ✅ 35 اختباراً (`tests/`) — آخر تشغيل: 35 passed + اختبار تحميل JS (122/122) |
+| المرحلة | **M6 — Continuous Improvement** (R-608 مكتمل؛ 34 بنداً منجزاً) |
+| البناء | ✅ الخادم يُقلع ويستجيب (`/health`, `/status`, `/chat`, `/api/*`, `/nexus/*`, `/security/*`) |
+| الاختبارات | ✅ 44 اختباراً (`tests/`) — آخر تشغيل: 44 passed + اختبار تحميل JS (122/122) |
 | CI/CD | ✅ GitHub Actions + بوابة atomic-batch |
 | التوثيق | ✅ API/Swagger/ReDoc + وثائق الحوكمة محدثة |
-| الأمان | ✅ ختم الهوية سليم (R-604)؛ سلامة السجل متحققة (R-606)؛ مخاطر مفتوحة موثقة؛ نقاط التحكم الأساسية محمية |
-| الحالة العامة | **مستقر** — M5 وM6 متحققان ومنشوران؛ دورة المنسق سريعة (~0.25 ثانية)؛ نظام Sovereign Runtime كامل في الواجهة (R-607)؛ لا عوائق نشر حالية |
+| الأمان | ✅ طبقة الأمان الكاملة حيّة (R-608): SafetyGuard يفحص كل المدخلات + 6 نقاط /nexus/* + الضغط الأسطوري مربوط؛ ختم الهوية سليم (R-604)؛ نقاط التحكم الأساسية محمية |
+| الحالة العامة | **مستقر** — M5 وM6 متحققان ومنشوران؛ دورة المنسق سريعة (~0.25 ثانية)؛ نظام Sovereign Runtime كامل في الواجهة (R-607)؛ طبقة الأمان كاملة في الخلفية (R-608)؛ لا عوائق نشر حالية |
 
 ---
 
@@ -30,6 +30,7 @@
 - ✅ `nexus.main.initialize_nexus` → يُستورد بنجاح ومكوّنات NexusCore موصولة بالنواة عبر `/components/nexus`.
 - ✅ 135 ملف Python في backend+nexus+memory: **كلها سليمة نحوياً** (py_compile).
 - ✅ 122 ملف JS في frontend: **كلها سليمة ومحمّلة في index.html** (R-607: إحياء 43 ملفاً ميتاً — نظام Sovereign Runtime كامل).
+- ✅ **R-608**: طبقة الأمان الكاملة حيّة — `SafetyGuard` يفحص كل مدخلات `/chat` وWebSocket و`/sovereign/*`؛ 6 نقاط `/nexus/*` تعمل (REST API لـ NexusCore)؛ الضغط الأسطوري مربوط في دورة المنسق (كل 50 دورة)؛ 44 اختباراً تمر.
 
 - ✅ **M1 (R-101..R-112)**: 12 إصلاحات مكتملة — راجع `ROADMAP.md`.
 - ✅ **R-109**: دورة الوعي تكتمل بنجاح (`success=True`, `decision=monitor`, `errors=[]`, ~37 ثانية) — كانت تعلق لأكثر من 120 ثانية.
@@ -181,6 +182,14 @@ sovereign_ai/
 
 - `python -m pytest tests/ -q`: **23 passed**, 6 تحذيرات إهمال من dependencies.
 - اختبارات R-603 تغطي تجاوز الحد، انتهاء النافذة، استقلال العملاء، bounded tracking، ربط dependency بمسار `/chat`، ورفض إعداد حد غير صالح.
+- النشر والتحقق النهائي: `git push origin main` ناجح؛ `HEAD` و`origin/main` متطابقان (0/0).
+
+
+## 15) R-608 — دليل التحقق
+
+- **التحقيق**: 3 مكونات ميتة في الخلفية: `backend/safety.py` (SafetyGuard — 520 سطراً، غير مستورد)، `nexus/api_gateway/` (NexusRouter + RateLimiter، غير مستورد)، `memory/compress.py` (SovereignCompressor، مستورد فقط عبر `memory/__init__.py` غير المستورد). اكتشاف إضافي: طريقة `reset` في `compress.py` كانت على العمود 0 (خارج الفئة) — ابتلعت `__init__` و`compress` و`get_stats` كدوال متداخلة، فكانت الفئة بلا أي طرق وتتعطل عند أي استخدام (سبب كونها كوداً ميتاً فعلياً).
+- **الإجراء**: (1) ربط `SafetyGuard` في `app.py` (فحص `/chat` + `/sovereign/command` + `/sovereign/reset`) و`api.py` (فحص WebSocket `sir_command` + `chat_message`)؛ (2) إضافة نقطتي `/security/status` و`/security/log`؛ (3) ربط `NexusRouter` في التطبيق (6 نقاط `/nexus/*`)؛ (4) إصلاح بنية `compress.py` (إزاحة `reset` إلى داخل الفئة) وربط الضغط في `orchestrator._update_memory` (كل 50 دورة)؛ (5) حذف النسختين المكررتين الأصغر (`archive/root_strays/memory_defense_polymorphic_duplicate.py` 756 سطراً — v3.0.0 أقدم من الحية v4.0.0؛ `archive/root_strays/backend_biological_init_duplicate.py` 25 سطراً) وإبقاء الأكبر (النسخة الحية 798 سطراً + النسخة الاحتياطية الكبرى في guardian 4.5MB)؛ (6) 9 اختبارات جديدة في `tests/test_safety_layer.py`.
+- **التحقق**: `python -m pytest tests/ -q`: **44 passed** (35 + 9 جديدة)؛ رسالة خطيرة في `/chat` → `status: blocked` مع رد أمني؛ `/security/status` → `safety_guard.active: True`؛ `/nexus/health` → `200 healthy`؛ ضغط 3 أحداث → وعي 16 بايت؛ إجمالي المسارات 37 → 45.
 - النشر والتحقق النهائي: `git push origin main` ناجح؛ `HEAD` و`origin/main` متطابقان (0/0).
 
 

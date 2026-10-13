@@ -36,6 +36,13 @@ except ImportError:
     sys.path.append('.')
     from orchestrator import get_orchestrator, OrchestratorMode
 
+# طبقة الأمان السيادية (R-608)
+try:
+    from safety import SafetyGuard
+    _ws_safety = SafetyGuard()
+except Exception:
+    _ws_safety = None
+
 import logging
 logger = logging.getLogger("SovereignAPI")
 
@@ -536,6 +543,23 @@ async def websocket_endpoint(websocket: WebSocket):
                 if msg_type == "sir_command":
                     command_text = payload.get("text", "")
                     
+                    # فحص الأمان (R-608): حتى السيد تُفحص الأوامر الممنوعة تماماً
+                    if _ws_safety is not None:
+                        safe_text, needs_approval, reason = _ws_safety.check_input(command_text, is_sovereign=True)
+                        if needs_approval:
+                            await manager.send_message(client_id, {
+                                "type": "command_response",
+                                "payload": {
+                                    "command": command_text,
+                                    "success": False,
+                                    "cycle_id": "safety-block",
+                                    "decision": {"action": "blocked", "reason": reason, "message": safe_text}
+                                },
+                                "timestamp": time.time()
+                            })
+                            logger.warning(f"أمر محظور من السيد [{client_id}]: {command_text[:50]} — {reason}")
+                            continue
+                    
                     input_data = {
                         "type": "sir_command",
                         "source": "websocket",
@@ -564,6 +588,23 @@ async def websocket_endpoint(websocket: WebSocket):
                 # ================================================
                 elif msg_type == "chat_message":
                     text = payload.get("text", "")
+                    
+                    # فحص الأمان (R-608): فحص رسالة الحوار قبل المعالجة
+                    if _ws_safety is not None:
+                        safe_text, needs_approval, reason = _ws_safety.check_input(text, is_sovereign=False)
+                        if needs_approval:
+                            await manager.send_message(client_id, {
+                                "type": "ai_message",
+                                "payload": {
+                                    "text": safe_text,
+                                    "cycle_id": "safety-block",
+                                    "blocked": True,
+                                    "reason": reason
+                                },
+                                "timestamp": time.time()
+                            })
+                            logger.warning(f"رسالة محظورة من [{client_id}]: {text[:50]} — {reason}")
+                            continue
                     
                     input_data = {
                         "type": "chat_message",

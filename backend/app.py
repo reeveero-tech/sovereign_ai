@@ -85,8 +85,24 @@ from config import SOVEREIGN_KEY as SOVEREIGN_API_KEY
 from config import CORS_ORIGINS as ALLOWED_ORIGINS
 from config import MAX_USER_MESSAGES_PER_MINUTE
 from rate_limit import SlidingWindowRateLimiter
+from safety import SafetyGuard, ActionType
 
 chat_rate_limiter = SlidingWindowRateLimiter(MAX_USER_MESSAGES_PER_MINUTE)
+
+# ============================================================
+# طبقة الأمان السيادية (R-608) — إحياء safety.py
+# ============================================================
+safety_guard = SafetyGuard()
+
+def enforce_input_safety(message_text: str, is_sovereign: bool = False) -> Optional[str]:
+    """
+    فحص أي رسالة تدخل النظام عبر طبقة الأمان.
+    تُرجع رسالة الرفض إذا كانت خطيرة، أو None إذا كانت آمنة.
+    """
+    safe_text, needs_approval, reason = safety_guard.check_input(message_text, is_sovereign)
+    if needs_approval:
+        return safe_text
+    return None
 
 def enforce_chat_rate_limit(request: Request) -> None:
     """Throttle chat by the connection's direct client IP, without trusting forwarded headers."""
@@ -250,6 +266,20 @@ app.add_middleware(
 )
 from api import get_api_router
 app.include_router(get_api_router())
+
+# ============================================================
+# NexusCore REST API (R-608) — إحياء nexus/api_gateway
+# ============================================================
+try:
+    import sys as _sys
+    _repo_root = _BACKEND_DIR.parent
+    if str(_repo_root) not in _sys.path:
+        _sys.path.insert(0, str(_repo_root))
+    from nexus.api_gateway import NexusRouter
+    app.include_router(NexusRouter.router)
+    logger.info("✅ NexusCore REST API مفعّل (/nexus/*)")
+except Exception as _nexus_err:
+    logger.warning(f"⚠️ NexusCore REST API غير مفعّل: {_nexus_err}")
 # ============================================================
 # نقاط API العامة (بدون مصادقة)
 # ============================================================
@@ -329,6 +359,23 @@ async def chat(message: ChatMessage, background_tasks: BackgroundTasks):
     """
     start_time = time.time()
     
+    # ========================================================
+    # فحص الأمان (R-608): فحص الرسالة قبل المعالجة
+    # ========================================================
+    safety_block = enforce_input_safety(message.text, is_sovereign=False)
+    if safety_block is not None:
+        safety_guard.log_sovereign_action("chat_blocked", {
+            "user_id": message.user_id,
+            "reason": safety_block[:100]
+        })
+        return ChatResponse(
+            reply=safety_block,
+            status="blocked",
+            cycle_id="safety-block",
+            processing_time_ms=round((time.time() - start_time) * 1000, 2),
+            timestamp=start_time
+        )
+    
     # إنشاء session_id إذا لم يكن موجوداً
     session_id = message.session_id or str(uuid.uuid4())
     
@@ -396,6 +443,18 @@ async def sovereign_command(command: SovereignCommand):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="مفتاح API غير صحيح"
+        )
+    
+    # ========================================================
+    # فحص الأمان (R-608): حتى السيد تُفحص الأوامر الممنوعة تماماً
+    # ========================================================
+    safety_block = enforce_input_safety(command.command, is_sovereign=True)
+    if safety_block is not None:
+        return SovereignCommandResponse(
+            success=False,
+            message=safety_block,
+            data={"blocked_by": "safety_guard"},
+            timestamp=time.time()
         )
     
     orchestrator = app.state.orchestrator
@@ -506,6 +565,13 @@ async def sovereign_reset(request: ResetRequest):
     """
     if not verify_api_key(request.api_key):
         raise HTTPException(status_code=401, detail="مفتاح API غير صحيح")
+    
+    # ========================================================
+    # فحص الأمان (R-608): إعادة التهيئة فعل خطير — يُفحص دائماً
+    # ========================================================
+    safety_block = enforce_input_safety("reset system", is_sovereign=True)
+    if safety_block is not None:
+        raise HTTPException(status_code=403, detail=safety_block)
     
     orchestrator = app.state.orchestrator
     
@@ -658,6 +724,47 @@ async def get_nexus_status():
             },
             "timestamp": time.time()
         }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================
+# نقاط الأمان (R-608) — طبقة الأمان السيادية
+# ============================================================
+
+@app.get("/security/status")
+async def get_security_status():
+    """حالة طبقة الأمان السيادية"""
+    return {
+        "safety_guard": {
+            "active": True,
+            "forbidden_absolute": len(safety_guard.forbidden_absolute),
+            "dangerous_patterns": list(safety_guard.dangerous_patterns.keys()),
+            "approval_cache_entries": len(safety_guard.approval_cache),
+            "security_log_file": str(safety_guard.security_log_file),
+        },
+        "rate_limiter": {
+            "active": True,
+            "max_per_minute": MAX_USER_MESSAGES_PER_MINUTE,
+        },
+        "nexus_api": {
+            "active": True,
+            "endpoints": ["/nexus/status", "/nexus/analyze/text", "/nexus/ingest", "/nexus/health", "/nexus/budget/analyze", "/nexus/recommendations"],
+        },
+        "timestamp": time.time()
+    }
+
+
+@app.get("/security/log")
+async def get_security_log(limit: int = Query(50, ge=1, le=500)):
+    """آخر أحداث سجل الأمان"""
+    log_file = safety_guard.security_log_file
+    if not log_file.exists():
+        return {"events": [], "total": 0}
+    try:
+        with open(log_file, "r", encoding="utf-8") as f:
+            log = json.load(f)
+        return {"events": log[-limit:], "total": len(log)}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

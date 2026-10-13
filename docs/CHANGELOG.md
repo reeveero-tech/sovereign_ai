@@ -1,7 +1,7 @@
 # CHANGELOG.md — سجل التغييرات
 
 > كل تغيير يُسجل هنا (قاعدة الدفعة الذرية).
-> آخر تحديث: 2026-10-13 (الدفعة M6 — R-607)
+> آخر تحديث: 2026-10-13 (الدفعة M6 — R-608)
 
 ---
 
@@ -176,3 +176,15 @@
   - `runtime-autonomous-preservation.js`: خطأ مطبعي `self.selfQuarantine` → `this.selfQuarantine` (كان يقرأ `this.selfQuarantine.enabled` على undefined).
 - **التحقق**: اختبار تحميل jsdom — **122/122 ملف تُحمَّل، 0 فشل**؛ **40/40 وحدة ميتة سُجّلت** في `window.SOVEREIGN` (52 نظاماً إجمالاً، من 17 سابقاً)؛ `node --check` يمر على الملفات الثلاثة المُصلحة؛ `python -m pytest tests/ -q`: **35 passed**.
 - أُغلق RF-03 وS-6 وسُجل القرار D-020.
+
+
+## [M6] — R-608 — 2026-10-13 — Revive safety layer (full)
+
+- **التحقيق** (أمر السيد: "نفذ احياء طبقة الامان بكل مكوناتها لابد أن تكون ضمن المشروع، بروتوكول الموت الذاتي يبقى محمي بالقرار، احذف أحد النسخ المكرره الأصغر، وابق الأكبر، وأحيها"): 3 مكونات ميتة في الخلفية — `backend/safety.py` (SafetyGuard، 520 سطراً، غير مستورد)، `nexus/api_gateway/` (NexusRouter + RateLimiter، غير مستورد)، `memory/compress.py` (SovereignCompressor، مستورد فقط عبر `memory/__init__.py` غير المستورد). اكتشاف إضافي: طريقة `reset` في `compress.py` كانت على العمود 0 (خارج الفئة) — ابتلعت `__init__` و`compress` و`get_stats` كدوال متداخلة، فكانت الفئة بلا أي طرق وتتعطل عند أي استخدام.
+- **أُحيي**:
+  - `safety.py`: `SafetyGuard` مربوط في `/chat` (فحص كل رسالة قبل المعالجة — الرسائل الخطيرة تُحجب برد أمني `status: blocked`)، في WebSocket (`sir_command` + `chat_message`)، وفي `/sovereign/command` و`/sovereign/reset` (الأوامر الممنوعة تماماً تُحجب حتى للسيد). نقطتان جديدتان: `/security/status` و`/security/log`.
+  - `api_gateway`: `NexusRouter` مربوط في التطبيق — 6 نقاط جديدة: `/nexus/status`, `/nexus/analyze/text`, `/nexus/ingest`, `/nexus/health`, `/nexus/budget/analyze`, `/nexus/recommendations`. إجمالي المسارات: 37 → 45.
+  - `compress.py`: أُصلح الخطأ البنيوي (إزاحة `reset` إلى داخل الفئة) — الفئة كاملة الآن (6 أبعاد ضغط + `compress_from_core` + `get_stats`). مربوط في `orchestrator._update_memory` — ضغط دوري للسجل السيادي كل 50 دورة.
+- **حُذف** (النسخ المكررة الأصغر — أمر السيد): `archive/root_strays/memory_defense_polymorphic_duplicate.py` (756 سطراً — v3.0.0 أقدم من الحية v4.0.0) و`archive/root_strays/backend_biological_init_duplicate.py` (25 سطراً). أُبقي الأكبر: النسخة الحية `backend/memory/defense/polymorphic.py` (798 سطراً) + النسخة الاحتياطية الكبرى في guardian (4.5MB، 204 ملفات).
+- **التحقق**: `python -m pytest tests/ -q`: **44 passed** (35 + 9 جديدة في `tests/test_safety_layer.py`)؛ رسالة خطيرة في `/chat` → `status: blocked`؛ `/security/status` → `safety_guard.active: True`؛ `/nexus/health` → `200 healthy`؛ ضغط 3 أحداث → وعي 16 بايت.
+- أُغلق RK-04 وسُجل القرار D-021.
