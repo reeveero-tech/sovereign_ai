@@ -21,6 +21,7 @@ data/sovereign_core/ledger.jsonl
 data/sovereign_core/index.json
 data/sovereign_core/meta.json
 data/sovereign_core/integrity.json
+data/sovereign_core/.lock
 data/memory_store/
 data/simulation/
 data/config_backup.json
