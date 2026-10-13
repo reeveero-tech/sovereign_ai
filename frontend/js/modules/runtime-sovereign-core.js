@@ -397,6 +397,19 @@ class SovereignRuntimeSovereignCore {
        SOVEREIGN LAWS (محسن - مع قوانين خدمة السيد)
     ======================================================== */
 
+    registerLaw({ id, priority = 10, immutable = false, enforcement = null }) {
+
+        this.laws.set(id, {
+            id,
+            priority,
+            immutable,
+            enforcement,
+            createdAt: Date.now()
+        });
+
+        console.log(`⚖️ Sovereign Law Registered | LAW: ${id} | PRIORITY: ${priority}${immutable ? ' | IMMUTABLE' : ''}`);
+    }
+
     registerSovereignLaws() {
 
         this.registerLaw({

@@ -166,6 +166,19 @@ class SovereignRuntimeCognitionEngine {
     }
 
     /* ========================================================
+       COGNITIVE LOOP (الحلقة المعرفية الدورية)
+    ======================================================== */
+
+    startCognitiveLoop() {
+
+        this._cognitiveInterval = setInterval(() => {
+
+            this.evaluateRuntime();
+
+        }, 3000); // كل 3 ثوانٍ
+    }
+
+    /* ========================================================
        FORECAST UPDATER (تحديث التنبؤات المستمر)
     ======================================================== */
 
@@ -941,6 +954,11 @@ class SovereignRuntimeCognitionEngine {
     ======================================================== */
 
     destroy() {
+
+        if (this._cognitiveInterval) {
+            clearInterval(this._cognitiveInterval);
+            this._cognitiveInterval = null;
+        }
 
         if (this._forecastInterval) {
             clearInterval(this._forecastInterval);

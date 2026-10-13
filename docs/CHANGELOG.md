@@ -1,7 +1,7 @@
 # CHANGELOG.md — سجل التغييرات
 
 > كل تغيير يُسجل هنا (قاعدة الدفعة الذرية).
-> آخر تحديث: 2026-10-13 (الدفعة M6 — R-606)
+> آخر تحديث: 2026-10-13 (الدفعة M6 — R-607)
 
 ---
 
@@ -164,3 +164,15 @@
 - **النتيجة**: زمن دورة المنسق ~0.25 ثانية (من ~11 ثانية، ~44×)؛ صفر فشل `prev_hash غير متطابق` في التشغيل.
 - أضيفت 5 اختبارات (`tests/test_performance_r606.py`)؛ `pytest`: 35 passed.
 - أُغلق RK-10 وسُجل القرار D-019.
+
+
+## [M6] — R-607 — 2026-10-13 — Revive dead frontend code
+
+- **التحقيق**: 43 ملف JS (26,880 سطراً) على القرص غير محمّلة في index.html — تشكّل نظام "Sovereign Runtime" الفرعي الكامل (محرك الإدراك، النواة السيادية، إدارة الجلسات، حوكمة التنفيذ، العدالة، قياس التدفق، الوعي الذاتي، الحفظ الذاتي، تطور الحضارة، الضغط، التوجيه، الجدولة، التتبع، السببية). النواة (runtime-kernel, runtime-orchestrator-ai, runtime-consciousness-core, runtime-init) محمّلة بالفعل؛ الوحدات الميتة صُممت للتسجيل فيها عبر `window.SOVEREIGN` (السجل الموحد، runtime-unified-registry.js).
+- **أُضيف**: 43 وسم `<script defer>` في index.html بترتيب اعتماديات طوبولوجي محسوب (الطبقة الأساسية أولاً: system-state, mode-manager, flow-telemetry, fairness-engine, execution-domains, session-*, access-control, context, contracts, causality-graph, cognitive-memory, sandboxes, zones, timeline, trace — ثم المحركات الأعلى: cognition-engine, cognitive-orchestrator, identity-core, meta-intelligence, self-awareness, sovereign-core, layer-manager, structural-integrity, evolution-governor, autonomous-preservation, civilization-registry, pressure-governor, domain-router, domain-scheduler, backpressure-engine, adaptive-scheduler, execution-scheduler, queue-intelligence).
+- **أُصلح** (3 أخطاء حقيقية في الكود الميت لم تُختبر أبداً):
+  - `runtime-cognition-engine.js`: دالة `startCognitiveLoop()` مفقودة — أُضيفت (حلقة معرفية كل 3 ثوانٍ تستدعي `evaluateRuntime()`، مع تنظيف في `destroy()`).
+  - `runtime-sovereign-core.js`: دالة `registerLaw()` مفقودة — أُضيفت (تسجيل قانون في `this.laws` Map مع أولوية وثبات).
+  - `runtime-autonomous-preservation.js`: خطأ مطبعي `self.selfQuarantine` → `this.selfQuarantine` (كان يقرأ `this.selfQuarantine.enabled` على undefined).
+- **التحقق**: اختبار تحميل jsdom — **122/122 ملف تُحمَّل، 0 فشل**؛ **40/40 وحدة ميتة سُجّلت** في `window.SOVEREIGN` (52 نظاماً إجمالاً، من 17 سابقاً)؛ `node --check` يمر على الملفات الثلاثة المُصلحة؛ `python -m pytest tests/ -q`: **35 passed**.
+- أُغلق RF-03 وS-6 وسُجل القرار D-020.

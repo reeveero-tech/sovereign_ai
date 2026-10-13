@@ -103,7 +103,7 @@ class SovereignRuntimeAutonomousPreservation {
            SELF-QUARANTINE - العزلة الذاتية عند الخطر
         ============================================================ */
 
-        self.selfQuarantine = {
+        this.selfQuarantine = {
             enabled: true,
             active: false,
             quarantineStart: null,
