@@ -1107,8 +1107,7 @@ class SovereignOrchestrator:
         
         # تخزين في الذاكرة الحية
         if self.memory_dynamic and hasattr(self.memory_dynamic, "ingest"):
-            self._safe_call(self.memory_dynamic, "ingest", "system", f"cycle_{cycle_id}", 
-                           str(record), importance=0.5)
+            self._safe_call(self.memory_dynamic, "ingest", "system", str(record), intensity=0.5)
             memory_update["status"] = "stored_in_dynamic"
         
         # ========================================================

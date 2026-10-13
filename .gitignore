@@ -27,6 +27,8 @@ data/simulation/
 data/config_backup.json
 data/language_evolution.json
 data/nexus_data/
+data/security_log.json
+data/approval_cache.json
 *.db
 *.sqlite
 *.sqlite3

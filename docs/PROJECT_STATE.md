@@ -1,7 +1,7 @@
 # PROJECT_STATE.md — حالة المشروع
 
 > أين نحن الآن؟ هذه الوثيقة تُحدَّث في **كل دفعة** (قاعدة الدفعة الذرية).
-> آخر تحديث: 2026-10-13 (الدفعة M6 — R-608)
+> آخر تحديث: 2026-10-14 (الدفعة M6 — R-609)
 
 ---
 
@@ -9,13 +9,13 @@
 
 | البعد | الحالة |
 |---|---|
-| المرحلة | **M6 — Continuous Improvement** (R-608 مكتمل؛ 34 بنداً منجزاً) |
+| المرحلة | **M6 — Continuous Improvement** (R-609 مكتمل؛ 35 بنداً منجزاً) |
 | البناء | ✅ الخادم يُقلع ويستجيب (`/health`, `/status`, `/chat`, `/api/*`, `/nexus/*`, `/security/*`) |
-| الاختبارات | ✅ 44 اختباراً (`tests/`) — آخر تشغيل: 44 passed + اختبار تحميل JS (122/122) |
+| الاختبارات | ✅ 48 اختباراً (`tests/`) — آخر تشغيل: 48 passed + اختبار تحميل JS (122/122) |
 | CI/CD | ✅ GitHub Actions + بوابة atomic-batch |
 | التوثيق | ✅ API/Swagger/ReDoc + وثائق الحوكمة محدثة |
-| الأمان | ✅ طبقة الأمان الكاملة حيّة (R-608): SafetyGuard يفحص كل المدخلات + 6 نقاط /nexus/* + الضغط الأسطوري مربوط؛ ختم الهوية سليم (R-604)؛ نقاط التحكم الأساسية محمية |
-| الحالة العامة | **مستقر** — M5 وM6 متحققان ومنشوران؛ دورة المنسق سريعة (~0.25 ثانية)؛ نظام Sovereign Runtime كامل في الواجهة (R-607)؛ طبقة الأمان كاملة في الخلفية (R-608)؛ لا عوائق نشر حالية |
+| الأمان | ✅ طبقة الأمان الكاملة حيّة (R-608/R-609): SafetyGuard يفحص كل المدخلات (بما فيها WebSocket `/ws/{user_id}`) + 6 نقاط /nexus/* + الضغط الأسطوري مربوط + تشفير AES-256-CBC (pycryptodome)؛ ختم الهوية سليم (R-604)؛ نقاط التحكم الأساسية محمية |
+| الحالة العامة | **مستقر** — M5 وM6 متحققان ومنشوران؛ دورة المنسق سريعة (~0.25 ثانية)؛ نظام Sovereign Runtime كامل في الواجهة (R-607)؛ طبقة الأمان كاملة في الخلفية (R-608)؛ تدقيق شامل أصلح 6 أخطاء حقيقية (R-609)؛ لا عوائق نشر حالية |
 
 ---
 
@@ -31,6 +31,7 @@
 - ✅ 135 ملف Python في backend+nexus+memory: **كلها سليمة نحوياً** (py_compile).
 - ✅ 122 ملف JS في frontend: **كلها سليمة ومحمّلة في index.html** (R-607: إحياء 43 ملفاً ميتاً — نظام Sovereign Runtime كامل).
 - ✅ **R-608**: طبقة الأمان الكاملة حيّة — `SafetyGuard` يفحص كل مدخلات `/chat` وWebSocket و`/sovereign/*`؛ 6 نقاط `/nexus/*` تعمل (REST API لـ NexusCore)؛ الضغط الأسطوري مربوط في دورة المنسق (كل 50 دورة)؛ 44 اختباراً تمر.
+- ✅ **R-609**: تدقيق شامل لكل ملف/مجلد/اسم — إصلاح 6 أخطاء حقيقية: (1) `/components/predictive` كان يعيد 500 (`get_controller_status` غير موجودة)؛ (2)+(3) استدعاء `ingest` في المنسق كان يمرر `importance` و3 وسائط موضعية (التوقيع `intensity` ووسيطان) → TypeError كل دورة؛ (4)+(5) `PredictiveEngine.reset()` كان يستدعي `_load_index()` و`_now_iso()` غير المعرّفتين؛ (6) WebSocket `/ws/{user_id}` (مسار المحادثة الحي) لم يكن مفحوصاً بطبقة الأمان. أُضيف `pycryptodome` (تشفير AES-256-CBC بدل XOR-DEV)؛ 4 اختبارات جديدة؛ 48 اختباراً تمر.
 
 - ✅ **M1 (R-101..R-112)**: 12 إصلاحات مكتملة — راجع `ROADMAP.md`.
 - ✅ **R-109**: دورة الوعي تكتمل بنجاح (`success=True`, `decision=monitor`, `errors=[]`, ~37 ثانية) — كانت تعلق لأكثر من 120 ثانية.
@@ -133,7 +134,7 @@ sovereign_ai/
 5. 🟠 **Mr.py**: كود "ولاء" مع بروتوكول موت ذاتي (sys.exit) وكشف عبث — أُبقي دون لمس (قرار D-005). خطر تشغيلي/أمني قائم.
 6. 🟠 **guardian/SYSTEM_LOCKED.lock**: قفل طارئ مقصود (PROTECTED_ACTION_WITHOUT_MASTER_TOKEN) — أُبقي كحالة أمان موثقة (قرار D-006). يتطلب رمز إعادة تفعيل من السيد (س-3).
 7. ✅ **لا .gitignore** — أُنشئ في R-112.
-8. ✅ **الاختبارات وCI** — 23 اختباراً وبوابة atomic-batch في GitHub Actions (R-401/R-402).
+8. ✅ **الاختبارات وCI** — 48 اختباراً وبوابة atomic-batch في GitHub Actions (R-401/R-402/R-609).
 
 ---
 
@@ -176,6 +177,8 @@ sovereign_ai/
 | 2026-10-13 | M6 — R-605: إلغاء تتبع بيانات وقت التشغيل (قرار R-112 المؤجل) | M6: continuous improvement |
 | 2026-10-13 | M6 — R-606: تحسين أداء دورة المنسق (TTL caching + إصلاح عودية + إصلاح سجل + مسار ذيل سريع) | M6: continuous improvement |
 | 2026-10-13 | M6 — R-607: إحياء 43 ملف JS ميت (نظام Sovereign Runtime) — ترتيب اعتماديات + إصلاح 3 أخطاء + ربط بـ index.html | M6: continuous improvement |
+| 2026-10-14 | M6 — R-608: إحياء طبقة الأمان الكاملة (safety.py + api_gateway + compress.py) | M6: continuous improvement |
+| 2026-10-14 | M6 — R-609: تدقيق شامل — إصلاح 6 أخطاء حقيقية + تشفير AES-256-CBC + 48 اختباراً | M6: continuous improvement |
 
 
 ## 10) R-603 — دليل التحقق
@@ -192,6 +195,21 @@ sovereign_ai/
 - **التحقق**: `python -m pytest tests/ -q`: **44 passed** (35 + 9 جديدة)؛ رسالة خطيرة في `/chat` → `status: blocked` مع رد أمني؛ `/security/status` → `safety_guard.active: True`؛ `/nexus/health` → `200 healthy`؛ ضغط 3 أحداث → وعي 16 بايت؛ إجمالي المسارات 37 → 45.
 - النشر والتحقق النهائي: `git push origin main` ناجح؛ `HEAD` و`origin/main` متطابقان (0/0).
 
+
+## 16) R-609 — دليل التحقق
+
+- **التحقيق**: تدقيق شامل لكل ملف ومجلد واسم في المستودع — 245 JS + 215 Python + 17 وثيقة + كل المسارات والمكونات والمراجع.
+- **الأخطاء المكتشفة والمصلحة (6)**:
+  1. `/components/predictive` → 500: `PredictiveController.get_controller_status()` غير موجودة (الموجودة: `get_stats`, `get_mode`, `get_last_decision`) — استُبدلت بدالة تجميع.
+  2. `orchestrator._update_memory`: `ingest(..., importance=0.5)` — التوقيع `intensity=0.5` → TypeError "فشل استدعاء ingest" كل دورة.
+  3. نفس الاستدعاء: 3 وسائط موضعية (`"system", f"cycle_{id}", str(record)`) لكن `ingest(user_id, text)` وسيطان — حُذفت الوسيطة الثالثة.
+  4. `PredictiveEngine.reset()`: `self._load_index()` غير موجودة — استُبدلت بـ `_load_state()` + `_load_forecasts()`.
+  5. `PredictiveEngine.reset()`: `_now_iso()` غير معرّفة — استُبدلت بـ `time.time()`.
+  6. WebSocket `/ws/{user_id}` (مسار المحادثة الحي في الواجهة) لم يكن مفحوصاً بطبقة الأمان — أُضيف فحص `enforce_input_safety` (الرسائل الخطيرة → `blocked=True` + `cycle_id="safety-block"`).
+- **فجوة أمان**: `pycryptodome` لم يكن في `requirements.txt` — التشفير كان يتراجع إلى XOR-DEV. أُضيف `pycryptodome==3.24.1` — تحقق: AES-256-CBC يعمل (encrypt/decrypt round-trip).
+- **نظافة**: `data/security_log.json` و`data/approval_cache.json` (بيانات وقت تشغيل) أُضيفا إلى `.gitignore`.
+- **التحقق**: `python -m pytest tests/ -q`: **48 passed** (44 + 4 جديدة)؛ كل نقاط `/components/*` و`/security/*` و`/nexus/*` تعيد 200؛ WebSocket خطير → `blocked=True`؛ كل 54 وحدة backend + 51 وحدة nexus + 4 وحدات guardian تُستورد بنجاح؛ `main.py --test` يمر.
+- النشر والتحقق النهائي: `git push origin main` ناجح؛ `HEAD` و`origin/main` متطابقان (0/0).
 
 ## 11) R-604 — دليل التحقق
 

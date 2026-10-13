@@ -168,8 +168,9 @@ class PredictiveEngine:
         self.last_future_map = {}
         self.trend_cache = {}
 
-        # إعادة تحميل الفهرس
-        self._index = self._load_index()
+        # إعادة تحميل الحالة والتوقعات
+        self._load_state()
+        self._load_forecasts()
 
         # إعادة السياسات الافتراضية
         self.policies = {
@@ -181,7 +182,7 @@ class PredictiveEngine:
 
         # تسجيل عملية إعادة التهيئة
         self.core.append_event("predictive::engine::reset", {
-            "timestamp": _now_iso(),
+            "timestamp": time.time(),
             "status": "predictive_engine_reset"
         })
     # آفاق التنبؤ بالثواني

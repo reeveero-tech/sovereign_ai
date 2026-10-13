@@ -1,7 +1,7 @@
 # CHANGELOG.md — سجل التغييرات
 
 > كل تغيير يُسجل هنا (قاعدة الدفعة الذرية).
-> آخر تحديث: 2026-10-13 (الدفعة M6 — R-608)
+> آخر تحديث: 2026-10-14 (الدفعة M6 — R-609)
 
 ---
 
@@ -188,3 +188,18 @@
 - **حُذف** (النسخ المكررة الأصغر — أمر السيد): `archive/root_strays/memory_defense_polymorphic_duplicate.py` (756 سطراً — v3.0.0 أقدم من الحية v4.0.0) و`archive/root_strays/backend_biological_init_duplicate.py` (25 سطراً). أُبقي الأكبر: النسخة الحية `backend/memory/defense/polymorphic.py` (798 سطراً) + النسخة الاحتياطية الكبرى في guardian (4.5MB، 204 ملفات).
 - **التحقق**: `python -m pytest tests/ -q`: **44 passed** (35 + 9 جديدة في `tests/test_safety_layer.py`)؛ رسالة خطيرة في `/chat` → `status: blocked`؛ `/security/status` → `safety_guard.active: True`؛ `/nexus/health` → `200 healthy`؛ ضغط 3 أحداث → وعي 16 بايت.
 - أُغلق RK-04 وسُجل القرار D-021.
+
+## [M6] — R-609 — 2026-10-14 — Comprehensive full-repo audit
+
+- **التحقيق** (أمر السيد: "اريد ان تختبر المشروع كماهو مصمم له سيادي... تختبر كل ملف كل مجلد كل مسمى... هل كل شئ يعمل، هل كل شي مترابط، هل هناك أخطاء أو نقص، هل هناك أخطاء نحويه أو غيرها، ثم اصلح كل شي وادفع كل شي إلى المستودع"): تدقيق شامل لكل ملف ومجلد واسم في المستودع — 245 JS + 215 Python + 17 وثيقة + كل المسارات والمكونات والمراجع.
+- **أُصلح (6 أخطاء حقيقية)**:
+  1. `/components/predictive` → 500: `PredictiveController.get_controller_status()` غير موجودة (الموجودة: `get_stats`, `get_mode`, `get_last_decision`) — استُبدلت بدالة تجميع.
+  2. `orchestrator._update_memory`: `ingest(..., importance=0.5)` — التوقيع `intensity=0.5` → TypeError "فشل استدعاء ingest" كل دورة.
+  3. نفس الاستدعاء: 3 وسائط موضعية (`"system", f"cycle_{id}", str(record)`) لكن `ingest(user_id, text)` وسيطان — حُذفت الوسيطة الثالثة.
+  4. `PredictiveEngine.reset()`: `self._load_index()` غير موجودة — استُبدلت بـ `_load_state()` + `_load_forecasts()`.
+  5. `PredictiveEngine.reset()`: `_now_iso()` غير معرّفة — استُبدلت بـ `time.time()`.
+  6. WebSocket `/ws/{user_id}` (مسار المحادثة الحي في الواجهة) لم يكن مفحوصاً بطبقة الأمان — أُضيف فحص `enforce_input_safety` (الرسائل الخطيرة → `blocked=True` + `cycle_id="safety-block"`).
+- **فجوة أمان**: `pycryptodome` لم يكن في `requirements.txt` — التشفير كان يتراجع إلى XOR-DEV. أُضيف `pycryptodome==3.24.1` — تحقق: AES-256-CBC يعمل (encrypt/decrypt round-trip).
+- **نظافة**: `data/security_log.json` و`data/approval_cache.json` (بيانات وقت تشغيل) أُضيفا إلى `.gitignore`.
+- **التحقق**: `python -m pytest tests/ -q`: **48 passed** (44 + 4 جديدة)؛ كل نقاط `/components/*` و`/security/*` و`/nexus/*` تعيد 200؛ WebSocket خطير → `blocked=True`؛ كل 54 وحدة backend + 51 وحدة nexus + 4 وحدات guardian تُستورد بنجاح؛ `main.py --test` يمر؛ لا أخطاء نحوية عربية؛ لا TODO/FIXME.
+- سُجل القرار D-022.

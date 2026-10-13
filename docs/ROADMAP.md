@@ -2,7 +2,7 @@
 
 > إلى أين نذهب؟ هذه الوثيقة هي **المرجع الوحيد** للعمل. لا يُعمل على بند غير موجود هنا.
 > كل دفعة يجب أن تحدّث بنداً في هذه الخارطة (قاعدة الدفعة الذرية).
-> آخر تحديث: 2026-10-13 (الدفعة M6 — R-606)
+> آخر تحديث: 2026-10-14 (الدفعة M6 — R-609)
 
 ---
 
@@ -484,13 +484,35 @@
 - **دليل التحقق**: `python -m pytest tests/ -q` — 44 passed؛ اختبار يدوي: رسالة خطيرة في `/chat` → `status: blocked`؛ `/security/status` → `active: True`؛ `/nexus/health` → `200 healthy`؛ ضغط 3 أحداث → وعي 16 بايت.
 - **ملاحظات**: أُغلق RK-04 (نقاط عامة — الآن محمية بطبقة الأمان)؛ سُجل القرار D-021.
 
+#### R-609 — تدقيق شامل وإصلاح كل الأخطاء (Comprehensive Full-Repo Audit)
+- **الحالة**: `done` (2026-10-14)
+- **الهدف**: اختبار المشروع كما صُمم له (سيادي) — فحص كل ملف وكل مجلد وكل مسمى، والتأكد أن كل شيء يعمل ومترابط، وكشف أي أخطاء أو نقص أو أخطاء نحوية، ثم إصلاح كل شيء ودفعه إلى المستودع (أمر السيد).
+- **النتيجة**: تدقيق شامل كشف وأصلح **6 أخطاء حقيقية** + فجوة أمان + فجوة توثيق:
+  1. `/components/predictive` كان يعيد 500 — `PredictiveController.get_controller_status()` غير موجودة (الموجودة: `get_stats`, `get_mode`, `get_last_decision`) — استُبدلت بدالة تجميع.
+  2. `orchestrator._update_memory`: `ingest(..., importance=0.5)` — التوقيع `intensity=0.5` → TypeError "فشل استدعاء ingest" كل دورة.
+  3. نفس الاستدعاء: 3 وسائط موضعية (`"system", f"cycle_{id}", str(record)`) لكن `ingest(user_id, text)` وسيطان — حُذفت الوسيطة الثالثة.
+  4. `PredictiveEngine.reset()`: `self._load_index()` غير موجودة — استُبدلت بـ `_load_state()` + `_load_forecasts()`.
+  5. `PredictiveEngine.reset()`: `_now_iso()` غير معرّفة — استُبدلت بـ `time.time()`.
+  6. WebSocket `/ws/{user_id}` (مسار المحادثة الحي في الواجهة) لم يكن مفحوصاً بطبقة الأمان — أُضيف فحص `enforce_input_safety` (الرسائل الخطيرة → `blocked=True` + `cycle_id="safety-block"`).
+  - **فجوة أمان**: `pycryptodome` لم يكن في `requirements.txt` — التشفير كان يتراجع إلى XOR-DEV. أُضيف `pycryptodome==3.24.1` — تحقق: AES-256-CBC يعمل (encrypt/decrypt round-trip).
+  - **نظافة**: `data/security_log.json` و`data/approval_cache.json` (بيانات وقت تشغيل) أُضيفا إلى `.gitignore`.
+  - **توثيق**: `docs/API.md` حُدثت (26 → 45 مساراً، نقاط `/nexus/*` و`/security/*` و`/components/defense`).
+- **النطاق**: `backend/app.py`, `backend/orchestrator.py`, `backend/predictive/predictive_engine.py`, `requirements.txt`, `.gitignore`, `tests/test_safety_layer.py` (4 اختبارات جديدة), `docs/API.md` + وثائق الحوكمة.
+- **خارج النطاق**: لا تغيير في `Mr.py` (محمي D-005)؛ لا تغيير في قفل guardian (D-006)؛ لا حذف لأي ملف.
+- **الاعتماديات**: R-608 (طبقة الأمان)، R-606 (أداء المنسق).
+- **معيار القبول**: كل نقاط `/components/*` و`/security/*` و`/nexus/*` تعيد 200؛ WebSocket يفحص المدخلات الخطيرة؛ إعادة تعيين محرك التنبؤ تعمل؛ التشفير AES-256-CBC حقيقي؛ 48 اختباراً تمر؛ شجرة العمل نظيفة.
+- **الوثائق المتأثرة**: `ROADMAP.md`, `PROJECT_STATE.md`, `QUALITY.md`, `RISKS.md`, `CHANGELOG.md`, `DECISIONS.md`, `OPEN_QUESTIONS.md`, `SECURITY.md`, `API.md`.
+- **المخاطر**: منخفضة؛ كل الإصلاحات محلية (استدعاءات/طرق) ولا تغير منطق الدورة.
+- **دليل التحقق**: `python -m pytest tests/ -q` — 48 passed (44 + 4 جديدة)؛ كل نقاط `/components/*` و`/security/*` و`/nexus/*` تعيد 200؛ WebSocket خطير → `blocked=True`؛ كل 54 وحدة backend + 51 وحدة nexus + 4 وحدات guardian تُستورد بنجاح؛ `main.py --test` يمر؛ لا أخطاء نحوية عربية؛ لا TODO/FIXME.
+- **ملاحظات**: سُجل القرار D-022.
+
 ---
 
 ## 3) ملخص الحالة
 
 | الحالة | العدد |
 |---|---|
-| done | 34 (R-001..R-003, R-101..R-112, R-201..R-203, R-301..R-303, R-401..R-403, R-501..R-502, R-601..R-608) |
+| done | 35 (R-001..R-003, R-101..R-112, R-201..R-203, R-301..R-303, R-401..R-403, R-501..R-502, R-601..R-609) |
 | in_progress | 0 |
 | proposed | 0 |
 | blocked | 0 |
@@ -510,3 +532,4 @@
 | 2026-10-13 | R-606: تحسين أداء دورة المنسق (TTL caching + إصلاح عودية + إصلاح سجل + مسار ذيل سريع) | M6 |
 | 2026-10-13 | R-607: إحياء 43 ملف JS ميت (نظام Sovereign Runtime) — ترتيب اعتماديات + إصلاح 3 أخطاء + ربط بـ index.html | M6 |
 | 2026-10-13 | R-608: إحياء طبقة الأمان الكاملة (safety.py + api_gateway + compress.py) — فحص كل المدخلات + 6 نقاط /nexus/* + إصلاح بنيوي للضاغط + حذف نسختين مكررتين أصغر | M6 |
+| 2026-10-14 | R-609: تدقيق شامل — إصلاح 6 أخطاء حقيقية (نقطة predictive، ingest، إعادة تعيين التنبؤ، فجوة أمان WebSocket) + تشفير AES-256-CBC + 48 اختباراً | M6 |

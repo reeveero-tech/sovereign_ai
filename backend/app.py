@@ -649,7 +649,11 @@ async def get_predictive_status():
         
         return {
             "engine": engine.get_prediction_status() if engine else None,
-            "controller": controller.get_controller_status() if controller else None,
+            "controller": {
+                "stats": controller.get_stats() if controller else None,
+                "mode": controller.get_mode() if controller else None,
+                "last_decision": controller.get_last_decision() if controller else None,
+            } if controller else None,
             "risk_manager": risk_manager.get_risk_status() if risk_manager else None,
             "timestamp": time.time()
         }
@@ -865,6 +869,22 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str):
                 "session_id": session_id,
                 "timestamp": time.time()
             }
+            
+            # فحص الأمان السيادي (R-608) — حماية مدخلات WebSocket
+            safety_block = enforce_input_safety(text, is_sovereign=False)
+            if safety_block is not None:
+                safety_guard.log_sovereign_action("ws_chat_blocked", {
+                    "user_id": user_id,
+                    "reason": safety_block[:100]
+                })
+                await manager.send_message(session_id, json.dumps({
+                    "type": "reply",
+                    "message": safety_block,
+                    "blocked": True,
+                    "cycle_id": "safety-block",
+                    "timestamp": time.time()
+                }))
+                continue
             
             result = orchestrator.run_cycle(input_data)
             
