@@ -90,7 +90,8 @@ def load_sovereign_key() -> str:
     1. متغير بيئة SOVEREIGN_KEY
     2. ملف .env في الجذر
     3. ملف key.secret (مشفر)
-    4. مفتاح افتراضي (مع تحذير)
+    4. توليد مفتاح دائم في التطوير (R-610) — يُحفظ في data/key.secret (مستثنى من git)
+    5. مفتاح مؤقت عشوائي (تطوير فقط) / رفض (إنتاج)
     """
     # المصدر 1: متغير البيئة
     key = os.getenv("SOVEREIGN_KEY")
@@ -121,7 +122,33 @@ def load_sovereign_key() -> str:
         except:
             pass
     
-    # المصدر 4: مفتاح مؤقت عشوائي للتطوير فقط
+    # المصدر 4 (R-610): توليد مفتاح سيد دائم في التطوير — الهوية السيادية تستمر عبر إعادة التشغيل
+    if IS_DEVELOPMENT:
+        try:
+            DATA_DIR.mkdir(parents=True, exist_ok=True)
+            persistent_key = secrets.token_urlsafe(32)
+            # حماية الملف: 0600 (المالك فقط) — الملف مستثنى من git (.gitignore)
+            fd = os.open(secret_file, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                f.write(persistent_key)
+            warnings.warn(
+                "🔑 تم توليد مفتاح سيد دائم للتطوير وحفظه في data/key.secret (مستثنى من git).\n"
+                "الهوية السيادية (ختم الهوية + توقيعات السجل) ستستمر عبر عمليات إعادة التشغيل."
+            )
+            return persistent_key
+        except FileExistsError:
+            # سباق: ملف أُنشئ للتو — أعد قراءته
+            try:
+                with open(secret_file, "r", encoding="utf-8") as f:
+                    key = f.read().strip()
+                    if key and len(key) >= 16:
+                        return key
+            except Exception:
+                pass
+        except Exception:
+            pass
+
+    # المصدر 5: مفتاح مؤقت عشوائي للتطوير فقط
     if IS_PRODUCTION:
         # في الإنتاج، نرفض التشغيل دون سر مُدار خارج الكود
         raise ValueError(
