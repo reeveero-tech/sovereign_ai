@@ -1,7 +1,7 @@
 # OPERATIONS.md — التشغيل والنشر
 
 > كيف يُشغَّل المشروع ويُنشر؟ الحالة الفعلية كما رُصدت.
-> آخر تحديث: 2026-10-13 (الدفعة M5)
+> آخر تحديث: 2026-10-13 (الدفعة M6 — R-603)
 
 ---
 
@@ -38,12 +38,12 @@ uvicorn app:app --host 0.0.0.0 --port 8000
 
 | المتغير | الافتراضي | ملاحظة |
 |---|---|---|
-| `SOVEREIGN_KEY` | مفتاح افتراضي غير آمن | 🔴 يجب تغييره |
+| `SOVEREIGN_KEY` | لا افتراضي ثابت؛ التطوير يولد مؤقتاً، والإنتاج يفشل مغلقاً دون سر | ✅ راجع SECURITY.md |
 | `DRIVE_ENABLED` | false | — |
 | `AI_ENVIRONMENT` | — | — |
 | `CORE_MODEL_NAME` | microsoft/Phi-3-mini-4k-instruct | لا يُستخدم فعلياً |
 | `CORE_MODEL_LOAD_ON_START` | true | لا يُستخدم فعلياً |
-| `MAX_USER_MESSAGES_PER_MINUTE` | 30 | غير مفعّل في الكود |
+| `MAX_USER_MESSAGES_PER_MINUTE` | 30 | ✅ حد `/chat` لكل IP مباشر؛ process-local (R-603) |
 | `MAX_CONCURRENT_USERS` | 100 | — |
 | `CORS_ORIGINS` | `*` | 🔴 خطر في الإنتاج |
 
@@ -88,3 +88,9 @@ uvicorn app:app --host 0.0.0.0 --port 8000
 | `/components/nexus` | 1.31 ms | 6.21 ms |
 
 > القياسات محلية على بيئة التطوير، وليست SLA إنتاجياً. أعد القياس بعد النشر على بيئة الإنتاج.
+
+## 7) حد الطلبات (R-603)
+
+- `MAX_USER_MESSAGES_PER_MINUTE` يضبط عدد طلبات `/chat` لكل IP مباشر خلال 60 ثانية (الافتراضي 30).
+- تجاوز الحد يعيد HTTP 429 مع `Retry-After`.
+- الحالة في الذاكرة bounded ولكل عملية؛ عند تشغيل عدة workers/نسخ، لكل واحدة حد مستقل. لا تُمرر عناوين `X-Forwarded-For` غير الموثوقة إلى المحدد.

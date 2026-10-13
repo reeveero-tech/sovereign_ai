@@ -29,7 +29,10 @@ from enum import Enum
 import os
 import pathlib
 
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Depends, status, BackgroundTasks, Query
+from fastapi import (
+    FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect, Depends,
+    status, BackgroundTasks, Query,
+)
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.gzip import GZipMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
@@ -80,6 +83,21 @@ from config import SOVEREIGN_KEY as SOVEREIGN_API_KEY
 # إعدادات CORS (السماح بالاتصال من جميع المصادر)
 # M1: CORS من config (متغير البيئة CORS_ORIGINS) — ليس مفتوحاً دائماً
 from config import CORS_ORIGINS as ALLOWED_ORIGINS
+from config import MAX_USER_MESSAGES_PER_MINUTE
+from rate_limit import SlidingWindowRateLimiter
+
+chat_rate_limiter = SlidingWindowRateLimiter(MAX_USER_MESSAGES_PER_MINUTE)
+
+def enforce_chat_rate_limit(request: Request) -> None:
+    """Throttle chat by the connection's direct client IP, without trusting forwarded headers."""
+    client_host = request.client.host if request.client else "unknown"
+    retry_after = chat_rate_limiter.check(client_host)
+    if retry_after is not None:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="تم تجاوز حد رسائل المحادثة؛ أعد المحاولة بعد انتهاء فترة التقييد.",
+            headers={"Retry-After": str(retry_after)},
+        )
 
 # ============================================================
 # نماذج البيانات (Data Models)
@@ -292,7 +310,12 @@ async def system_status():
     )
 
 
-@app.post("/chat", response_model=ChatResponse)
+@app.post(
+    "/chat",
+    response_model=ChatResponse,
+    responses={429: {"description": "Rate limit exceeded"}},
+    dependencies=[Depends(enforce_chat_rate_limit)],
+)
 async def chat(message: ChatMessage, background_tasks: BackgroundTasks):
     """
     نقطة المحادثة الرئيسية.
