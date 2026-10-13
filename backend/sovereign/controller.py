@@ -177,6 +177,8 @@ class SovereignController:
         
         # خلفيات المتحكم
         self._active = True
+        # R-606: ذاكرة مؤقتة قصيرة لنتيجة getter (نمط drives.py)
+        self._controller_status_cache = None
         self._controller_loop = threading.Thread(target=self._continuous_control, daemon=True)
         self._controller_loop.start()
         
@@ -902,9 +904,13 @@ class SovereignController:
     
     def get_controller_status(self) -> Dict[str, Any]:
         """الحالة الحالية للمتحكم"""
+        # R-606: تخزين مؤقت قصير
+        now = time.time()
+        if self._controller_status_cache is not None and (now - self._controller_status_cache["ts"]) < 2.0:
+            return self._controller_status_cache["data"]
         snapshot = self.controller_cycle()
         
-        return {
+        result = {
             "system_mode": snapshot.system_mode,
             "system_health": snapshot.system_health,
             "global_priority": snapshot.global_priority,
@@ -918,6 +924,8 @@ class SovereignController:
             "narrative": snapshot.narrative,
             "timestamp": snapshot.timestamp
         }
+        self._controller_status_cache = {"ts": time.time(), "data": result}
+        return result
     
     def get_final_decisions(self, limit: int = 20) -> List[Dict]:
         """سجل القرارات النهائية"""

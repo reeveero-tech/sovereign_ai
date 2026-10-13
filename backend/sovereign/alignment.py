@@ -164,6 +164,8 @@ class SovereignAlignment:
         
         # خلفيات الاصطفاف
         self._active = True
+        # R-606: ذاكرة مؤقتة قصيرة لنتيجة getter (نمط drives.py)
+        self._alignment_status_cache = None
         self._alignment_loop = threading.Thread(target=self._continuous_alignment, daemon=True)
         self._alignment_loop.start()
         
@@ -714,11 +716,15 @@ class SovereignAlignment:
     
     def get_alignment_status(self) -> Dict[str, Any]:
         """الحالة الحالية للاصطفاف"""
+        # R-606: تخزين مؤقت قصير
+        now = time.time()
+        if self._alignment_status_cache is not None and (now - self._alignment_status_cache["ts"]) < 2.0:
+            return self._alignment_status_cache["data"]
         snapshot = self.alignment_cycle()
         
         level_names = ["حرج", "منخفض", "متوسط", "جيد", "عالٍ", "كامل"]
         
-        return {
+        result = {
             "alignment_score": snapshot.alignment_score,
             "alignment_level": snapshot.alignment_level,
             "alignment_level_name": level_names[snapshot.alignment_level] if snapshot.alignment_level < len(level_names) else "جيد",
@@ -732,6 +738,8 @@ class SovereignAlignment:
             "narrative": snapshot.narrative,
             "timestamp": snapshot.timestamp
         }
+        self._alignment_status_cache = {"ts": time.time(), "data": result}
+        return result
     
     def get_violations(self, resolved: Optional[bool] = None) -> List[Dict]:
         """سجل الانحرافات"""

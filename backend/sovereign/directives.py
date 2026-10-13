@@ -163,6 +163,8 @@ class SovereignDirectives:
         
         # خلفيات التوجيهات
         self._active = True
+        # R-606: ذاكرة مؤقتة قصيرة لنتيجة getter (نمط drives.py)
+        self._directives_status_cache = None
         self._directives_loop = threading.Thread(target=self._continuous_directives, daemon=True)
         self._directives_loop.start()
         
@@ -837,11 +839,15 @@ class SovereignDirectives:
     
     def get_directives_status(self) -> Dict[str, Any]:
         """الحالة الحالية للتوجيهات"""
+        # R-606: تخزين مؤقت قصير
+        now = time.time()
+        if self._directives_status_cache is not None and (now - self._directives_status_cache["ts"]) < 2.0:
+            return self._directives_status_cache["data"]
         snapshot = self.directives_cycle()
         
         level_names = ["", "فوري", "تشغيلي", "تكتيكي", "استراتيجي", "دستوري"]
         
-        return {
+        result = {
             "active_directives": len(snapshot.active_directives),
             "directives_count": snapshot.directives_count,
             "highest_level": snapshot.highest_level,
@@ -853,6 +859,8 @@ class SovereignDirectives:
             "narrative": snapshot.narrative,
             "timestamp": snapshot.timestamp
         }
+        self._directives_status_cache = {"ts": time.time(), "data": result}
+        return result
     
     def get_active_directives(self) -> List[Dict]:
         """التوجيهات النشطة"""

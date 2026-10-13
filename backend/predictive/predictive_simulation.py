@@ -179,6 +179,8 @@ class PredictiveSimulation:
         
         # خلفيات المحاكاة
         self._active = True
+        # R-606: ذاكرة مؤقتة قصيرة لنتيجة getter (نمط drives.py)
+        self._simulation_status_cache = None
         self._simulation_loop = threading.Thread(target=self._continuous_simulation, daemon=True)
         self._simulation_loop.start()
         
@@ -855,9 +857,13 @@ class PredictiveSimulation:
     
     def get_simulation_status(self) -> Dict[str, Any]:
         """الحالة الحالية للمحاكاة"""
+        # R-606: تخزين مؤقت قصير
+        now = time.time()
+        if self._simulation_status_cache is not None and (now - self._simulation_status_cache["ts"]) < 2.0:
+            return self._simulation_status_cache["data"]
         snapshot = self.simulation_cycle(runs=100, steps=12)
         
-        return {
+        result = {
             "last_batch_id": snapshot.batch.id[:16],
             "total_runs": snapshot.batch.runs,
             "total_steps": snapshot.batch.steps,
@@ -868,6 +874,8 @@ class PredictiveSimulation:
             "narrative": snapshot.narrative,
             "timestamp": snapshot.timestamp
         }
+        self._simulation_status_cache = {"ts": time.time(), "data": result}
+        return result
     
     def get_simulation_results(self) -> Dict[str, Any]:
         """نتائج آخر محاكاة"""

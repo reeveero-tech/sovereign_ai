@@ -159,6 +159,8 @@ class SelfModel:
         
         # خلفيات نموذج الذات
         self._active = True
+        # R-606: ذاكرة مؤقتة قصيرة لنتيجة getter (نمط drives.py)
+        self._self_status_cache = None
         self._self_reflection_loop = threading.Thread(target=self._continuous_self_reflection, daemon=True)
         self._self_reflection_loop.start()
         
@@ -791,9 +793,13 @@ class SelfModel:
     
     def get_self_status(self) -> Dict[str, Any]:
         """الحالة الحالية لنموذج الذات"""
+        # R-606: تخزين مؤقت قصير
+        now = time.time()
+        if self._self_status_cache is not None and (now - self._self_status_cache["ts"]) < 2.0:
+            return self._self_status_cache["data"]
         snapshot = self.compute_self_snapshot()
         
-        return {
+        result = {
             "self_awareness_level": snapshot.self_awareness_level,
             "self_awareness_score": snapshot.self_awareness_score,
             "dimensions": {name: dim.score for name, dim in self.dimensions.items()},
@@ -805,6 +811,8 @@ class SelfModel:
             "narrative": snapshot.narrative,
             "timestamp": time.time()
         }
+        self._self_status_cache = {"ts": time.time(), "data": result}
+        return result
     
     def get_dimensions(self) -> Dict[str, Dict]:
         """أبعاد الذات"""

@@ -177,6 +177,8 @@ class CognitiveArchetypes:
         
         # خلفيات الأنماط
         self._active = True
+        # R-606: ذاكرة مؤقتة قصيرة لنتيجة getter (نمط drives.py)
+        self._archetype_status_cache = None
         self._archetype_loop = threading.Thread(target=self._continuous_archetype_update, daemon=True)
         self._archetype_loop.start()
         
@@ -866,10 +868,14 @@ class CognitiveArchetypes:
     
     def get_archetype_status(self) -> Dict[str, Any]:
         """الحالة الحالية للأنماط الأصلية"""
+        # R-606: تخزين مؤقت قصير
+        now = time.time()
+        if self._archetype_status_cache is not None and (now - self._archetype_status_cache["ts"]) < 2.0:
+            return self._archetype_status_cache["data"]
         probabilities = self.update_archetypes()
         dominant = self.get_dominant_archetype()
         
-        return {
+        result = {
             "archetype_level": self.archetype_level,
             "dominant_archetype": dominant,
             "coherence": self.calculate_coherence(),
@@ -885,6 +891,8 @@ class CognitiveArchetypes:
             "total_transitions": len(self.transitions),
             "timestamp": time.time()
         }
+        self._archetype_status_cache = {"ts": time.time(), "data": result}
+        return result
     
     def get_archetype_details(self, archetype_name: str) -> Optional[Dict]:
         """تفاصيل نمط أصلي معين"""

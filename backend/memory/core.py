@@ -483,8 +483,8 @@ class SovereignCore:
             # إعادة إنشاء حدث البداية
             self._create_genesis_event()
         
-        # إعادة تعيين الفهرس
-        self.index = self._load_index()
+        # إعادة تعيين الفهرس — R-606: إعادة بناء من السجل بدل تحميل فهرس قديم
+        self.index = self._rebuild_index()
         
         # إعادة تعيين الميتا
         self._save_meta()
@@ -633,7 +633,8 @@ class SovereignCore:
             
             # 7) تحديث الحالة الداخلية
             self._last_hash = event_hash
-            self._save_meta()
+            # R-606: إبطال ذاكرة التحقق المؤقتة — تغيّر السجل
+            self._integrity_cache = None
             
             # 8) تحديث الفهرس
             self.index.add_event(
@@ -643,6 +644,9 @@ class SovereignCore:
                 prev_hash=event["prev_hash"],
                 user=user
             )
+            
+            # 9) حفظ الميتا بعد الفهرس (R-606: عدّاد الأحداث متسق)
+            self._save_meta()
             
             logger.info(f"📝 حدث جديد: {event_type_str} | {event_hash[:16]}... | المستخدم: {user or 'system'}")
             
@@ -682,6 +686,29 @@ class SovereignCore:
         if not self.log_file.exists():
             return
         
+        # R-606: مسار سريع — قراءة الذيل فقط عند طلب الأحدث (reverse + limit)
+        # يتجنب قراءة السجل الكامل في الذاكرة في كل استدعاء (كان O(n) لكل استدعاء)
+        if reverse and limit is not None and not from_hash:
+            try:
+                with open(self.log_file, 'rb') as f:
+                    f.seek(0, 2)
+                    size = f.tell()
+                    # اقرأ آخر ~64KB كافية لعدد limit من الأحداث (كل حدث ~400 بايت)
+                    read_size = min(size, max(4096, limit * 1024))
+                    f.seek(size - read_size)
+                    tail = f.read().decode('utf-8', errors='replace')
+                lines = [l for l in tail.split('\n') if l.strip()]
+                events = [json.loads(l) for l in lines]
+                # قد نكون بدأنا في منتصف سطر — تجاهل أول عنصر غير مكتمل
+                if len(events) > limit:
+                    events = events[-limit:]
+                for event in reversed(events):
+                    yield event
+                return
+            except Exception:
+                # أي فشل في المسار السريع → الرجوع للمسار الكامل
+                pass
+        
         events = []
         with open(self.log_file, 'r', encoding='utf-8') as f:
             for line in f:
@@ -716,9 +743,11 @@ class SovereignCore:
         - يتحقق من وجود الـ blobs.
         """
         # M1: تخزين مؤقت للتحقق — لا نعيد فحص السجل الكامل في كل استعلام حالة
-        # يُعاد التحقق فقط إذا تغيّر السجل (عدد الأحداث أو آخر تجزئة)
+        # R-606: يُعاد التحقق فقط إذا تغيّر السجل (آخر تجزئة) أو انقضت المهلة (60 ثانية)
         if not verbose and self._integrity_cache is not None:
             if self._integrity_cache.get("last_hash") == self._last_hash:
+                return self._integrity_cache["status"]
+            if (time.time() - self._integrity_cache.get("ts", 0)) < 60.0:
                 return self._integrity_cache["status"]
         
         logger.info("🔍 بدء التحقق من سلامة السجل...")
@@ -808,7 +837,8 @@ class SovereignCore:
         self._integrity_cache = {
             "status": IntegrityStatus.VERIFIED,
             "last_hash": self._last_hash,
-            "checked_at": utc_now_iso()
+            "checked_at": utc_now_iso(),
+            "ts": time.time()
         }
         
         logger.info(f"✅ السجل سليم! تم التحقق من {event_count} حدث.")
@@ -893,7 +923,32 @@ class SovereignCore:
     
     def _load_index(self) -> SovereignIndex:
         """تحميل أو إعادة إنشاء الفهرس"""
-        return SovereignIndex(self.index_file)
+        # R-606: إصلاح — المسار في self.index.index_file وليس self.index_file
+        return SovereignIndex(self.index.index_file)
+
+    def _rebuild_index(self) -> SovereignIndex:
+        """R-606: إعادة بناء الفهرس بالكامل من السجل (للاسترداد من فهرس قديم/تالف)."""
+        new_index = SovereignIndex(self.index.index_file)
+        new_index.data = new_index._empty_index()
+        if self.log_file.exists():
+            with open(self.log_file, 'r', encoding='utf-8') as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        event = json.loads(line)
+                        new_index.add_event(
+                            event_hash=event.get('hash', ''),
+                            event_type=event.get('type', ''),
+                            event_time=event.get('time', ''),
+                            prev_hash=event.get('prev_hash', ''),
+                            user=None
+                        )
+                    except Exception as e:
+                        logger.error(f"فشل إعادة بناء الفهرس عند حدث: {e}")
+        new_index.save()
+        return new_index
 
 
 # ============================================================

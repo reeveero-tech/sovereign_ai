@@ -171,6 +171,8 @@ class IdentityCore:
         
         # خلفيات حماية الهوية
         self._active = True
+        # R-606: ذاكرة مؤقتة قصيرة لنتيجة getter (نمط drives.py)
+        self._identity_status_cache = None
         self._identity_maintenance = threading.Thread(target=self._continuous_identity_maintenance, daemon=True)
         self._identity_maintenance.start()
         
@@ -900,9 +902,13 @@ class IdentityCore:
     
     def get_identity_status(self) -> Dict[str, Any]:
         """الحالة الحالية للهوية"""
+        # R-606: تخزين مؤقت قصير
+        now = time.time()
+        if self._identity_status_cache is not None and (now - self._identity_status_cache["ts"]) < 2.0:
+            return self._identity_status_cache["data"]
         identity = self.current_identity or self.compute_identity()
         
-        return {
+        result = {
             "identity_signature": identity.identity_signature[:16],
             "coherence_level": identity.coherence_level,
             "coherence_score": identity.coherence_score,
@@ -918,6 +924,8 @@ class IdentityCore:
             "narrative": identity.narrative,
             "timestamp": time.time()
         }
+        self._identity_status_cache = {"ts": time.time(), "data": result}
+        return result
     
     def get_identity_history(self, limit: int = 20) -> List[Dict]:
         """سجل الهوية عبر الزمن"""

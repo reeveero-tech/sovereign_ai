@@ -177,6 +177,8 @@ class SovereignWill:
         
         # خلفيات الإرادة
         self._active = True
+        # R-606: ذاكرة مؤقتة قصيرة لنتيجة getter (نمط drives.py)
+        self._will_status_cache = None
         self._will_loop = threading.Thread(target=self._continuous_will, daemon=True)
         self._will_loop.start()
         
@@ -846,9 +848,13 @@ class SovereignWill:
     
     def get_will_status(self) -> Dict[str, Any]:
         """الحالة الحالية للإرادة"""
+        # R-606: تخزين مؤقت قصير
+        now = time.time()
+        if self._will_status_cache is not None and (now - self._will_status_cache["ts"]) < 2.0:
+            return self._will_status_cache["data"]
         snapshot = self.will_cycle()
         
-        return {
+        result = {
             "will_strength": snapshot.will_strength,
             "will_mode": snapshot.will_mode,
             "will_vector": snapshot.will_vector,
@@ -859,6 +865,8 @@ class SovereignWill:
             "narrative": snapshot.narrative,
             "timestamp": snapshot.timestamp
         }
+        self._will_status_cache = {"ts": time.time(), "data": result}
+        return result
     
     def get_decisions(self, limit: int = 20) -> List[Dict]:
         """سجل القرارات السابقة"""

@@ -172,6 +172,8 @@ class IntrospectionEngine:
         
         # خلفيات الاستبطان
         self._active = True
+        # R-606: ذاكرة مؤقتة قصيرة لنتيجة getter (نمط drives.py)
+        self._introspection_status_cache = None
         self._introspection_loop = threading.Thread(target=self._continuous_introspection, daemon=True)
         self._introspection_loop.start()
         
@@ -851,9 +853,13 @@ class IntrospectionEngine:
     
     def get_introspection_status(self) -> Dict[str, Any]:
         """الحالة الحالية للاستبطان"""
+        # R-606: تخزين مؤقت قصير
+        now = time.time()
+        if self._introspection_status_cache is not None and (now - self._introspection_status_cache["ts"]) < 2.0:
+            return self._introspection_status_cache["data"]
         snapshot = self.introspection_cycle()
         
-        return {
+        result = {
             "cognitive_health": snapshot.cognitive_health,
             "self_awareness": snapshot.self_awareness,
             "service_quality": snapshot.service_quality,
@@ -865,6 +871,8 @@ class IntrospectionEngine:
             "total_aspirations": len(self.sovereign_aspirations),
             "timestamp": snapshot.timestamp
         }
+        self._introspection_status_cache = {"ts": time.time(), "data": result}
+        return result
     
     def get_pending_commands(self) -> List[Dict]:
         """الأوامر المعلقة من السيد"""

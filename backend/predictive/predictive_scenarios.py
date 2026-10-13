@@ -162,6 +162,8 @@ class PredictiveScenarioEngine:
         
         # خلفيات السيناريوهات
         self._active = True
+        # R-606: ذاكرة مؤقتة قصيرة لنتيجة getter (نمط drives.py)
+        self._scenario_status_cache = None
         self._scenario_loop = threading.Thread(target=self._continuous_scenario_analysis, daemon=True)
         self._scenario_loop.start()
         
@@ -933,9 +935,13 @@ class PredictiveScenarioEngine:
     
     def get_scenario_status(self) -> Dict[str, Any]:
         """الحالة الحالية للسيناريوهات"""
+        # R-606: تخزين مؤقت قصير
+        now = time.time()
+        if self._scenario_status_cache is not None and (now - self._scenario_status_cache["ts"]) < 2.0:
+            return self._scenario_status_cache["data"]
         snapshot = self.scenario_cycle()
         
-        return {
+        result = {
             "dominant_scenario": snapshot.dominant_scenario.name,
             "dominant_probability": snapshot.dominant_scenario.probability,
             "risk_level": snapshot.risk_level,
@@ -946,6 +952,8 @@ class PredictiveScenarioEngine:
             "narrative": snapshot.narrative,
             "timestamp": snapshot.timestamp
         }
+        self._scenario_status_cache = {"ts": time.time(), "data": result}
+        return result
     
     def get_scenarios(self) -> List[Dict]:
         """جميع السيناريوهات"""

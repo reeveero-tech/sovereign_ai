@@ -184,6 +184,8 @@ class PredictiveRiskManager:
         
         # خلفيات إدارة المخاطر
         self._active = True
+        # R-606: ذاكرة مؤقتة قصيرة لنتيجة getter (نمط drives.py)
+        self._risk_status_cache = None
         self._risk_detection_loop = threading.Thread(target=self._continuous_risk_detection, daemon=True)
         self._risk_detection_loop.start()
         
@@ -878,9 +880,13 @@ class PredictiveRiskManager:
     
     def get_risk_status(self) -> Dict[str, Any]:
         """الحالة الحالية للمخاطر"""
+        # R-606: تخزين مؤقت قصير
+        now = time.time()
+        if self._risk_status_cache is not None and (now - self._risk_status_cache["ts"]) < 2.0:
+            return self._risk_status_cache["data"]
         snapshot = self.risk_cycle()
         
-        return {
+        result = {
             "active_risks": len(snapshot.active_risks),
             "high_priority_risks": len([r for r in snapshot.prioritized_risks if r.priority > 0.7]),
             "overall_risk_level": self.overall_risk_level,
@@ -890,6 +896,8 @@ class PredictiveRiskManager:
             "narrative": snapshot.narrative,
             "timestamp": snapshot.timestamp
         }
+        self._risk_status_cache = {"ts": time.time(), "data": result}
+        return result
     
     def get_risks(self, category: str = None) -> List[Dict]:
         """الحصول على المخاطر"""
@@ -925,10 +933,6 @@ class PredictiveRiskManager:
             }
             for r in prioritized[:limit]
         ]
-    
-    def get_early_warnings_list(self) -> List[Dict]:
-        """الإنذارات المبكرة"""
-        return self.get_early_warnings_list()
     
     def get_mitigation_plans(self) -> List[Dict]:
         """خطط التخفيف"""

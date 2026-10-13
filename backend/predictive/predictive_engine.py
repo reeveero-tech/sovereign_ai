@@ -226,6 +226,8 @@ class PredictiveEngine:
         
         # خلفيات التنبؤ
         self._active = True
+        # R-606: ذاكرة مؤقتة قصيرة لنتيجة getter (نمط drives.py)
+        self._prediction_status_cache = None
         self._prediction_loop = threading.Thread(target=self._continuous_prediction, daemon=True)
         self._prediction_loop.start()
         
@@ -1044,9 +1046,13 @@ class PredictiveEngine:
     
     def get_prediction_status(self) -> Dict[str, Any]:
         """الحالة الحالية للتنبؤ"""
+        # R-606: تخزين مؤقت قصير — يُستدعى عدة مرات داخل دورة واحدة
+        now = time.time()
+        if self._prediction_status_cache is not None and (now - self._prediction_status_cache["ts"]) < 2.0:
+            return self._prediction_status_cache["data"]
         snapshot = self.predictive_cycle()
         
-        return {
+        result = {
             "active_predictions": len(snapshot.active_predictions),
             "overall_risk": snapshot.risk_profile.get("overall_risk", 0.5),
             "overall_opportunity": snapshot.opportunity_profile.get("overall_opportunity", 0.5),
@@ -1055,6 +1061,8 @@ class PredictiveEngine:
             "narrative": snapshot.narrative,
             "timestamp": snapshot.timestamp
         }
+        self._prediction_status_cache = {"ts": time.time(), "data": result}
+        return result
     
     def get_predictions(self, prediction_type: Optional[str] = None) -> List[Dict]:
         """الحصول على التنبؤات"""

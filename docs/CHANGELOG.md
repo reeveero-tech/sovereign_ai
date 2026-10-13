@@ -1,7 +1,7 @@
 # CHANGELOG.md — سجل التغييرات
 
 > كل تغيير يُسجل هنا (قاعدة الدفعة الذرية).
-> آخر تحديث: 2026-10-13 (الدفعة M6 — R-605)
+> آخر تحديث: 2026-10-13 (الدفعة M6 — R-606)
 
 ---
 
@@ -149,3 +149,18 @@
 - **القرار المؤجل من R-112**: 2233 ملف بيانات وقت تشغيل (8.8MB) كانت مُتتبَّعة في git رغم `.gitignore` — تُنشأ تلقائياً وتُلوّث شجرة العمل في كل تشغيل اختبار.
 - **الإجراء**: `git rm -r --cached data/` — إزالة من الفهرس مع إبقاء الملفات على القرص.
 - **التحقق**: `git ls-files data/` = 0؛ `git status` نظيف بعد `pytest`؛ كل ملف يطابق `.gitignore`.
+
+## [M6] — R-606 — 2026-10-13 — Orchestrator cycle performance
+
+- **التحقيق**: دورة المنسق ~11 ثانية؛ عنق الزجاجة في `_analyze_future`/`sense_state` (41.9 ثانية) لأن كل `get_*_status()` يُعيد تشغيل دورة كاملة (يقرأ آلاف blobs) وتُستدعى بشكل متكرر داخل دورة المنسق الواحدة.
+- **أُصلح**:
+  - تخزين مؤقت قصير (TTL 2 ثانية، نمط `drives.py`) على 12 getter باهظ الثمن: `get_prediction_status`, `get_risk_status`, `get_scenario_status`, `get_simulation_status`, `get_controller_status` (sovereign), `get_will_status`, `get_alignment_status`, `get_directives_status`, `get_introspection_status`, `get_self_status`, `get_archetype_status`, `get_identity_status`.
+  - خطأ عودية لا نهائية في `get_early_warnings_list` (تعريف مكرر — الأخير يستدعي نفسه) — أُزيل التعريف العودي.
+  - ذاكرة `verify_integrity` كانت تُبطل في كل إضافة حدث → فحص كامل للسجل في كل استدعاء؛ أُضيف إبطال صريح عند الإضافة + TTL 60 ثانية.
+  - `_load_index` كان يشير إلى `self.index_file` غير الموجود — أُصلح إلى `self.index.index_file`؛ أُضيف `_rebuild_index` (إعادة بناء الفهرس من السجل) واستُخدم في `reset()`.
+  - ترتيب `_save_meta` بعد `index.add_event` — عدّاد الأحداث في meta أصبح متسقاً مع الفهرس.
+  - `iterate_events` — مسار ذيل سريع لـ `reverse+limit` (يتجنب قراءة السجل كاملاً في كل استدعاء)؛ `views._background_integration` محدود بـ 1000 حدث حديث.
+  - سجل تالف (رأس مقطوع + مفاتيح توقيع مختلطة من تشغيلات اختبار) — أُصلح عبر `reset()` مع نسخة احتياطية `.bak` أولاً؛ `verify_integrity` = VERIFIED.
+- **النتيجة**: زمن دورة المنسق ~0.25 ثانية (من ~11 ثانية، ~44×)؛ صفر فشل `prev_hash غير متطابق` في التشغيل.
+- أضيفت 5 اختبارات (`tests/test_performance_r606.py`)؛ `pytest`: 35 passed.
+- أُغلق RK-10 وسُجل القرار D-019.

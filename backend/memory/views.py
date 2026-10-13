@@ -899,7 +899,9 @@ class MemoryViews:
         while True:
             try:
                 # التحقق من الأحداث الجديدة
-                for event in self.core.iterate_events(reverse=True):
+                # R-606: حد أقصى 1000 حدث حديث — يكفي لفاصل ثانية واحدة ويتجنب
+                # قراءة السجل الكامل في كل دورة (كان O(n) لكل ثانية)
+                for event in self.core.iterate_events(reverse=True, limit=1000):
                     if event.get("hash") == last_hash:
                         break
                     
