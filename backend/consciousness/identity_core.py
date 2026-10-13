@@ -156,6 +156,7 @@ class IdentityCore:
         
         # ختم الهوية (الجوهر الخالد)
         self.seal: Optional[IdentitySeal] = None
+        self.is_sealed = False
         self._load_seal()
         
         # النسخ الاحتياطية للهوية
@@ -166,7 +167,7 @@ class IdentityCore:
         self.current_identity: Optional[IdentitySnapshot] = None
         self.identity_history: List[IdentitySnapshot] = []
         self.identity_coherence = IDENTITY_COHERENCE_FORMING
-        self.is_sealed = False
+        self.is_sealed = self.seal is not None
         
         # خلفيات حماية الهوية
         self._active = True
@@ -244,28 +245,26 @@ class IdentityCore:
         sovereign_key_hash = hashlib.sha3_512(SOVEREIGN_KEY.encode()).hexdigest()
         core_hash = self.core._last_hash if self.core else "GENESIS"
         
-        # بصمة الأنماط الأصلية
-        archetype_status = self.archetypes.get_archetype_status()
-        archetype_fingerprint = hashlib.sha256(
-            json.dumps(archetype_status.get("top_archetypes", []), sort_keys=True).encode()
-        ).hexdigest()
+        # بصمة الأنماط الأصلية (R-604: بصمة القوالب الثابتة لا الاحتمالات المتغيرة)
+        archetype_fingerprint = self._archetype_template_fingerprint()
         
-        # إنشاء التوقيع النهائي
-        seal_data = f"{sovereign_key_hash}:{core_hash}:{archetype_fingerprint}:{time.time()}"
+        # إنشاء التوقيع النهائي (R-604: طابع زمني موحد للتوقيع والـ created_at)
+        seal_timestamp = time.time()
+        seal_data = f"{sovereign_key_hash}:{core_hash}:{archetype_fingerprint}:{seal_timestamp}"
         signature = hashlib.sha3_512(seal_data.encode()).hexdigest()
         
         seal_id = f"seal_{int(time.time()*1000)}_{secrets.token_hex(8)}"
         
         seal = IdentitySeal(
             id=seal_id,
-            created_at=time.time(),
+            created_at=seal_timestamp,
             signature=signature,
             fingerprint=hashlib.sha3_256(seal_data.encode()).hexdigest(),
             sovereign_key_hash=sovereign_key_hash,
             core_hash=core_hash,
             archetype_fingerprint=archetype_fingerprint,
             integrity_verified=True,
-            seal_version=3
+            seal_version=4
         )
         
         self.seal = seal
@@ -297,12 +296,7 @@ class IdentityCore:
         
         # إعادة حساب البصمات
         sovereign_key_hash = hashlib.sha3_512(SOVEREIGN_KEY.encode()).hexdigest()
-        core_hash = self.core._last_hash if self.core else "GENESIS"
-        
-        archetype_status = self.archetypes.get_archetype_status()
-        archetype_fingerprint = hashlib.sha256(
-            json.dumps(archetype_status.get("top_archetypes", []), sort_keys=True).encode()
-        ).hexdigest()
+        archetype_fingerprint = self._archetype_template_fingerprint()
         
         # التحقق من تطابق البصمات
         if self.seal.sovereign_key_hash != sovereign_key_hash:
@@ -313,15 +307,71 @@ class IdentityCore:
             logger.error("❌ ختم الهوية تالف: الأنماط الأصلية تغيرت!")
             return False
         
-        # إعادة حساب التوقيع
-        seal_data = f"{sovereign_key_hash}:{core_hash}:{archetype_fingerprint}:{self.seal.created_at}"
+        # التحقق من التوقيع (R-604: يُعاد حسابه من الحقول المخزنة، لا من حالة حية متغيرة)
+        seal_data = f"{self.seal.sovereign_key_hash}:{self.seal.core_hash}:{self.seal.archetype_fingerprint}:{self.seal.created_at}"
         expected_signature = hashlib.sha3_512(seal_data.encode()).hexdigest()
         
         if self.seal.signature != expected_signature:
             logger.error("❌ ختم الهوية تالف: التوقيع غير متطابق!")
             return False
         
+        # ملاحظة (R-604): لا يُفحص سجل الذاكرة الكامل هنا — سلامة سلسلة الذاكرة
+        # مسؤولية نظام الذاكرة نفسه (verify_integrity في _continuous_integrity_check
+        # كل 60 ثانية). فحص السجل الكامل داخل verify_seal يسبب انحداراً في الأداء
+        # لأن الأحداث تُضاف باستمرار فيُعاد فحص 27k+ حدث في كل استدعاء.
+        # core_hash المخزن هو لقطة زمنية عند الختم، ويُغطى بالتوقيع.
+        
         return True
+    
+    def _archetype_template_fingerprint(self) -> str:
+        """
+        بصمة قوالب الأنماط الأصلية الثابتة (R-604).
+        
+        تُحسب من الحقول الثابتة للقوالب (الاسم، العائلة، التسمية، الوصف، السمات)
+        وليس من الاحتمالات/الشدة المتغيرة ديناميكياً، حتى لا يُعتبر التطور
+        الطبيعي للأنماط تلاعباً بالهوية.
+        """
+        try:
+            templates = []
+            for name, a in self.archetypes.archetypes.items():
+                templates.append({
+                    "name": a.name,
+                    "family": a.family,
+                    "label": a.label,
+                    "description": a.description,
+                    "attributes": a.attributes
+                })
+            return hashlib.sha256(
+                json.dumps(templates, sort_keys=True, ensure_ascii=False).encode()
+            ).hexdigest()
+        except Exception as e:
+            logger.error(f"خطأ في حساب بصمة قوالب الأنماط: {e}")
+            # احتياط: بصمة الحالة الحالية (لا تُستخدم إلا عند فشل غير متوقع)
+            archetype_status = self.archetypes.get_archetype_status()
+            return hashlib.sha256(
+                json.dumps(archetype_status.get("top_archetypes", []), sort_keys=True).encode()
+            ).hexdigest()
+    
+    def _migrate_legacy_seal(self) -> bool:
+        """
+        ترحيل ختم قديم (v3) إلى الصيغة الجديدة (v4) (R-604).
+        
+        الأختام القديمة وُقّعت بطابع زمني مختلف عن created_at المخزن،
+        وبصمة أنماط متغيرة، لذا لا يمكن التحقق منها. عند التحميل، يُعاد
+        إنشاؤها بصيغة v4 سليمة بدل إطلاق إنذارات تلف كاذبة.
+        """
+        if not self.seal:
+            return False
+        if getattr(self.seal, "seal_version", 3) >= 4:
+            return False
+        try:
+            logger.warning("🔄 ترحيل ختم الهوية القديم (v3) إلى الصيغة v4...")
+            self.create_seal()
+            logger.warning("✅ تم ترحيل ختم الهوية إلى الصيغة v4")
+            return True
+        except Exception as e:
+            logger.error(f"خطأ في ترحيل ختم الهوية: {e}")
+            return False
     
     def _save_seal(self):
         """حفظ ختم الهوية في مكان آمن"""
@@ -346,6 +396,9 @@ class IdentityCore:
                 self.seal = IdentitySeal(**seal_dict)
                 self.is_sealed = True
                 logger.info("📜 تم تحميل ختم الهوية")
+                # R-604: ترحيل الأختام القديمة (v3) إلى الصيغة v4 السليمة
+                if getattr(self.seal, "seal_version", 3) < 4:
+                    self._migrate_legacy_seal()
         except Exception as e:
             logger.error(f"خطأ في تحميل ختم الهوية: {e}")
     
