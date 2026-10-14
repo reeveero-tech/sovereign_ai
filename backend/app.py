@@ -1248,7 +1248,9 @@ if __name__ == "__main__":
     print("\n" + "=" * 80)
     print("🌐 Sovereign AI Web Server - الخادم السيادي الكامل")
     print("=" * 80)
-    print(f"\n🔑 مفتاح API للسيد: {SOVEREIGN_API_KEY}")
+    # R-617: لا يُسجّل المفتاح نفسه أبدًا — فقط بصمته (أول 8 أحرف من sha256)
+    _fp = hashlib.sha256(SOVEREIGN_API_KEY.encode()).hexdigest()[:8]
+    print(f"\n🔑 مفتاح API للسيد (بصمة فقط): {_fp}...")
     print(f"📖 التوثيق: http://localhost:8000/docs")
     print(f"🏥 فحص الصحة: http://localhost:8000/health")
     print(f"📊 حالة النظام: http://localhost:8000/status")
