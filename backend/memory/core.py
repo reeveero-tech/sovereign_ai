@@ -597,27 +597,34 @@ class SovereignCore:
     
     def _compute_event_signature(self, event_hash: str, prev_hash: str, 
                                   blob_hash: str, event_time: str, 
-                                  event_type: str) -> str:
+                                  event_type: str,
+                                  key_id: Optional[str] = None) -> str:
         """حساب توقيع الحدث (لضمان عدم التلاعب)
         
-        R-620: التوقيع يشمل key_id (إن وُجد مفتاح KeyRing نشط) —
-        يجعل التوقيع مشتقًا من مفتاح KeyRing، وليس فقط من مفتاح الإعدادات.
-        التحقق من SignatureVerifier يطابق هذه الصيغة.
+        R-625: التوقيع يُشتق من مفتاح KeyRing المحدد في key_id —
+        - للكتابة: key_id = المفتاح النشط (self._keyring_key_id)
+        - للتحقق: key_id = event['key_id'] (وليس المفتاح النشط الحالي)
+        هذا يضمن أن أحداث المفتاح A تُتحقق بنجاح بعد الدوران إلى B.
+        
+        R-626: إذا تعذر الحصول على مفتاح KeyRing صالح، يُرفض الإلحاق
+        (لا fallback إلى مفتاح الإعدادات تحت هوية مفتاح KeyRing).
         """
-        key_id_part = self._keyring_key_id or ""
+        key_id_part = key_id if key_id is not None else ""
         data = f"{event_hash}|{prev_hash}|{blob_hash}|{event_time}|{event_type}|{key_id_part}"
         
-        # R-620: إذا وُجد مفتاح KeyRing نشط، يُستخدم للتوقيع (وليس فقط مفتاح الإعدادات)
-        if self._keyring is not None and self._keyring_key_id:
+        # R-625: تحديد المفتاح المستخدم — من key_id المُمرر (وليس المفتاح النشط)
+        _use_key_id = key_id if key_id is not None else self._keyring_key_id
+        
+        if self._keyring is not None and _use_key_id:
             try:
-                active = self._keyring.get_key(self._keyring_key_id)
-                if active is not None and hasattr(active, 'private_key'):
+                key_record = self._keyring.get_key(_use_key_id)
+                if key_record is not None and hasattr(key_record, 'private_key'):
                     # توقيع HMAC بالمفتاح الخاص من KeyRing
                     import hmac as _hmac
-                    key_bytes = active.private_key.encode('utf-8') if isinstance(active.private_key, str) else active.private_key
+                    key_bytes = key_record.private_key.encode('utf-8') if isinstance(key_record.private_key, str) else key_record.private_key
                     return _hmac.new(key_bytes, data.encode('utf-8'), __import__('hashlib').sha256).hexdigest()
             except Exception as e:
-                logger.warning(f"⚠️ KeyRing signing failed, falling back: {e}")
+                logger.warning(f"⚠️ KeyRing signing failed: {e}")
         
         # احتياط: التوقيع بمفتاح الإعدادات (كما كان)
         return compute_hmac(data.encode('utf-8'), self.signing_key)
@@ -649,9 +656,10 @@ class SovereignCore:
                 self._last_hash, blob_hash, event_time, event_type_str
             )
             
-            # 4) حساب التوقيع
+            # 4) حساب التوقيع (R-625: بالمفتاح النشط من KeyRing)
             signature = self._compute_event_signature(
-                event_hash, self._last_hash, blob_hash, event_time, event_type_str
+                event_hash, self._last_hash, blob_hash, event_time, event_type_str,
+                key_id=self._keyring_key_id
             )
             
             # 5) بناء حدث السجل
@@ -836,14 +844,19 @@ class SovereignCore:
                     # - الأحداث التاريخية (بلا key_id): تُتحقق بالصيغة القديمة
                     #   (مفتاح الإعدادات، بيانات بلا key_id) — لا إعادة توقيع للتاريخ.
                     if 'key_id' in event:
+                        # R-625: التحقق يستخدم key_id من الحدث نفسه (وليس المفتاح النشط)
+                        # — يضمن أن أحداث المفتاح A تُتحقق بنجاح بعد الدوران إلى B
                         expected_signature = self._compute_event_signature(
                             event['hash'],
                             event['prev_hash'],
                             event['blob'],
                             event['time'],
-                            event['type']
+                            event['type'],
+                            key_id=event.get('key_id')
                         )
-                        if event['signature'] != expected_signature:
+                        # R-625: مقارنة آمنة (hmac.compare_digest)
+                        import hmac as _hmac
+                        if not _hmac.compare_digest(event['signature'], expected_signature):
                             logger.error(f"❌ فشل في السطر {line_num}: التوقيع غير صحيح (صيغة KeyRing)")
                             return IntegrityStatus.CORRUPTED
                     else:

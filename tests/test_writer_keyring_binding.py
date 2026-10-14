@@ -90,11 +90,24 @@ class TestWriterKeyRingBinding:
             f"tampering not detected: {status.reason}"
         )
 
-    def test_integrity_check_passes_with_new_events(self):
-        """التحقق من سلامة السجل ينجح مع الأحداث الجديدة (توقيع KeyRing)."""
-        # R-624: استخدام SovereignCore واحد — كل instance يُنشئ genesis
-        # في السجل المعزول (بدلاً من القراءة)، فتتكرر الأحداث و يفشل التحقق.
-        core = SovereignCore()
+    def test_integrity_check_passes_with_new_events(self, tmp_path):
+        """التحقق من سلامة السجل ينجح مع الأحداث الجديدة (توقيع KeyRing).
+        
+        R-628: سجل معزول بمسارات صريحة — لضمان أن السجل يحتوي فقط
+        أحداث هذا الاختبار (وليس أحداث اختبارات أخرى).
+        """
+        _core_dir = tmp_path / "sovereign_core"
+        _core_dir.mkdir(parents=True, exist_ok=True)
+        _blobs_dir = _core_dir / "blobs"
+        _blobs_dir.mkdir(exist_ok=True)
+
+        core = SovereignCore(
+            log_file=_core_dir / "ledger.jsonl",
+            blobs_dir=_blobs_dir,
+            index_file=_core_dir / "index.json",
+            meta_file=_core_dir / "meta.json",
+            integrity_file=_core_dir / "integrity.json",
+        )
         core.append_event(EventType.INTERACTION, {"test": "integrity"}, user="test")
 
         status = core.verify_integrity()
