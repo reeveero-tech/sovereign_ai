@@ -266,19 +266,25 @@ def test_key_rotation_full_cycle(isolated_keyring):
 
 
 def test_keyring_stats(isolated_keyring):
-    """إحصائيات KeyRing تعمل بشكل صحيح."""
+    """إحصائيات KeyRing تعمل بشكل صحيح.
+    
+    R-634: fallback معطل — KeyRing معزول يحتوي فقط المفاتيح التي
+    أنشأها الاختبار (لا مفاتيح من المسار الحقيقي) — لذا نتحقق
+    من أعداد دقيقة (وليس >=).
+    """
     ring, _ = isolated_keyring
 
     k1 = ring.generate_new_key(reason="stats1")
     k2 = ring.generate_new_key(reason="stats2")
     ring.mark_key_lost(k2.key_id)
 
-    # R-621: مع fallback للقراءة من المسار الحقيقي، قد يكون هناك مفتاح
-    # إضافي من المسار الحقيقي (fallback) — لذا نتحقق من الحد الأدنى.
+    # R-634: fallback معطل — أعداد دقيقة (المفتاحان فقط)
     stats = ring.stats()
-    assert stats["total_keys"] >= 2
-    assert stats["active"] >= 1
-    assert stats["lost"] >= 1
+    assert stats["total_keys"] == 2, (
+        f"isolated KeyRing must have exactly 2 keys (no fallback), got {stats['total_keys']}"
+    )
+    assert stats["active"] == 1
+    assert stats["lost"] == 1
     # المفتاحان الجديدان موجودان
     assert k1.key_id in ring._keys
     assert k2.key_id in ring._keys

@@ -94,15 +94,20 @@ class KeyRing:
         self.keyring_file = self.keys_dir / "keyring.json"
         self.history_file = self.keys_dir / "HISTORY.jsonl"
 
-        # R-621: fallback للقراءة فقط — إذا كان keyring.json غير موجود في الجذر المعزول
-        # (اختباري)، يُحاول القراءة من المسار الحقيقي (data/keys/keyring.json).
-        # هذا يجعل الاختبارات المعزولة تُحمّل المفتاح الفعلي، دون كتابة عليه.
-        self._readonly_fallback: Optional[Path] = None
-        if not self.keyring_file.exists():
-            _repo_root = Path(__file__).resolve().parent.parent.parent.parent
-            _real_keyring = _repo_root / "data" / "keys" / "keyring.json"
-            if _real_keyring.exists():
-                self._readonly_fallback = _real_keyring
+        # R-621 (معطل — R-634): كان fallback للقراءة فقط — إذا كان keyring.json
+        # غير موجود في الجذر المعزول، يُحاول القراءة من المسار الحقيقي.
+        # R-634 (من مراجعة المستشار): هذا يكسر العزل — الجذر المعزول يجب
+        # ألا يتجاوز إلى أسرار التشغيل. عُطّل السلوك (لا حذف — الأثر محفوظ
+        # غير مفعّل احترامًا لقيد عدم الحذف).
+        #
+        # Affect السابق (معطل):
+        #   self._readonly_fallback: Optional[Path] = None
+        #   if not self.keyring_file.exists():
+        #       _repo_root = Path(__file__).resolve().parent.parent.parent.parent
+        #       _real_keyring = _repo_root / "data" / "keys" / "keyring.json"
+        #       if _real_keyring.exists():
+        #           self._readonly_fallback = _real_keyring
+        self._readonly_fallback: Optional[Path] = None  # R-634: معطل دائمًا
 
         # المفاتيح في الذاكرة
         self._keys: Dict[str, KeyRecord] = {}
@@ -118,18 +123,12 @@ class KeyRing:
     def load_from_disk(self) -> "KeyRing":
         """يُحمّل الحالة من القرص. إذا لم يوجد ملف، يبدأ فارغًا.
         
-        R-621: إذا كان الجذر معزولًا (اختباري) و keyring.json غير موجود،
-        يُحمّل من المسار الحقيقي (قراءة فقط) — لضمان أن الاختبارات
-        تستخدم المفتاح الفعلي، دون كتابة عليه.
+        R-634: fallback معطل — الجذر المحدد (keys_dir) حدٌّ لا يتجاوزه إلى
+        أسرار التشغيل. إذا كان فارغًا، يبقى فارغًا (لا قراءة من المسار الحقيقي).
         """
-        # R-621: تحديد الملف الذي سيُقرأ (الحقيقي أو المعزول أو fallback)
-        _load_file = self.keyring_file
-        if not self.keyring_file.exists() and self._readonly_fallback is not None:
-            _load_file = self._readonly_fallback
-
-        if _load_file.exists():
+        if self.keyring_file.exists():
             try:
-                data = json.loads(_load_file.read_text(encoding="utf-8"))
+                data = json.loads(self.keyring_file.read_text(encoding="utf-8"))
                 for kd in data.get("keys", []):
                     rec = KeyRecord(
                         key_id=kd["key_id"],

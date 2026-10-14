@@ -31,32 +31,53 @@ from backend.sovereign.keys import KeyRing, SignatureVerifier
 
 
 class TestWriterKeyRingBinding:
-    """اختبارات ربط الكاتب بـ KeyRing (R-620)."""
+    """اختبارات ربط الكاتب بـ KeyRing (R-620).
+    
+    R-634: عزل كامل — KeyRing معزول في tmp_path (لا fallback للحقيقي).
+    """
 
-    def _make_core(self) -> SovereignCore:
-        """يُنشئ SovereignCore جديد (مع KeyRing محمّل)."""
-        return SovereignCore()
+    def _make_core(self, tmp_path) -> SovereignCore:
+        """يُنشئ SovereignCore جديد مع KeyRing معزول محقون (R-629)."""
+        _keys_dir = tmp_path / "keys"
+        _keys_dir.mkdir(exist_ok=True)
+        keyring = KeyRing(keys_dir=_keys_dir)
+        keyring.generate_new_key(reason="r620_test")
+        keyring.save_to_disk()
 
-    def _make_verifier(self) -> SignatureVerifier:
-        """يُنشئ SignatureVerifier مع KeyRing محمّل."""
-        keyring = KeyRing()
+        _core_dir = tmp_path / "sovereign_core"
+        _core_dir.mkdir(parents=True, exist_ok=True)
+        (_core_dir / "blobs").mkdir(exist_ok=True)
+
+        return SovereignCore(
+            log_file=_core_dir / "ledger.jsonl",
+            blobs_dir=_core_dir / "blobs",
+            index_file=_core_dir / "index.json",
+            meta_file=_core_dir / "meta.json",
+            integrity_file=_core_dir / "integrity.json",
+            keyring=keyring,
+        )
+
+    def _make_verifier(self, tmp_path) -> SignatureVerifier:
+        """يُنشئ SignatureVerifier مع KeyRing معزول."""
+        _keys_dir = tmp_path / "keys"
+        keyring = KeyRing(keys_dir=_keys_dir)
         keyring.load_from_disk()
         return SignatureVerifier(keyring)
 
-    def test_new_event_has_key_id(self):
+    def test_new_event_has_key_id(self, tmp_path):
         """الحدث الجديد يحمل key_id من KeyRing النشط."""
-        core = self._make_core()
+        core = self._make_core(tmp_path)
         result = core.append_event(EventType.INTERACTION, {"test": "r620"}, user="test")
 
         assert "key_id" in result, "event must have key_id"
         assert result["key_id"] == core._keyring_key_id
 
-    def test_event_signature_matches_keyring_key(self):
+    def test_event_signature_matches_keyring_key(self, tmp_path):
         """توقيع الحدث مطابق لمفتاح KeyRing (وليس مفتاح الإعدادات فقط)."""
-        core = self._make_core()
+        core = self._make_core(tmp_path)
         result = core.append_event(EventType.INTERACTION, {"test": "r620_sig"}, user="test")
 
-        verifier = self._make_verifier()
+        verifier = self._make_verifier(tmp_path)
         event = {
             "hash": result["hash"],
             "prev_hash": result["prev_hash"],
@@ -69,12 +90,12 @@ class TestWriterKeyRingBinding:
         status = verifier.verify_event(event)
         assert status.status.value == "verified", f"signature failed: {status.reason}"
 
-    def test_tampered_signature_detected(self):
+    def test_tampered_signature_detected(self, tmp_path):
         """توقيع مزوّر يُكتشف (تغيير الحمولة لا يُغيّر التوقيع القديم)."""
-        core = self._make_core()
+        core = self._make_core(tmp_path)
         result = core.append_event(EventType.INTERACTION, {"test": "tamper"}, user="test")
 
-        verifier = self._make_verifier()
+        verifier = self._make_verifier(tmp_path)
         # تزييف: تغيير الحمولة لكن الاحتفاظ بالتوقيع القديم
         event = {
             "hash": "fake_hash_12345",
@@ -93,9 +114,15 @@ class TestWriterKeyRingBinding:
     def test_integrity_check_passes_with_new_events(self, tmp_path):
         """التحقق من سلامة السجل ينجح مع الأحداث الجديدة (توقيع KeyRing).
         
-        R-628: سجل معزول بمسارات صريحة — لضمان أن السجل يحتوي فقط
-        أحداث هذا الاختبار (وليس أحداث اختبارات أخرى).
+        R-628: سجل معزول بمسارات صريحة + KeyRing معزول محقون (R-634).
         """
+        # R-634: KeyRing معزول محقون (لا fallback)
+        _keys_dir = tmp_path / "keys"
+        _keys_dir.mkdir(exist_ok=True)
+        keyring = KeyRing(keys_dir=_keys_dir)
+        keyring.generate_new_key(reason="integrity_test_r634")
+        keyring.save_to_disk()
+
         _core_dir = tmp_path / "sovereign_core"
         _core_dir.mkdir(parents=True, exist_ok=True)
         _blobs_dir = _core_dir / "blobs"
@@ -107,21 +134,22 @@ class TestWriterKeyRingBinding:
             index_file=_core_dir / "index.json",
             meta_file=_core_dir / "meta.json",
             integrity_file=_core_dir / "integrity.json",
+            keyring=keyring,
         )
         core.append_event(EventType.INTERACTION, {"test": "integrity"}, user="test")
 
         status = core.verify_integrity()
         assert status.value == "verified", f"integrity failed: {status}"
 
-    def test_legacy_events_use_old_format(self):
+    def test_legacy_events_use_old_format(self, tmp_path):
         """الأحداث التاريخية (بلا key_id) تُتحقق بالصيغة القديمة."""
-        core = self._make_core()
+        core = self._make_core(tmp_path)
         # إنشاء حدث قديم الصيغة (بلا key_id)
         result = core.append_event(EventType.INTERACTION, {"test": "legacy"}, user="test")
         # إزالة key_id لمحاكاة حدث قديم (لا يُفعَل في الإنتاج — للاختبار فقط)
         del result["key_id"]
 
-        verifier = self._make_verifier()
+        verifier = self._make_verifier(tmp_path)
         status = verifier.verify_event(result)
         # حدث بلا key_id → UNVERIFIABLE_MISSING_KEY (LEGACY_PRE_KEYRING)
         assert status.status.value == "unverifiable_missing_key", (
@@ -130,35 +158,95 @@ class TestWriterKeyRingBinding:
 
 
 class TestKeyRingFallback:
-    """اختبارات fallback قراءة المفتاح الحقيقي في بيئة معزولة (R-621)."""
+    """اختبارات عزل KeyRing (R-621 معطل — R-634).
+    
+    R-634: الجذر المعزول لا يتجاوز إلى أسرار التشغيل —
+    إذا كان keys_dir فارغًا، يبقى فارغًا (لا fallback).
+    """
 
-    def test_keyring_loads_real_key_in_isolated_env(self):
-        """KeyRing يُحمّل المفتاح الحقيقي حتى في بيئة معزولة."""
-        keyring = KeyRing()
+    def test_isolated_keyring_stays_empty(self, tmp_path):
+        """R-634: KeyRing معزول (keys_dir فارغ) يبقى فارغ — لا قراءة من المسار الحقيقي."""
+        _keys_dir = tmp_path / "keys_isolated"
+        _keys_dir.mkdir()
+
+        # KeyRing معزول — لا مفاتيح (لا fallback)
+        keyring = KeyRing(keys_dir=_keys_dir)
         keyring.load_from_disk()
-        active = keyring.get_active_key()
-        assert active is not None, "KeyRing must load active key from real path (R-621)"
 
-    def test_sovereign_core_links_keyring_in_isolated_env(self):
-        """SovereignCore يربط KeyRing حتى في بيئة معزولة."""
-        core = SovereignCore()
-        assert core._keyring_key_id is not None, (
-            "SovereignCore must link to KeyRing (R-621 fallback)"
+        # يجب أن يبقى فارغًا (لا fallback إلى المسار الحقيقي)
+        active = keyring.get_active_key()
+        assert active is None, (
+            "isolated KeyRing must stay empty (no fallback to real path) — R-634"
+        )
+        assert len(keyring._keys) == 0, (
+            f"isolated KeyRing must have 0 keys, got {len(keyring._keys)}"
         )
 
-    def test_keyring_does_not_write_to_real_path(self):
-        """KeyRing لا يكتب إلى المسار الحقيقي في بيئة معزولة."""
-        keyring = KeyRing()
+    def test_isolated_keyring_no_real_keys_leaked(self, tmp_path):
+        """R-634: KeyRing معزول لا يُحمّل أي مفتاح من المسار الحقيقي."""
+        _keys_dir = tmp_path / "keys_no_leak"
+        _keys_dir.mkdir()
+
+        keyring = KeyRing(keys_dir=_keys_dir)
         keyring.load_from_disk()
-        # إنشاء مفتاح جديد (في المسار المعزول)
-        new_key = keyring.generate_new_key(reason="R-621 test")
-        # حفظ (يجب أن يكتب إلى المسار المعزول، وليس الحقيقي)
+
+        # لا مفاتيح من المسار الحقيقي (لا تسريب)
+        _real = _REPO_ROOT / "data" / "keys" / "keyring.json"
+        if _real.exists():
+            real_data = json.loads(_real.read_text(encoding="utf-8"))
+            real_key_ids = {k["key_id"] for k in real_data["keys"]}
+            for kid in keyring._keys:
+                assert kid not in real_key_ids, (
+                    f"real key {kid} leaked into isolated KeyRing — R-634"
+                )
+
+    def test_sovereign_core_in_isolated_env_no_keyring(self, tmp_path):
+        """R-634: SovereignCore في بيئة معزولة (fallback معطل) لا يربط KeyRing.
+        
+        (الكتابة تُرفض — فشل مُغلق. راجع TestFailClosed.)
+        """
+        _core_dir = tmp_path / "sovereign_core"
+        _core_dir.mkdir(parents=True, exist_ok=True)
+        (_core_dir / "blobs").mkdir(exist_ok=True)
+
+        # R-629: تعطيل التحميل التلقائي (fallback معطل)
+        _orig = os.environ.get("SOVEREIGN_KEYRING_FALLBACK_DISABLED")
+        os.environ["SOVEREIGN_KEYRING_FALLBACK_DISABLED"] = "1"
+        try:
+            core = SovereignCore(
+                log_file=_core_dir / "ledger.jsonl",
+                blobs_dir=_core_dir / "blobs",
+                index_file=_core_dir / "index.json",
+                meta_file=_core_dir / "meta.json",
+                integrity_file=_core_dir / "integrity.json",
+            )
+            # لا KeyRing (fallback معطل — R-634)
+            assert core._keyring is None, (
+                "SovereignCore must not load KeyRing when fallback disabled — R-634"
+            )
+            assert core._keyring_key_id is None
+        finally:
+            if _orig is None:
+                os.environ.pop("SOVEREIGN_KEYRING_FALLBACK_DISABLED", None)
+            else:
+                os.environ["SOVEREIGN_KEYRING_FALLBACK_DISABLED"] = _orig
+
+    def test_keyring_does_not_write_to_real_path(self, tmp_path):
+        """KeyRing لا يكتب إلى المسار الحقيقي في بيئة معزولة."""
+        _keys_dir = tmp_path / "keys_write_test"
+        _keys_dir.mkdir()
+
+        keyring = KeyRing(keys_dir=_keys_dir)
+        keyring.generate_new_key(reason="R-634 test")
         keyring.save_to_disk()
 
         # المسار الحقيقي لا يجب أن يُغيّر (لا يُضاف المفتاح الجديد)
         _real = _REPO_ROOT / "data" / "keys" / "keyring.json"
         data = json.loads(_real.read_text(encoding="utf-8"))
         real_key_ids = [k["key_id"] for k in data["keys"]]
-        assert new_key.key_id not in real_key_ids, (
-            "KeyRing must NOT write to real path in isolated env"
-        )
+        # المفتاح الجديد ليس في الحقيقي
+        new_key_id = keyring.get_active_key().key_id if keyring.get_active_key() else None
+        if new_key_id:
+            assert new_key_id not in real_key_ids, (
+                "KeyRing must NOT write to real path in isolated env"
+            )

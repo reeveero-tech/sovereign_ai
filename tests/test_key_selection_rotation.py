@@ -184,11 +184,18 @@ class TestKeySelectionAfterRotation:
 class TestLegacyCompatibility:
     """اختبارات التوافق التاريخي (أحداث key_id بصيغة 5 حقول)."""
 
-    def test_legacy_5field_event_with_key_id_verifies_old_format(self):
+    def test_legacy_5field_event_with_key_id_verifies_old_format(self, tmp_path):
         """حدث تاريخي يحمل key_id لكن بتوقيع بصيغة 5 حقول (بدون key_id في البيانات)
-        يُتحقق بالصيغة القديمة (لا يُعتبر تزييفًا)."""
-        keyring = KeyRing()
-        keyring.load_from_disk()
+        يُتحقق بالصيغة القديمة (لا يُعتبر تزييفًا).
+        
+        R-634: KeyRing معزول (لا fallback للحقيقي).
+        """
+        # R-634: KeyRing معزول
+        _keys_dir = tmp_path / "keys_legacy"
+        _keys_dir.mkdir(exist_ok=True)
+        keyring = KeyRing(keys_dir=_keys_dir)
+        keyring.generate_new_key(reason="legacy_test_r634")
+        keyring.save_to_disk()
         active = keyring.get_active_key()
         assert active is not None
 
