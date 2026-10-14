@@ -1,0 +1,170 @@
+"""
+اختبار البوابة 1 (التحقق التشغيلي المنفصل) — R-655
+
+هذا الاختبار يُشغّل في عملية Python جديدة (subprocess) و يُحمّل
+التطبيق بإعداداته الحقيقية (دون monkeypatch أو reload) ثم يختبر
+مسار المصادقة الفعلي ضد الاعتماد الحالي و القديم.
+
+R-655: الفشل يجب أن يفشل الاختبار (لا skip).
+"""
+
+import hashlib
+import json
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+import pytest
+
+_REPO_ROOT = Path(__file__).resolve().parent.parent
+
+
+def _fp(key: str) -> str:
+    return hashlib.sha256(key.encode("utf-8")).hexdigest()[:16]
+
+
+def _load_key_from_file(path: Path) -> str:
+    with open(path, "r", encoding="utf-8") as f:
+        return f.read().strip()
+
+
+class TestOperationalAuth:
+    """التحقق التشغيلي المنفصل — البوابة 1."""
+
+    def test_operational_auth_new_key_accepted_old_rejected(self):
+        """التشغيل الفعلي: عملية Python جديدة تُحمّل التطبيق و تختبر المصادقة.
+
+        - يُحمّل التطبيق بإعداداته الحقيقية (data/key.secret)
+        - يختبر /api-key بالمفتاح الجديد (200) و القديم (403)
+        - لا monkeypatch، لا reload، لا skip — الفشل = فشل
+        """
+        new_key_path = _REPO_ROOT / "data" / "key.secret"
+        old_key_path = _REPO_ROOT / "data" / "key.secret.old_rotated_2026_10_14"
+
+        # المفاتيح موجودة (إلزامي — لا skip)
+        assert new_key_path.exists(), f"new key file missing: {new_key_path}"
+        assert old_key_path.exists(), f"old key file missing: {old_key_path}"
+
+        new_key = _load_key_from_file(new_key_path)
+        old_key = _load_key_from_file(old_key_path)
+
+        # بصمات مختلفة
+        new_fp = _fp(new_key)
+        old_fp = _fp(old_key)
+        assert new_fp != old_fp, "new and old key fingerprints must differ"
+
+        # سكربت التحقق التشغيلي (subprocess — عملية جديدة)
+        # يُحمّل التطبيق بالإعدادات الحقيقية (دون monkeypatch/reload)
+        script = (
+            "import sys, os, json\n"
+            f"sys.path.insert(0, {str(_REPO_ROOT / 'backend')!r})\n"
+            f"os.chdir({str(_REPO_ROOT)!r})\n"
+            "# إلغاء متغيرات البيئة الاختبارية (لكن المفتاح من data/key.secret)\n"
+            "os.environ.pop('SOVEREIGN_KEY', None)\n"
+            "os.environ.pop('SOVEREIGN_DATA_ROOT', None)\n"
+            "from fastapi.testclient import TestClient\n"
+            "import app\n"
+            "client = TestClient(app.app)\n"
+            "results = {}\n"
+            "try:\n"
+            f"    r = client.get('/api-key', params={{'master_key': {new_key!r}}})\n"
+            "    results['new_key_status'] = r.status_code\n"
+            "except Exception as e:\n"
+            "    results['new_key_error'] = str(e)\n"
+            "try:\n"
+            f"    r = client.get('/api-key', params={{'master_key': {old_key!r}}})\n"
+            "    results['old_key_status'] = r.status_code\n"
+            "except Exception as e:\n"
+            "    results['old_key_error'] = str(e)\n"
+            "print(json.dumps(results))\n"
+        )
+
+        result = subprocess.run(
+            [sys.executable, "-c", script],
+            capture_output=True,
+            text=True,
+            cwd=str(_REPO_ROOT),
+            timeout=120,
+        )
+
+        # R-655: الفشل يفشل الاختبار (لا skip)
+        assert result.returncode == 0, (
+            f"subprocess failed (returncode={result.returncode}): "
+            f"{result.stderr[-500:]}"
+        )
+
+        # تحليل النتائج
+        output = result.stdout.strip()
+        assert output, f"subprocess produced no output: stderr={result.stderr[-300:]}"
+
+        try:
+            results = json.loads(output)
+        except json.JSONDecodeError:
+            # محاولة استخراج آخر سطر JSON
+            lines = [l for l in output.split("\n") if l.strip().startswith("{")]
+            assert lines, f"no JSON in output: {output[-300:]}"
+            results = json.loads(lines[-1])
+
+        # R-655: تأكيد المصادقة الفعلية
+        # المفتاح الجديد: 200 (يُقبل)
+        assert results.get("new_key_status") == 200, (
+            f"NEW key must be accepted (200), got: {results.get('new_key_status')} "
+            f"(error: {results.get('new_key_error', 'none')})"
+        )
+
+        # المفتاح القديم: 403 (يُرفض)
+        assert results.get("old_key_status") == 403, (
+            f"OLD key must be rejected (403), got: {results.get('old_key_status')} "
+            f"(error: {results.get('old_key_error', 'none')})"
+        )
+
+        # R-655: بصمات (لا أسرار)
+        print(f"[R-655] new_key_fp={new_fp}, old_key_fp={old_fp}")
+        print(f"[R-655] new=200, old=403 — operational auth CONFIRMED")
+
+    def test_identity_seal_path_follows_code_definition(self):
+        """R-655: مسار ختم الهوية يُتبّع التعريف الفعلي (IDENTITY_SEAL_FILE).
+
+        لا مسار مكتوب يدويًا — نستورد التعريف من الكود.
+        """
+        # استيراد التعريف الفعلي (subprocess — لا تلوث)
+        script = (
+            "import sys, os, json\n"
+            f"sys.path.insert(0, {str(_REPO_ROOT)!r})\n"
+            f"sys.path.insert(0, {str(_REPO_ROOT / 'backend')!r})\n"
+            f"os.chdir({str(_REPO_ROOT)!r})\n"
+            "os.environ.pop('SOVEREIGN_KEY', None)\n"
+            "os.environ.pop('SOVEREIGN_DATA_ROOT', None)\n"
+            "from backend.consciousness import identity_core\n"
+            "print(json.dumps({\n"
+            "    'seal_file': str(identity_core.IDENTITY_SEAL_FILE),\n"
+            "    'seal_exists': identity_core.IDENTITY_SEAL_FILE.exists(),\n"
+            "    'identity_dir': str(identity_core.IDENTITY_DIR),\n"
+            "}))\n"
+        )
+
+        result = subprocess.run(
+            [sys.executable, "-c", script],
+            capture_output=True,
+            text=True,
+            cwd=str(_REPO_ROOT),
+            timeout=60,
+        )
+
+        # R-655: الفشل يفشل (لا skip)
+        assert result.returncode == 0, (
+            f"subprocess failed: {result.stderr[-300:]}"
+        )
+
+        lines = [
+            l for l in result.stdout.strip().split("\n") if l.strip().startswith("{")
+        ]
+        assert lines, f"no JSON in output: {result.stdout[-200:]}"
+        info = json.loads(lines[-1])
+
+        # الختم موجود (مسار فعلي من الكود)
+        assert info["seal_exists"], (
+            f"identity seal file must exist at actual path: {info['seal_file']}"
+        )
+        print(f"[R-655] seal_file={info['seal_file']} (exists)")
