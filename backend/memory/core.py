@@ -952,6 +952,8 @@ class SovereignCore:
             "unverifiable_missing_key": 0,
             "invalid": 0,
             "legacy_pre_keyring": 0,
+            "malformed_json": 0,
+            "execution_errors": 0,
         }
         
         if not self.log_file.exists():
@@ -981,10 +983,17 @@ class SovereignCore:
                 if not line:
                     continue
                 
+                report["total"] += 1
+                
+                # R-645: تصنيف منفصل للأخطاء (ليس كلها مفتاح مفقود)
                 try:
                     event = json.loads(line)
-                    report["total"] += 1
-                    
+                except json.JSONDecodeError:
+                    # JSON غير صالح — حالة بنيوية (ليست مفتاح مفقود)
+                    report["malformed_json"] += 1
+                    continue
+                
+                try:
                     if verifier is None:
                         # لا KeyRing — كل الأحداث unverifiable (ليس إثبات تلاعب)
                         if "key_id" in event:
@@ -1004,9 +1013,12 @@ class SovereignCore:
                             report["legacy_pre_keyring"] += 1
                     elif status_val == "invalid":
                         report["invalid"] += 1
+                except KeyError as e:
+                    # حقل مفقود في الحدث — حالة بنيوية
+                    report["malformed_json"] += 1
                 except Exception:
-                    # حدث غير قابل للقراءة — يُحسب unverifiable (ليس إثبات تلاعب)
-                    report["unverifiable_missing_key"] += 1
+                    # خطأ تنفيذ (ليس مفتاح مفقود)
+                    report["execution_errors"] += 1
         
         logger.info(
             f"📋 تقرير التوقيعات: {report['total']} إجمالي، "

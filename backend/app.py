@@ -421,11 +421,14 @@ async def ledger_verify():
 
     return {
         "ledger_summary": stats,
+        # R-647: توافق قديم — anchors["verified"] بمعناه السابق (فحص الجذر)
+        # + حقول الثقة الجديدة (root_verified, trusted, details)
         "anchors": {
             "total": anchors_verification["total_anchors"],
+            "verified": anchors_verification["root_verified_count"],  # توافق قديم (فحص الجذر)
+            "failed": anchors_verification["failed"],
             "root_verified": anchors_verification["root_verified_count"],
             "trusted": anchors_verification["trusted_count"],
-            "failed": anchors_verification["failed"],
             "details": [
                 {
                     "anchor_id": d["anchor_id"],

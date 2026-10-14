@@ -352,30 +352,39 @@ class LedgerAnchor:
                         f"cannot verify signature (not trusted)"
                     )
                     return result
-                
-                # R-642: تحقق من ثقة المفتاح (ACTIVE — غير COMPROMISED)
-                from backend.sovereign.keys.keyring import KeyStatus
-                if key_record.status == KeyStatus.COMPROMISED:
-                    result["message"] = (
-                        f"anchor key {key_id} is COMPROMISED — "
-                        f"signature may verify but key is not trusted"
-                    )
-                    # root_verified صحيح لكن key_trusted = False
-                    return result
-                if key_record.status != KeyStatus.ACTIVE:
-                    result["message"] = (
-                        f"anchor key {key_id} status={key_record.status} — "
-                        f"not trusted for coverage"
-                    )
-                    return result
-                result["key_trusted"] = True
+                # R-644: فصل التوقيع عن الثقة — حساب HMAC أولاً
+                # (حتى لو كان المفتاح COMPROMISED أو RETIRED)
+                # ثم تحديد الثقة منفصلًا
                 
                 # التحقق من التوقيع v2 (يُغطي الجذر)
                 # R-642: استخدم anchor['event_count'] (وليس len(batch_lines))
                 # — تغيير العدد المحفوظ يجب أن يُكتشف
+                # R-644: تحقق بنيوي صارم — event_count مطلوب و يجب أن يُطابق
                 event_count_from_anchor = anchor.get("event_count")
                 if event_count_from_anchor is None:
-                    event_count_from_anchor = len(batch_lines)
+                    result["message"] = (
+                        f"anchor missing event_count — structural failure "
+                        f"(cannot verify signature)"
+                    )
+                    return result
+                
+                # R-644: تحقق بنيوي صارم — النطاق صالح
+                if not (0 <= start <= end < len(lines)):
+                    result["message"] = (
+                        f"invalid batch range [{start}, {end}] "
+                        f"(total={len(lines)}) — structural failure"
+                    )
+                    return result
+                
+                # R-644: event_count يجب أن يُطابق طول النطاق
+                expected_count = end - start + 1
+                if event_count_from_anchor != expected_count:
+                    result["message"] = (
+                        f"event_count mismatch: anchor says {event_count_from_anchor}, "
+                        f"but range [{start},{end}] implies {expected_count} — "
+                        f"structural failure"
+                    )
+                    return result
                 
                 expected_sig_data = self.compute_anchor_signature_data(
                     start, end, event_count_from_anchor, expected_root, key_id
@@ -395,7 +404,27 @@ class LedgerAnchor:
                     )
                     return result
                 result["signature_verified"] = True
-                result["message"] = "verified (root + signature v2 + trusted key)"
+                
+                # R-644: تحديد الثقة منفصلًا عن التوقيع (بعد حساب HMAC)
+                # - COMPROMISED: التوقيع قد ينجح (signature_verified=True)
+                #   لكن الثقة = False (نتيجة تشخريبية منفصلة)
+                # - RETIRED/LOST/EXPIRED: الأختام التاريخية لا تُبطل —
+                #   شرط ACTIVE خاص بإصدار أحداث جديدة، ليس للتحقق التاريخي
+                from backend.sovereign.keys.keyring import KeyStatus
+                if key_record.status == KeyStatus.COMPROMISED:
+                    result["message"] = (
+                        f"signature verified but key {key_id} is COMPROMISED — "
+                        f"not trusted for coverage (separate cryptographic result)"
+                    )
+                    # signature_verified = True, key_trusted = False
+                    return result
+                
+                # R-644: RETIRED/LOST/EXPIRED — لا تُبطل الأختام التاريخية
+                # (المفتاح معروف و التوقيع صحيح — الثقة محفوظة)
+                result["key_trusted"] = True
+                result["message"] = (
+                    f"verified (root + signature v2 + key status={key_record.status})"
+                )
             else:
                 # v1 (قديم) — root_verified فقط (لا تحقق توقيع)
                 result["message"] = (
