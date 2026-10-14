@@ -1,7 +1,28 @@
 # CHANGELOG.md — سجل التغييرات
 
 > كل تغيير يُسجل هنا (قاعدة الدفعة الذرية).
-> آخر تحديث: 2026-10-14 (الدفعة M6 — R-611)
+> آخر تحديث: 2026-10-14 (الدفعة M6 — R-612)
+
+---
+
+## [M6] — 2026-10-14 — R-612: الذكاء السيادي الحقيقي
+
+### أُصلح
+- `backend/orchestrator.py`: **قرار المتحكم السيادي كان يُتجاهل دائماً** — `_make_decision` كان يقرأ `controller_decision.sovereign_decision` غير الموجودة (الحقل الفعلي `final_decision` بكائن `FinalDecision` يحمل `command_name`). الشرط كان دائماً `False` → القرار السيادي لا يُستخدم أبداً. أُصلح: قراءة `final_decision.command_name` مع خريطة أوامر → إجراءات. المصدر الآن `sovereign_controller`.
+- `backend/orchestrator.py`: **NexusCore (47 مكوّناً) كان معزولاً** — دورة المنسق لم تكن تقرأ نص المستخدم. أُضيف فهم النص في `_gather_perception` (لغة + مشاعر + نية + كلمات مفتاحية) → `perception["nexus"]`، وتوجيه القرار بنية المستخدم (`analyze`→`explore`, `alert`→`activate_defense`).
+- `backend/memory.py`: ملف ميت (1 بايت) لا يُستورد أبداً — حُذف.
+
+### أُضيف
+- `backend/orchestrator.py`: كل دورة تُحفظ في `nexus_data/store/cycles/` عبر مكوّن `store` + سجل تدقيق موقّع عبر مكوّن `audit` — الذاكرة الطويلة حقيقية (S-7 مغلقة).
+- `backend/app.py` + `backend/api.py`: ردود حقيقية في `/chat` و`/ws/{user_id}` و`/api/ws` — `فهمت — نيتك: تحليل. القرار: explore.` بدل الرد الجاهز.
+- `tests/test_nexus_wiring_r612.py`: 5 اختبارات انحدار (فهم العربية/الإنجليزية، توجيه نية التحليل، استخدام قرار المتحكم، استمرار الدورة في مخزن Nexus).
+
+### حُدث
+- `.gitignore`: استثناء بيانات وقت تشغيل NexusCore (`nexus_data/store/`, `audit/`, `backups/`, `emergency/`, `exports/`, `files/`, `keys/`, `reports/`, `security/`).
+- وثائق الحوكمة: `ROADMAP.md`, `PROJECT_STATE.md`, `OPEN_QUESTIONS.md`.
+
+### ملاحظات
+- تحقق فعلي: `python -m pytest tests/ -q` → `56 passed, 1 warning` (كانت 51)؛ `/chat {"text":"حلل هذه البيانات من فضلك"}` → `فهمت — نيتك: تحليل. القرار: explore.`؛ `/chat {"text":"مرحبا"}` → `قرار المتحكم السيادي: continue.`؛ WebSocket `/ws/{user_id}` و`/api/ws` يردان بفهم حقيقي ويمنعان الرسائل الخطيرة؛ `nexus_data/store/cycles/*.json` تُنشأ بعد كل دورة؛ `git status --short` نظيف بعد تشغيل كامل. سُجل القرار D-025.
 
 ---
 
