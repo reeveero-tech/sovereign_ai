@@ -558,6 +558,9 @@ class AwarenessEngine:
         """معالجة المحتوى تحت الوعي"""
         while self._active:
             try:
+                # TODO: placeholder, tracked in issue — real subliminal processing
+                #   not yet implemented. Should process items from _subliminal_queue
+                #   when self.current_moment is set. R-681 (open item 3).
                 # TOLERATED: placeholder for future condition check — no action needed (R-680)
                 if self.current_moment:
                     pass
