@@ -125,7 +125,11 @@ class TestAnchorRejectsArbitrarySignature:
     def test_1_random_signature_correct_length_rejected(self, tmp_path):
         """الاعتداء 1: توقيع عشوائي بطول صحيح — يجب أن يُرفض.
 
-        توقيع عشوائي (hex من secrets) — لا يطابق HMAC الحقيقي.
+        توقيع عشوائي (64 حرفًا hex — طول HMAC-SHA256).
+
+        R-665: يفحص verify_anchor نفسه (وليس verify_anchor_detailed).
+        المشكلة: verify_anchor يُعيد root_verified فقط — إذا كان الجذر
+        صحيحًا، يُعيد True بالخطأ رغم فشل التوقيع. هذا هو الضعف (RED).
         """
         setup = self._setup(tmp_path)
         manager = setup["manager"]
@@ -136,17 +140,24 @@ class TestAnchorRejectsArbitrarySignature:
         fake_sig = secrets.token_hex(32)
         anchor["signature"] = fake_sig
 
+        # R-665: فحص verify_anchor نفسه (tuple — العنصر الأول = root_verified)
+        # إذا كان root صحيحًا لكن التوقيع فاشل — verify_anchor يُعيد True
+        # بالخطأ (لا يفحص التوقيع). هذا يجب أن يُرفض.
         result = manager.verify_anchor(anchor, keyring=keyring)
-        # يجب أن يُرفض — signature_verified = False (أو root_verified = False)
-        detailed = manager.verify_anchor_detailed(anchor, keyring=keyring)
-        assert detailed["signature_verified"] is False, (
-            f"random signature (correct length) must be REJECTED — "
-            f"got signature_verified={detailed['signature_verified']} "
-            f"(message: {detailed['message']})"
+        success = result[0]  # العنصر الأول
+        message = result[1]  # العنصر الثاني (سبب الرفض)
+
+        # يجب أن يُرفض — success = False (التوقيع فاشل، المرساة غير صالحة)
+        # حتى لو كان الجذر صحيحًا، التوقيع العشوائي يُرفض
+        assert success is False, (
+            f"verify_anchor must REJECT anchor with random signature — "
+            f"but it returned success={success} (root_verified only). "
+            f"This means verify_anchor only checks root, not signature! "
+            f"(message: {message})"
         )
-        assert detailed["trusted"] is False, (
-            f"random signature must not be trusted — "
-            f"got trusted={detailed['trusted']}"
+        # الرسالة يجب أن تُشير إلى الرفض (وليس القبول)
+        assert "mismatch" in message.lower() or "reject" in message.lower() or "fail" in message.lower(), (
+            f"verify_anchor message must indicate rejection — got: {message}"
         )
 
     def test_2_valid_signature_wrong_key_rejected(self, tmp_path):
@@ -175,15 +186,14 @@ class TestAnchorRejectsArbitrarySignature:
         # حقن التوقيع بالمفتاح الآخر (لكن key_id يُشير للمفتاح الحقيقي)
         anchor["signature"] = other_sig
 
+        # R-665: فحص verify_anchor نفسه
         result = manager.verify_anchor(anchor, keyring=keyring)
-        detailed = manager.verify_anchor_detailed(anchor, keyring=keyring)
-        # يجب أن يُرفض — signature_verified = False
-        assert detailed["signature_verified"] is False, (
-            f"signature from DIFFERENT key must be REJECTED — "
-            f"got signature_verified={detailed['signature_verified']} "
-            f"(message: {detailed['message']})"
+        success = result[0]
+        message = result[1]
+        assert success is False, (
+            f"verify_anchor must REJECT signature from DIFFERENT key — "
+            f"but returned success={success} (message: {message})"
         )
-        assert detailed["trusted"] is False
 
     def test_3_valid_signature_wrong_format_rejected(self, tmp_path):
         """الاعتداء 3: توقيع صحيح بصيغة خاطئة — يجب أن يُرفض.
@@ -204,14 +214,14 @@ class TestAnchorRejectsArbitrarySignature:
 
         anchor["signature"] = b64_sig
 
+        # R-665: فحص verify_anchor نفسه
         result = manager.verify_anchor(anchor, keyring=keyring)
-        detailed = manager.verify_anchor_detailed(anchor, keyring=keyring)
-        assert detailed["signature_verified"] is False, (
-            f"signature in WRONG FORMAT (base64 instead of hex) must be REJECTED — "
-            f"got signature_verified={detailed['signature_verified']} "
-            f"(message: {detailed['message']})"
+        success = result[0]
+        message = result[1]
+        assert success is False, (
+            f"verify_anchor must REJECT signature in WRONG FORMAT — "
+            f"but returned success={success} (message: {message})"
         )
-        assert detailed["trusted"] is False
 
     def test_4_missing_signature_field_rejected(self, tmp_path):
         """الاعتداء 4: مرساة بلا حقل `signature` — يجب أن يُرفض.
@@ -226,14 +236,14 @@ class TestAnchorRejectsArbitrarySignature:
         # حذف حقل signature (لكن لا نحذف المرساة نفسها — فقط في الذاكرة)
         anchor.pop("signature", None)
 
+        # R-665: فحص verify_anchor نفسه
         result = manager.verify_anchor(anchor, keyring=keyring)
-        detailed = manager.verify_anchor_detailed(anchor, keyring=keyring)
-        assert detailed["signature_verified"] is False, (
-            f"anchor WITHOUT signature field must be REJECTED — "
-            f"got signature_verified={detailed['signature_verified']} "
-            f"(message: {detailed['message']})"
+        success = result[0]
+        message = result[1]
+        assert success is False, (
+            f"verify_anchor must REJECT anchor WITHOUT signature — "
+            f"but returned success={success} (message: {message})"
         )
-        assert detailed["trusted"] is False
 
     def test_5_empty_signature_rejected(self, tmp_path):
         """الاعتداء 5: توقيع فارغ (`""`) — يجب أن يُرفض."""
@@ -244,14 +254,14 @@ class TestAnchorRejectsArbitrarySignature:
 
         anchor["signature"] = ""
 
+        # R-665: فحص verify_anchor نفسه
         result = manager.verify_anchor(anchor, keyring=keyring)
-        detailed = manager.verify_anchor_detailed(anchor, keyring=keyring)
-        assert detailed["signature_verified"] is False, (
-            f"EMPTY signature must be REJECTED — "
-            f"got signature_verified={detailed['signature_verified']} "
-            f"(message: {detailed['message']})"
+        success = result[0]
+        message = result[1]
+        assert success is False, (
+            f"verify_anchor must REJECT EMPTY signature — "
+            f"but returned success={success} (message: {message})"
         )
-        assert detailed["trusted"] is False
 
     def test_6_null_signature_rejected(self, tmp_path):
         """الاعتداء 6: توقيع null — يجب أن يُرفض."""
@@ -262,14 +272,14 @@ class TestAnchorRejectsArbitrarySignature:
 
         anchor["signature"] = None
 
+        # R-665: فحص verify_anchor نفسه
         result = manager.verify_anchor(anchor, keyring=keyring)
-        detailed = manager.verify_anchor_detailed(anchor, keyring=keyring)
-        assert detailed["signature_verified"] is False, (
-            f"NULL signature must be REJECTED — "
-            f"got signature_verified={detailed['signature_verified']} "
-            f"(message: {detailed['message']})"
+        success = result[0]
+        message = result[1]
+        assert success is False, (
+            f"verify_anchor must REJECT NULL signature — "
+            f"but returned success={success} (message: {message})"
         )
-        assert detailed["trusted"] is False
 
     def test_7_reused_signature_with_different_root_rejected(self, tmp_path):
         """الاعتداء 7: توقيع مُعاد استخدامه مع جذر مختلف — يجب أن يُرفض.
@@ -286,19 +296,16 @@ class TestAnchorRejectsArbitrarySignature:
         anchor["merkle_root"] = f"sha256:{fake_root}"
         # التوقيع القديم (يُغطي الجذر الأصلي — ليس الجديد)
 
+        # R-665: فحص verify_anchor نفسه
+        # (توقيع قديم + جذر مختلف — يجب أن يُرفض الجذر و التوقيع)
         result = manager.verify_anchor(anchor, keyring=keyring)
-        detailed = manager.verify_anchor_detailed(anchor, keyring=keyring)
-        # يجب أن يُرفض — root_verified = False أو signature_verified = False
-        assert (
-            detailed["root_verified"] is False
-            or detailed["signature_verified"] is False
-        ), (
-            f"reused signature with DIFFERENT root must be REJECTED — "
-            f"got root_verified={detailed['root_verified']}, "
-            f"signature_verified={detailed['signature_verified']} "
-            f"(message: {detailed['message']})"
+        success = result[0]
+        message = result[1]
+        # الجذر مختلف — root_verified = False → success = False
+        assert success is False, (
+            f"verify_anchor must REJECT reused signature with DIFFERENT root — "
+            f"but returned success={success} (message: {message})"
         )
-        assert detailed["trusted"] is False
 
     def test_8_anchor_batch_rejects_arbitrary_signature(self, tmp_path):
         """الاعتداء 8 (إضافي): `anchor_batch` يجب أن يرفض توقيعًا تعسفيًا.
@@ -385,6 +392,31 @@ class TestAnchorRejectsArbitrarySignature:
             f"are accepted when no keyring is provided!"
         )
 
+    def test_12_random_signature_base64url_43_chars_rejected(self, tmp_path):
+        """الاعتداء 12 (R-665): توقيع عشوائي 43 حرفًا base64url — يجب أن يُرفض.
+
+        كما طلب المالك: «توقيع عشوائي بطول صحيح: 43 حرفاً base64url
+        عشوائياً، لكنه لا يطابق مفتاحاً حقيقياً."
+        """
+        setup = self._setup(tmp_path)
+        manager = setup["manager"]
+        keyring = setup["keyring"]
+        anchor = dict(setup["valid_anchor"])
+
+        # توقيع عشوائي (43 حرفًا base64url — تنسيق المفتاح، ليس التوقيع)
+        fake_sig = secrets.token_urlsafe(32)  # 43 حرفًا base64url
+        assert len(fake_sig) == 43, f"expected 43 chars, got {len(fake_sig)}"
+        anchor["signature"] = fake_sig
+
+        # R-665: فحص verify_anchor نفسه
+        result = manager.verify_anchor(anchor, keyring=keyring)
+        success = result[0]
+        message = result[1]
+        assert success is False, (
+            f"verify_anchor must REJECT 43-char base64url random signature — "
+            f"but returned success={success} (message: {message})"
+        )
+
     def test_9_valid_anchor_accepted(self, tmp_path):
         """ضابط إيجابي: مرساة صحيحة يجب أن تُقبل (signature_verified = True)."""
         setup = self._setup(tmp_path)
@@ -392,15 +424,17 @@ class TestAnchorRejectsArbitrarySignature:
         keyring = setup["keyring"]
         anchor = setup["valid_anchor"]
 
+        # R-665: فحص verify_anchor نفسه (ضابط إيجابي)
+        result = manager.verify_anchor(anchor, keyring=keyring)
+        success = result[0]
+        message = result[1]
+        assert success is True, (
+            f"verify_anchor must ACCEPT valid anchor — "
+            f"but returned success={success} (message: {message})"
+        )
+        # التفاصيل أيضاً (root + signature + trusted)
         detailed = manager.verify_anchor_detailed(anchor, keyring=keyring)
-        assert detailed["root_verified"] is True, (
-            f"valid anchor root must be verified — got {detailed['root_verified']} "
-            f"(message: {detailed['message']})"
-        )
-        assert detailed["signature_verified"] is True, (
-            f"valid anchor signature must be verified — "
-            f"got {detailed['signature_verified']} "
-            f"(message: {detailed['message']})"
-        )
+        assert detailed["root_verified"] is True
+        assert detailed["signature_verified"] is True
         assert detailed["key_trusted"] is True
         assert detailed["trusted"] is True

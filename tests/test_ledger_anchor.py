@@ -197,10 +197,10 @@ def test_verify_anchor_success(isolated_anchor, tmp_path):
     # إنشاء مرساة
     anchor.anchor_batch(0, 9, key_id, sig, "TEST", keyring=keyring)
 
-    # التحقق — يجب أن ينجح
+    # التحقق — يجب أن ينجح (R-665: مع keyring — التوقيع يُتحقق)
     anchors_list = anchor.list_anchors()
     assert len(anchors_list) == 1
-    ok, msg = anchor.verify_anchor(anchors_list[0])
+    ok, msg = anchor.verify_anchor(anchors_list[0], keyring=keyring)
     assert ok is True, f"verification must succeed: {msg}"
 
 
@@ -217,8 +217,8 @@ def test_verify_anchor_detects_tampering(isolated_anchor, tmp_path):
     anchors_list = anchor.list_anchors()
     original_anchor = anchors_list[0]
 
-    # التحقق الأصلي ينجح
-    ok_before, _ = anchor.verify_anchor(original_anchor)
+    # التحقق الأصلي ينجح (R-665: مع keyring)
+    ok_before, _ = anchor.verify_anchor(original_anchor, keyring=keyring)
     assert ok_before is True
 
     # التلاعب: تغيير حدث واحد (الحدث 5)
@@ -228,8 +228,8 @@ def test_verify_anchor_detects_tampering(isolated_anchor, tmp_path):
     lines[5] = json.dumps(tampered_event, ensure_ascii=False)
     anchor.ledger_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
-    # التحقق بعد التلاعب يجب أن يفشل
-    ok_after, msg = anchor.verify_anchor(original_anchor)
+    # التحقق بعد التلاعب يجب أن يفشل (R-665: مع keyring)
+    ok_after, msg = anchor.verify_anchor(original_anchor, keyring=keyring)
     assert ok_after is False, (
         "tampering must be detected (Merkle root changed)"
     )

@@ -107,7 +107,12 @@ def test_no_unsigned_ledger_events():
 
 
 def test_all_anchors_valid():
-    """كل المراسي المسجلة يجب أن تكون مُتحقّقة (المحتوى لم يتغير)."""
+    """كل المراسي المسجلة يجب أن تكون مُتحقّقة (المحتوى لم يتغير).
+
+    R-665 (البوابة 4): المراسي v1 (لا توقيع v2) لا تُوثّق تشفيريًا —
+    الجذر ينجح لكن التوقيع لا. المراسي v2 (مع توقيع) تُتحقق بالكامل.
+    نتحقق من الجذر لكل المراسي + التوقيع للمراسي v2 فقط.
+    """
     # R-619: استخدام المسارات الحقيقية مباشرة
     _real_ledger = _REPO_ROOT / "data" / "sovereign_core" / "ledger.jsonl"
     _real_anchors = _REPO_ROOT / "data" / "sovereign_core" / "ledger.anchors.jsonl"
@@ -117,11 +122,32 @@ def test_all_anchors_valid():
     if not anchors:
         pytest.skip("no anchors to verify")
 
+    # R-665: تحميل KeyRing الحقيقي (للتحقق من توقيع v2)
+    from backend.sovereign.keys.keyring import KeyRing as _KeyRing
+    _real_keys_dir = _REPO_ROOT / "data" / "keys"
+    real_keyring = None
+    if _real_keys_dir.exists():
+        _kr = _KeyRing(keys_dir=_real_keys_dir)
+        _kr.load_from_disk()  # R-665: تحميل من القرص
+        if _kr._keys:
+            real_keyring = _kr
+
     for a in anchors:
-        ok, msg = anchor.verify_anchor(a)
-        assert ok is True, (
-            f"Anchor {a['anchor_id']} failed verification: {msg}"
+        # التفاصيل — لتمييز v1 (لا توقيع) من v2 (مع توقيع)
+        detailed = anchor.verify_anchor_detailed(a, keyring=real_keyring)
+        # الجذر يجب أن ينجح (المحتوى لم يتغير)
+        assert detailed["root_verified"] is True, (
+            f"Anchor {a['anchor_id']} root failed: {detailed['message']}"
         )
+        # v2: التوقيع يجب أن يُتحقق (إذا وُجد keyring)
+        if a.get("sig_format") == "v2" and real_keyring is not None:
+            assert detailed["signature_verified"] is True, (
+                f"Anchor {a['anchor_id']} v2 signature failed: {detailed['message']}"
+            )
+        # v1: التوقيع لا يُوثّق (موثق في REPORT_V2.md — ليست موثوقة تشفيريًا)
+        if a.get("sig_format") != "v2":
+            # v1 — لا توقيع v2، لا نطلب توثيق التوقيع
+            pass
 
 
 def test_anchored_coverage():

@@ -1,0 +1,57 @@
+================================================================
+GATE 4 — GREEN PHASE v3 FINAL (verify_anchor fix — After Fix)
+================================================================
+Date: 2026-10-14
+Test: backend/tests/invariants/test_anchor_rejects_arbitrary_signature.py
+Method: TDD (RED → GREEN → LOCK)
+Fix: R-665 — verify_anchor now returns success = root_verified AND
+      signature_verified (not root_verified only). If signature fails,
+      the anchor is rejected (no false root-only success).
+
+RESULT: GREEN CONFIRMED — 12 of 12 tests PASSED
+
+Test results (AFTER fix):
+  - test_1_random_signature_correct_length_rejected: PASSED (was RED)
+  - test_2_valid_signature_wrong_key_rejected: PASSED (was RED)
+  - test_3_valid_signature_wrong_format_rejected: PASSED (was RED)
+  - test_4_missing_signature_field_rejected: PASSED (was RED)
+  - test_5_empty_signature_rejected: PASSED (was RED)
+  - test_6_null_signature_rejected: PASSED (was RED)
+  - test_7_reused_signature_with_different_root_rejected: PASSED
+  - test_8_anchor_batch_rejects_arbitrary_signature: PASSED
+  - test_10_anchor_batch_accepts_valid_signature: PASSED (positive control)
+  - test_11_anchor_batch_rejects_no_keyring: PASSED (fail-closed)
+  - test_12_random_signature_base64url_43_chars_rejected: PASSED (was RED)
+  - test_9_valid_anchor_accepted: PASSED (positive control)
+
+RESULT: 0 of 7 attack cases accept forgery (all rejected via verify_anchor)
+
+LOCK: All other tests pass (233 passed + 1 skipped — operational test)
+
+Note: This is the FINAL green log (v3). Previous green log (v1)
+is preserved as forensics/gate4_green.log.
+
+Below is the RAW pytest output (unmodified — forensic evidence):
+================================================================
+
+============================= test session starts ==============================
+platform linux -- Python 3.14.3, pytest-9.1.1, pluggy-1.6.0 -- /usr/local/bin/python3
+cachedir: .pytest_cache
+rootdir: /home/user/workspace/sovereign_ai
+plugins: anyio-4.15.1, ddtrace-4.15.6
+collecting ... collected 12 items
+
+backend/tests/invariants/test_anchor_rejects_arbitrary_signature.py::TestAnchorRejectsArbitrarySignature::test_1_random_signature_correct_length_rejected PASSED [  8%]
+backend/tests/invariants/test_anchor_rejects_arbitrary_signature.py::TestAnchorRejectsArbitrarySignature::test_2_valid_signature_wrong_key_rejected PASSED [ 16%]
+backend/tests/invariants/test_anchor_rejects_arbitrary_signature.py::TestAnchorRejectsArbitrarySignature::test_3_valid_signature_wrong_format_rejected PASSED [ 25%]
+backend/tests/invariants/test_anchor_rejects_arbitrary_signature.py::TestAnchorRejectsArbitrarySignature::test_4_missing_signature_field_rejected PASSED [ 33%]
+backend/tests/invariants/test_anchor_rejects_arbitrary_signature.py::TestAnchorRejectsArbitrarySignature::test_5_empty_signature_rejected PASSED [ 41%]
+backend/tests/invariants/test_anchor_rejects_arbitrary_signature.py::TestAnchorRejectsArbitrarySignature::test_6_null_signature_rejected PASSED [ 50%]
+backend/tests/invariants/test_anchor_rejects_arbitrary_signature.py::TestAnchorRejectsArbitrarySignature::test_7_reused_signature_with_different_root_rejected PASSED [ 58%]
+backend/tests/invariants/test_anchor_rejects_arbitrary_signature.py::TestAnchorRejectsArbitrarySignature::test_8_anchor_batch_rejects_arbitrary_signature PASSED [ 66%]
+backend/tests/invariants/test_anchor_rejects_arbitrary_signature.py::TestAnchorRejectsArbitrarySignature::test_10_anchor_batch_accepts_valid_signature PASSED [ 75%]
+backend/tests/invariants/test_anchor_rejects_arbitrary_signature.py::TestAnchorRejectsArbitrarySignature::test_11_anchor_batch_rejects_no_keyring PASSED [ 83%]
+backend/tests/invariants/test_anchor_rejects_arbitrary_signature.py::TestAnchorRejectsArbitrarySignature::test_12_random_signature_base64url_43_chars_rejected PASSED [ 91%]
+backend/tests/invariants/test_anchor_rejects_arbitrary_signature.py::TestAnchorRejectsArbitrarySignature::test_9_valid_anchor_accepted PASSED [100%]
+
+============================== 12 passed in 0.20s ==============================

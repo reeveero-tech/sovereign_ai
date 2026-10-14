@@ -313,9 +313,15 @@ class LedgerAnchor:
         
         R-642: التغطية الموثوقة تشخريًًا تتطلب root_verified +
         signature_verified + key_trusted (كلها معًا).
+
+        R-665 (البوابة 4 — GREEN): success = root_verified AND
+        signature_verified — إذا فشل التوقيع، يُرفض (لا نجاح الجذر
+        بالخطأ). المرساة غير الصالحة (توقيع فاشل) لا تُقبل.
         """
         result = self.verify_anchor_detailed(anchor, keyring)
-        return result["root_verified"], result["message"]
+        # R-665: النجاح يتطلب الجذر + التوقيع (لا الجذر فقط)
+        success = result["root_verified"] and result["signature_verified"]
+        return success, result["message"]
 
     def verify_anchor_detailed(self, anchor: Dict, keyring=None) -> Dict:
         """

@@ -301,17 +301,22 @@ class SovereigntyScorer:
                 "test_no_mock_outside_tests.py",
                 "test_keyring_immutability.py",
                 "test_all_entrypoints_respond.py",
+                # R-665 (البوابة 4): حماية توقيع المرساة — مطلوب دائمًا
+                "test_anchor_rejects_arbitrary_signature.py",
             ]
 
             existing = [f for f in required_files if (invariants_dir / f).exists()]
 
-            # R-664 (البوابة 4): اختبار حماية توقيع المرساة
-            # (في backend/tests/invariants/ — لأن المالك طلب هذا المسار)
+            # R-665: اختبار البوابة 4 في backend/tests/invariants/
+            # (المالك طلب هذا المسار — مطلوب دائمًا، ليس مشروطًا)
             backend_invariants = self.repo_root / "backend" / "tests" / "invariants"
             gate4_file = "test_anchor_rejects_arbitrary_signature.py"
-            if backend_invariants.exists() and (backend_invariants / gate4_file).exists():
-                existing.append(gate4_file)
-                required_files.append(gate4_file)
+            if (backend_invariants / gate4_file).exists():
+                if gate4_file not in existing:
+                    existing.append(gate4_file)
+            else:
+                # مطلوب دائمًا — إذا غاب، يُسجَّل كمفقود
+                axis.issues.append(f"missing invariant: backend/tests/invariants/{gate4_file}")
             missing = [f for f in required_files if f not in existing]
 
             # الدرجة: 60% وجود الملفات + 40% لا يتيمة/mock
