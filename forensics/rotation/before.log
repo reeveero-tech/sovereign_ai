@@ -1,0 +1,33 @@
+{
+  "timestamp": "2026-10-14T14:13:41Z",
+  "action": "before_rotation",
+  "old_key_fingerprint": "c0081032b884af24",
+  "old_key_length": 43,
+  "file_states": {
+    "data/key.secret": {
+      "exists": true,
+      "size": 43,
+      "sha256_first16": "c0081032b884af24"
+    },
+    "data/key.secret.new": {
+      "exists": true,
+      "size": 43,
+      "sha256_first16": "96265b6e2103bc50"
+    },
+    "data/keys/keyring.json": {
+      "exists": true,
+      "size": 974,
+      "sha256_first16": "286ed0bea0438ead"
+    },
+    "data/sovereign_core/ledger.jsonl": {
+      "exists": true,
+      "size": 45862771,
+      "sha256_first16": "841e679721d6d3a4"
+    },
+    "data/sovereign_core/ledger.anchors.jsonl": {
+      "exists": true,
+      "size": 3529,
+      "sha256_first16": "b924d1ab0b2b7c4a"
+    }
+  }
+}

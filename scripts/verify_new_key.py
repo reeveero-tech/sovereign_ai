@@ -22,8 +22,10 @@ import sys
 _REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(_REPO_ROOT, "backend"))
 
-NEW_KEY_FILE = os.path.join(_REPO_ROOT, "data", "key.secret.new")
-OLD_KEY_FILE = os.path.join(_REPO_ROOT, "data", "key.secret")
+# R-652: بعد التدوير، المفتاح الجديد في data/key.secret
+# و القديم في data/key.secret.old_rotated_2026_10_14
+NEW_KEY_FILE = os.path.join(_REPO_ROOT, "data", "key.secret")
+OLD_KEY_FILE = os.path.join(_REPO_ROOT, "data", "key.secret.old_rotated_2026_10_14")
 KEYRING_FILE = os.path.join(_REPO_ROOT, "data", "keys", "keyring.json")
 
 
@@ -45,13 +47,17 @@ def check_all() -> bool:
     with open(NEW_KEY_FILE, "r", encoding="ascii") as f:
         new_key = f.read()
 
-    # فحص 2: الطول
+    # فحص 2: الطول (43 بالضبط — تنسيق المالك)
     if len(new_key) == 43:
-        print(f"PASS 2: length = {len(new_key)} (exact 43)")
+        print(f"PASS 2: length = {len(new_key)} (exact 43 — owner's format)")
     elif len(new_key) >= 16:
-        print(f"PASS 2: length = {len(new_key)} (>= 16 minimum)")
+        # R-652: فرع >= 16 ممنوع — التنسيق 43 بالضبط (قرار المالك)
+        failures.append(
+            f"FAIL 2: length {len(new_key)} — must be EXACTLY 43 "
+            f"(owner's format: base64url, 43 chars). >= 16 is NOT accepted."
+        )
     else:
-        failures.append(f"FAIL 2: length {len(new_key)} < 16 minimum")
+        failures.append(f"FAIL 2: length {len(new_key)} < 43 (too short)")
 
     # فحص 3: التنسيق (base64url فقط)
     base64url_chars = set("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_")
@@ -67,7 +73,7 @@ def check_all() -> bool:
     else:
         failures.append("FAIL 4: contains newline/space/tab")
 
-    # فحص 5: لا يطابق المفتاح القديم
+    # فحص 5: لا يطابق المفتاح القديم (إلزامي — غياب الملف = فشل)
     if os.path.exists(OLD_KEY_FILE):
         with open(OLD_KEY_FILE, "r", encoding="utf-8") as f:
             old_key = f.read().strip()
@@ -78,7 +84,11 @@ def check_all() -> bool:
             new_fp = hashlib.sha256(new_key.encode()).hexdigest()[:16]
             print(f"PASS 5: different from old key ({old_fp} -> {new_fp})")
     else:
-        print("PASS 5: no old key file (skipped — nothing to compare)")
+        # R-652: غياب ملف المقارنة = فشل (ليس نجاحًا)
+        failures.append(
+            f"FAIL 5: old key file not found ({OLD_KEY_FILE}) — "
+            f"cannot verify rotation without comparison (NOT a pass)"
+        )
 
     # فحص 6: يُنتج HMAC صالحًا
     test_data = b"gate1_rotation_test_2026_10_14"
@@ -92,7 +102,7 @@ def check_all() -> bool:
     else:
         failures.append("FAIL 6: HMAC signature verification failed")
 
-    # فحص 7: key_id فريد (لا يطابق مفاتيح KeyRing)
+    # فحص 7: key_id فريد (إلزامي — غياب keyring.json = فشل)
     new_key_id = hashlib.sha256(new_key.encode("utf-8")).hexdigest()[:16]
     if os.path.exists(KEYRING_FILE):
         with open(KEYRING_FILE, "r", encoding="utf-8") as f:
@@ -103,7 +113,11 @@ def check_all() -> bool:
         else:
             print(f"PASS 7: key_id {new_key_id} is unique (not in KeyRing)")
     else:
-        print(f"PASS 7: no keyring.json (skipped) — key_id {new_key_id}")
+        # R-652: غياب keyring.json = فشل (ليس نجاحًا)
+        failures.append(
+            f"FAIL 7: keyring.json not found ({KEYRING_FILE}) — "
+            f"cannot verify key_id uniqueness (NOT a pass)"
+        )
 
     # النتيجة
     print()

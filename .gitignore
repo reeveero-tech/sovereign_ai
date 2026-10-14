@@ -47,6 +47,10 @@ key.secret
 logs/
 nohup.out
 
+# R-651: استثناء — سجلات forensics/rotation (إيصال التدوير — يجب أن تكون متتبعة)
+!forensics/rotation/before.log
+!forensics/rotation/after.log
+
 # بيئات التطوير
 .replit
 .idea/
