@@ -28,6 +28,7 @@ from backend.sovereign.ledger import (
     verify_merkle_root,
     hash_leaf,
 )
+from backend.sovereign.keys.keyring import KeyRing, KeyStatus
 
 
 # ============================================================
@@ -118,16 +119,63 @@ def isolated_anchor():
     return anchor, events
 
 
-def test_anchor_batch_creates_anchor(isolated_anchor):
+def _make_keyring_with_sig(anchor, batch_start, batch_end, key_id, tmp_path=None):
+    """يُنشئ keyring + توقيع صحيح (R-664 — anchor_batch يتحقق من التوقيع)."""
+    import secrets
+    import hmac as _hmac
+    import hashlib as _hashlib
+    keys_dir = tmp_path / "keys" if tmp_path else Path(tempfile.mkdtemp()) / "keys"
+    keys_dir.mkdir(parents=True, exist_ok=True)
+    keyring = KeyRing(keys_dir=keys_dir)
+    key_rec = keyring.generate_new_key(reason="test anchor")
+    real_key_id = key_rec.key_id
+    # حساب التوقيع الصحيح (HMAC-SHA256 لبيانات v2)
+    lines = anchor.read_ledger_lines()
+    batch_lines = lines[batch_start : batch_end + 1]
+    merkle_root = compute_merkle_root(batch_lines)
+    sig_data = anchor.compute_anchor_signature_data(
+        batch_start, batch_end, len(batch_lines), merkle_root, real_key_id
+    )
+    sig = _hmac.new(
+        key_rec.private_key.encode("utf-8"),
+        sig_data.encode("utf-8"),
+        _hashlib.sha256
+    ).hexdigest()
+    return keyring, real_key_id, sig
+
+
+def _make_sig_for_keyring(anchor, batch_start, batch_end, key_id, keyring):
+    """يُنشئ توقيعًا صحيحًا لمفتاح موجود في keyring (R-664)."""
+    import hmac as _hmac
+    import hashlib as _hashlib
+    key_rec = keyring.get_key(key_id)
+    assert key_rec is not None, f"key {key_id} not in keyring"
+    lines = anchor.read_ledger_lines()
+    batch_lines = lines[batch_start : batch_end + 1]
+    merkle_root = compute_merkle_root(batch_lines)
+    sig_data = anchor.compute_anchor_signature_data(
+        batch_start, batch_end, len(batch_lines), merkle_root, key_id
+    )
+    return _hmac.new(
+        key_rec.private_key.encode("utf-8"),
+        sig_data.encode("utf-8"),
+        _hashlib.sha256
+    ).hexdigest()
+
+
+def test_anchor_batch_creates_anchor(isolated_anchor, tmp_path):
     """anchor_batch يُنشئ مرساة صحيحة لنطاق محدد."""
     anchor, events = isolated_anchor
+    # R-664: anchor_batch يتحقق من التوقيع — نُنشئ keyring + توقيع صحيح
+    keyring, key_id, sig = _make_keyring_with_sig(anchor, 0, 9, None, tmp_path)
 
     result = anchor.anchor_batch(
         batch_start=0,
         batch_end=9,
-        key_id="test_key_id_12345",
-        signature="test_anchor_signature",
+        key_id=key_id,
+        signature=sig,
         reason="TEST_BATCH",
+        keyring=keyring,
     )
 
     assert result is not None, "anchor_batch must return an anchor record"
@@ -135,17 +183,19 @@ def test_anchor_batch_creates_anchor(isolated_anchor):
     assert result["batch_end"] == 9
     assert result["event_count"] == 10
     assert result["merkle_root"].startswith("sha256:")
-    assert result["key_id"] == "test_key_id_12345"
+    assert result["key_id"] == key_id
     assert result["reason"] == "TEST_BATCH"
     assert len(result["anchor_id"]) == 16
 
 
-def test_verify_anchor_success(isolated_anchor):
+def test_verify_anchor_success(isolated_anchor, tmp_path):
     """التحقق من مرساة صحيحة ينجح (المحتوى لم يتغير)."""
     anchor, events = isolated_anchor
+    # R-664: توقيع صحيح
+    keyring, key_id, sig = _make_keyring_with_sig(anchor, 0, 9, None, tmp_path)
 
     # إنشاء مرساة
-    anchor.anchor_batch(0, 9, "key1", "sig1", "TEST")
+    anchor.anchor_batch(0, 9, key_id, sig, "TEST", keyring=keyring)
 
     # التحقق — يجب أن ينجح
     anchors_list = anchor.list_anchors()
@@ -154,15 +204,16 @@ def test_verify_anchor_success(isolated_anchor):
     assert ok is True, f"verification must succeed: {msg}"
 
 
-def test_verify_anchor_detects_tampering(isolated_anchor):
+def test_verify_anchor_detects_tampering(isolated_anchor, tmp_path):
     """
     الجوهر (المرحلة 2): أي تعديل على أي حدث في النطاق المُرسى
     يُكشف فورًا (Merkle root يتغير).
     """
     anchor, events = isolated_anchor
 
-    # إنشاء مرساة للنطاق [0, 9]
-    anchor.anchor_batch(0, 9, "key1", "sig1", "TEST")
+    # إنشاء مرساة للنطاق [0, 9] (R-664: توقيع صحيح)
+    keyring, key_id, sig = _make_keyring_with_sig(anchor, 0, 9, None, tmp_path)
+    anchor.anchor_batch(0, 9, key_id, sig, "TEST", keyring=keyring)
     anchors_list = anchor.list_anchors()
     original_anchor = anchors_list[0]
 
@@ -185,16 +236,18 @@ def test_verify_anchor_detects_tampering(isolated_anchor):
     assert "mismatch" in msg.lower() or "modified" in msg.lower()
 
 
-def test_verify_anchor_out_of_range(isolated_anchor):
+def test_verify_anchor_out_of_range(isolated_anchor, tmp_path):
     """مرساة بنطاق يتجاوز اليدجر تُعاد كفاشلة (وليس نجاحًا كاذبًا)."""
     anchor, events = isolated_anchor
+    # R-664: توقيع صحيح (للنطاق الصالح)
+    keyring, key_id, sig = _make_keyring_with_sig(anchor, 0, 9, None, tmp_path)
 
-    # محاولة إنشاء مرساة لنطاق غير صالح
-    result = anchor.anchor_batch(0, 999, "key1", "sig1", "TEST")
+    # محاولة إنشاء مرساة لنطاق غير صالح (توقيع لنطاق صالح — لكن النطاق غير صالح)
+    result = anchor.anchor_batch(0, 999, key_id, sig, "TEST", keyring=keyring)
     assert result is None, "out-of-range anchor must return None"
 
     # إنشاء مرساة صالحة ثم حذف أحداث (اختصار اليدجر)
-    anchor.anchor_batch(0, 9, "key1", "sig1", "TEST")
+    anchor.anchor_batch(0, 9, key_id, sig, "TEST", keyring=keyring)
     anchors_list = anchor.list_anchors()
 
     # تقصير اليدجر (إزالة أحداث) — النطاق لم يعد صالحًا
@@ -205,32 +258,39 @@ def test_verify_anchor_out_of_range(isolated_anchor):
     assert ok is False, "shortened ledger must fail verification"
 
 
-def test_list_anchors(isolated_anchor):
+def test_list_anchors(isolated_anchor, tmp_path):
     """list_anchors يُعيد كل المراسي المسجلة."""
     anchor, events = isolated_anchor
 
     # لا مراسي في البداية
     assert anchor.list_anchors() == []
 
+    # R-664: توقيعات صحيحة (keyring واحد — توقيعان لنطاقين مختلفين)
+    keyring, key_id, sig1 = _make_keyring_with_sig(anchor, 0, 4, None, tmp_path)
+    sig2 = _make_sig_for_keyring(anchor, 5, 9, key_id, keyring)
+
     # إنشاء مرساة
-    anchor.anchor_batch(0, 4, "key1", "sig1", "BATCH1")
+    anchor.anchor_batch(0, 4, key_id, sig1, "BATCH1", keyring=keyring)
     anchors = anchor.list_anchors()
     assert len(anchors) == 1
 
-    # إنشاء مرساة ثانية (نطاق مختلف)
-    anchor.anchor_batch(5, 9, "key1", "sig2", "BATCH2")
+    # إنشاء مرساة ثانية (نطاق مختلف — نفس المفتاح)
+    anchor.anchor_batch(5, 9, key_id, sig2, "BATCH2", keyring=keyring)
     anchors = anchor.list_anchors()
     assert len(anchors) == 2
     assert anchors[0]["reason"] == "BATCH1"
     assert anchors[1]["reason"] == "BATCH2"
 
 
-def test_full_report(isolated_anchor):
+def test_full_report(isolated_anchor, tmp_path):
     """full_report يُعيد تقريرًا شاملًا صحيحًا."""
     anchor, events = isolated_anchor
 
+    # R-664: توقيع صحيح
+    keyring, key_id, sig = _make_keyring_with_sig(anchor, 0, 9, None, tmp_path)
+
     # إنشاء مرساة تغطي كل الأحداث
-    anchor.anchor_batch(0, 9, "key1", "sig1", "FULL_COVERAGE")
+    anchor.anchor_batch(0, 9, key_id, sig, "FULL_COVERAGE", keyring=keyring)
 
     report = anchor.full_report()
     assert report["total_events"] == 10

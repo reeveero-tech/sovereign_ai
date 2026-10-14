@@ -132,6 +132,8 @@ def test_no_orphan_modules():
             continue  # أرشيف موثق
         if f.startswith("tests/"):
             continue  # اختبارات (نقاط دخول اختبارية)
+        if f.startswith("backend/tests/"):
+            continue  # اختبارات backend (نقاط دخول اختبارية — R-664)
         if f.startswith("scripts/"):
             continue  # سكربتات أدوات (نقاط دخول — تُشغّل يدويًا، مثل verify_new_key.py)
         if f.endswith("__init__.py"):

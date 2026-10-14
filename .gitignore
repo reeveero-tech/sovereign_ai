@@ -51,6 +51,10 @@ nohup.out
 !forensics/rotation/before.log
 !forensics/rotation/after.log
 
+# R-664: استثناء — سجلات البوابة 4 (دليل جنائي — يجب أن تكون متتبعة)
+!forensics/gate4_red.log
+!forensics/gate4_green.log
+
 # R-661: استثناء — تقرير تلوث الختم (توثيقي — ليس سر)
 !data/identity/SEAL_POLLUTION_REPORT.json
 

@@ -127,6 +127,7 @@ class LedgerAnchor:
         signature: str,
         reason: str = "PRE_KEYRING_UNSIGNED_BATCH",
         notes: str = "",
+        keyring=None,
     ) -> Optional[Dict]:
         """
         يُثبّت نطاقًا من الأحداث بمرساة تشفيرية.
@@ -186,6 +187,41 @@ class LedgerAnchor:
                         "signature does not cover merkle_root. "
                         "Use v2 format: anchor_sig_v2|..."
                     )
+
+            # R-664: حماية توقيع المرساة (البوابة 4 — GREEN)
+            # التوقيع التعسفي يُرفض — يجب أن يُوقّع بالمفتاح الحقيقي
+            # (HMAC-SHA256 لبيانات v2 بالمفتاح المحدد في key_id)
+            # إذا لم يُمرر keyring، لا يمكن التحقق — نُرفض (fail-closed)
+            if keyring is None:
+                logger.error(
+                    f"❌ R-664: anchor_batch: no KeyRing provided — "
+                    f"cannot verify signature (fail-closed)"
+                )
+                return None
+            _key_record = keyring.get_key(key_id) if key_id else None
+            if _key_record is None or not getattr(_key_record, "private_key", None):
+                logger.error(
+                    f"❌ R-664: anchor_batch: key {key_id} not found in KeyRing "
+                    f"— cannot verify signature (fail-closed)"
+                )
+                return None
+            # حساب التوقيع المتوقع (HMAC-SHA256 لبيانات v2)
+            _expected_sig_data = self.compute_anchor_signature_data(
+                batch_start, batch_end, len(batch_lines), merkle_root, key_id
+            )
+            import hmac as _hmac_v2
+            import hashlib as _hashlib_v2
+            _expected_sig = _hmac_v2.new(
+                _key_record.private_key.encode("utf-8"),
+                _expected_sig_data.encode("utf-8"),
+                _hashlib_v2.sha256
+            ).hexdigest()
+            if not _hmac_v2.compare_digest(_expected_sig, signature or ""):
+                logger.error(
+                    f"❌ R-664: anchor_batch: signature mismatch — "
+                    f"arbitrary signature REJECTED (fail-closed)"
+                )
+                return None
 
             anchor_record = {
                 "anchor_id": anchor_id,

@@ -1,0 +1,68 @@
+================================================================
+GATE 4 — RED PHASE (Attack Test — Before Fix)
+================================================================
+Date: 2026-10-14
+Test: backend/tests/invariants/test_anchor_rejects_arbitrary_signature.py
+Method: TDD (RED → GREEN → LOCK)
+Rule: No fix before failure is proven. No success declared before test passes.
+
+RESULT: RED CONFIRMED — 1 of 9 tests FAILED
+
+Test results (BEFORE fix):
+  - test_1_random_signature_correct_length_rejected: PASSED (rejection works)
+  - test_2_valid_signature_wrong_key_rejected: PASSED (rejection works)
+  - test_3_valid_signature_wrong_format_rejected: PASSED (rejection works)
+  - test_4_missing_signature_field_rejected: PASSED (rejection works)
+  - test_5_empty_signature_rejected: PASSED (rejection works)
+  - test_6_null_signature_rejected: PASSED (rejection works)
+  - test_7_reused_signature_with_different_root_rejected: PASSED (rejection works)
+  - test_8_anchor_batch_rejects_arbitrary_signature: **FAILED** (RED)
+  - test_9_valid_anchor_accepted: PASSED (positive control)
+
+FINDING (RED):
+  anchor_batch ACCEPTS arbitrary signature — it created an anchor
+  with a random/fake signature (secrets.token_hex(32)) without
+  verifying it. This means: anyone can write an anchor with a fake
+  signature, and it will be accepted into ledger.anchors.jsonl.
+
+Type of failure: ACCEPTANCE OF FORGERY
+  - verify_anchor (verification path) correctly rejects all 7 attacks
+  - BUT anchor_batch (creation path) does NOT verify signature before writing
+  - The 7 verify_anchor attacks all PASSED (rejection works)
+  - The 1 anchor_batch attack FAILED (creation accepts forgery)
+
+Note: The original test_8 (before keyring param was added) failed
+because anchor_batch created an anchor with a fake signature.
+The updated test_8 (with keyring param) also fails before the fix
+because anchor_batch did not accept a keyring parameter and did
+not verify the signature.
+
+Below is the RAW pytest output (unmodified — forensic evidence):
+================================================================
+
+============================= test session starts ==============================
+platform linux -- Python 3.14.3, pytest-9.1.1, pluggy-1.6.0 -- /usr/local/bin/python3
+cachedir: .pytest_cache
+rootdir: /home/user/workspace/sovereign_ai
+plugins: anyio-4.15.1, ddtrace-4.15.6
+collecting ... collected 9 items
+
+backend/tests/invariants/test_anchor_rejects_arbitrary_signature.py::TestAnchorRejectsArbitrarySignature::test_1_random_signature_correct_length_rejected PASSED [ 11%]
+backend/tests/invariants/test_anchor_rejects_arbitrary_signature.py::TestAnchorRejectsArbitrarySignature::test_2_valid_signature_wrong_key_rejected PASSED [ 22%]
+backend/tests/invariants/test_anchor_rejects_arbitrary_signature.py::TestAnchorRejectsArbitrarySignature::test_3_valid_signature_wrong_format_rejected PASSED [ 33%]
+backend/tests/invariants/test_anchor_rejects_arbitrary_signature.py::TestAnchorRejectsArbitrarySignature::test_4_missing_signature_field_rejected PASSED [ 44%]
+backend/tests/invariants/test_anchor_rejects_arbitrary_signature.py::TestAnchorRejectsArbitrarySignature::test_5_empty_signature_rejected PASSED [ 55%]
+backend/tests/invariants/test_anchor_rejects_arbitrary_signature.py::TestAnchorRejectsArbitrarySignature::test_6_null_signature_rejected PASSED [ 66%]
+backend/tests/invariants/test_anchor_rejects_arbitrary_signature.py::TestAnchorRejectsArbitrarySignature::test_7_reused_signature_with_different_root_rejected PASSED [ 77%]
+backend/tests/invariants/test_anchor_rejects_arbitrary_signature.py::TestAnchorRejectsArbitrarySignature::test_8_anchor_batch_rejects_arbitrary_signature FAILED [ 88%]
+backend/tests/invariants/test_anchor_rejects_arbitrary_signature.py::TestAnchorRejectsArbitrarySignature::test_9_valid_anchor_accepted PASSED [100%]
+
+=================================== FAILURES ===================================
+_ TestAnchorRejectsArbitrarySignature.test_8_anchor_batch_rejects_arbitrary_signature _
+backend/tests/invariants/test_anchor_rejects_arbitrary_signature.py:328: in test_8_anchor_batch_rejects_arbitrary_signature
+    assert result is None, (
+E   AssertionError: anchor_batch must REJECT arbitrary signature — but it created an anchor with fake signature. This means arbitrary signatures are accepted!
+E   assert {'anchor_id': 'd6174b3b6e219986', 'batch_start': 0, 'batch_end': 2, 'event_count': 3, ...} is None
+=========================== short test summary info ============================
+FAILED backend/tests/invariants/test_anchor_rejects_arbitrary_signature.py::TestAnchorRejectsArbitrarySignature::test_8_anchor_batch_rejects_arbitrary_signature
+========================= 1 failed, 8 passed in 0.27s ==========================

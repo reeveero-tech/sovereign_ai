@@ -304,6 +304,14 @@ class SovereigntyScorer:
             ]
 
             existing = [f for f in required_files if (invariants_dir / f).exists()]
+
+            # R-664 (البوابة 4): اختبار حماية توقيع المرساة
+            # (في backend/tests/invariants/ — لأن المالك طلب هذا المسار)
+            backend_invariants = self.repo_root / "backend" / "tests" / "invariants"
+            gate4_file = "test_anchor_rejects_arbitrary_signature.py"
+            if backend_invariants.exists() and (backend_invariants / gate4_file).exists():
+                existing.append(gate4_file)
+                required_files.append(gate4_file)
             missing = [f for f in required_files if f not in existing]
 
             # الدرجة: 60% وجود الملفات + 40% لا يتيمة/mock

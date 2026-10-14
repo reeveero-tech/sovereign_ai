@@ -195,7 +195,7 @@ class TestAnchorTrustConditions:
         merkle_root = compute_merkle_root(lines)
         sig = anchor.sign_anchor_with_key(0, len(lines)-1, merkle_root, active.key_id, active.private_key)
 
-        result = anchor.anchor_batch(0, len(lines)-1, active.key_id, sig, reason="v2_correct")
+        result = anchor.anchor_batch(0, len(lines)-1, active.key_id, sig, reason="v2_correct", keyring=keyring)
         assert result is not None
 
         detailed = anchor.verify_anchor_detailed(result, keyring=keyring)
@@ -218,7 +218,7 @@ class TestAnchorTrustConditions:
         lines = anchor.read_ledger_lines()
         merkle_root = compute_merkle_root(lines)
         sig = anchor.sign_anchor_with_key(0, len(lines)-1, merkle_root, active.key_id, active.private_key)
-        result = anchor.anchor_batch(0, len(lines)-1, active.key_id, sig, reason="before_tamper")
+        result = anchor.anchor_batch(0, len(lines)-1, active.key_id, sig, reason="before_tamper", keyring=keyring)
         assert result is not None
 
         # تعديل المحتوى (تغيير حدث)
@@ -257,7 +257,7 @@ class TestAnchorTrustConditions:
         lines = anchor.read_ledger_lines()
         merkle_root = compute_merkle_root(lines)
         sig = anchor.sign_anchor_with_key(0, len(lines)-1, merkle_root, active.key_id, active.private_key)
-        result = anchor.anchor_batch(0, len(lines)-1, active.key_id, sig, reason="before_count_change")
+        result = anchor.anchor_batch(0, len(lines)-1, active.key_id, sig, reason="before_count_change", keyring=keyring)
         assert result is not None
 
         # تعديل event_count في المرساة (تزييف)
@@ -270,33 +270,65 @@ class TestAnchorTrustConditions:
         )
 
     def test_missing_keyring_no_trusted_coverage(self, tmp_path):
-        """غياب KeyRing: لا تغطية موثوقة (رغم نجاح الجذر)."""
+        """غياب KeyRing: لا تغطية موثوقة (رغم نجاح الجذر).
+
+        R-664: anchor_batch يرفض بدون keyring (fail-closed).
+        نختبر verify_anchor_detailed بمرساة يُنشئها يدويًا (لا عبر anchor_batch).
+        """
         anchor = self._make_anchor(tmp_path)
         lines = anchor.read_ledger_lines()
         merkle_root = compute_merkle_root(lines)
 
-        # إنشاء مرساة v2 بلا keyring
-        result = anchor.anchor_batch(0, len(lines)-1, "some_key", "some_sig", reason="no_kr")
-        assert result is not None
+        # R-664: anchor_batch يرفض بدون keyring (fail-closed) — يُعيد None
+        result = anchor.anchor_batch(0, len(lines)-1, "some_key", "some_sig", reason="no_kr", keyring=None)
+        assert result is None, "anchor_batch must REJECT without keyring (fail-closed)"
+
+        # إنشاء مرساة يدويًا (لا عبر anchor_batch — للتحقق فقط)
+        manual_anchor = {
+            "anchor_id": "manual_no_kr",
+            "batch_start": 0,
+            "batch_end": len(lines)-1,
+            "event_count": len(lines),
+            "merkle_root": f"sha256:{merkle_root}",
+            "reason": "no_kr",
+            "key_id": "some_key",
+            "signature": "some_sig",
+            "anchored_at": "2026-10-14T00:00:00Z",
+            "sig_format": "v2",
+        }
 
         # التحقق بدون keyring — الجذر ينجح لكن لا توثيق توقيع
-        detailed = anchor.verify_anchor_detailed(result, keyring=None)
+        detailed = anchor.verify_anchor_detailed(manual_anchor, keyring=None)
         assert detailed["root_verified"] is True, "root should verify (content unchanged)"
         assert detailed["signature_verified"] is False, "signature must NOT verify without keyring"
         assert detailed["trusted"] is False, "must not be trusted without keyring"
 
     def test_v1_not_trusted(self, tmp_path):
-        """v1 (أو إزالة الإصدار): قد ينجح فحص الجذر لكن لا يُحتسب توثيق التوقيع."""
+        """v1 (أو إزالة الإصدار): قد ينجح فحص الجذر لكن لا يُحتسب توثيق التوقيع.
+
+        R-664: anchor_batch يرفض بدون keyring (fail-closed).
+        نختبر verify_anchor_detailed بمرساة v1 يُنشئها يدويًا.
+        """
         anchor = self._make_anchor(tmp_path)
         lines = anchor.read_ledger_lines()
+        merkle_root = compute_merkle_root(lines)
 
-        # إنشاء مرساة v1 (بلا sig_format)
-        result = anchor.anchor_batch(0, len(lines)-1, "key1", "sig1", reason="v1_test")
-        assert result is not None
+        # R-664: anchor_batch يرفض بدون keyring (fail-closed) — يُعيد None
+        result = anchor.anchor_batch(0, len(lines)-1, "key1", "sig1", reason="v1_test", keyring=None)
+        assert result is None, "anchor_batch must REJECT without keyring (fail-closed)"
 
-        # إزالة sig_format (محاكاة v1)
-        v1_anchor = dict(result)
-        v1_anchor.pop("sig_format", None)
+        # إنشاء مرساة v1 يدويًا (لا sig_format — للتحقق فقط)
+        v1_anchor = {
+            "anchor_id": "manual_v1",
+            "batch_start": 0,
+            "batch_end": len(lines)-1,
+            "event_count": len(lines),
+            "merkle_root": f"sha256:{merkle_root}",
+            "reason": "v1_test",
+            "key_id": "key1",
+            "signature": "sig1",
+            "anchored_at": "2026-10-14T00:00:00Z",
+        }
 
         detailed = anchor.verify_anchor_detailed(v1_anchor, keyring=None)
         assert detailed["root_verified"] is True, "root should verify"
@@ -312,7 +344,7 @@ class TestAnchorTrustConditions:
         lines = anchor.read_ledger_lines()
         merkle_root = compute_merkle_root(lines)
         sig = anchor.sign_anchor_with_key(0, len(lines)-1, merkle_root, active.key_id, active.private_key)
-        result = anchor.anchor_batch(0, len(lines)-1, active.key_id, sig, reason="before_compromise")
+        result = anchor.anchor_batch(0, len(lines)-1, active.key_id, sig, reason="before_compromise", keyring=keyring)
         assert result is not None
 
         # تعليم المفتاح كمخترق
