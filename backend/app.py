@@ -295,13 +295,34 @@ except Exception as _nexus_err:
 # + إحياء guardian عبر /guardian/status (قراءة فقط)
 # لا يُحذف أو يُعدَّل أي ملف أصلي — هذه إضافات توافقية فقط.
 # ============================================================
-from backend.compat import ensure_nexus_running_async, guardian_status_snapshot
+from backend.compat import ensure_nexus_running_async, guardian_status_snapshot, generate_live_recommendations
 
 # إضافة نقطة /guardian/status — إحياء guardian/ بشكل قابل للتشخيص دون تفعيل EmergencyBreaker
 @app.get("/guardian/status")
 async def guardian_status():
     """حالة نظام الحارس (قراءة فقط) — إحياء guardian/ عبر طبقة توافق"""
     return guardian_status_snapshot()
+
+
+# إضافة نقطة /nexus/recommendations/live — إصلاح فجوة حقيقية:
+# النقطة الأصلية /nexus/recommendations تعيد قائمة فارغة ثابتة رغم أن
+# RecommendationEngine مسجل فعلاً في المحرك (كموّن recommender).
+# هذه النقطة الجديدة تُولّد توصيات فعلية من المكوّن المسجل.
+# (لا يُحذف أو يُعدّل الملف الأصلي — هذه إضافة توافقية فقط.)
+from pydantic import BaseModel as _BM
+
+class RecommendationContext(_BM):
+    """سياق التوصية — يُمرر إلى RecommendationEngine.generate()"""
+    confidence: float = 1.0
+    trend: str = "neutral"
+    anomaly_count: int = 0
+    model_config = {"extra": "allow"}  # يسمح بحقول إضافية في السياق
+
+
+@app.post("/nexus/recommendations/live")
+async def nexus_recommendations_live(context: RecommendationContext):
+    """توليد توصيات فعلية من RecommendationEngine المسجل في NexusCore"""
+    return generate_live_recommendations(context.model_dump())
 
 # ============================================================
 # نقاط API العامة (بدون مصادقة)

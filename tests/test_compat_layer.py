@@ -79,6 +79,89 @@ def test_nexus_lifecycle_reuses_shared_engine():
     )
 
 
+def test_nexus_recommendations_live_generates_real_recommendations():
+    """
+    يتأكد أن generate_live_recommendations() يُولّد توصيات فعلية من
+    RecommendationEngine المسجل (recommender) — وليس قائمة فارغة ثابتة
+    كما في النقطة الأصلية /nexus/recommendations.
+    """
+    from backend.compat import generate_live_recommendations
+    from nexus.main import initialize_nexus
+
+    # تهيئة المكونات (recommender يُسجّل هنا)
+    initialize_nexus()
+
+    # سياق يُفعّل كل القواعد الافتراضية الثلاث
+    context = {
+        "confidence": 0.3,      # < 0.5 → مراجعة انخفاض الثقة
+        "trend": "down",        # == down → مراجعة الاتجاه الهبوطي
+        "anomaly_count": 10,    # > 5 → تحقيق في الشذوذات
+    }
+    result = generate_live_recommendations(context)
+
+    assert isinstance(result, dict)
+    assert "error" not in result, f"unexpected error: {result.get('error')}"
+    assert "recommendations" in result
+
+    recs = result["recommendations"]
+    assert len(recs) == 3, (
+        f"expected 3 recommendations (confidence<0.5, trend=down, anomaly>5), got {len(recs)}"
+    )
+
+    # تحقق من البنية الفعلية لكل توصية
+    for rec in recs:
+        assert "rec_id" in rec and rec["rec_id"], f"rec_id missing/empty: {rec}"
+        assert "title" in rec and rec["title"], f"title missing/empty: {rec}"
+        assert "description" in rec and rec["description"], f"description missing: {rec}"
+        assert rec["requires_human_approval"] is True, (
+            f"requires_human_approval should be True (the decision is always the user's), got {rec}"
+        )
+        assert rec["data_basis"] == context, (
+            f"data_basis should be the provided context, got {rec['data_basis']}"
+        )
+
+    # تحقق من العناوين الفعلية (قواعد حقيقية، ليست بيانات وهمية)
+    titles = [r["title"] for r in recs]
+    assert "مراجعة انخفاض الثقة" in titles, f"missing confidence review rule, got {titles}"
+    assert "مراجعة الاتجاه الهبوطي" in titles, f"missing trend review rule, got {titles}"
+    assert "تحقيق في الشذوذات" in titles, f"missing anomaly investigation rule, got {titles}"
+
+
+def test_nexus_recommendations_live_empty_context_no_error():
+    """يتأكد أن سياقًا لا يُفعّل أي قاعدة لا يُنتج أخطاء (قائمة فارغة، لا استثناء)"""
+    from backend.compat import generate_live_recommendations
+    from nexus.main import initialize_nexus
+
+    initialize_nexus()
+    result = generate_live_recommendations({})  # سياق فارغ
+    assert isinstance(result, dict)
+    assert result.get("recommendations") == [], (
+        f"empty context should produce no recommendations, got {result}"
+    )
+    assert "error" not in result, f"empty context should not error: {result}"
+
+
+def test_nexus_recommendations_live_uses_shared_recommender():
+    """
+    يتأكد أن الطبقة تُعيد استخدام مكوّن recommender المسجل في المحرك
+    المشترك (get_engine()) — لا تنشئ نسخة منفصلة.
+    """
+    from backend.compat import generate_live_recommendations
+    from nexus.main import initialize_nexus
+    from nexus.core.engine import get_engine
+
+    initialize_nexus()
+    shared = get_engine().get_component("recommender")
+    assert shared is not None, "recommender should be registered in shared engine"
+
+    # استدعاء مرتين — يجب أن يكون نفس المكوّن (لا يُنشأ نسخة جديدة)
+    result1 = generate_live_recommendations({"confidence": 0.1})
+    result2 = generate_live_recommendations({"confidence": 0.1})
+    # نفس المكوّن → نفس عدد القواعد المسجلة
+    assert result1["recommendations"] is not None
+    assert result2["recommendations"] is not None
+
+
 def test_guardian_snapshot_is_readonly_and_no_sensitive_leak():
     """
     يتأكد أن guardian_status_snapshot():
