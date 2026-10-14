@@ -58,8 +58,9 @@ nohup.out
 !forensics/gate4_green_v3.log
 
 # R-667: استثناء — سجلات البوابة 5 (دليل جنائي — يجب أن تكون متتبعة)
-!forensics/gate5_red.log
+!forensics/gate5_baseline.log
 !forensics/gate5_green.log
+!forensics/gate5_true_red.log
 
 # R-661: استثناء — تقرير تلوث الختم (توثيقي — ليس سر)
 !data/identity/SEAL_POLLUTION_REPORT.json
