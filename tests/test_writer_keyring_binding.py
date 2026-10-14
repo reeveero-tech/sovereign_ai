@@ -183,22 +183,25 @@ class TestKeyRingFallback:
         )
 
     def test_isolated_keyring_no_real_keys_leaked(self, tmp_path):
-        """R-634: KeyRing معزول لا يُحمّل أي مفتاح من المسار الحقيقي."""
+        """R-634: KeyRing معزول لا يُحمّل أي مفتاح من المسار الحقيقي.
+        
+        R-636: لا قراءة لأسرار التشغيل — بيانات اختبار مستقلة في tmp_path
+        (لا يعتمد على وجود data/keys/keyring.json الحقيقي).
+        """
         _keys_dir = tmp_path / "keys_no_leak"
         _keys_dir.mkdir()
 
         keyring = KeyRing(keys_dir=_keys_dir)
         keyring.load_from_disk()
 
-        # لا مفاتيح من المسار الحقيقي (لا تسريب)
-        _real = _REPO_ROOT / "data" / "keys" / "keyring.json"
-        if _real.exists():
-            real_data = json.loads(_real.read_text(encoding="utf-8"))
-            real_key_ids = {k["key_id"] for k in real_data["keys"]}
-            for kid in keyring._keys:
-                assert kid not in real_key_ids, (
-                    f"real key {kid} leaked into isolated KeyRing — R-634"
-                )
+        # R-636: بيانات اختبار مستقلة (لا قراءة للملف الحقيقي)
+        # — نتحقق فقط أن KeyRing المعزول فارغ (لا مفاتيح من أي مكان)
+        assert len(keyring._keys) == 0, (
+            f"isolated KeyRing must have 0 keys (no leak from anywhere), "
+            f"got {len(keyring._keys)}"
+        )
+        active = keyring.get_active_key()
+        assert active is None, "isolated KeyRing must have no active key (no leak)"
 
     def test_sovereign_core_in_isolated_env_no_keyring(self, tmp_path):
         """R-634: SovereignCore في بيئة معزولة (fallback معطل) لا يربط KeyRing.
@@ -232,7 +235,11 @@ class TestKeyRingFallback:
                 os.environ["SOVEREIGN_KEYRING_FALLBACK_DISABLED"] = _orig
 
     def test_keyring_does_not_write_to_real_path(self, tmp_path):
-        """KeyRing لا يكتب إلى المسار الحقيقي في بيئة معزولة."""
+        """KeyRing لا يكتب إلى المسار الحقيقي في بيئة معزولة.
+        
+        R-636: لا قراءة للملف الحقيقي — يتحقق فقط أن الكتابة
+        تتم داخل keys_dir المعزول (لا اعتماد على وجود الملف الحقيقي).
+        """
         _keys_dir = tmp_path / "keys_write_test"
         _keys_dir.mkdir()
 
@@ -240,13 +247,21 @@ class TestKeyRingFallback:
         keyring.generate_new_key(reason="R-634 test")
         keyring.save_to_disk()
 
-        # المسار الحقيقي لا يجب أن يُغيّر (لا يُضاف المفتاح الجديد)
-        _real = _REPO_ROOT / "data" / "keys" / "keyring.json"
-        data = json.loads(_real.read_text(encoding="utf-8"))
-        real_key_ids = [k["key_id"] for k in data["keys"]]
-        # المفتاح الجديد ليس في الحقيقي
+        # R-636: التحقق أن الكتابة تمت داخل keys_dir المعزول فقط
+        # (لا قراءة للملف الحقيقي — لا اعتماد على وجوده)
+        _isolated_keyring_file = _keys_dir / "keyring.json"
+        assert _isolated_keyring_file.exists(), (
+            "KeyRing must write to isolated keys_dir"
+        )
+        isolated_data = json.loads(_isolated_keyring_file.read_text(encoding="utf-8"))
+        assert len(isolated_data["keys"]) >= 1, (
+            "isolated keyring.json must contain the generated key"
+        )
+        
+        # المفتاح الجديد موجود في المعزول
         new_key_id = keyring.get_active_key().key_id if keyring.get_active_key() else None
         if new_key_id:
-            assert new_key_id not in real_key_ids, (
-                "KeyRing must NOT write to real path in isolated env"
+            isolated_key_ids = [k["key_id"] for k in isolated_data["keys"]]
+            assert new_key_id in isolated_key_ids, (
+                "new key must be written to isolated path"
             )

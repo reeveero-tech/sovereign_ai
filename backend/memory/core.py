@@ -710,6 +710,25 @@ class SovereignCore:
         لا حذف. لا تعديل. فقط إضافة.
         """
         with FileLock(LOCK_FILE):
+            # 0) R-635: حارس الإلحاق — اختيار مفتاح صالح قبل أي حفظ دائم
+            # (قبل blob_store.put — لا يُحفظ blob إذا فشل اختيار المفتاح)
+            _current_key_id = self._get_current_signing_key_id()
+            if _current_key_id is None:
+                raise RuntimeError(
+                    "R-635: No active signing key available (compromised/retired/lost "
+                    "or no KeyRing) — refusing to append event BEFORE any persistent "
+                    "save (fail-closed, guard before blob_store.put). "
+                    "Generate or rotate an active key first."
+                )
+            
+            # R-635: تحقق من مادة المفتاح غير الفارغة (قبل أي حفظ)
+            _key_record = self._keyring.get_key(_current_key_id) if self._keyring else None
+            if _key_record is None or not getattr(_key_record, 'private_key', None):
+                raise RuntimeError(
+                    f"R-635: Key {_current_key_id} has no private_key material — "
+                    f"refusing to append event BEFORE any persistent save (fail-closed)."
+                )
+            
             # 1) تحويل الـ payload إلى JSON وتخزينه كـ blob
             payload_json = safe_json_dumps(payload)
             payload_bytes = payload_json.encode('utf-8')
@@ -723,19 +742,7 @@ class SovereignCore:
                 self._last_hash, blob_hash, event_time, event_type_str
             )
             
-            # 4) حساب التوقيع (R-632: بالمفتاح النشط الحالي — يُختار في كل كتابة)
-            # R-632: الكاتب يختار المفتاح النشط من KeyRing في كل مرة (وليس المخزّن في المُنشئ)
-            # — يضمن أن الدوران يُلتقط فورًا دون إعادة إنشاء Core
-            _current_key_id = self._get_current_signing_key_id()
-            
-            # R-633: فشل مُغلق — إذا لم يوجد مفتاح نشط صالح، يُرفض الإلحاق
-            # (لا توقيع بمفتاح الإعدادات و لا حدث بدون key_id)
-            if _current_key_id is None:
-                raise RuntimeError(
-                    "R-633: No active signing key available (compromised/retired/lost "
-                    "or no KeyRing) — refusing to append event (fail-closed). "
-                    "Generate or rotate an active key first."
-                )
+            # 4) حساب التوقيع (R-632: بالمفتاح النشط الحالي — المُختار في الخطوة 0)
             signature = self._compute_event_signature(
                 event_hash, self._last_hash, blob_hash, event_time, event_type_str,
                 key_id=_current_key_id

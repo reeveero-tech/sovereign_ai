@@ -26,7 +26,28 @@ from backend.sovereign.keys import KeyRing, SignatureVerifier
 
 
 class TestFailClosed:
-    """اختبارات الفشل المُغلق (R-629) — لا fallback عند غياب المفتاح."""
+    """اختبارات الفشل المُغلق (R-629) — لا fallback عند غياب المفتاح.
+    
+    R-635: حارس الإلحاق قبل أي حفظ دائم (قبل blob_store.put).
+    R-637: مقارنة بصمات الملفات الكاملة (blobs، الفهرس، HISTORY) —
+    قبل و بعد محاولة مرفوضة.
+    """
+
+    def _collect_file_fingerprints(self, root: Path) -> dict:
+        """R-637: يجمع بصمات sha256 لكل الملفات تحت الجذر المعطى."""
+        import hashlib
+        fingerprints = {}
+        if not root.exists():
+            return fingerprints
+        for f in sorted(root.rglob("*")):
+            if f.is_file():
+                try:
+                    with open(f, "rb") as fh:
+                        fp = hashlib.sha256(fh.read()).hexdigest()[:16]
+                    fingerprints[str(f.relative_to(root))] = fp
+                except Exception:
+                    pass
+        return fingerprints
 
     def test_append_rejected_without_keyring(self, tmp_path):
         """غياب KeyRing: الكاتب يرفض الإلحاق (فشل مُغلق)."""
@@ -52,11 +73,64 @@ class TestFailClosed:
             # الإلحاق يجب أن يُرفض (فشل مُغلق)
             with pytest.raises((RuntimeError, KeyError)) as exc_info:
                 core.append_event(EventType.INTERACTION, {"test": "no_kr"}, user="test")
-            assert "R-626" in str(exc_info.value) or "fail-closed" in str(exc_info.value), (
-                f"must fail closed with R-626: {exc_info.value}"
+            assert "R-63" in str(exc_info.value), (
+                f"must fail closed with R-63x: {exc_info.value}"
             )
         finally:
             # استعادة الحالة الأصلية
+            if _orig is None:
+                os.environ.pop("SOVEREIGN_KEYRING_FALLBACK_DISABLED", None)
+            else:
+                os.environ["SOVEREIGN_KEYRING_FALLBACK_DISABLED"] = _orig
+
+    def test_failed_append_no_file_changes_fingerprints(self, tmp_path):
+        """R-637: محاولة إلحاق مرفوضة لا تُغيّر أي ملف (بصمات كاملة).
+        
+        يقارن بصمات sha256 لكل الملفات تحت tmp_path (بما فيها
+        blobs، الفهرس، ledger، HISTORY) قبل و بعد المحاولة المرفوضة.
+        """
+        _core_dir = tmp_path / "sovereign_core"
+        _core_dir.mkdir(parents=True, exist_ok=True)
+        (_core_dir / "blobs").mkdir(exist_ok=True)
+
+        # R-629: تعطيل fallback
+        _orig = os.environ.get("SOVEREIGN_KEYRING_FALLBACK_DISABLED")
+        os.environ["SOVEREIGN_KEYRING_FALLBACK_DISABLED"] = "1"
+        try:
+            core = SovereignCore(
+                log_file=_core_dir / "ledger.jsonl",
+                blobs_dir=_core_dir / "blobs",
+                index_file=_core_dir / "index.json",
+                meta_file=_core_dir / "meta.json",
+                integrity_file=_core_dir / "integrity.json",
+            )
+
+            # بصمات الملفات قبل المحاولة (كل الملفات تحت tmp_path)
+            before = self._collect_file_fingerprints(tmp_path)
+
+            # محاولة إلحاق (يجب أن تُرفض — فشل مُغلق R-635)
+            with pytest.raises((RuntimeError, KeyError)):
+                core.append_event(EventType.INTERACTION, {"test": "fail_fp"}, user="test")
+
+            # بصمات الملفات بعد المحاولة
+            after = self._collect_file_fingerprints(tmp_path)
+
+            # R-637: البصمات متطابقة (لا تغيير في أي ملف)
+            assert before == after, (
+                f"rejected append must not change any file. "
+                f"Before: {len(before)} files, After: {len(after)} files. "
+                f"New files: {sorted(set(after) - set(before))}, "
+                f"Changed: {sorted(k for k in before if before.get(k) != after.get(k))}"
+            )
+            # R-635: لا blob جديد (الحارس قبل blob_store.put)
+            blobs_dir = _core_dir / "blobs"
+            blob_files = list(blobs_dir.rglob("*")) if blobs_dir.exists() else []
+            blob_files = [f for f in blob_files if f.is_file()]
+            assert len(blob_files) == 0, (
+                f"rejected append must not create any blob (guard before blob_store.put), "
+                f"found {len(blob_files)} blobs"
+            )
+        finally:
             if _orig is None:
                 os.environ.pop("SOVEREIGN_KEYRING_FALLBACK_DISABLED", None)
             else:
