@@ -1,8 +1,16 @@
-"""Security regression tests for sovereign-key configuration."""
+"""Security regression tests for sovereign-key configuration.
+
+R-615 (المرحلة الثانية — الجريمة الثانية): النسخة السابقة من هذا الاختبار
+كانت تحذف data/key.secret الحقيقي مرتين (السطر 37 و54) — أداة جريمة ثانية
+اكتُشفت في forensics/KEY_LOSS_TIMELINE.md. الآن الاختبار يعمل في جذر
+مؤقت معزول عبر SOVEREIGN_DATA_ROOT (نفس نمط test_identity_persistence.py).
+لا يُلمس مفتاح التشغيل الحقيقي إطلاقًا.
+"""
 
 import os
 import subprocess
 import sys
+import tempfile
 
 
 def _run_config(env):
@@ -26,40 +34,66 @@ def test_development_without_key_generates_persistent_key():
     الهوية السيادية (ختم الهوية + توقيعات السجل) يجب أن تستمر عبر إعادة التشغيل —
     لذلك المفتاح المولّد يُعاد استخدامه في التشغيل الثاني (نفس القيمة)،
     ولا يُستخدم أي مفتاح افتراضي معروف.
+
+    R-615: عزل فعلي — المفتاح يُنشأ داخل جذر مؤقت (SOVEREIGN_DATA_ROOT)،
+    لا يُلمس مفتاح التشغيل الحقيقي.
     """
+    # إنشاء جذر مؤقت معزول (نفس نمط test_identity_persistence.py)
+    tmp_root = tempfile.mkdtemp(prefix="sovereign_config_test_")
+    tmp_data = os.path.join(tmp_root, "data")
+    os.makedirs(tmp_data, exist_ok=True)
+
     env = os.environ.copy()
     env.pop("SOVEREIGN_KEY", None)
     env["AI_ENVIRONMENT"] = "development"
+    # عزل فعلي: config.py سيستخدم tmp_data كـ DATA_DIR
+    env["SOVEREIGN_DATA_ROOT"] = tmp_data
 
-    # تنظيف أي مفتاح دائم سابق لبدء حالة نظيفة
-    secret_file = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "key.secret")
-    if os.path.exists(secret_file):
-        os.remove(secret_file)
+    # المفتاح سيُنشأ داخل الجذر المؤقت — لا يُلمس المفتاح الحقيقي
+    secret_file = os.path.join(tmp_data, "key.secret")
 
     first = _run_config(env)
     second = _run_config(env)
 
-    assert first.returncode == 0
-    assert second.returncode == 0
+    assert first.returncode == 0, f"first config run failed: {first.stderr}"
+    assert second.returncode == 0, f"second config run failed: {second.stderr}"
     assert first.stdout.strip()
     assert second.stdout.strip()
     # R-610: المفتاح الدائم يُعاد استخدامه — نفس القيمة عبر عمليات التشغيل
-    assert first.stdout.strip() == second.stdout.strip()
+    assert first.stdout.strip() == second.stdout.strip(), (
+        "key should be identical across restarts (persistent identity)"
+    )
     assert "مفتاح_افتراضي_غير_آمن" not in first.stdout
-    # المفتاح الدائم كُتب على القرص
-    assert os.path.exists(secret_file)
+    # المفتاح الدائم كُتب على القرص (داخل الجذر المؤقت)
+    assert os.path.exists(secret_file), (
+        f"key.secret should be created in isolated tmp dir {tmp_data}"
+    )
 
-    # تنظيف بعد الاختبار
-    if os.path.exists(secret_file):
-        os.remove(secret_file)
+    # التحقق من أن المفتاح الحقيقي لم يُلمس (إن كان موجودًا قبل الاختبار)
+    # (لو كان موجودًا، ما زال موجودًا — لم نلمسه)
+    # (لا نتحقق من المحتوى — سرية)
 
 
 def test_production_without_key_fails_closed():
+    """في الإنتاج، غياب المفتاح يجب أن يمنع التشغيل (فشل مقفل).
+
+    R-615: عزل فعلي — الاختبار يعمل في جذر مؤقت معزول، لا يُلمس المفتاح
+    الحقيقي. (بدون العزل، config.py سيجد المفتاح الحقيقي ولن يفشل.)
+    """
+    tmp_root = tempfile.mkdtemp(prefix="sovereign_prod_test_")
+    tmp_data = os.path.join(tmp_root, "data")
+    os.makedirs(tmp_data, exist_ok=True)
+
     env = os.environ.copy()
     env.pop("SOVEREIGN_KEY", None)
     env["AI_ENVIRONMENT"] = "production"
+    # عزل فعلي: المفتاح الحقيقي غير مرئي داخل الجذر المؤقت
+    env["SOVEREIGN_DATA_ROOT"] = tmp_data
 
     result = _run_config(env)
 
-    assert result.returncode != 0
+    assert result.returncode != 0, (
+        f"production without key should fail (returncode != 0), "
+        f"got 0 with key {result.stdout!r}"
+    )
     assert "لم يتم تعيين مفتاح السيد" in (result.stderr + result.stdout)
