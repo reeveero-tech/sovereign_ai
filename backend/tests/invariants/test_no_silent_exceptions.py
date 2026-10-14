@@ -1,33 +1,24 @@
 """
-Invariant 9: لا except:pass صامت بلا تعليق تبرير (R-680)
+Invariant 9: لا except:pass/continue صامت بلا تعليق تبرير (R-680/R-680d)
 
-يتحقق أن كل `except: pass` في كود الإنتاج (خارج tests/) لديه تعليق تبرير
-قبل بداية `try` أو على نفس سطر `except`.
+يستخدم AST (وليس regex) لتحديد المعالجات الصامتة بدقة، ويفحص التعليقات
+المرتبطة بها. يفشل إذا وُجد:
+- `except: pass` بلا تعليق تبرير
+- `except Exception: continue` بلا تعليق تبرير
 
-النمط المسموح:
-    # R-XXX: <reason>            ← تعليق تبرير
-    try:
-        ...
-    except:
-        pass                      ← مسموح (مبرر)
+التعليق المبرر يجب أن يكون:
+- على نفس سطر `except` (مثل `except:  # R-680: reason`)
+- أو في السطور 1-3 قبل `except` أو قبل `try:` المقابل
 
-أو
-
-    try:
-        ...
-    except:  # R-XXX reason
-        pass
-
-أي `except: pass` بلا تعليق تبرير = فشل الاختبار.
-
-الاستثناءات:
-- tests/ (كل ملفات الاختبارات — بلا تعليق مطلوب)
+الاستثناءات (مجلدات):
+- tests/, backend/tests/ (الاختبارات)
 - archive/ (أرشيف — غير مُشغّل)
-- frontend/ (JavaScript — غير Py)
+- frontend/ (JavaScript)
 - data/ (بيانات)
 - guardian/data/emergency (backup)
 """
 
+import ast
 import re
 import sys
 from pathlib import Path
@@ -41,7 +32,7 @@ for p in [str(_REPO_ROOT), str(_BACKEND_DIR)]:
         sys.path.insert(0, p)
 
 
-# المجلدات المستثناة من الفحص (اختبارات، أرشيف، غير كود الإنتاج)
+# المجلدات المستثناة من الفحص
 EXCLUDED_DIRS = {
     "tests/",
     "backend/tests/",
@@ -57,65 +48,79 @@ EXCLUDED_DIRS = {
     "emergency_backups",
 }
 
-# أنماط تبرير مقبولة (تعليق يحتوي على R-XXX أو TOLERATED أو توضيح عربي/إنجليزي طويل)
-JUSTIFICATION_PATTERNS = [
-    r"#\s*R-\d+\s*[:\s]",          # R-680, R-670, etc.
-    r"#\s*TOLERATED\s*[:\s]",       # # TOLERATED: reason
-    r"#\s*justif",                   # justification (English)
-    r"#\s*مُبرر",                  # مُبرر (عربي)
-    r"#\s*مبرر",                  # مبرر (عربي)
-    r"#\s*تعليق",
-]
-JUSTIFICATION_RE = re.compile("|".join(JUSTIFICATION_PATTERNS))
+# أنماط تبرير مقبولة
+JUSTIFICATION_RE = re.compile(
+    r"#\s*(R-\d+\s*[:\s]|TOLERATED\s*[:\s]|justif|مُبرر|مبرر)"
+)
 
-# الحد الأدنى لطول التعليق (حتى لا يكون `# x` تبريراً زائفاً)
 MIN_COMMENT_LENGTH = 8
 
 
-def _has_justification_comment(lines: list, except_line_idx: int) -> bool:
-    """
-    يفحص السطور السابقة (1-4) لسطر `except` للبحث عن تعليق تبرير.
-    أيضاً يفحص التعليق على نفس سطر `except`.
-    """
-    # 1) التعليق على نفس سطر `except` (مثل `except:  # R-680: reason`)
-    except_line = lines[except_line_idx]
+def _get_except_node_end_lineno(node: ast.ExceptHandler, src: str) -> int:
+    """يُعيد رقم السطر الأخير لمعالج except."""
+    return getattr(node, "end_lineno", node.lineno)
+
+
+def _check_comment_on_except_line(node: ast.ExceptHandler, lines: list) -> bool:
+    """يفحص التعليق على نفس سطر `except`."""
+    except_line = lines[node.lineno - 1]
     if "#" in except_line:
         comment_part = except_line.split("#", 1)[1].strip()
-        if len(comment_part) >= MIN_COMMENT_LENGTH and JUSTIFICATION_RE.search(except_line):
+        if (len(comment_part) >= MIN_COMMENT_LENGTH
+                and JUSTIFICATION_RE.search(except_line)):
             return True
+    return False
 
-    # 2) التعليق في السطور السابقة (من 1 إلى 4 سطور قبل `except` أو `try`)
-    # نبحث أول عن `try:` قبل `except` — ثم نفحص السطور بين `try:` و `except`
-    for back in range(1, 5):
-        idx = except_line_idx - back
-        if idx < 0: break
+
+def _check_comment_before_except_or_try(node: ast.ExceptHandler, lines: list,
+                                        src: str) -> bool:
+    """يفحص السطور قبل `except`، ثم قبل `try:` المقابل (بلا حد مسافة)."""
+    # 1) فحص السطور قبل `except` (حتى نصل إلى `try:`)
+    for back in range(1, len(lines)):  # لا حد — نرجع حتى نجد `try:`
+        idx = node.lineno - 1 - back
+        if idx < 0:
+            break
         line = lines[idx]
         stripped = line.strip()
-        # إذا وجدنا `try:` قبل — فالتعليق يجب أن يكون قبل `try:`
+        # إذا وصلنا إلى `try:` — نبحث قبل `try:` (1-3 أسطر)
         if stripped.startswith("try"):
-            # نفحص السطور قبل `try:`
             for back2 in range(1, 4):
                 idx2 = idx - back2
-                if idx2 < 0: break
+                if idx2 < 0:
+                    break
                 l2 = lines[idx2]
                 if "#" in l2:
                     comment_part = l2.split("#", 1)[1].strip()
-                    if len(comment_part) >= MIN_COMMENT_LENGTH and JUSTIFICATION_RE.search(l2):
+                    if (len(comment_part) >= MIN_COMMENT_LENGTH
+                            and JUSTIFICATION_RE.search(l2)):
                         return True
-            break
-        # إذا كان السطر يحتوي تعليقاً مباشرة قبل `except` (ليس `try`)
+            return False
+        # تعليق قبل `except` مباشرة
         if "#" in line and not stripped.startswith("try"):
             comment_part = line.split("#", 1)[1].strip()
-            if len(comment_part) >= MIN_COMMENT_LENGTH and JUSTIFICATION_RE.search(line):
+            if (len(comment_part) >= MIN_COMMENT_LENGTH
+                    and JUSTIFICATION_RE.search(line)):
                 return True
+    return False
 
+
+def _is_silent_except(node: ast.ExceptHandler) -> bool:
+    """يحدد إذا كان معالج except صامتاً (pass أو continue)."""
+    if len(node.body) != 1:
+        return False
+    stmt = node.body[0]
+    if isinstance(stmt, ast.Pass):
+        return True
+    # continue
+    if isinstance(stmt, ast.Continue):
+        return True
     return False
 
 
 def _scan_silent_exceptions():
     """
-    يفحص كل ملفات الإنتاج بحثاً عن `except: pass` بلا تعليق تبرير.
-    يُعيد قائمة (file, line_number, except_line).
+    يفحص كل ملفات الإنتاج بحثاً عن `except: pass` أو `except: continue`
+    بلا تعليق تبرير. يستخدم AST (لا regex) لدقة أعلى.
     """
     violations = []
 
@@ -130,69 +135,77 @@ def _scan_silent_exceptions():
         ]):
             continue
 
-        # استثناء المجلدات المسموح بها (اختبارات، أرشيف، إلخ)
+        # استثناء المجلدات المسموح بها
         if any(rel_posix.startswith(d) for d in EXCLUDED_DIRS):
             continue
 
-        # استثناء هذا الملف نفسه (لا يفحص نفسه)
+        # استثناء هذا الملف نفسه
         if rel_posix == "backend/tests/invariants/test_no_silent_exceptions.py":
             continue
 
         try:
             src = p.read_text(encoding="utf-8")
+        # TOLERATED: unreadable file — excluded from scan (R-680d)
         except Exception:
+            continue
+
+        try:
+            tree = ast.parse(src)
+        # TOLERATED: unparsable AST — excluded from scan (R-680d)
+        except SyntaxError:
             continue
 
         lines = src.split("\n")
 
-        # نمط: `except...:` ثم سطر `pass` مباشرة
-        for i in range(len(lines) - 1):
-            stripped = lines[i].strip()
-            if (stripped.startswith("except") and stripped.endswith(":")
-                    and lines[i + 1].strip() == "pass"):
-                if not _has_justification_comment(lines, i):
-                    violations.append({
-                        "file": rel_posix,
-                        "line": i + 1,
-                        "except_line": stripped,
-                    })
+        # البحث عن كل معالجات except
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.ExceptHandler):
+                continue
 
-        # نمط إضافي: `except...:` ثم سطر `continue` (يُخفي فشلاً في حلقة)
-        for i in range(len(lines) - 1):
-            stripped = lines[i].strip()
-            if (stripped.startswith("except") and stripped.endswith(":")
-                    and lines[i + 1].strip() == "continue"):
-                if not _has_justification_comment(lines, i):
-                    violations.append({
-                        "file": rel_posix,
-                        "line": i + 1,
-                        "except_line": stripped,
-                        "pattern": "except_continue",
-                    })
+            if not _is_silent_except(node):
+                continue
+
+            # فحص التعليق
+            has_comment = (
+                _check_comment_on_except_line(node, lines)
+                or _check_comment_before_except_or_try(node, lines, src)
+            )
+
+            if not has_comment:
+                # تحديد النمط (pass أو continue)
+                stmt = node.body[0]
+                pattern = "pass" if isinstance(stmt, ast.Pass) else "continue"
+                violations.append({
+                    "file": rel_posix,
+                    "line": node.lineno,
+                    "pattern": pattern,
+                    "except_line": lines[node.lineno - 1].strip(),
+                })
 
     return violations
 
 
 class TestNoSilentExceptions:
-    """Invariant: كل except:pass في الإنتاج لديه تعليق تبرير."""
+    """Invariant: كل except صامت (pass/continue) في الإنتاج لديه تعليق تبرير."""
 
-    def test_no_silent_except_pass_in_production(self):
-        """
-        يفشل إذا وُجد `except: pass` بلا تعليق تبرير في كود الإنتاج.
-        """
+    def test_no_silent_except_in_production(self):
+        """يفشل إذا وُجد `except: pass` أو `except: continue` بلا تعليق تبرير."""
         violations = _scan_silent_exceptions()
 
         if violations:
             error_msg = (
-                f"Found {len(violations)} silent `except: pass` in production "
-                f"(no justification comment):\n\n"
+                f"Found {len(violations)} silent `except: pass/continue` in "
+                f"production (no justification comment):\n\n"
             )
-            for v in violations[:30]:  # أول 30 للاختصار
-                error_msg += f"  - {v['file']}:{v['line']}  ({v['except_line']})\n"
+            for v in violations[:30]:
+                error_msg += (
+                    f"  - {v['file']}:{v['line']}  "
+                    f"({v['except_line']})  [pattern={v['pattern']}]\n"
+                )
             if len(violations) > 30:
                 error_msg += f"  ... and {len(violations) - 30} more\n"
             error_msg += (
-                "\nEvery `except: pass` in production code MUST have a "
+                "\nEvery silent `except` in production code MUST have a "
                 "justification comment before `try:` or on the `except` line. "
                 "Format: `# R-XXX: <reason>` or `# TOLERATED: <reason>`.\n"
                 "See forensics/silent_failure_audit.md for full list."
@@ -200,7 +213,62 @@ class TestNoSilentExceptions:
             assert False, error_msg
 
     def test_scan_function_works(self):
-        """Test that the scanner runs and returns a list."""
+        """Test that the AST scanner runs and returns a list."""
         violations = _scan_silent_exceptions()
         assert isinstance(violations, list)
+
+    def test_detects_bare_except_pass_no_comment(self, tmp_path):
+        """اختبار صغير: يثبت أن الماسح يكشف `except: pass` بلا تعليق (AST-based)."""
+        # ملف مؤقت بمحتوى صامت — نحفظه ثم نفحص
+        content = "try:\n    x = 1\nexcept Exception:\n    pass\n"
+        test_file = tmp_path / "sample_silent.py"
+        test_file.write_text(content, encoding="utf-8")
+
+        # نُشغّل الماسح يدوياً على المحتوى
+        import ast as ast_mod
+        tree = ast_mod.parse(content)
+        lines = content.split("\n")
+        found = False
+        for node in ast_mod.walk(tree):
+            if isinstance(node, ast_mod.ExceptHandler):
+                if _is_silent_except(node):
+                    if not (_check_comment_on_except_line(node, lines)
+                            or _check_comment_before_except_or_try(node, lines, content)):
+                        found = True
+        assert found, "Scanner must detect silent except:pass with no comment"
+
+    def test_detects_bare_except_continue_no_comment(self, tmp_path):
+        """اختبار صغير: يثبت أن الماسح يكشف `except: continue` بلا تعليق."""
+        content = "for i in range(10):\n    try:\n        x = i\n    except Exception:\n        continue\n"
+        import ast as ast_mod
+        tree = ast_mod.parse(content)
+        lines = content.split("\n")
+        found = False
+        for node in ast_mod.walk(tree):
+            if isinstance(node, ast_mod.ExceptHandler):
+                if _is_silent_except(node):
+                    if not (_check_comment_on_except_line(node, lines)
+                            or _check_comment_before_except_or_try(node, lines, content)):
+                        found = True
+        assert found, "Scanner must detect silent except:continue with no comment"
+
+    def test_accepts_justified_except(self, tmp_path):
+        """اختبار صغير: يثبت أن الماسح يقبل `except: pass` مع تعليق تبرير."""
+        content = (
+            "# TOLERATED: test justification (R-680)\n"
+            "try:\n    x = 1\nexcept Exception:\n    pass\n"
+        )
+        import ast as ast_mod
+        tree = ast_mod.parse(content)
+        lines = content.split("\n")
+        found_unjustified = False
+        for node in ast_mod.walk(tree):
+            if isinstance(node, ast_mod.ExceptHandler):
+                if _is_silent_except(node):
+                    if not (_check_comment_on_except_line(node, lines)
+                            or _check_comment_before_except_or_try(node, lines, content)):
+                        found_unjustified = True
+        assert not found_unjustified, (
+            "Scanner must NOT flag except:pass with TOLERATED comment"
+        )
 

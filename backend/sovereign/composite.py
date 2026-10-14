@@ -12,6 +12,7 @@
 # "الأرقام التي تنتجها نفس الدالة التي تتحقق منها ليست درجة — هي مرآة."
 # هذا الملف لا يُستخدم للتحقق. هو رقم إحصائي اختياري فقط.
 
+from pathlib import Path
 from typing import Dict
 
 from backend.sovereign.primitives import Primitives
@@ -57,12 +58,15 @@ class Composite:
     التي يمكن لأي طرف ثالث حسابها من الملفات.
     """
 
-    def __init__(self, primitives: Primitives, tests_passing: int = 0, tests_total: int = 0):
+    def __init__(self, primitives: Primitives, tests_passing: int = 0, tests_total: int = 0,
+                 junit_xml_path: str = None):
         self.primitives = primitives
         self._weights = COMPOSITE_WEIGHTS
         # R-680: قيمة pytest الخارجية (إذا لم تُمرر → سيقرأها compute من provenance)
         self.tests_passing = tests_passing
         self.tests_total = tests_total
+        # R-680d: مسار ملف JUnit XML (provenance)
+        self.junit_xml_path = junit_xml_path
 
     def set_tests_passing(self, passing: int, total: int):
         """لتعيين قيمة pytest يدوياً (من مستخدم خارجي أو CI)."""
@@ -75,13 +79,35 @@ class Composite:
         الملف: `forensics/clean_build_skips.md` ليس مصدر أرقام (لا أرقام مُخزنة).
         الحل: يستخدم `backend/tests/__init__.py` و CI workflow — لكن هذه غير مُخزنة كرقم.
 
-        الأنسب هنا: قراءة قيمة من `forensics/clean_build_skips.md` غير ممكن (لا أرقام).
-        لذا نُرجع (0, 0) — يعني "غير محسوب" — ويُحسب من خارج هذا الملف فقط.
+        الأنسب هنا: قراءة من `forensics/clean_build_skips.md` غير ممكن (لا أرقام).
+        الحل الفعلي: قراءة من ملف JUnit XML إذا مُرر مساره، أو من معاملات المُنشئ.
         """
-        # تم تمرير قيمة يدوية؟
+        # 1) تم تمرير قيمة يدوية؟
         if self.tests_passing > 0 and self.tests_total > 0:
             return self.tests_passing, self.tests_total
-        # قراءة من provenance إذا موجود — غير موجود حالياً → (0, 0)
+
+        # 2) قراءة من ملف JUnit XML (provenance)
+        # يُولّده: python -m pytest --junitxml=path/to/results.xml
+        # يُحدّد الملف عبر: Composite(primitives, junit_xml_path=...)
+        if self.junit_xml_path and Path(self.junit_xml_path).exists():
+            try:
+                import xml.etree.ElementTree as ET
+                tree = ET.parse(self.junit_xml_path)
+                suite = tree.getroot()
+                # إيجاد testsuite الرئيسي
+                testsuites = suite.find("testsuite")
+                if testsuites is not None:
+                    total = int(testsuites.get("tests", 0))
+                    failures = int(testsuites.get("failures", 0))
+                    errors = int(testsuites.get("errors", 0))
+                    skipped = int(testsuites.get("skipped", 0))
+                    passed = total - failures - errors - skipped
+                    return max(0, passed), max(0, total)
+            # TOLERATED: JUnit XML malformed — fall through to (0,0)
+            except Exception:
+                pass
+
+        # 3) لا provenance → (0, 0) = غير محسوب
         # (لا نُخفي الفشل — نُرجع 0/0 و يُفسر كـ "غير محسوب")
         return 0, 0
 
@@ -103,7 +129,14 @@ class Composite:
         mocks_count = p["mocks_outside_tests_count"]
         no_mocks = 1.0 if mocks_count == 0 else 0.0
         files_imported = p["files_imported_count"]
-        no_orphans = 1.0 if files_imported > 0 else 0.0
+        # R-680d: نسبة الملفات المستوردة — استيراد ملف واحد لا يعادل استيراد الكل.
+        # العقد: "files_imported_count (114 من 272) تحوّل إلى ثنائي no_orphan_modules،
+        # مما يُجمّد الفرق بين 114 و 272" — هذا هو الإصلاح.
+        files_total = p["files_total_count"]
+        if files_total > 0:
+            no_orphans = files_imported / files_total
+        else:
+            no_orphans = 0.0
 
         # R-680: tests_passing_count_ratio — يُحسب من تشغيل pytest، لا من الملفات.
         # المشكلة الأصلية: tests_passing_count كان دائماً -1 (تشغيلي، لا يُحسب هنا).
@@ -189,6 +222,9 @@ class Composite:
             "formula": formula,
             "components": components,
             "primitives": p,
+            "tests_passing": tests_passing,
+            "tests_total": tests_total,
+            "tests_passing_count_ratio": tests_passing_ratio,
             "mocks_outside_tests_count": mocks_count,
             "hard_kill_factor": hard_kill_factor,
             "warning": (

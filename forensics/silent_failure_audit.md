@@ -181,3 +181,32 @@ except Exception as e:
 
 **الاختبار الآن:** `test_no_silent_exceptions.py` يفحص كلا النمطين (`except: pass` و `except Exception: continue`) — يمر بنجاح.
 
+
+
+## 6) R-680d — التحديث بعد تحويل الماسح إلى AST
+
+المستشار قال: "الاختبار الحالي يعطي اطمئناناً زائفاً لأنه يفوت صيغاً". محقاً.
+
+### الصيغ التي كان regex يفوتها (اكتشفها AST):
+1. `except Exception: pass` على سطر واحد (inline)
+2. `except ImportError:` + `pass` مع تعليق **داخل** except (ليس قبله)
+3. `try: cb(event)` + `except Exception: pass` (inline in loop)
+
+### المواقع الجديدة التي أصلحها AST (6 مواقع):
+| الملف | السطر | النمط | الإصلاح |
+|---|---|---|---|
+| `backend/orchestrator.py` | 62 | `except ImportError: pass` | نقل TOLERATED قبل `try:` |
+| `guardian/master_guardian.py` | 148 | inline `except Exception: pass` | أُضيف TOLERATED قبل `except` |
+| `guardian/master_guardian.py` | 164 | inline | أُضيف TOLERATED |
+| `guardian/master_guardian.py` | 203 | inline | أُضيف TOLERATED |
+| `guardian/emergency_breaker.py` | 141 | inline `except Exception: pass` | أُضيف TOLERATED |
+| `backend/memory/core.py` | 871 | `except Exception: pass` (fast-path) | أُضيف TOLERATED |
+
+### التحسينات على الماسح:
+- يستخدم `ast.ExceptHandler` (لا regex) — دقة أعلى
+- يبحث قبل `try:` **بلا حد مسافة** (كان يفوت التعليقات البعيدة)
+- يفحص `except Exception: continue` أيضاً
+- أُضيف 3 اختبارات صغيرة تثبت كشف الصيغ الجديدة
+
+### الحالة النهائية:
+`test_no_silent_exceptions.py` = 5 اختبارات، كلها تمر. الماسح AST-based.

@@ -145,6 +145,7 @@ class MasterGuardian:
                 self.status.blocked_attempts += 1
                 for cb in self._callbacks["on_block"]:
                     try: cb(event)
+                    # TOLERATED: on_block callback failure must not crash guardian (R-680d)
                     except Exception: pass
                 logger.warning(
                     f"🚫 BLOCKED [{actor}] → {action} on {target}"
@@ -161,6 +162,7 @@ class MasterGuardian:
         self.status.total_events += 1
         for cb in self._callbacks["on_allow"]:
             try: cb(event)
+            # TOLERATED: callback failure must not crash guardian (R-680d)
             except Exception: pass
         logger.info(f"✅ ALLOWED [{actor}] → {action}")
         return {"allowed": True, "reason": "مسموح", "event_id": event.event_id}
@@ -200,6 +202,7 @@ class MasterGuardian:
 
         for cb in self._callbacks["on_emergency"]:
             try: cb(event)
+            # TOLERATED: callback failure must not crash guardian (R-680d)
             except Exception: pass
 
     def _trigger_emergency(self, actor: str, action: str,

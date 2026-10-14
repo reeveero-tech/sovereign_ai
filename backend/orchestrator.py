@@ -36,6 +36,7 @@ from enum import Enum
 from collections import deque
 import traceback
 
+# TOLERATED: optional modules unavailable — degraded mode, not crash (R-680d)
 try:
     from memory.core import get_core
     from memory.dynamic import get_dynamic_memory
@@ -60,7 +61,6 @@ try:
     from sovereign.controller import get_sovereign_controller
     from quantum.quantum_controller import get_quantum_controller
 except ImportError:
-    # تسامح مع الأخطاء - لا ننهار إذا لم نجد وحدة
     pass
 
 import logging

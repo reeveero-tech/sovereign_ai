@@ -138,6 +138,7 @@ class EmergencyBreaker:
         # استدعاء callbacks
         for cb in self._freeze_callbacks:
             try: cb(incident)
+            # TOLERATED: callback failure must not crash emergency breaker (R-680d)
             except Exception: pass
 
         return incident

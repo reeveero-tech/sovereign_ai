@@ -167,6 +167,26 @@ class TestComposite:
         # المجموع المتاح = 0.80 (0.20 مفقودة لأن tests_passing = 0)
         assert result["components"]["tests_passing_count_ratio"]["contribution"] == 0.0
 
+    def test_11c_no_orphans_is_ratio_not_binary(self, repo_root):
+        """R-680d: no_orphans يجب أن يكون نسبة (files_imported/files_total)،
+        لا ثنائي (1 if files_imported > 0). استيراد ملف واحد لا يعادل استيراد الكل."""
+        c = self._composite(repo_root)
+        result = c.compute()
+        p = result["primitives"]
+        files_imported = p["files_imported_count"]
+        files_total = p["files_total_count"]
+        # القيمة المتوقعة = نسبة الملفات المستوردة
+        expected = files_imported / files_total if files_total > 0 else 0.0
+        actual = result["components"]["no_orphan_modules"]["value"]
+        assert abs(actual - expected) < 1e-6, (
+            f"no_orphan_modules must be ratio ({expected}) — got {actual}"
+        )
+        # ليست ثنائية — لا يساوي 1.0 (لأن الملفات المستوردة أقل من الكل)
+        assert 0 < actual < 1, (
+            f"no_orphan_modules must not be binary (1.0) — got {actual}. "
+            f"files_imported={files_imported} of files_total={files_total}"
+        )
+
     def test_12_composite_has_warning(self, repo_root):
         c = self._composite(repo_root)
         result = c.compute()

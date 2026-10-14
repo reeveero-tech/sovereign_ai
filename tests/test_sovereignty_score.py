@@ -172,3 +172,69 @@ def test_sovereignty_score_timestamp_present(client):
     data = r.json()
     assert "timestamp" in data
     assert isinstance(data["timestamp"], (int, float))
+
+
+# ============================================================
+# R-680d: اختبارات الواجهة المُحدّثة (primitives + composite)
+# ============================================================
+
+def test_sovereignty_score_returns_primitives_table(client):
+    """/sovereignty/score يُعيد جدول المؤشرات الأولية (primitives)."""
+    r = client.get("/sovereignty/score")
+    assert r.status_code == 200
+
+    data = r.json()
+    assert "primitives" in data, "primitives table must be present (R-680d)"
+
+    primitives = data["primitives"]
+    required_keys = [
+        "tests_passing_count",
+        "files_total_count",
+        "files_imported_count",
+        "mocks_outside_tests_count",
+        "keys_stats",
+        "ledger_events_stats",
+        "anchors_stats",
+        "invariants_stats",
+    ]
+    for key in required_keys:
+        assert key in primitives, f"primitives missing: {key} (R-680d)"
+
+
+def test_sovereignty_score_composite_has_disputed_label(client):
+    """الرقم المُركّب يحمل النص الحرفي '* قابل للجدل' مع الدرجة."""
+    r = client.get("/sovereignty/score")
+    assert r.status_code == 200
+
+    data = r.json()
+    assert "composite" in data, "composite must be present (R-680d)"
+
+    composite = data["composite"]
+    # العلامة الحرفية المطلوبة من العقد
+    assert composite.get("score_label") == "* قابل للجدل", (
+        f"score_label must be '* قابل للجدل' — got {composite.get('score_label')}"
+    )
+    assert composite.get("disputed") is True, (
+        "disputed must be True (R-680d)"
+    )
+    # الدرجة
+    score = composite.get("score")
+    assert isinstance(score, (int, float)), (
+        f"composite score must be numeric: {score}"
+    )
+    assert 0 <= score <= 100, (
+        f"composite score must be 0-100: {score}"
+    )
+
+
+def test_sovereignty_score_composite_is_last_key(client):
+    """الرقم المُركّب يجب أن يكون آخر مفتاح في الاستجابة (آخر سطر)."""
+    r = client.get("/sovereignty/score")
+    assert r.status_code == 200
+
+    data = r.json()
+    keys = list(data.keys())
+    assert keys[-1] == "composite", (
+        f"composite must be the last key — got last key: {keys[-1]}"
+    )
+

@@ -868,8 +868,8 @@ class SovereignCore:
                 for event in reversed(events):
                     yield event
                 return
+            # TOLERATED: fast-path read failure → fall back to full read (R-680d)
             except Exception:
-                # أي فشل في المسار السريع → الرجوع للمسار الكامل
                 pass
         
         events = []

@@ -533,12 +533,18 @@ async def sovereignty_score():
             "anchors_stats": composite_result["primitives"]["anchors_stats"],
             "invariants_stats": composite_result["primitives"]["invariants_stats"],
         },
-        # R-680: الرقم المُركّب — في آخر سطر مع علامة "قابل للجدل".
+        # R-680: الرقم المُركّب — في آخر سطر مع علامة "* قابل للجدل".
         "composite": {
             "score": composite_result["composite_score"],
+            "score_label": "* قابل للجدل",  # R-680d: العلامة الحرفية من العقد
             "formula": composite_result["formula"],
             "components": composite_result["components"],
-            "disputed": True,  # ⚠️ قابل للجدل — راجع forensics/clean_build_skips.md
+            "tests_passing": composite_result["tests_passing"],
+            "tests_total": composite_result["tests_total"],
+            "tests_passing_count_ratio": composite_result["tests_passing_count_ratio"],
+            "hard_kill_factor": composite_result["hard_kill_factor"],
+            "mocks_outside_tests_count": composite_result["mocks_outside_tests_count"],
+            "disputed": True,  # ⚠️ قابل للجدل — راجع forensics/silent_failure_audit.md
         },
     }
 
