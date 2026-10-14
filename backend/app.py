@@ -17,6 +17,7 @@
 """
 
 import asyncio
+import hashlib
 import json
 import time
 import uuid
@@ -208,7 +209,9 @@ async def lifespan(app: FastAPI):
     
     # تسجيل نجاح بدء التشغيل
     logger.info("✅ خادم Sovereign AI جاهز")
-    logger.info(f"🔑 مفتاح API للسيد: {SOVEREIGN_API_KEY}")
+    # R-617: لا يُسجّل المفتاح نفسه أبدًا — فقط بصمته (أول 8 أحرف من sha256)
+    _key_fingerprint = hashlib.sha256(SOVEREIGN_API_KEY.encode()).hexdigest()[:8]
+    logger.info(f"🔑 مفتاح API للسيد (بصمة فقط): {_key_fingerprint}...")
     logger.info(f"📖 التوثيق: http://localhost:8000/docs")
     # طبقة توافق: تشغيل محرك NexusCore فعليًا (يصلح state=initializing الدائم)
     # انظر backend/compat/nexus_lifecycle.py — لا تعديل للأصل، بل استدعاء engine.start()

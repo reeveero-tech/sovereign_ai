@@ -97,3 +97,5 @@ nexus_data/security/
 
 # بيانات وقت تشغيل النسخ الاحتياطية للطوارئ (تُنشأ تلقائياً)
 guardian/data/emergency/emergency_backups/*/data/
+data/keys/keyring.json
+data/keys/HISTORY.jsonl

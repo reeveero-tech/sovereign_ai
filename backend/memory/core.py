@@ -439,6 +439,24 @@ class SovereignCore:
             # توليد مفتاح جديد إذا كان افتراضياً
             self.signing_key = b'new_generated_key_here'
 
+        # R-618: KeyRing — ربط الأحداث الجديدة بمفتاحها في KeyRing
+        # (حتى تكون قابلة للتحقق لاحقًا، بدل unverifiable_missing_key)
+        self._keyring = None
+        self._keyring_key_id = None
+        try:
+            from backend.sovereign.keys import KeyRing
+            kr = KeyRing()
+            kr.load_from_disk()
+            active = kr.get_active_key()
+            if active is not None:
+                self._keyring = kr
+                self._keyring_key_id = active.key_id
+                logger.info(f"🔑 KeyRing linked: {active.key_id}")
+            else:
+                logger.warning("⚠️ KeyRing has no active key — events will be unverifiable")
+        except Exception as e:
+            logger.warning(f"⚠️ KeyRing not available: {e}")
+
         # حالة السجل
         self._last_hash = self._load_last_hash()
         # M1: ذاكرة مؤقتة لنتيجة التحقق من سلامة السجل
@@ -625,6 +643,10 @@ class SovereignCore:
                 "type": event_type_str,
                 "signature": signature
             }
+            # R-618: ربط الحدث بمفتاحه في KeyRing (إن وُجد مفتاح نشط)
+            # — يجعل الحدث قابلًا للتحقق لاحقًا
+            if self._keyring_key_id:
+                event["key_id"] = self._keyring_key_id
             
             # 6) كتابة الحدث إلى السجل (JSONL)
             event_line = json.dumps(event, ensure_ascii=False)

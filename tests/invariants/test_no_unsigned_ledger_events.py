@@ -29,17 +29,34 @@ def test_no_unsigned_ledger_events():
     """
     Invariant: كل حدث في اليدجر يجب أن يكون مصنّفًا (signed/anchored/unverifiable).
     لا حدث 'مجهول' بدون تصنيف.
+
+    ملاحظة: يقرأ السجل الحقيقي (data/sovereign_core/ledger.jsonl) مباشرة —
+    ليس السجل المعزول في SOVEREIGN_DATA_ROOT (راجع R-619).
     """
-    anchor = LedgerAnchor()
-    lines = anchor.read_ledger_lines()
+    # R-619: قراءة السجل الحقيقي مباشرة (وليس المعزول)
+    _real_ledger = _REPO_ROOT / "data" / "sovereign_core" / "ledger.jsonl"
+    if not _real_ledger.exists():
+        pytest.skip("real ledger not found")
+
+    # قراءة الأسطر مباشرة
+    lines = []
+    with open(_real_ledger, "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.rstrip("\n")
+            if line.strip():
+                lines.append(line)
 
     if not lines:
-        pytest.skip("ledger is empty — nothing to verify")
+        pytest.skip("real ledger is empty — nothing to verify")
 
     # تحميل KeyRing
     keyring = KeyRing()
     keyring.load_from_disk()
     verifier = SignatureVerifier(keyring)
+
+    # R-619: المراسي — استخدام المسارات الحقيقية
+    _real_anchors = _REPO_ROOT / "data" / "sovereign_core" / "ledger.anchors.jsonl"
+    anchor = LedgerAnchor(ledger_path=_real_ledger, anchors_path=_real_anchors)
 
     # الأحداث المُغطاة بالمراسي
     anchors_list = anchor.list_anchors()
@@ -91,7 +108,10 @@ def test_no_unsigned_ledger_events():
 
 def test_all_anchors_valid():
     """كل المراسي المسجلة يجب أن تكون مُتحقّقة (المحتوى لم يتغير)."""
-    anchor = LedgerAnchor()
+    # R-619: استخدام المسارات الحقيقية مباشرة
+    _real_ledger = _REPO_ROOT / "data" / "sovereign_core" / "ledger.jsonl"
+    _real_anchors = _REPO_ROOT / "data" / "sovereign_core" / "ledger.anchors.jsonl"
+    anchor = LedgerAnchor(ledger_path=_real_ledger, anchors_path=_real_anchors)
     anchors = anchor.list_anchors()
 
     if not anchors:
@@ -106,12 +126,24 @@ def test_all_anchors_valid():
 
 def test_anchored_coverage():
     """التغطية بالمراسي — كل الأحداث القديمة يجب أن تكون مُغطاة."""
-    anchor = LedgerAnchor()
-    lines = anchor.read_ledger_lines()
+    # R-619: قراءة السجل الحقيقي مباشرة
+    _real_ledger = _REPO_ROOT / "data" / "sovereign_core" / "ledger.jsonl"
+    if not _real_ledger.exists():
+        pytest.skip("real ledger not found")
+
+    lines = []
+    with open(_real_ledger, "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.rstrip("\n")
+            if line.strip():
+                lines.append(line)
 
     if not lines:
-        pytest.skip("ledger is empty")
+        pytest.skip("real ledger is empty")
 
+    # R-619: استخدام المسارات الحقيقية للمراسي
+    _real_anchors = _REPO_ROOT / "data" / "sovereign_core" / "ledger.anchors.jsonl"
+    anchor = LedgerAnchor(ledger_path=_real_ledger, anchors_path=_real_anchors)
     anchors = anchor.list_anchors()
     anchored_events = set()
     for a in anchors:
