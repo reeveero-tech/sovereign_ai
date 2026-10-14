@@ -24,7 +24,11 @@ import pytest
 
 
 class TestAPIKeyRotation:
-    """اختبارات البوابة 1 (تدوير اعتماد API)."""
+    """اختبارات البوابة 1 (تدوير اعتماد API).
+
+    R-680c: في clone نظيف، data/key.secret غير موجود (سر مُستثنى من git).
+    هذا السلوك متوقع — يجب أن تُتخطى هذه الاختبارات، لا أن تفشل.
+    """
 
     def _load_key_from_file(self, path: Path) -> str:
         """يقرأ المفتاح من ملف (دون استخدام config.py المخزّن)."""
@@ -33,12 +37,18 @@ class TestAPIKeyRotation:
 
     def test_new_key_accepted(self):
         """المفتاح الجديد يُقبل (مقارنة مباشرة)."""
-        new_key = self._load_key_from_file(_REPO_ROOT / "data" / "key.secret")
+        key_file = _REPO_ROOT / "data" / "key.secret"
+        if not key_file.exists():
+            pytest.skip("key.secret not found in clean clone (R-680c)")
+        new_key = self._load_key_from_file(key_file)
         assert new_key == new_key  # trivially true
 
     def test_old_key_rejected(self):
         """المفتاح القديم يُرفض (لا يُطابق الجديد)."""
-        new_key = self._load_key_from_file(_REPO_ROOT / "data" / "key.secret")
+        key_file = _REPO_ROOT / "data" / "key.secret"
+        if not key_file.exists():
+            pytest.skip("key.secret not found in clean clone (R-680c)")
+        new_key = self._load_key_from_file(key_file)
         old_key_path = _REPO_ROOT / "data" / "key.secret.old_rotated_2026_10_14"
         if not old_key_path.exists():
             pytest.skip("old key backup not found (rotation not yet performed)")
@@ -47,14 +57,20 @@ class TestAPIKeyRotation:
 
     def test_wrong_keys_rejected(self):
         """مفاتيح خاطئة تُرفض."""
-        new_key = self._load_key_from_file(_REPO_ROOT / "data" / "key.secret")
+        key_file = _REPO_ROOT / "data" / "key.secret"
+        if not key_file.exists():
+            pytest.skip("key.secret not found in clean clone (R-680c)")
+        new_key = self._load_key_from_file(key_file)
         wrong_keys = ["wrong_key_123", "", "x", new_key[:-1], new_key + "x"]
         for wk in wrong_keys:
             assert wk != new_key, f"wrong key must differ: {wk[:10]}..."
 
     def test_fingerprints_different(self):
         """بصمات المفتاحين مختلفة."""
-        new_key = self._load_key_from_file(_REPO_ROOT / "data" / "key.secret")
+        key_file = _REPO_ROOT / "data" / "key.secret"
+        if not key_file.exists():
+            pytest.skip("key.secret not found in clean clone (R-680c)")
+        new_key = self._load_key_from_file(key_file)
         old_key_path = _REPO_ROOT / "data" / "key.secret.old_rotated_2026_10_14"
         if not old_key_path.exists():
             pytest.skip("old key backup not found")
