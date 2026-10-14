@@ -443,6 +443,18 @@ async def root():
     return HTMLResponse(content="<h1>Sovereign AI</h1><p>Frontend not found</p>")
 
 
+@app.get("/agent/ledger")
+async def agent_ledger_report():
+    """
+    تقرير سجل أفعال الوكيل التقني (المرحلة 6 من ROADMAP_V2).
+    يُوثّق كل تعديل قام به الوكيل — لا أفعال خفية.
+    """
+    from backend.sovereign.agent_ledger import AgentLedger
+
+    ledger = AgentLedger()
+    return ledger.full_report()
+
+
 @app.get("/sovereignty/score")
 async def sovereignty_score():
     """
