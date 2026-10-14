@@ -195,45 +195,115 @@ success = root_verified AND signature_verified
 
 ---
 
-## البوابة 5: سياسة المفاتيح التاريخية — CLOSED
+## البوابة 5: سياسة المفاتيح التاريخية — CLOSED (إصلاح ثغرة فعلية)
 
 التاريخ: 2026-10-14
 المنهج: TDD (RED → GREEN → LOCK)
 العقد: docs/KEY_STATE_MACHINE.md
-سجل RED: forensics/gate5_red.log (v2 — TRUE RED — ImportError)
-سجل GREEN: forensics/gate5_green.log (22/22)
+سجل Baseline: forensics/gate5_baseline.log (خط أساس — لا RED)
+سجل RED الحقيقي: forensics/gate5_true_red.log (3 حالات فشل — ثغرة فعلية)
+سجل GREEN: forensics/gate5_green.log (26/26)
 الاختبار: backend/tests/invariants/test_key_state_transitions.py
+الاختبار (الثغرة): backend/tests/invariants/test_key_state_vulnerability.py
 
-### تصحيح منهجي (موثق بصدق — R-667)
+### تصحيح مؤرخ (R-668) — RED الأصلي لم يكن RED
 
-في المحاولة الأولى، كتبت آلة الحالة (`state_machine.py`) **قبل** تشغيل
-الاختبار — خالف TDD. الاختبار مرّ فورًا (لا RED). أُفصح عن هذا
-بصدق و أُعيد التشغيل مع إزالة `state_machine.py` مؤقتًا لإثبات
-RED الحقيقي (ImportError — كل الاختبارات فشلت).
+**الاعتراف الصادق:**
+
+RED الأصلي (ImportError من إزالة `state_machine.py`) **لم يكن RED حقيقي** —
+كان غياب ملف، ليس ثغرة. كتبت `state_machine.py` قبل تشغيل الاختبار،
+ثم أزلته "لإثبات RED" — لكن هذا كان تزييفًا منهجيًا.
+
+**السؤال الصادق:** هل كان هناك سلوك خطر فعلي في الكود القديم
+بدون `state_machine.py`؟
+
+**الجواب: نعم — ثغرة فعلية موجودة.**
+
+### الثغرة الفعلية (R-668 — forensics/gate5_true_red.log)
+
+**الاكتشاف:**
+- **التوقيع** كان محميًا (get_active_key يفحص status != ACTIVE → None)
+- **التحقق** لم يكن محميًا (verify_event يفحص **فقط LOST**)
+
+**السلوك الخطر:** مفتاح `COMPROMISED` أو `EXPIRED` أو `RETIRED`
+يُعاد `VERIFIED` (نجاح التحقق رغم أن المفتاح مخترق/منتهي/مستبدل).
+
+**RED الحقيقي (3 حالات فشل):**
+1. `test_compromised_key_returns_verified_dangerous` — FAILED
+   (COMPROMISED يُعاد VERIFIED — يجب ألا يكون)
+2. `test_expired_key_returns_verified_dangerous` — FAILED
+   (EXPIRED يُعاد VERIFIED — يجب ألا يكون)
+3. `test_retired_key_returns_verified_dangerous` — FAILED
+   (RETIRED يُعاد VERIFIED — يجب ألا يكون)
+
+**ضابط إيجابي:** `test_signing_with_retired_key_blocked` — PASSED
+(التوقيع محمي — get_active_key يرفض RETIRED)
+
+**نوع الفشل:** قبول زائف (مفاتيح خطرة تُقبل كصالحة)
+
+### الإصلاح (R-668)
+
+`verify_event()` الآن يفحص كل الحالات:
+- `LOST` → `UNVERIFIABLE_MISSING_KEY` (كما كان)
+- `COMPROMISED`/`EXPIRED`/`RETIRED` → `UNVERIFIABLE_MISSING_KEY`
+  (كانت تُعاد `VERIFIED` — ثغرة)
+
+### تداخل KeyStatus و KeyState (R-668)
+
+**المشكلة:** يوجد enumان لوصف حالة المفتاح — `KeyStatus` (keyring.py)
+و `KeyState` (state_machine.py).
+
+**الحل:** دالة ترجمة صريحة `translate_status_to_state()`:
+- `RETIRED` → `ROTATED` (مُستبدل — تحقق تاريخي فقط)
+- `ACTIVE` → `ACTIVE`
+- `LOST` → `LOST`
+- `COMPROMISED` → `COMPROMISED`
+- `EXPIRED` → `EXPIRED`
+
+**التبرير:** توحيد الـ enumين يتطلب تغيير `keyring.json` (البيانات
+الحقيقية) و كل الكود الذي يقرأ `KeyStatus` — توسيع كبير خارج نطاق
+البوابة 5. دالة ترجمة صريحة تُحقق نفس الهدف (واجهة واحدة للحالة)
+دون تغيير البيانات أو كسر الاختبارات. التوحيد الكامل يُسجّل كقرار
+معلّق.
+
+**التقرير:** `forensics/key_state_duality.md` (جدول المفاتيح الحقيقية + الترجمة)
+
+**اختبار الترجمة:** `test_23_key_status_translates_to_key_state` (في
+`test_key_state_transitions.py`) — أي مفتاح يُحمّل من `keyring.json`
+يجب أن تكون حالته قابلة للترجمة إلى `KeyState`. إذا وُجد مفتاح بحالة
+لا تُترجم — فشل صريح.
+
+### GREEN (forensics/gate5_green.log)
+
+**النتيجة:** 26 من 26 اختبارًا ناجحة (22 الأصلية + 4 ترجمة)
 
 ### الحالات التي كانت غير محمية قبل الإصلاح
 
 **keyring.py** كان لديه حماية جزئية (R-633):
 - `KeyStatus` enum (ACTIVE/RETIRED/LOST/COMPROMISED/EXPIRED)
-- `get_active_key()` يُعيد فقط ACTIVE
+- `get_active_key()` يُعيد فقط ACTIVE (التوقيع محمي)
+- `verify_event()` يفحص فقط `LOST` (التحقق غير محمي)
 
-**ما كان مفقودًا** (و أُضيف في `state_machine.py`):
+**ما أُضيف في `state_machine.py`:**
 - حالة `ROTATED` (keyring.py لديه `RETIRED`، ليس `ROTATED`)
-- `ALLOWED_TRANSITIONS` (جدول انتقالات صريح — 7 مسموحة، 5+ ممنوعة)
-- `assert_usable_for_signing()` (تأكيد صريح للتوقيع)
-- `assert_usable_for_verification()` (تأكيد صريح للتحقق)
+- `ALLOWED_TRANSITIONS` (جدول انتقالات صريح)
+- `assert_usable_for_signing()` (فقط ACTIVE)
+- `assert_usable_for_verification()`
 - `VerificationResult` (UNVERIFIABLE_MISSING_KEY وليس False — الفرق الجوهري)
 - `KeyStateError` (خطأ صريح للانتقالات الممنوعة)
+- `translate_status_to_state()` (ترجمة صريحة RETIRED → ROTATED)
 
-### RED الحقيقي (forensics/gate5_red.log)
+### الإصلاح في `verifier.py` (R-668)
 
-**النتيجة:** 1 خطأ تجميع (ImportError) — كل 22 اختبارًا فشل
+```python
+# قبل: يفحص فقط LOST
+if key_record.status == KeyStatus.LOST:
+    ...
 
-**نوع الفشل:** خطأ استيراد (state_machine.py غير موجود)
-
-### GREEN (forensics/gate5_green.log)
-
-**النتيجة:** 22 من 22 اختبارًا ناجحة
+# بعد: يفحص كل الحالات الخطرة
+if key_record.status in (KeyStatus.COMPROMISED, KeyStatus.EXPIRED, KeyStatus.RETIRED):
+    return UNVERIFIABLE_MISSING_KEY
+```
 
 ### آلة الحالة
 
@@ -242,7 +312,7 @@ RED الحقيقي (ImportError — كل الاختبارات فشلت).
 - **5+ انتقالات ممنوعة صريحة**
 - **EXPIRED نهائي** — لا انتقال منها
 
-### الاختبارات (22 — 12 الأصلية + 10 إضافية)
+### الاختبارات (26 — 22 الأصلية + 4 ترجمة)
 
 الحالات الـ 12 الأصلية:
 1. التوقيع بمفتاح LOST — يفشل صراحة (KeyStateError: LOST key cannot sign)
@@ -270,10 +340,40 @@ RED الحقيقي (ImportError — كل الاختبارات فشلت).
 21. حالة صالحة (str) تُحوّل
 22. EXPIRED → أي حالة تفشل
 
+حالات الترجمة (4 — R-668):
+23. كل حالات KeyStatus تُترجم إلى KeyState
+24. حالة لا تُترجم → فشل صريح
+25. حالة None → فشل صريح
+26. مفاتيح keyring تُترجم حالتها
+
+اختبارات الثغرة (4 — R-668):
+1. COMPROMISED لا يُعاد VERIFIED (أُصلح)
+2. EXPIRED لا يُعاد VERIFIED (أُصلح)
+3. RETIRED لا يُعاد VERIFIED (أُصلح)
+4. التوقيع بمفتاح RETIRED مُمنوع (ضابط إيجابي)
+
 ### ملاحظة: المفاتيح التاريخية محفوظة، لا حذف
 
 `data/keys/keyring.json` لم يُحذف منه أي مفتاح — كل المفاتيح
 (بما فيها LOST/COMPROMISED) محفوظة كأثر جنائي.
+
+### تدقيق حدود التدقيق (R-669)
+
+**الأرقام الفعلية (إعادة تشغيل):**
+- كل الدوال في backend/ (بدون tests/): **1596**
+- الدوال التي تُعيد قيمة: **1027**
+- الدوال التي تُعيد قيمة + رسالة خطأ: **121**
+- الدوال التي تُعيد bool + رسالة خطأ: **30**
+- **الدوال التي تُعيد قيمة دون رسالة (فئة غير مُدققة): 906**
+
+**حدود التدقيق:**
+1. التدقيق يفحص التناقض بين القيمة و الرسالة فقط
+2. الدوال التي تُعيد قيمة دون رسالة (906) غير مُدققة
+3. الدوال في `tests/` غير مُدققة
+4. التدقيق يعتمد على AST — لا يفحص الدوال المُنشأة ديناميكيًا
+5. الفحص اليدوي يفحص 5 أسطر بعد رسالة الفشل
+
+**التقرير الكامل:** `forensics/boolean_message_audit.md` (قسم "ما لم يُفحص")
 
 ---
 

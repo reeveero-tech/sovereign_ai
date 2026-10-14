@@ -131,6 +131,27 @@ class SignatureVerifier:
                 reason=f"key {event_key_id} is marked LOST — cannot verify, not claiming forgery"
             )
 
+        # R-668 (البوابة 5 — إصلاح الثغرة): مفتاح COMPROMISED/EXPIRED/RETIRED
+        # لا يُعاد VERIFIED — التحقق به غير موثوق (المفتاح مخترق/منتهي/مستبدل).
+        # RETIRED: تحقق تاريخي مشروط — لا يُعاد VERIFIED (لأن المفتاح مُستبدل).
+        # COMPROMISED: مخترق — لا يُعاد VERIFIED.
+        # EXPIRED: منتهي — لا يُعاد VERIFIED.
+        if key_record.status in (KeyStatus.COMPROMISED, KeyStatus.EXPIRED, KeyStatus.RETIRED):
+            status_names = {
+                KeyStatus.COMPROMISED: "COMPROMISED",
+                KeyStatus.EXPIRED: "EXPIRED",
+                KeyStatus.RETIRED: "RETIRED",
+            }
+            status_name = status_names[key_record.status]
+            return VerificationResult(
+                status=VerificationStatus.UNVERIFIABLE_MISSING_KEY,
+                key_id=event_key_id,
+                reason=(
+                    f"key {event_key_id} is {status_name} — "
+                    f"cannot verify (not claiming forgery, but not trusted)"
+                ),
+            )
+
         # تحقق فعلي — HMAC
         expected = self._compute_signature(event_data, key_record.private_key)
         actual = event.get("signature", "")

@@ -171,3 +171,41 @@ def assert_explicit_state(state) -> KeyState:
                 f"{[s.value for s in KeyState]}"
             )
     return state
+
+
+# ============================================================
+# R-668: ترجمة KeyStatus (keyring.py) → KeyState (state_machine.py)
+# ============================================================
+
+# RETIRED → ROTATED: مفتاح مُستبدل — تحقق تاريخي فقط، لا توقيع
+KEYSTATUS_TO_KEYSTATE = {
+    "ACTIVE": KeyState.ACTIVE,
+    "RETIRED": KeyState.ROTATED,  # RETIRED = مُستبدل (تحقق تاريخي فقط)
+    "LOST": KeyState.LOST,
+    "COMPROMISED": KeyState.COMPROMISED,
+    "EXPIRED": KeyState.EXPIRED,
+}
+
+
+def translate_status_to_state(status) -> KeyState:
+    """يُترجم KeyStatus (keyring.py) إلى KeyState (state_machine.py).
+
+    RETIRED → ROTATED (مُستبدل — تحقق تاريخي فقط)
+    إذا وُجد حالة لا تُترجم → KeyStateError (فشل صريح).
+    """
+    if status is None:
+        raise KeyStateError(
+            "cannot translate None KeyStatus — key has no explicit state"
+        )
+
+    # KeyStatus قد يكون enum أو str
+    status_str = status.value if hasattr(status, "value") else str(status)
+    status_upper = status_str.upper()
+
+    if status_upper not in KEYSTATUS_TO_KEYSTATE:
+        raise KeyStateError(
+            f"cannot translate KeyStatus {status_str!r} to KeyState — "
+            f"valid statuses: {list(KEYSTATUS_TO_KEYSTATE.keys())}"
+        )
+
+    return KEYSTATUS_TO_KEYSTATE[status_upper]

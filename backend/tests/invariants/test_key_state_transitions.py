@@ -34,7 +34,10 @@ from backend.sovereign.keys.state_machine import (
     assert_usable_for_verification,
     verification_result_for,
     assert_explicit_state,
+    translate_status_to_state,
+    KEYSTATUS_TO_KEYSTATE,
 )
+from backend.sovereign.keys.keyring import KeyStatus
 
 
 class TestKeyStateTransitions:
@@ -238,3 +241,72 @@ class TestKeyStateTransitions:
         for target in [KeyState.ACTIVE, KeyState.ROTATED, KeyState.LOST, KeyState.COMPROMISED]:
             with pytest.raises(KeyStateError):
                 transition(KeyState.EXPIRED, target)
+
+    # ============================================================
+    # R-668: ترجمة KeyStatus ↔ KeyState
+    # ============================================================
+
+    def test_23_key_status_translates_to_key_state(self):
+        """ترجمة KeyStatus (keyring.py) → KeyState (state_machine.py).
+
+        RETIRED → ROTATED (مُستبدل — تحقق تاريخي فقط).
+        كل حالة يجب أن تُترجم — إذا وُجد حالة لا تُترجم، فشل صريح.
+        """
+        # كل حالات KeyStatus تُترجم
+        for status_name, expected_state in [
+            ("ACTIVE", KeyState.ACTIVE),
+            ("RETIRED", KeyState.ROTATED),
+            ("LOST", KeyState.LOST),
+            ("COMPROMISED", KeyState.COMPROMISED),
+            ("EXPIRED", KeyState.EXPIRED),
+        ]:
+            # ترجمة من str
+            result = translate_status_to_state(status_name)
+            assert result == expected_state, (
+                f"{status_name} must translate to {expected_state}, got {result}"
+            )
+
+            # ترجمة من enum
+            from backend.sovereign.keys.keyring import KeyStatus as _KS
+            enum_val = getattr(_KS, status_name)
+            result2 = translate_status_to_state(enum_val)
+            assert result2 == expected_state
+
+    def test_24_untranslatable_status_fails(self):
+        """حالة لا تُترجم → فشل صريح (KeyStateError)."""
+        with pytest.raises(KeyStateError) as exc_info:
+            translate_status_to_state("INVALID_STATUS")
+
+        error_msg = str(exc_info.value)
+        assert "cannot translate" in error_msg
+        assert "INVALID_STATUS" in error_msg
+
+    def test_25_none_status_fails(self):
+        """حالة None → فشل صريح (لا default)."""
+        with pytest.raises(KeyStateError):
+            translate_status_to_state(None)
+
+    def test_26_keyring_keys_translate_to_key_state(self, tmp_path):
+        """كل مفتاح يُحمّل من keyring.json تُترجم حالته إلى KeyState.
+
+        إذا وُجد مفتاح بحالة لا تُترجم → فشل صريح.
+        """
+        from backend.sovereign.keys.keyring import KeyRing
+        keys_dir = tmp_path / "keys"
+        keys_dir.mkdir()
+        keyring = KeyRing(keys_dir=keys_dir)
+        key_rec = keyring.generate_new_key(reason="test translate")
+
+        # ترجمة حالة المفتاح
+        state = translate_status_to_state(key_rec.status)
+        assert state == KeyState.ACTIVE
+
+        # مفتاح RETIRED → ROTATED
+        key_rec.status = KeyStatus.RETIRED
+        state2 = translate_status_to_state(key_rec.status)
+        assert state2 == KeyState.ROTATED
+
+        # مفتاح COMPROMISED → COMPROMISED
+        key_rec.status = KeyStatus.COMPROMISED
+        state3 = translate_status_to_state(key_rec.status)
+        assert state3 == KeyState.COMPROMISED
