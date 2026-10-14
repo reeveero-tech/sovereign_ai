@@ -347,6 +347,89 @@ async def nexus_recommendations_pending():
 # لذلك هذا يُصلح المسار الأصلي دون تعديل الملف الأصلي.)
 register_compat_router(app)
 
+
+# ============================================================
+# المرحلة 2 (ROADMAP_V2): نقطة نهاية /ledger/verify — تقرير التحقق
+# من اليدجر (KeyRing + Merkle Anchors). للقراءة فقط.
+# ============================================================
+@app.get("/ledger/verify")
+async def ledger_verify():
+    """
+    تقرير التحقق من اليدجر السيادي:
+    - عدد الأحداث المُتحقَّق منها بالمفتاح (KeyRing)
+    - عدد المراسي (Merkle Anchors)
+    - عدد الأحداث المحمية بمرساة
+    - عدد الأحداث المجهولة/الفاشلة
+    """
+    from backend.sovereign.ledger import LedgerAnchor
+    from backend.sovereign.keys import KeyRing, SignatureVerifier
+
+    # تحميل KeyRing
+    keyring = KeyRing()
+    keyring.load_from_disk()
+
+    # تحميل اليدجر والمراسي
+    anchor = LedgerAnchor()
+    lines = anchor.read_ledger_lines()
+
+    # تحليل كل الأحداث (تحقق من التوقيع)
+    verifier = SignatureVerifier(keyring)
+
+    # عدد الأحداث المُغطاة بالمراسي
+    anchors_list = anchor.list_anchors()
+    anchored_events = set()
+    for a in anchors_list:
+        for i in range(a["batch_start"], a["batch_end"] + 1):
+            anchored_events.add(i)
+
+    # تصنيف كل حدث
+    stats = {
+        "total_events": len(lines),
+        "verified_with_key": 0,      # موقّع بمفتاح معروف وصالح
+        "anchored_events": len(anchored_events),  # داخل مرساة
+        "unverifiable": 0,          # لا نعرف (مفتاح فُقد أو LEGACY)
+        "invalid": 0,               # مزوّر (التوقيع لا يطابق)
+        "legacy_pre_keyring": 0,     # أحداث قديمة بدون key_id
+    }
+
+    import json as _json
+    for i, line in enumerate(lines):
+        try:
+            event = _json.loads(line)
+        except Exception:
+            stats["invalid"] += 1
+            continue
+
+        if "key_id" not in event:
+            stats["legacy_pre_keyring"] += 1
+
+        result = verifier.verify_event(event)
+        status_val = result.status.value
+        if status_val == "verified":
+            stats["verified_with_key"] += 1
+        elif status_val == "unverifiable_missing_key":
+            stats["unverifiable"] += 1
+        elif status_val == "invalid":
+            stats["invalid"] += 1
+
+    # التحقق من كل المراسي
+    anchors_verification = anchor.verify_all_anchors()
+
+    return {
+        "ledger_summary": stats,
+        "anchors": {
+            "total": len(anchors_list),
+            "verified": anchors_verification["verified"],
+            "failed": anchors_verification["failed"],
+        },
+        "keyring_stats": keyring.stats(),
+        "anchored_coverage_pct": round(
+            (len(anchored_events) / len(lines)) * 100, 2
+        ) if lines else 0.0,
+        "timestamp": time.time(),
+    }
+
+
 # ============================================================
 # نقاط API العامة (بدون مصادقة)
 # ============================================================

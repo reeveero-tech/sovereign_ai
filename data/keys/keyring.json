@@ -1,0 +1,16 @@
+{
+  "keys": [
+    {
+      "key_id": "b8bf12ab28abfc01",
+      "public_key": "963f5d3ca0f4b9f3b9d1d23693a0fd644dbf7244dc5a39ed2cd5c7e65aad20f4",
+      "private_key": "3QNn8Q2eIZIOxwKfvepoZ1m2vbn3LNz3ThEH4aRf_B0",
+      "valid_from": "2026-10-14T06:49:28Z",
+      "valid_until": null,
+      "status": "active",
+      "reason_for_retirement": null,
+      "notes": "R-615: anchor for legacy events (original key lost)"
+    }
+  ],
+  "active_key_id": "b8bf12ab28abfc01",
+  "saved_at": "2026-10-14T06:49:28Z"
+}
