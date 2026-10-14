@@ -598,8 +598,28 @@ class SovereignCore:
     def _compute_event_signature(self, event_hash: str, prev_hash: str, 
                                   blob_hash: str, event_time: str, 
                                   event_type: str) -> str:
-        """حساب توقيع الحدث (لضمان عدم التلاعب)"""
-        data = f"{event_hash}|{prev_hash}|{blob_hash}|{event_time}|{event_type}"
+        """حساب توقيع الحدث (لضمان عدم التلاعب)
+        
+        R-620: التوقيع يشمل key_id (إن وُجد مفتاح KeyRing نشط) —
+        يجعل التوقيع مشتقًا من مفتاح KeyRing، وليس فقط من مفتاح الإعدادات.
+        التحقق من SignatureVerifier يطابق هذه الصيغة.
+        """
+        key_id_part = self._keyring_key_id or ""
+        data = f"{event_hash}|{prev_hash}|{blob_hash}|{event_time}|{event_type}|{key_id_part}"
+        
+        # R-620: إذا وُجد مفتاح KeyRing نشط، يُستخدم للتوقيع (وليس فقط مفتاح الإعدادات)
+        if self._keyring is not None and self._keyring_key_id:
+            try:
+                active = self._keyring.get_key(self._keyring_key_id)
+                if active is not None and hasattr(active, 'private_key'):
+                    # توقيع HMAC بالمفتاح الخاص من KeyRing
+                    import hmac as _hmac
+                    key_bytes = active.private_key.encode('utf-8') if isinstance(active.private_key, str) else active.private_key
+                    return _hmac.new(key_bytes, data.encode('utf-8'), __import__('hashlib').sha256).hexdigest()
+            except Exception as e:
+                logger.warning(f"⚠️ KeyRing signing failed, falling back: {e}")
+        
+        # احتياط: التوقيع بمفتاح الإعدادات (كما كان)
         return compute_hmac(data.encode('utf-8'), self.signing_key)
     
     def append_event(self, event_type: EventType, payload: Dict[str, Any],
@@ -810,20 +830,31 @@ class SovereignCore:
                         return IntegrityStatus.CORRUPTED
                     
                     # 3) التحقق من التوقيع
-                    expected_signature = self._compute_event_signature(
-                        event['hash'],
-                        event['prev_hash'],
-                        event['blob'],
-                        event['time'],
-                        event['type']
-                    )
-                    if not verify_hmac(
-                        f"{event['hash']}|{event['prev_hash']}|{event['blob']}|{event['time']}|{event['type']}".encode('utf-8'),
-                        self.signing_key,
-                        event['signature']
-                    ):
-                        logger.error(f"❌ فشل في السطر {line_num}: التوقيع غير صحيح")
-                        return IntegrityStatus.CORRUPTED
+                    # R-620: حدثان بصيغتين مختلفتين —
+                    # - الأحداث الجديدة (تحمل key_id): تُوقّع بمفتاح KeyRing
+                    #   وتشمل key_id في بيانات التوقيع (صيغة _compute_event_signature).
+                    # - الأحداث التاريخية (بلا key_id): تُتحقق بالصيغة القديمة
+                    #   (مفتاح الإعدادات، بيانات بلا key_id) — لا إعادة توقيع للتاريخ.
+                    if 'key_id' in event:
+                        expected_signature = self._compute_event_signature(
+                            event['hash'],
+                            event['prev_hash'],
+                            event['blob'],
+                            event['time'],
+                            event['type']
+                        )
+                        if event['signature'] != expected_signature:
+                            logger.error(f"❌ فشل في السطر {line_num}: التوقيع غير صحيح (صيغة KeyRing)")
+                            return IntegrityStatus.CORRUPTED
+                    else:
+                        # صيغة تاريخية — تحقق بالمفتاح القديم
+                        if not verify_hmac(
+                            f"{event['hash']}|{event['prev_hash']}|{event['blob']}|{event['time']}|{event['type']}".encode('utf-8'),
+                            self.signing_key,
+                            event['signature']
+                        ):
+                            logger.error(f"❌ فشل في السطر {line_num}: التوقيع غير صحيح")
+                            return IntegrityStatus.CORRUPTED
                     
                     # 4) التحقق من وجود الـ blob
                     if not self.blob_store.exists(event['blob']):

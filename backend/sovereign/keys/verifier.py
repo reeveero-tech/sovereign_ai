@@ -71,8 +71,14 @@ class SignatureVerifier:
     def extract_event_data(event: Dict) -> str:
         """
         يستخرج البيانات المُوقّعة من حدث (نفس صيغة memory/core.py).
+        
+        R-620: الصيغة الجديدة تشمل key_id في بيانات التوقيع:
+        {hash}|{prev_hash}|{blob}|{time}|{type}|{key_id}
+        
+        الأحداث التاريخية (بلا key_id): الصيغة القديمة بلا key_id.
         """
-        return f"{event['hash']}|{event['prev_hash']}|{event['blob']}|{event['time']}|{event['type']}"
+        key_id_part = event.get("key_id") or ""
+        return f"{event['hash']}|{event['prev_hash']}|{event['blob']}|{event['time']}|{event['type']}|{key_id_part}"
 
     def verify_event(self, event: Dict) -> VerificationResult:
         """
