@@ -136,12 +136,15 @@ class TestHeaderAuthentication:
         app_module = self._setup_app_key(monkeypatch, new_key)
 
         # R-662: تفعيل INFO مؤقتًا + استعادة الحالة السابقة
+        # R-681: httpx >=0.28 uses logger name "httpx2" instead of "httpx".
+        # Enable both names to capture request logs across versions.
         import io
-        httpx_logger = logging.getLogger("httpx")
-        prev_level = httpx_logger.level
-        prev_propagate = httpx_logger.propagate
-        httpx_logger.setLevel(logging.INFO)
-        httpx_logger.propagate = True
+        prev_states = {}
+        for logger_name in ("httpx", "httpx2"):
+            httpx_logger = logging.getLogger(logger_name)
+            prev_states[logger_name] = (httpx_logger.level, httpx_logger.propagate)
+            httpx_logger.setLevel(logging.INFO)
+            httpx_logger.propagate = True
 
         log_capture = io.StringIO()
         handler = logging.StreamHandler(log_capture)
@@ -178,6 +181,8 @@ class TestHeaderAuthentication:
             )
         finally:
             root_logger.removeHandler(handler)
-            # R-662: استعادة الحالة السابقة
-            httpx_logger.setLevel(prev_level)
-            httpx_logger.propagate = prev_propagate
+            # R-662/R-681: استعادة الحالة السابقة (كلا الاسمين httpx و httpx2)
+            for logger_name, (prev_level, prev_propagate) in prev_states.items():
+                httpx_logger = logging.getLogger(logger_name)
+                httpx_logger.setLevel(prev_level)
+                httpx_logger.propagate = prev_propagate

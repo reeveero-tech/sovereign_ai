@@ -44,16 +44,34 @@ def test_safety_guard_action_types_cover_critical_actions():
     assert RiskLevel.CRITICAL.value == 4
 
 
+def _iter_app_routes(app):
+    """Flatten app.routes, unwrapping _IncludedRouter (fastapi >=0.14x).
+    Older fastapi flattened routes on include_router; newer versions wrap
+    them in _IncludedRouter which lacks `.path`. Unwrap via effective_route_contexts
+    (or recurse into original_router) to expose the real routes with paths.
+    R-681 (open item 1/6 followup): version-tolerant route iteration.
+    """
+    out = []
+    for route in app.routes:
+        _Included = getattr(__import__("fastapi.routing", fromlist=["_IncludedRouter"]),
+                            "_IncludedRouter", None)
+        if _Included and isinstance(route, _Included):
+            out.extend(_iter_app_routes(route.original_router))
+        else:
+            out.append(route)
+    return out
+
+
 def test_app_registers_security_endpoints():
     from app import app
-    paths = [route.path for route in app.routes]
+    paths = [getattr(route, "path", None) for route in _iter_app_routes(app)]
     assert "/security/status" in paths
     assert "/security/log" in paths
 
 
 def test_app_registers_nexus_api_endpoints():
     from app import app
-    paths = [route.path for route in app.routes]
+    paths = [getattr(route, "path", None) for route in _iter_app_routes(app)]
     assert "/nexus/status" in paths
     assert "/nexus/health" in paths
     assert "/nexus/analyze/text" in paths
@@ -62,7 +80,8 @@ def test_app_registers_nexus_api_endpoints():
 
 def test_app_registers_safety_dependency_on_chat():
     from app import app, enforce_input_safety
-    chat_route = next(route for route in app.routes if getattr(route, "path", None) == "/chat")
+    chat_route = next(route for route in _iter_app_routes(app)
+                     if getattr(route, "path", None) == "/chat")
     assert any(
         dependency.call is enforce_input_safety
         for dependency in chat_route.dependant.dependencies
