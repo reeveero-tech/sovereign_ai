@@ -24,9 +24,76 @@ jobs:
           pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Run test suite
+      - name: 'R-681: Generate ephemeral data/key.secret for CI (root fix for skips)'
         run: |
-          python -m pytest tests/ -v
+          set -euo pipefail
+          mkdir -p data
+          # Preferred: KEY_SECRET env var; fallback: auto-generate for CI.
+          # This file is gitignored and never committed — CI ephemeral only.
+          if [ -n "${KEY_SECRET:-}" ]; then
+            printf '%s' "$KEY_SECRET" > data/key.secret
+            echo "key.secret provided via KEY_SECRET env (length: $(wc -c < data/key.secret))"
+          else
+            python -c "import secrets; print(secrets.token_urlsafe(32))" > data/key.secret
+            chmod 600 data/key.secret
+            echo "key.secret auto-generated for CI (ephemeral — not committed)"
+          fi
+          ls -la data/key.secret
+
+      - name: Capture git SHA (provenance)
+        id: sha
+        run: |
+          echo "sha=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
+          echo "short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+          git rev-parse HEAD > forensics/.ci_sha.txt
+
+      - name: Run test suite (tests/ + backend/tests/) with JUnit + SHA
+        run: |
+          set -euo pipefail
+          SHA=$(git rev-parse HEAD)
+          python -m pytest tests/ backend/tests/ -v \
+            --junitxml=forensics/pytest_results.xml \
+            --junit-prefix="R-681-ci-sha-${SHA}" \
+            || { echo "❌ pytest FAILED — see forensics/pytest_results.xml"; exit 1; }
+
+      - name: Upload JUnit XML artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: junit-results-${{ steps.sha.outputs.short }}
+          path: forensics/pytest_results.xml
+          if-no-files-found: error
+
+      - name: Print JUnit provenance summary
+        run: |
+          python - << 'EOF'
+          import xml.etree.ElementTree as ET
+          import subprocess
+          sha = subprocess.check_output(["git","rev-parse","HEAD"]).decode().strip()
+          tree = ET.parse("forensics/pytest_results.xml")
+          root = tree.getroot()
+          def walk(s):
+              for ts in s.iter("testsuite"):
+                  print(f"suite={ts.get('name')} tests={ts.get('tests')} "
+                        f"failures={ts.get('failures')} errors={ts.get('errors')} "
+                        f"skipped={ts.get('skipped')}")
+          walk(root)
+          print(f"PROVENANCE git SHA = {sha}")
+          # inject SHA into XML root attributes for tamper-evidence
+          root.set("git_sha", sha)
+          root.set("junit_prefix", f"R-681-ci-sha-{sha}")
+          ET.indent(tree)
+          tree.write("forensics/pytest_results.xml", encoding="utf-8", xml_declaration=True)
+          print("✅ git SHA embedded in JUnit XML")
+          EOF
+
+      - name: Upload JUnit XML with embedded SHA (second artifact)
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: junit-with-sha-${{ steps.sha.outputs.short }}
+          path: forensics/pytest_results.xml
+          if-no-files-found: error
 
       - name: Atomic batch gate — docs must change with code
         if: github.event_name == 'pull_request'
