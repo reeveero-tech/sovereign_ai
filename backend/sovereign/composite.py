@@ -74,16 +74,17 @@ class Composite:
         self.tests_total = total
 
     def _get_tests_passing_from_provenance(self, primitives_dict: Dict) -> tuple:
-        """يقرأ قيمة pytest من ملف الحالة (provenance) — إن لم تُمرر يدوياً.
-
-        الملف: `forensics/clean_build_skips.md` ليس مصدر أرقام (لا أرقام مُخزنة).
-        الحل: يستخدم `backend/tests/__init__.py` و CI workflow — لكن هذه غير مُخزنة كرقم.
-
-        الأنسب هنا: قراءة من `forensics/clean_build_skips.md` غير ممكن (لا أرقام).
-        الحل الفعلي: قراءة من ملف JUnit XML إذا مُرر مساره، أو من معاملات المُنشئ.
+        """يقرأ قيمة pytest من تقرير JUnit XML — إن لم تُمرر يدوياً.
+        الملف يُولّده: python -m pytest --junitxml=path/to/results.xml
+        R-680e: التحقق من المدخلات:
+        - إذا total <= 0 → غير متاح → (0, 0)
+        - إذا passing < 0 → غير صالح → (0, 0)
+        - إذا passing > total → غير صالح → (0, 0)
+        - إذا 0/total (كل الاختبارات فشلت) → (0, total) — قياس حقيقي، ليس (0,0)
         """
-        # 1) تم تمرير قيمة يدوية؟
-        if self.tests_passing > 0 and self.tests_total > 0:
+        # 1) تم تمرير قيمة يدوية صحيحة؟
+        if (self.tests_passing >= 0 and self.tests_total > 0
+                and self.tests_passing <= self.tests_total):
             return self.tests_passing, self.tests_total
 
         # 2) قراءة من ملف JUnit XML (provenance)
@@ -102,13 +103,22 @@ class Composite:
                     errors = int(testsuites.get("errors", 0))
                     skipped = int(testsuites.get("skipped", 0))
                     passed = total - failures - errors - skipped
-                    return max(0, passed), max(0, total)
+
+                    # التحقق من صحة المدخلات (R-680e)
+                    if total <= 0:
+                        return 0, 0  # غير صالح
+                    if passed < 0:
+                        return 0, 0  # غير صالح (failures+errors+skipped > total)
+                    if passed > total:
+                        return 0, 0  # غير صالح
+                    # صالح — يشمل حالة 0/total (كلها فشلت)
+                    return passed, total
             # TOLERATED: JUnit XML malformed — fall through to (0,0)
             except Exception:
                 pass
 
-        # 3) لا provenance → (0, 0) = غير محسوب
-        # (لا نُخفي الفشل — نُرجع 0/0 و يُفسر كـ "غير محسوب")
+        # 3) لا provenance → (0, 0) = غير متاح
+        # (لا نُخفي الفشل — نُرجع 0/0 و يُفسر كـ "غير متاح")
         return 0, 0
 
     def compute(self) -> Dict:
@@ -203,6 +213,8 @@ class Composite:
             },
         }
 
+        # R-680e: القص قبل بناء الصيغة — حتى تطابق الصيغة الدرجة المعادة
+        composite = max(0.0, min(100.0, composite))
         formula = (
             f"composite = ("
             f"{self._weights['ledger_signed_ratio']} * {ledger_ratio:.4f} "
@@ -213,9 +225,6 @@ class Composite:
             f"+ {self._weights['tests_passing_count_ratio']} * {tests_passing_ratio:.4f}"
             f") * {hard_kill_factor} * 100 = {composite:.2f}"
         )
-        # ملاحظة: composite قد يزيد عن 100 إذا كانت النسب > 1 — الحد الأعلى هو 100.
-        # إذا كانت mocks_outside_tests_count > 0 → hard_kill_factor = 0 → composite = 0.
-        composite = max(0.0, min(100.0, composite))
 
         return {
             "composite_score": round(composite, 2),

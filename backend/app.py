@@ -499,11 +499,24 @@ async def sovereignty_score():
     scorer = SovereigntyScorer()
     report = scorer.compute()
 
+    # R-680e: ربط فعلي بـ pytest من خلال تقرير JUnit (provenance).
+    # الملف يُولّده CI أو المستخدم بـ: python -m pytest --junitxml=forensics/pytest_results.xml
+    # إذا الملف غير موجود → tests_passing_ratio = 0 (غير متاح، لا يمنح نقاطاً مجاناً).
+    _junit_candidates = [
+        pathlib.Path(__file__).resolve().parent.parent / "forensics" / "pytest_results.xml",
+        pathlib.Path("/tmp/evidence8/results.xml"),  # بيئة الاختبار المحلية
+    ]
+    _junit_path = None
+    for _p in _junit_candidates:
+        if _p.exists():
+            _junit_path = str(_p)
+            break
+
     # R-680: إضافة المؤشرات الأولية + الرقم المُركّب مع علامة "قابل للجدل"
     # تُحسب المؤشرات الأولية من ملفات المستودع (لا من تشغيل pytest).
     # يُحسب الرقم المُركّب باستخدام composite.py (المُعدّل بـ R-680).
     primitives_obj = Primitives()
-    composite_obj = Composite(primitives_obj)
+    composite_obj = Composite(primitives_obj, junit_xml_path=_junit_path)
     composite_result = composite_obj.compute()
 
     return {

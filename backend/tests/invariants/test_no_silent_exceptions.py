@@ -72,20 +72,66 @@ def _check_comment_on_except_line(node: ast.ExceptHandler, lines: list) -> bool:
     return False
 
 
+def _find_owning_try(node: ast.ExceptHandler, tree: ast.Module) -> ast.Try:
+    """يجد عقدة Try التي تملك معالج except هذا (عبر AST، لا بحث نصي).
+
+    R-680e: يربط كل ExceptHandler بـ Try المقابل — لا يسمح بتعليق
+    يبرر معالجاً داخلياً أن يُعفي معالجاً خارجياً غير مبرر.
+    """
+    for try_node in ast.walk(tree):
+        if isinstance(try_node, ast.Try):
+            if node in try_node.handlers:
+                return try_node
+    return None
+
+
 def _check_comment_before_except_or_try(node: ast.ExceptHandler, lines: list,
-                                        src: str) -> bool:
-    """يفحص السطور قبل `except`، ثم قبل `try:` المقابل (بلا حد مسافة)."""
-    # 1) فحص السطور قبل `except` (حتى نصل إلى `try:`)
-    for back in range(1, len(lines)):  # لا حد — نرجع حتى نجد `try:`
+                                        src: str, tree: ast.Module = None) -> bool:
+    """يفحص التعليقات المرتبطة بمعالج except هذا تحديداً.
+
+    R-680e: يربط ExceptHandler بـ Try المالك له عبر AST، ثم يفحص:
+    1) تعليق على نفس سطر `except`
+    2) تعليق في السطور 1-3 قبل `except` (قبل جسم try مباشرة)
+    3) تعليق داخل جسم except (بين `except:` و `pass`) — يبرر هذا المعالج
+    4) تعليق في السطور 1-3 قبل `try:` المالك (عبر AST)
+    """
+    # 0) تعليق داخل جسم except (بين `except:` و `pass`) — يبرر هذا المعالج
+    if node.body and len(node.body) == 1:
+        stmt = node.body[0]
+        for ln in range(node.lineno + 1, stmt.lineno):
+            if ln - 1 < len(lines):
+                inner_line = lines[ln - 1]
+                if "#" in inner_line:
+                    comment_part = inner_line.split("#", 1)[1].strip()
+                    if (len(comment_part) >= MIN_COMMENT_LENGTH
+                            and JUSTIFICATION_RE.search(inner_line)):
+                        return True
+
+    # 1) فحص السطور 1-3 قبل `except` مباشرة
+    for back in range(1, 4):
         idx = node.lineno - 1 - back
         if idx < 0:
             break
         line = lines[idx]
         stripped = line.strip()
-        # إذا وصلنا إلى `try:` — نبحث قبل `try:` (1-3 أسطر)
-        if stripped.startswith("try"):
+        # تجاهل الأسطر الفارغة
+        if not stripped:
+            continue
+        # تعليق قبل `except` مباشرة
+        if "#" in line and not stripped.startswith("try"):
+            comment_part = line.split("#", 1)[1].strip()
+            if (len(comment_part) >= MIN_COMMENT_LENGTH
+                    and JUSTIFICATION_RE.search(line)):
+                return True
+        break  # أول سطر غير فارغ/غير تعليق → توقف
+
+    # 2) ربط بـ Try المالك عبر AST
+    if tree is not None:
+        try_node = _find_owning_try(node, tree)
+        if try_node is not None:
+            # فحص السطور 1-3 قبل `try:`
             for back2 in range(1, 4):
-                idx2 = idx - back2
+                idx2 = try_node.lineno - 1 - back2
                 if idx2 < 0:
                     break
                 l2 = lines[idx2]
@@ -95,12 +141,6 @@ def _check_comment_before_except_or_try(node: ast.ExceptHandler, lines: list,
                             and JUSTIFICATION_RE.search(l2)):
                         return True
             return False
-        # تعليق قبل `except` مباشرة
-        if "#" in line and not stripped.startswith("try"):
-            comment_part = line.split("#", 1)[1].strip()
-            if (len(comment_part) >= MIN_COMMENT_LENGTH
-                    and JUSTIFICATION_RE.search(line)):
-                return True
     return False
 
 
@@ -168,7 +208,7 @@ def _scan_silent_exceptions():
             # فحص التعليق
             has_comment = (
                 _check_comment_on_except_line(node, lines)
-                or _check_comment_before_except_or_try(node, lines, src)
+                or _check_comment_before_except_or_try(node, lines, src, tree)
             )
 
             if not has_comment:
@@ -233,7 +273,7 @@ class TestNoSilentExceptions:
             if isinstance(node, ast_mod.ExceptHandler):
                 if _is_silent_except(node):
                     if not (_check_comment_on_except_line(node, lines)
-                            or _check_comment_before_except_or_try(node, lines, content)):
+                            or _check_comment_before_except_or_try(node, lines, content, tree)):
                         found = True
         assert found, "Scanner must detect silent except:pass with no comment"
 
@@ -248,7 +288,7 @@ class TestNoSilentExceptions:
             if isinstance(node, ast_mod.ExceptHandler):
                 if _is_silent_except(node):
                     if not (_check_comment_on_except_line(node, lines)
-                            or _check_comment_before_except_or_try(node, lines, content)):
+                            or _check_comment_before_except_or_try(node, lines, content, tree)):
                         found = True
         assert found, "Scanner must detect silent except:continue with no comment"
 
@@ -266,9 +306,49 @@ class TestNoSilentExceptions:
             if isinstance(node, ast_mod.ExceptHandler):
                 if _is_silent_except(node):
                     if not (_check_comment_on_except_line(node, lines)
-                            or _check_comment_before_except_or_try(node, lines, content)):
+                            or _check_comment_before_except_or_try(node, lines, content, tree)):
                         found_unjustified = True
         assert not found_unjustified, (
             "Scanner must NOT flag except:pass with TOLERATED comment"
         )
+
+
+    def test_inner_justification_does_not_excuse_outer(self, tmp_path):
+        """R-680e: تعليق يبرر معالجاً داخلياً لا يبرر المعالج الخارجي.
+
+        الحالة: try خارجي (غير مبرر) يحتوي try داخلي (مبرر).
+        الماسح يجب أن يُبلغ عن المعالج الخارجي، لا أن يُعفيه بتعليق الداخلي.
+        """
+        content = (
+            "try:\n"                              # try خارجي — سطر 1
+            "    try:\n"                          # try داخلي
+            "        x = 1\n"
+            "    except Exception:\n"             # معالج داخلي — مبرر
+            "        # TOLERATED: inner justified (R-680e)\n"
+            "        pass\n"
+            "except Exception:\n"                  # معالج خارجي — غير مبرر
+            "    pass\n"
+        )
+        import ast as ast_mod
+        tree = ast_mod.parse(content)
+        lines = content.split("\n")
+
+        # الماسح يجب أن يكتشف المعالج الخارجي (غير مبرر)
+        outer_found = False
+        inner_found = False
+        for node in ast_mod.walk(tree):
+            if isinstance(node, ast_mod.ExceptHandler):
+                if not _is_silent_except(node):
+                    continue
+                justified = (
+                    _check_comment_on_except_line(node, lines)
+                    or _check_comment_before_except_or_try(node, lines, content, tree)
+                )
+                if justified:
+                    inner_found = True
+                else:
+                    outer_found = True
+        # المعالج الداخلي مبرر، الخارجي غير مبرر
+        assert inner_found, "inner must be justified"
+        assert outer_found, "outer must NOT be justified by inner comment"
 
