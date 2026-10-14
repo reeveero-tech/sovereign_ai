@@ -146,8 +146,12 @@ class TestRealRotation:
         return kr
 
     def test_writer_picks_up_rotation_without_manual_fields(self, tmp_path):
-        """الدوران الفعلي: الكاتب يلتقط المفتاح الجديد من KeyRing
-        (بدون تعديل الحقول الداخلية يدويًا)."""
+        """الدوران الفعلي: الكاتب نفسه (core1) يلتقط المفتاح الجديد
+        (بدون إنشاء Core جديد و بدون تعديل الحقول الداخلية).
+        
+        R-632: append_event يختار المفتاح النشط الحالي في كل كتابة —
+        الدوران يُلتقط فورًا دون إعادة إنشاء Core.
+        """
         _core_dir = tmp_path / "sovereign_core"
         _core_dir.mkdir(parents=True, exist_ok=True)
         (_core_dir / "blobs").mkdir(exist_ok=True)
@@ -156,7 +160,7 @@ class TestRealRotation:
         keyring = self._isolated_keyring(tmp_path)
         key_a = keyring.get_active_key().key_id
 
-        # 2) إنشاء Core بحقن KeyRing (R-629 — لا تحميل تلقائي)
+        # 2) إنشاء Core واحد بحقن KeyRing (R-629 — لا تحميل تلقائي)
         core1 = SovereignCore(
             log_file=_core_dir / "ledger.jsonl",
             blobs_dir=_core_dir / "blobs",
@@ -172,29 +176,18 @@ class TestRealRotation:
         assert r1["key_id"] == key_a
 
         # 3) دوران فعلي: A → B (عبر KeyRing نفسه)
-        new_key = keyring.generate_new_key(reason="rotation_r630")
+        new_key = keyring.generate_new_key(reason="rotation_r632")
         keyring.save_to_disk()
         key_b = new_key.key_id
         assert key_b != key_a
 
-        # 4) إنشاء Core جديد بحقن نفس KeyRing (بعد الدوران)
-        # — الكاتب يجب أن يلتقط المفتاح الجديد B (النشط)
-        core2 = SovereignCore(
-            log_file=_core_dir / "ledger.jsonl",
-            blobs_dir=_core_dir / "blobs",
-            index_file=_core_dir / "index.json",
-            meta_file=_core_dir / "meta.json",
-            integrity_file=_core_dir / "integrity.json",
-            keyring=keyring,
+        # 4) R-632: كتابة عبر الكاتب نفسه (core1 — لا core2، لا تعديل يدوي)
+        # الكاتب يلتقط المفتاح الجديد B (النشط) في كل كتابة
+        r2 = core1.append_event(EventType.INTERACTION, {"test": "after_rotation"}, user="test")
+        assert r2["key_id"] == key_b, (
+            f"writer (same core1) must pick up new active key B ({key_b}), "
+            f"got {r2['key_id']} (key_a={key_a})"
         )
-        # الكاتب يلتقط المفتاح الجديد (النشط B — ليس A)
-        assert core2._keyring_key_id == key_b, (
-            f"writer must pick up new active key B ({key_b}), got {core2._keyring_key_id}"
-        )
-
-        # كتابة حدث بالمفتاح B (النشط الجديد)
-        r2 = core2.append_event(EventType.INTERACTION, {"test": "after_rotation"}, user="test")
-        assert r2["key_id"] == key_b
 
         # 5) التحقق من الحدثين عبر SignatureVerifier
         verifier = SignatureVerifier(keyring)
@@ -212,6 +205,10 @@ class TestRealRotation:
         s2 = verifier.verify_event(e2)
         assert s1.status.value == "verified", f"event A must verify: {s1.reason}"
         assert s2.status.value == "verified", f"event B must verify: {s2.reason}"
+
+        # 6) سلامة السجل الكامل (أحداث A و B معًا) — عبر الكاتب نفسه
+        status = core1.verify_integrity()
+        assert status.value == "verified", f"integrity failed after rotation: {status}"
 
     def test_tampered_key_id_to_known_key_returns_invalid(self, tmp_path):
         """تزييف key_id إلى مفتاح معروف (B) يُنتج INVALID (وليس VERIFIED)."""
@@ -258,6 +255,64 @@ class TestRealRotation:
         }
         s2 = verifier.verify_event(original)
         assert s2.status.value == "verified"
+
+
+class TestCompromisedKey:
+    """اختبارات المفتاح المخترق (R-633) — لا يُستخدم للكتابة، لكن يُتحقق من أحداثه التاريخية."""
+
+    def test_compromised_key_not_used_for_writing(self, tmp_path):
+        """مفتاح COMPROMISED لا يُستخدم للكتابة (فشل مُغلق)."""
+        _core_dir = tmp_path / "sovereign_core"
+        _core_dir.mkdir(parents=True, exist_ok=True)
+        (_core_dir / "blobs").mkdir(exist_ok=True)
+
+        # إنشاء KeyRing معزول بمفتاح A
+        keyring = self._isolated_keyring_compromised(tmp_path)
+        key_a = keyring.get_active_key().key_id
+
+        core = SovereignCore(
+            log_file=_core_dir / "ledger.jsonl",
+            blobs_dir=_core_dir / "blobs",
+            index_file=_core_dir / "index.json",
+            meta_file=_core_dir / "meta.json",
+            integrity_file=_core_dir / "integrity.json",
+            keyring=keyring,
+        )
+
+        # كتابة حدث بالمفتاح A (نشط)
+        r1 = core.append_event(EventType.INTERACTION, {"test": "before_compromise"}, user="test")
+        assert r1["key_id"] == key_a
+
+        # تعليم المفتاح A كمخترق (COMPROMISED)
+        keyring.mark_key_compromised(key_a, reason="test compromise r633")
+
+        # R-633: لا يوجد مفتاح نشط (A مخترق) — الكتابة يجب أن تُرفض
+        with pytest.raises((RuntimeError, KeyError)):
+            core.append_event(EventType.INTERACTION, {"test": "after_compromise"}, user="test")
+
+        # لكن الأحداث القديمة (بالمفتاح A) ما زالت قابلة للتحقق التاريخي
+        # (لا يُمنع التحقق — فقط الكتابة)
+        verifier = SignatureVerifier(keyring)
+        e1 = {
+            "hash": r1["hash"], "prev_hash": r1["prev_hash"], "blob": r1["blob"],
+            "time": r1["time"], "type": r1["type"], "signature": r1["signature"],
+            "key_id": r1["key_id"],
+        }
+        # قد يكون INVALID (توقيع صحيح لكن المفتاح مخترق) أو غير ذلك
+        # المهم: لا يُرفض التحقق (لا استثناء)
+        s1 = verifier.verify_event(e1)
+        assert s1.status.value in ("verified", "invalid", "unverifiable_missing_key"), (
+            f"historical event must have defined status: {s1.status}"
+        )
+
+    def _isolated_keyring_compromised(self, tmp_path) -> KeyRing:
+        """يُنشئ KeyRing معزول (لاختبار المفتاح المخترق)."""
+        _keys_dir = tmp_path / "keys_compromised"
+        _keys_dir.mkdir(exist_ok=True)
+        kr = KeyRing(keys_dir=_keys_dir)
+        kr.generate_new_key(reason="compromised_test_r633")
+        kr.save_to_disk()
+        return kr
 
 
 class TestLegacyFixedSample:

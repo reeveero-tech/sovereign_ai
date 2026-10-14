@@ -665,6 +665,37 @@ class SovereignCore:
             "before appending events."
         )
     
+    def _get_current_signing_key_id(self) -> Optional[str]:
+        """
+        R-632: يُعيد المفتاح النشط الحالي من KeyRing (في كل كتابة).
+        
+        - يتحقق من صلاحية المفتاح للكتابة (ACTIVE، غير COMPROMISED/RETIRED)
+        - يُعيد None إذا لم يوجد مفتاح صالح (فشل مُغلق في التوقيع)
+        """
+        if self._keyring is None:
+            return None
+        
+        try:
+            active = self._keyring.get_active_key()
+            if active is None:
+                return None
+            
+            # R-632: تحقق من صلاحية المفتاح للكتابة
+            # (ACTIVE فقط — COMPROMISED/RETIRED/LOST/EXPIRED لا يُستخدم للكتابة)
+            from backend.sovereign.keys.keyring import KeyStatus
+            if active.status != KeyStatus.ACTIVE:
+                logger.warning(
+                    f"⚠️ Key {active.key_id} status={active.status} — not valid for writing"
+                )
+                return None
+            
+            # تحديث المفتاح المخزّن (يلتقط الدوران)
+            self._keyring_key_id = active.key_id
+            return active.key_id
+        except Exception as e:
+            logger.warning(f"⚠️ Failed to get current signing key: {e}")
+            return None
+    
     def append_event(self, event_type: EventType, payload: Dict[str, Any],
                      user: Optional[str] = None) -> Dict[str, Any]:
         # M1: قبول EventType أو سلسلة نصية (كان ينهار على السلاسل)
@@ -692,10 +723,22 @@ class SovereignCore:
                 self._last_hash, blob_hash, event_time, event_type_str
             )
             
-            # 4) حساب التوقيع (R-625: بالمفتاح النشط من KeyRing)
+            # 4) حساب التوقيع (R-632: بالمفتاح النشط الحالي — يُختار في كل كتابة)
+            # R-632: الكاتب يختار المفتاح النشط من KeyRing في كل مرة (وليس المخزّن في المُنشئ)
+            # — يضمن أن الدوران يُلتقط فورًا دون إعادة إنشاء Core
+            _current_key_id = self._get_current_signing_key_id()
+            
+            # R-633: فشل مُغلق — إذا لم يوجد مفتاح نشط صالح، يُرفض الإلحاق
+            # (لا توقيع بمفتاح الإعدادات و لا حدث بدون key_id)
+            if _current_key_id is None:
+                raise RuntimeError(
+                    "R-633: No active signing key available (compromised/retired/lost "
+                    "or no KeyRing) — refusing to append event (fail-closed). "
+                    "Generate or rotate an active key first."
+                )
             signature = self._compute_event_signature(
                 event_hash, self._last_hash, blob_hash, event_time, event_type_str,
-                key_id=self._keyring_key_id
+                key_id=_current_key_id
             )
             
             # 5) بناء حدث السجل
@@ -707,10 +750,10 @@ class SovereignCore:
                 "type": event_type_str,
                 "signature": signature
             }
-            # R-618: ربط الحدث بمفتاحه في KeyRing (إن وُجد مفتاح نشط)
-            # — يجعل الحدث قابلًا للتحقق لاحقًا
-            if self._keyring_key_id:
-                event["key_id"] = self._keyring_key_id
+            # R-618/R-632: ربط الحدث بمفتاحه في KeyRing (المفتاح المستخدم فعليًا للتوقيع)
+            # — يضمن أن key_id يطابق المفتاح المستخدم للتوقيع (لا هوية مزيّفة)
+            if _current_key_id:
+                event["key_id"] = _current_key_id
             
             # 6) كتابة الحدث إلى السجل (JSONL)
             event_line = json.dumps(event, ensure_ascii=False)

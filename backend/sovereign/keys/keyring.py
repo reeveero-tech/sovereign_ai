@@ -227,9 +227,19 @@ class KeyRing:
         return self._keys.get(key_id)
 
     def get_active_key(self) -> Optional[KeyRecord]:
-        """يُعيد المفتاح النشط الحالي (أو None)."""
+        """يُعيد المفتاح النشط الحالي (أو None).
+        
+        R-633: يتحقق أن المفتاح نشط فعلًا (ACTIVE) — المفاتيح المخترقة
+        أو المتقاعدة أو المفقودة لا تُعاد كمفتاح نشط.
+        """
         if self._active_key_id:
-            return self._keys.get(self._active_key_id)
+            rec = self._keys.get(self._active_key_id)
+            if rec is None:
+                return None
+            # R-633: فقط ACTIVE يُعاد (COMPROMISED/RETIRED/LOST/EXPIRED → None)
+            if rec.status != KeyStatus.ACTIVE:
+                return None
+            return rec
         return None
 
     def list_keys(self) -> List[KeyRecord]:
@@ -284,6 +294,30 @@ class KeyRing:
             "action": "KEY_MARKED_LOST",
             "key_id": key_id,
             "notes": notes,
+        })
+        return True
+
+    def mark_key_compromised(self, key_id: str, reason: str = "") -> bool:
+        """
+        R-633: يُعلّم مفتاحًا كمخترق (COMPROMISED).
+        
+        - لا يُستخدم للكتابة أبدًا (فشل مُغلق في append_event)
+        - أحداثه التاريخية تُتحقق (لا يُمنع التحقق — فقط الكتابة)
+        - يُسجّل في HISTORY (لا حذف)
+        """
+        rec = self._keys.get(key_id)
+        if rec is None:
+            return False
+        rec.status = KeyStatus.COMPROMISED
+        rec.reason_for_retirement = f"compromised: {reason}" if reason else "compromised"
+        if self._active_key_id == key_id:
+            self._active_key_id = None
+
+        self._append_history({
+            "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            "action": "KEY_MARKED_COMPROMISED",
+            "key_id": key_id,
+            "reason": reason,
         })
         return True
 
