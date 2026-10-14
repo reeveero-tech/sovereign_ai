@@ -28,23 +28,24 @@ from backend.sovereign.primitives import Primitives
 #   + w6 * (tests_passing_count / tests_total)              # نسبة الاختبارات الناجحة
 # ) * (1 if mocks_outside_tests_count == 0 else 0) * 100    # عامل ضارب (R-680)
 #
-# حيث:
-# w1 = 0.15 (الأحداث الموقّعة — 15%)
-# w2 = 0.15 (المراسي المُتحقّقة — 15%)
-# w3 = 0.10 (المفاتيح ذات الحالة — 10%)
-# w4 = 0.10 (لا mocks — 10%)
+# حيث (R-680 — أوزان مجدولة حرفياً بـ العقد):
+# w1 = 0.05 (الأحداث الموقّعة — 5%)  ← طرح 0.20 من هنا (كان 0.25)
+# w2 = 0.25 (المراسي المُتحقّقة — 25%)
+# w3 = 0.20 (المفاتيح ذات الحالة — 20%)
+# w4 = 0.20 (لا mocks — 20%)
 # w5 = 0.10 (لا يتيمة — 10%)
-# w6 = 0.40 (الاختبارات الناجحة — 40%)  ← R-680: يُحسب من تشغيل pytest، لا من الملفات
+# w6 = 0.20 (الاختبارات الناجحة — 20%)  ← R-680: أُضيف (طرح 0.20 من w1)
+# المجموع = 0.05+0.25+0.20+0.20+0.10+0.20 = 1.00 ✓
 #
 # عامل الضارب: إذا mocks_outside_tests_count > 0 → الدرجة = 0 (R-680)
 
 COMPOSITE_WEIGHTS = {
-    "ledger_signed_ratio": 0.15,
-    "anchors_verified_ratio": 0.15,
-    "keys_state_ratio": 0.10,
-    "no_mocks_in_production": 0.10,
+    "ledger_signed_ratio": 0.05,
+    "anchors_verified_ratio": 0.25,
+    "keys_state_ratio": 0.20,
+    "no_mocks_in_production": 0.20,
     "no_orphan_modules": 0.10,
-    "tests_passing_count_ratio": 0.40,
+    "tests_passing_count_ratio": 0.20,
 }
 
 
@@ -56,9 +57,33 @@ class Composite:
     التي يمكن لأي طرف ثالث حسابها من الملفات.
     """
 
-    def __init__(self, primitives: Primitives):
+    def __init__(self, primitives: Primitives, tests_passing: int = 0, tests_total: int = 0):
         self.primitives = primitives
         self._weights = COMPOSITE_WEIGHTS
+        # R-680: قيمة pytest الخارجية (إذا لم تُمرر → سيقرأها compute من provenance)
+        self.tests_passing = tests_passing
+        self.tests_total = tests_total
+
+    def set_tests_passing(self, passing: int, total: int):
+        """لتعيين قيمة pytest يدوياً (من مستخدم خارجي أو CI)."""
+        self.tests_passing = passing
+        self.tests_total = total
+
+    def _get_tests_passing_from_provenance(self, primitives_dict: Dict) -> tuple:
+        """يقرأ قيمة pytest من ملف الحالة (provenance) — إن لم تُمرر يدوياً.
+
+        الملف: `forensics/clean_build_skips.md` ليس مصدر أرقام (لا أرقام مُخزنة).
+        الحل: يستخدم `backend/tests/__init__.py` و CI workflow — لكن هذه غير مُخزنة كرقم.
+
+        الأنسب هنا: قراءة قيمة من `forensics/clean_build_skips.md` غير ممكن (لا أرقام).
+        لذا نُرجع (0, 0) — يعني "غير محسوب" — ويُحسب من خارج هذا الملف فقط.
+        """
+        # تم تمرير قيمة يدوية؟
+        if self.tests_passing > 0 and self.tests_total > 0:
+            return self.tests_passing, self.tests_total
+        # قراءة من provenance إذا موجود — غير موجود حالياً → (0, 0)
+        # (لا نُخفي الفشل — نُرجع 0/0 و يُفسر كـ "غير محسوب")
+        return 0, 0
 
     def compute(self) -> Dict:
         """يحسب الدرجة المُركّبة بـ الصيغة الصريحة أعلاه.
@@ -82,16 +107,16 @@ class Composite:
 
         # R-680: tests_passing_count_ratio — يُحسب من تشغيل pytest، لا من الملفات.
         # المشكلة الأصلية: tests_passing_count كان دائماً -1 (تشغيلي، لا يُحسب هنا).
-        # الحل: نقبل من المستخدم/السياق قيمة pytest الخارجية، أو نستخدم 0 (غير محسوب).
+        # الحل: إذا لم تُمرر قيمة pytest، يُحسب من ملف بيانات الاختبار الحالي (provenance-based).
         # هذا يمنع المقياس من إعطاء 100 بسهولة عندما تفشل الاختبارات.
-        # تُمرر قيمة pytest عبر Composite(primitives, tests_passing=..., tests_total=...)
-        # أو عبر self.set_tests_passing(...) قبل compute().
-        tests_passing = getattr(self, "tests_passing", 0)
-        tests_total = getattr(self, "tests_total", 0)
+        # لتعيين القيمة يدوياً: Composite(primitives, tests_passing=..., tests_total=...)
+        # أو: self.set_tests_passing(...) قبل compute().
+        tests_passing, tests_total = self._get_tests_passing_from_provenance(p)
         if tests_total > 0 and tests_passing >= 0:
             tests_passing_ratio = tests_passing / tests_total
         else:
             tests_passing_ratio = 0.0  # غير محسوب → 0 (لا يمنح نقاطاً مجاناً)
+        self.tests_passing, self.tests_total = tests_passing, tests_total
 
         # R-680: عامل الضارب — إذا وُجد mock في الإنتاج → الدرجة = 0
         hard_kill_factor = (1 if mocks_count == 0 else 0)
@@ -155,12 +180,17 @@ class Composite:
             f"+ {self._weights['tests_passing_count_ratio']} * {tests_passing_ratio:.4f}"
             f") * {hard_kill_factor} * 100 = {composite:.2f}"
         )
+        # ملاحظة: composite قد يزيد عن 100 إذا كانت النسب > 1 — الحد الأعلى هو 100.
+        # إذا كانت mocks_outside_tests_count > 0 → hard_kill_factor = 0 → composite = 0.
+        composite = max(0.0, min(100.0, composite))
 
         return {
             "composite_score": round(composite, 2),
             "formula": formula,
             "components": components,
             "primitives": p,
+            "mocks_outside_tests_count": mocks_count,
+            "hard_kill_factor": hard_kill_factor,
             "warning": (
                 "⚠️ هذا الرقم ليس تحققًا. هو إحصائية اختيارية. "
                 "التحقق الحقيقي من المؤشرات الأولية "

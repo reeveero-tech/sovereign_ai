@@ -168,7 +168,16 @@ except Exception as e:
 
 ---
 
-## 5) قرار تحسين مستقبلي (موثق، غير مُنفذ)
+## 5) قرار تحسين (موثق + مُنفذ — R-680)
 
-**قرار R-680 (مقترح):** أي `except: pass` في كود الإنتاج يتطلب تعليق تبرير بنمط `# TOLERATED: <reason>` أو `# R-XXX: <reason>`. إن غاب التعليق → اختبار `test_no_silent_exceptions.py` يفشل.
+**قرار R-680 (مُنفذ):** أي `except: pass` أو `except Exception: continue` في كود الإنتاج يتطلب تعليق تبرير بنمط `# TOLERATED: <reason>` أو `# R-XXX: <reason>`. إن غاب التعليق → اختبار `backend/tests/invariants/test_no_silent_exceptions.py` يفشل.
+
+**الإصلاحات النهائية (بعد تصحيح المستشار):**
+- 5 مواقع `except Exception: continue` في `primitives.py` — أُضيف تعليق TOLERATED.
+- 1 موقع في `ledger/anchor.py` — أُضيف تعليق TOLERATED.
+- 1 موقع في `keys/rotation.py` — أُضيف تعليق TOLERATED.
+- 2 موقع في `score.py` — أُضيف تعليق TOLERATED.
+- 1 موقع `except FileNotFoundError: continue` في `memory/core.py` — أُضيف تعليق TOLERATED.
+
+**الاختبار الآن:** `test_no_silent_exceptions.py` يفحص كلا النمطين (`except: pass` و `except Exception: continue`) — يمر بنجاح.
 

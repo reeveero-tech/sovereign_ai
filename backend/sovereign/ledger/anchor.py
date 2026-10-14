@@ -568,6 +568,7 @@ class LedgerAnchor:
                     continue
                 try:
                     anchors.append(json.loads(line))
+                # TOLERATED: malformed JSON line in anchors file — skip, not raise (R-680)
                 except Exception:
                     continue
         return anchors

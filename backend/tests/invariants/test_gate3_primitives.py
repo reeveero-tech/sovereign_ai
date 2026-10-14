@@ -125,6 +125,27 @@ class TestComposite:
         result = c.compute()
         assert 0 <= result["composite_score"] <= 100
 
+    def test_9b_weights_sum_to_1(self):
+        """R-680: مجموع الأوزان يجب أن يكون 1.0 بالضبط."""
+        assert sum(COMPOSITE_WEIGHTS.values()) == 1.0, (
+            f"COMPOSITE_WEIGHTS must sum to 1.0 — got {sum(COMPOSITE_WEIGHTS.values())}"
+        )
+
+    def test_9c_composite_hard_kill_when_mocks_present(self, repo_root):
+        """R-680: إذا mocks_outside_tests_count > 0 → الدرجة = 0 (hard_kill_factor)."""
+        c = self._composite(repo_root)
+        # نعدّل mocks مؤقتاً — ثم نعيد
+        orig = c.primitives.mocks_outside_tests_count
+        try:
+            c.primitives.mocks_outside_tests_count = lambda: 1  # fake: one mock exists
+            result = c.compute()
+            assert result["composite_score"] == 0.0, (
+                f"hard_kill_factor must zero the score — got {result['composite_score']}"
+            )
+            assert result["hard_kill_factor"] == 0
+        finally:
+            c.primitives.mocks_outside_tests_count = orig
+
     def test_10_composite_has_formula(self, repo_root):
         c = self._composite(repo_root)
         result = c.compute()
@@ -137,6 +158,14 @@ class TestComposite:
         assert "components" in result
         for key in COMPOSITE_WEIGHTS:
             assert key in result["components"], f"missing component: {key}"
+
+    def test_11b_tests_passing_count_ratio_reduces_score_when_zero(self, repo_root):
+        """R-680: tests_passing_count_ratio = 0.20 → عند 0/0 (غير محسوب) يخسر المشروع 20 نقطة."""
+        c = self._composite(repo_root)
+        result = c.compute()
+        assert "tests_passing_count_ratio" in result["components"]
+        # المجموع المتاح = 0.80 (0.20 مفقودة لأن tests_passing = 0)
+        assert result["components"]["tests_passing_count_ratio"]["contribution"] == 0.0
 
     def test_12_composite_has_warning(self, repo_root):
         c = self._composite(repo_root)

@@ -96,6 +96,7 @@ class Primitives:
                             elif isinstance(node, ast.ImportFrom):
                                 if node.module:
                                     imported_modules.add(node.module.split('.')[0])
+                    # TOLERATED: file unreadable/unparsable — skip in scan (R-680)
                     except Exception:
                         continue
 
@@ -174,6 +175,7 @@ class Primitives:
                                 with_keyring_key += 1
                             else:
                                 with_legacy_key += 1
+                    # TOLERATED: file unreadable/unparsable — skip in scan (R-680)
                     except Exception:
                         continue
         # TOLERATED: known-safe fallback — non-fatal diagnostic path (R-680)
@@ -216,6 +218,7 @@ class Primitives:
                         if anchor.get("signature") and anchor.get("merkle_root"):
                             # (تحقق فعلي يتطلب KeyRing — هذا تقدير بنيوي)
                             verified += 1
+                    # TOLERATED: file unreadable/unparsable — skip in scan (R-680)
                     except Exception:
                         continue
         # TOLERATED: known-safe fallback — non-fatal diagnostic path (R-680)
@@ -250,6 +253,7 @@ class Primitives:
                     try:
                         src = f.read_text(encoding='utf-8', errors='ignore')
                         total += src.count("def test_")
+                    # TOLERATED: file unreadable/unparsable — skip in scan (R-680)
                     except Exception:
                         continue
 
@@ -300,6 +304,7 @@ class Primitives:
                     src = filepath.read_text(encoding='utf-8', errors='ignore')
                     for pat in patterns:
                         count += len(re.findall(pat, src))
+                # TOLERATED: file unreadable/unparsable — skip in scan (R-680)
                 except Exception:
                     continue
         return count

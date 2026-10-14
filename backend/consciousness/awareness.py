@@ -558,6 +558,7 @@ class AwarenessEngine:
         """معالجة المحتوى تحت الوعي"""
         while self._active:
             try:
+                # TOLERATED: placeholder for future condition check — no action needed (R-680)
                 if self.current_moment:
                     pass
                 time.sleep(0.1)

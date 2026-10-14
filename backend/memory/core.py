@@ -171,6 +171,7 @@ class FileLock:
                         logger.warning(f"🧹 إزالة قفل قديم ({age:.0f}s) — عملية سابقة انهارت")
                         self.lock_file.unlink()
                         continue
+                # TOLERATED: lock file vanished mid-check (race) — retry loop handles it (R-680)
                 except FileNotFoundError:
                     continue
                 # TOLERATED: known-safe fallback — non-fatal diagnostic path (R-680)

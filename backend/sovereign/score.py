@@ -375,6 +375,7 @@ class SovereigntyScorer:
                 try:
                     src = (self.repo_root / f).read_text(encoding="utf-8")
                     tree = ast.parse(src)
+                # TOLERATED: file unreadable/unparsable AST — counted as not-imported (R-680)
                 except Exception:
                     continue
 
@@ -448,6 +449,7 @@ class SovereigntyScorer:
 
                 try:
                     src = p.read_text(encoding="utf-8")
+                # TOLERATED: unreadable file — excluded from mocks count (R-680)
                 except Exception:
                     continue
 

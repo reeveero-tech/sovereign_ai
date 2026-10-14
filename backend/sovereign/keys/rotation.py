@@ -124,6 +124,7 @@ class KeyRotation:
                     entry = json.loads(line)
                     if entry.get("action") in ("KEY_RETIRED", "KEY_CREATED"):
                         rotations.append(entry)
+                # TOLERATED: malformed HISTORY.jsonl line — skip, not raise (R-680)
                 except Exception:
                     continue
         return rotations

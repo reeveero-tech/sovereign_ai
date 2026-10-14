@@ -157,6 +157,19 @@ def _scan_silent_exceptions():
                         "except_line": stripped,
                     })
 
+        # نمط إضافي: `except...:` ثم سطر `continue` (يُخفي فشلاً في حلقة)
+        for i in range(len(lines) - 1):
+            stripped = lines[i].strip()
+            if (stripped.startswith("except") and stripped.endswith(":")
+                    and lines[i + 1].strip() == "continue"):
+                if not _has_justification_comment(lines, i):
+                    violations.append({
+                        "file": rel_posix,
+                        "line": i + 1,
+                        "except_line": stripped,
+                        "pattern": "except_continue",
+                    })
+
     return violations
 
 
