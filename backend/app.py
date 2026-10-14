@@ -210,6 +210,12 @@ async def lifespan(app: FastAPI):
     logger.info("✅ خادم Sovereign AI جاهز")
     logger.info(f"🔑 مفتاح API للسيد: {SOVEREIGN_API_KEY}")
     logger.info(f"📖 التوثيق: http://localhost:8000/docs")
+    # طبقة توافق: تشغيل محرك NexusCore فعليًا (يصلح state=initializing الدائم)
+    # انظر backend/compat/nexus_lifecycle.py — لا تعديل للأصل، بل استدعاء engine.start()
+    try:
+        ensure_nexus_running()
+    except Exception as _nexus_lifecycle_err:
+        logger.warning(f"⚠️ NexusCore lifecycle: {_nexus_lifecycle_err}")
     
     yield
     
@@ -282,6 +288,20 @@ try:
     logger.info("✅ NexusCore REST API مفعّل (/nexus/*)")
 except Exception as _nexus_err:
     logger.warning(f"⚠️ NexusCore REST API غير مفعّل: {_nexus_err}")
+
+# ============================================================
+# طبقة توافق: ربط دورة حياة NexusCore (يُصلح state=initializing الدائم)
+# + إحياء guardian عبر /guardian/status (قراءة فقط)
+# لا يُحذف أو يُعدَّل أي ملف أصلي — هذه إضافات توافقية فقط.
+# ============================================================
+from backend.compat import ensure_nexus_running, guardian_status_snapshot
+
+# إضافة نقطة /guardian/status — إحياء guardian/ بشكل قابل للتشخيص دون تفعيل EmergencyBreaker
+@app.get("/guardian/status")
+async def guardian_status():
+    """حالة نظام الحارس (قراءة فقط) — إحياء guardian/ عبر طبقة توافق"""
+    return guardian_status_snapshot()
+
 # ============================================================
 # نقاط API العامة (بدون مصادقة)
 # ============================================================

@@ -28,6 +28,10 @@ data/config_backup.json
 data/language_evolution.json
 data/nexus_data/
 data/security_log.json
+
+# إضافة توافقية: nexus_data الذي يُنشأ عند تشغيل الخادم من داخل backend/
+# (يُطابق data/nexus_data/ أعلاه — لكن المسار يبدأ من backend/)
+backend/nexus_data/
 data/approval_cache.json
 *.db
 *.sqlite
