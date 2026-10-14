@@ -1200,6 +1200,31 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str):
 # نقاط API إضافية
 # ============================================================
 
+# R-658: دعم الاعتماد في الرأس (X-API-Key) — دون حذف الواجهة القديمة
+# المفتاح في الرأس لا يُسجّل في روابط الطلب (مثل query params)
+from fastapi import Header
+
+@app.get("/api-key-header")
+async def get_api_key_header(
+    x_api_key: str = Header(None, alias="X-API-Key"),
+):
+    """
+    حالة مفتاح API للسيد (R-658) — نسخة الرأس.
+    المفتاح في الرأس X-API-Key لا يُسجّل في روابط الطلب
+    (بعكس query params مثل master_key في /api-key).
+    لا يُكشف المفتاح نفسه أبداً — يُعاد فقط بصمة المفتاح (SHA-256).
+    """
+    if not x_api_key or x_api_key != SOVEREIGN_API_KEY:
+        raise HTTPException(status_code=403, detail="غير مصرح: مطلوب مفتاح السيد")
+    from config import SOVEREIGN_KEY_FINGERPRINT
+    return {
+        "fingerprint": SOVEREIGN_KEY_FINGERPRINT,
+        "source": "header (X-API-Key) — not logged in URLs",
+        "note": "المفتاح لا يُكشف عبر API. أعد تعيينه عبر SOVEREIGN_KEY أو data/key.secret.",
+        "timestamp": time.time()
+    }
+
+
 @app.get("/api-key")
 async def get_api_key(master_key: str = Query(None, description="مفتاح السيد للتحقق")):
     """
