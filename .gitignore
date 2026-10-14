@@ -73,3 +73,9 @@ cache/
 experiments/
 exports/
 memory/
+
+# بيانات وقت تشغيل guardian (تُنشأ تلقائياً عند كل تشغيل)
+guardian/data/guardian_events.jsonl
+
+# قاعدة بيانات NexusCore (تُنشأ تلقائياً)
+nexus_data/nexus.db

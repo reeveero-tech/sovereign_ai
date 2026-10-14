@@ -22,9 +22,16 @@ from enum import Enum
 from pathlib import Path
 from typing import Callable, Dict, List, Optional
 
+# R-611: تثبيت المسارات على جذر المستودع — تعمل من أي دليل عمل
+import os as _os
+_REPO_ROOT = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
+def _repo_path(rel: str):
+    return str(_os.path.join(_REPO_ROOT, rel))
+
+
 logger = logging.getLogger("guardian.emergency")
 
-EMERGENCY_LOG_DIR  = Path("guardian/data/emergency")
+EMERGENCY_LOG_DIR  = Path(_repo_path("guardian/data/emergency"))
 EMERGENCY_LOG_FILE = EMERGENCY_LOG_DIR / "emergency_events.jsonl"
 LOCK_FILE          = EMERGENCY_LOG_DIR / "SYSTEM_LOCKED.lock"
 BACKUP_DIR         = EMERGENCY_LOG_DIR / "emergency_backups"

@@ -14,9 +14,15 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional
 
+# R-611: تثبيت المسارات على جذر المستودع — تعمل من أي دليل عمل
+import os as _os
+_REPO_ROOT = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
+def _repo_path(rel: str):
+    return str(_os.path.join(_REPO_ROOT, rel))
+
 logger = logging.getLogger("guardian.self_evolve")
 
-EVOLUTION_LOG = Path("guardian/data/evolution_log.jsonl")
+EVOLUTION_LOG = Path(_repo_path("guardian/data/evolution_log.jsonl"))
 
 
 @dataclass

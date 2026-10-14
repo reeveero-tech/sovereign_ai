@@ -20,6 +20,13 @@ from enum import Enum
 from pathlib import Path
 from typing import Callable, Dict, List, Optional
 
+# R-611: تثبيت المسارات على جذر المستودع — تعمل من أي دليل عمل
+import os as _os
+_REPO_ROOT = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
+def _repo_path(rel: str):
+    return str(_os.path.join(_REPO_ROOT, rel))
+
+
 logger = logging.getLogger("guardian.master")
 
 # ── ثوابت غير قابلة للتغيير ────────────────────────────────────────────────
@@ -75,9 +82,9 @@ class MasterGuardian:
       • تفعيل كسر الزجاج (إذا كانت محاولة تجاوز صريحة)
     """
 
-    def __init__(self, guardian_dir: str = "guardian/data",
+    def __init__(self, guardian_dir: str = None,
                  master_passphrase: Optional[str] = None):
-        self.guardian_dir = Path(guardian_dir)
+        self.guardian_dir = Path(guardian_dir or _repo_path("guardian/data"))
         self.guardian_dir.mkdir(parents=True, exist_ok=True)
 
         self.guardian_id = str(uuid.uuid4())[:8]

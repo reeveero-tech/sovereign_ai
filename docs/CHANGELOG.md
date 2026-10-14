@@ -1,7 +1,23 @@
 # CHANGELOG.md — سجل التغييرات
 
 > كل تغيير يُسجل هنا (قاعدة الدفعة الذرية).
-> آخر تحديث: 2026-10-14 (الدفعة M6 — R-610)
+> آخر تحديث: 2026-10-14 (الدفعة M6 — R-611)
+
+---
+
+## [M6] — 2026-10-14 — R-611: تحصين الإنتاج
+
+### أُصلح
+- `nexus/main.py`: نقطة الدخول كانت تفشل بـ `ModuleNotFoundError: No module named 'nexus'` عند التشغيل المباشر `python3 nexus/main.py` — أُضيف جذر المستودع إلى `sys.path` في كتلة `__main__`. الآن تعمل من أي دليل: `✅ NexusCore: 47 components` + `🛡️ Guardian: ACTIVE`.
+- `backend/app.py` + `backend/api.py`: 5 تحذيرات `PydanticDeprecatedSince20` (class-based `Config`) حُوّلت إلى `model_config = ConfigDict(...)` — التحذيرات انخفضت من 6 إلى 1 (المتبقي من مكتبة starlette الخارجية).
+- `backend/requirements.txt`: كان غير متزامن مع الجذر — أُضيف `pycryptodome==3.24.1` (تشفير AES-256-CBC) و`pytest==9.1.1` (الاختبارات). الآن مطابق تماماً للجذر.
+
+### حُدث
+- `.gitignore`: `guardian/data/guardian_events.jsonl` و`nexus_data/nexus.db` (بيانات وقت تشغيل تُنشأ تلقائياً) لم تعودا مُتتبعتين — شجرة العمل نظيفة بعد التشغيل (نفس فئة R-605).
+- وثائق الحوكمة: `ROADMAP.md`, `PROJECT_STATE.md`.
+
+### ملاحظات
+- تحقق فعلي: `python3 nexus/main.py` يعمل؛ `python -m pytest tests/ -q` → `51 passed, 1 warning`؛ `git status --short` نظيف بعد تشغيل الخادم والاختبارات؛ WebSocket `/ws/{user_id}` و`/api/ws` يمنعان `shutdown the system` بـ `safety-block` (عميل WebSocket حقيقي). سُجل القرار D-024.
 
 ---
 

@@ -12,10 +12,17 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Set
 
+# R-611: تثبيت المسارات على جذر المستودع — تعمل من أي دليل عمل
+import os as _os
+_REPO_ROOT = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
+def _repo_path(rel: str):
+    return str(_os.path.join(_REPO_ROOT, rel))
+
+
 logger = logging.getLogger("guardian.integrity")
 
-INTEGRITY_DB   = Path("guardian/data/integrity_baseline.json")
-INTEGRITY_LOG  = Path("guardian/data/integrity_events.jsonl")
+INTEGRITY_DB   = Path(_repo_path("guardian/data/integrity_baseline.json"))
+INTEGRITY_LOG  = Path(_repo_path("guardian/data/integrity_events.jsonl"))
 
 # الملفات والمجلدات المحمية (لا يجوز تعديلها دون إذن السيد)
 PROTECTED_PATHS = [

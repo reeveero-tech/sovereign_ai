@@ -1,4 +1,5 @@
 # متوافق مع requirements.txt في الجذر (تم توحيده في M1)
+# R-611: مزامنة كاملة مع الجذر — أُضيف pycryptodome (تشفير AES-256-CBC) و pytest (الاختبارات)
 fastapi==0.115.0
 uvicorn[standard]==0.30.0
 websockets==13.0
@@ -8,3 +9,6 @@ httpx==0.27.0
 numpy==1.26.4
 scikit-learn==1.3.0
 scipy==1.13.0
+pycryptodome==3.24.1
+
+pytest==9.1.1

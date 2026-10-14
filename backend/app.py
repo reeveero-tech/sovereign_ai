@@ -37,7 +37,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.gzip import GZipMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, ConfigDict, Field, validator
 import uvicorn
 
 # مسار مجلد الواجهة الأمامية
@@ -125,14 +125,15 @@ class ChatMessage(BaseModel):
     user_id: str = Field(default="anonymous", max_length=100, description="معرف المستخدم")
     session_id: Optional[str] = Field(default=None, description="معرف الجلسة")
     
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "text": "من أنت؟",
                 "user_id": "user_123",
                 "session_id": None
             }
         }
+    )
 
 
 class ChatResponse(BaseModel):
@@ -150,14 +151,15 @@ class SovereignCommand(BaseModel):
     parameters: Dict[str, Any] = Field(default_factory=dict, description="معاملات الأمر")
     api_key: str = Field(..., description="مفتاح API الخاص بالسيد")
     
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "command": "reset",
                 "parameters": {},
                 "api_key": "your_api_key_here"
             }
         }
+    )
 
 
 class SovereignCommandResponse(BaseModel):
