@@ -38,18 +38,50 @@ class TestPrimitives:
         assert p.files_imported_count() > 0, "files_imported_count must be > 0"
 
     def test_3_keys_stats_has_state(self, repo_root):
+        """R-671: في clone نظيف، keyring.json غير موجود (سر — لا يُدفع).
+
+        الاختبار يتقبل الحالتين:
+        - في المشروع الكامل: keyring موجود → يفحص الحالة
+        - في clone نظيف: keyring غير موجود → stats = 0 (لا فشل)
+        """
         p = self._primitives(repo_root)
         stats = p.keys_stats()
-        assert stats["keys_total"] > 0, "keyring.json must have keys"
-        assert stats["keys_with_state"] > 0, "keys must have state"
-        assert 0.0 <= stats["ratio"] <= 1.0, "ratio must be 0-1"
+        keyring_path = repo_root / "data" / "keys" / "keyring.json"
+
+        if not keyring_path.exists():
+            # clone نظيف — keyring.json غير موجود (سر — لا يُدفع)
+            # الاختبار يتحقق أن الدالة تُعيد قيمة فارغة صحيحة (لا ينهار)
+            assert stats["keys_total"] == 0, "empty keyring must return keys_total=0"
+            assert stats["keys_with_state"] == 0
+            assert stats["ratio"] == 0.0
+        else:
+            # المشروع الكامل — يفحص الحالة الفعلية
+            assert stats["keys_total"] > 0, "keyring.json must have keys"
+            assert stats["keys_with_state"] > 0, "keys must have state"
+            assert 0.0 <= stats["ratio"] <= 1.0, "ratio must be 0-1"
 
     def test_4_ledger_events_stats(self, repo_root):
+        """R-671: في clone نظيف، ledger.jsonl غير موجود (بيانات وقت تشغيل).
+
+        الاختبار يتقبل الحالتين:
+        - في المشروع الكامل: ledger موجود → يفحص الأحداث
+        - في clone نظيف: ledger غير موجود → stats = 0 (لا فشل)
+        """
         p = self._primitives(repo_root)
         stats = p.ledger_events_stats()
-        assert stats["events_total"] > 0, "ledger must have events"
-        assert stats["events_signed"] > 0, "ledger must have signed events"
-        assert 0.0 <= stats["ratio"] <= 1.0
+        ledger_path = repo_root / "data" / "sovereign_core" / "ledger.jsonl"
+
+        if not ledger_path.exists():
+            # clone نظيف — ledger.jsonl غير موجود (بيانات وقت تشغيل — 45MB)
+            # الاختبار يتحقق أن الدالة تُعيد قيمة فارغة صحيحة (لا ينهار)
+            assert stats["events_total"] == 0, "empty ledger must return events_total=0"
+            assert stats["events_signed"] == 0
+            assert stats["ratio"] == 0.0
+        else:
+            # المشروع الكامل — يفحص الأحداث الفعلية
+            assert stats["events_total"] > 0, "ledger must have events"
+            assert stats["events_signed"] > 0, "ledger must have signed events"
+            assert 0.0 <= stats["ratio"] <= 1.0
 
     def test_5_anchors_stats(self, repo_root):
         p = self._primitives(repo_root)

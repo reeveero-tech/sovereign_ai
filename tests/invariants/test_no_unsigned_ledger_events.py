@@ -116,6 +116,18 @@ def test_all_anchors_valid():
     # R-619: استخدام المسارات الحقيقية مباشرة
     _real_ledger = _REPO_ROOT / "data" / "sovereign_core" / "ledger.jsonl"
     _real_anchors = _REPO_ROOT / "data" / "sovereign_core" / "ledger.anchors.jsonl"
+
+    # R-671 (البوابة 2): في clone نظيف، ledger.jsonl غير موجود
+    # (بيانات وقت تشغيل — 45MB، لا تُدفع). المراسي تشير لأحداث
+    # غير موجودة → الجذر يفشل. هذا ليس خطأ في الكود — هو غياب بيانات.
+    # الاختبار يُتخطى (skip) — لا فشل.
+    if not _real_ledger.exists():
+        pytest.skip(
+            "ledger.jsonl not present (runtime data — not tracked in git). "
+            "Anchors reference events that don't exist in a clean clone. "
+            "This is expected behavior, not a failure."
+        )
+
     anchor = LedgerAnchor(ledger_path=_real_ledger, anchors_path=_real_anchors)
     anchors = anchor.list_anchors()
 
