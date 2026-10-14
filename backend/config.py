@@ -51,14 +51,32 @@ def get_project_root() -> Path:
 
 BASE_DIR = get_project_root()
 
+# عزل بيانات الاختبار (R-615): يسمح بإعادة توجيه مجلد البيانات إلى جذر مؤقت
+# عبر متغير البيئة SOVEREIGN_DATA_ROOT — تستخدمه الاختبارات لعزل بياناتها
+# عن بيانات التشغيل الحقيقية (data/). يجب تعيينه قبل استيراد هذا الملف.
+# ملاحظة: لا يُلمس هذا المتغير في التشغيل العادي — القيمة الافتراضية هي
+# BASE_DIR / 'data' كما هو الأصل. لا حذف، لا تعديل للسلوك الأصلي.
+_TEST_DATA_ROOT = os.getenv("SOVEREIGN_DATA_ROOT")
+if _TEST_DATA_ROOT:
+    # عزل فعلي: كل المسارات المشتقة من DATA_DIR ستشير إلى الجذر المؤقت
+    DATA_DIR = Path(_TEST_DATA_ROOT)
+    # مجلدات إضافية تُعزل أيضًا (logs, cache, temp) لتجنب أي كتابة خارج الجذر
+    _ISOLATED_ROOT = DATA_DIR.parent
+    LOGS_DIR = _ISOLATED_ROOT / "logs"
+    CACHE_DIR = _ISOLATED_ROOT / "cache"
+    TEMP_DIR = _ISOLATED_ROOT / "temp"
+else:
+    # المسارات الأصلية (التشغيل العادي — لا تغيير)
+    DATA_DIR = BASE_DIR / "data"
+    LOGS_DIR = BASE_DIR / "logs"
+    CACHE_DIR = BASE_DIR / "cache"
+    TEMP_DIR = BASE_DIR / "temp"
+
 # المجلدات الرئيسية
 BACKEND_DIR = BASE_DIR / "backend"
 FRONTEND_DIR = BASE_DIR / "frontend"
-DATA_DIR = BASE_DIR / "data"
+# ملاحظة: DATA_DIR محدد أعلاه (أصلي أو معزول)
 EXPERIMENTS_DIR = BASE_DIR / "experiments"
-LOGS_DIR = BASE_DIR / "logs"
-CACHE_DIR = BASE_DIR / "cache"
-TEMP_DIR = BASE_DIR / "temp"
 
 # ============================================================
 # 3. ملفات البيانات الأساسية

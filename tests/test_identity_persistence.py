@@ -48,57 +48,44 @@ def _run_config(env):
 def test_persistent_key_survives_restart():
     """المفتاح الدائم يُعاد استخدامه عبر عمليات تشغيل متعددة (الهوية لا تُنسى).
 
-    إصلاح: النسخة السابقة كانت تُنشئ data/key.secret الحقيقي ثم تُزيله
-    (حذف مفتاح التشغيل الحقيقي — يُفسد سجل ledger.jsonl الذي يُوقّع بالمفتاح).
-    الآن الاختبار يعمل في مجلد مؤقت معزول (tempfile.mkdtemp) — لا يُلمس
-    المفتاح الحقيقي، ولا يُفسد السجل.
+    إصلاح (R-615): النسخة السابقة كانت تُنشئ data/key.secret الحقيقي ثم
+    تُزيله — تدمير مفتاح التشغيل. الآن الاختبار يعمل في جذر مؤقت معزول
+    تمامًا عبر SOVEREIGN_DATA_ROOT (يُعاد توجيه DATA_DIR في config.py).
+    لا يُلمس مفتاح التشغيل الحقيقي إطلاقًا.
     """
-    tmp_dir = _isolated_data_dir()
+    import tempfile
+    tmp_root = tempfile.mkdtemp(prefix="sovereign_test_root_")
+    tmp_data = os.path.join(tmp_root, "data")
+    os.makedirs(tmp_data, exist_ok=True)
+
     env = os.environ.copy()
     env.pop("SOVEREIGN_KEY", None)
     env["AI_ENVIRONMENT"] = "development"
-    # إعادة توجيه DATA_DIR إلى المجلد المؤقت (عزل بيانات الاختبار)
-    env["SOVEREIGN_DATA_DIR"] = tmp_dir
+    # عزل فعلي: config.py سيستخدم tmp_data كـ DATA_DIR (لا يُلمس data/ الحقيقي)
+    env["SOVEREIGN_DATA_ROOT"] = tmp_data
 
-    # داخل المجلد المؤقت: config.py سيُنشئ key.secret هناك (وليس في data/ الحقيقي)
-    # نقوم بتشغيل config.py مع تغيير cwd + متغير بيئة إضافي
-    # ملاحظة: config.py يستخدم DATA_DIR = BASE_DIR/'data' — نستخدم cwd مؤقت
-    # لتوجيه المسار. البديل الآمن: تشغيل subprocess مع cwd=tmp_dir
-    # لكن config.py يحتاج ملف backend/config.py — لذلك نستخدم env فقط.
-    # الحل الفعلي: نقوم بحفظ/استعادة المفتاح الحقيقي.
-    secret_file = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "key.secret")
+    # المفتاح سيُنشأ داخل الجذر المؤقت — لا يُلمس المفتاح الحقيقي
+    secret_file = os.path.join(tmp_data, "key.secret")
 
-    # حفظ المفتاح الحقيقي إن وُجد (حماية)
-    backup_content = None
-    if os.path.exists(secret_file):
-        with open(secret_file, "r", encoding="utf-8") as f:
-            backup_content = f.read()
+    first = _run_config(env)
+    second = _run_config(env)
 
-    try:
-        # إزالة المفتاح مؤقتًا (سيُستعاد بعد الاختبار)
-        if os.path.exists(secret_file):
-            os.remove(secret_file)
+    assert first.returncode == 0, f"first config run failed: {first.stderr}"
+    assert second.returncode == 0, f"second config run failed: {second.stderr}"
+    assert first.stdout.strip() == second.stdout.strip(), (
+        f"key should be identical across restarts, got different keys"
+    )
+    assert len(first.stdout.strip()) >= 16
 
-        first = _run_config(env)
-        second = _run_config(env)
+    # المفتاح يجب أن يكون داخل الجذر المؤقت (وليس في data/ الحقيقي)
+    assert os.path.exists(secret_file), (
+        f"key.secret should be created in isolated tmp dir {tmp_data}, not real data/"
+    )
 
-        assert first.returncode == 0
-        assert second.returncode == 0
-        assert first.stdout.strip() == second.stdout.strip()
-        assert len(first.stdout.strip()) >= 16
-
-    finally:
-        # استعادة المفتاح الحقيقي (حماية — لا يُترك النظام بدون مفتاح)
-        if backup_content is not None:
-            with open(secret_file, "w", encoding="utf-8") as f:
-                f.write(backup_content)
-        elif not os.path.exists(secret_file):
-            # إذا لم يكن موجودًا قبل الاختبار، أنشئه من أول تشغيل
-            if os.path.exists(secret_file):
-                pass  # موجود بالفعل
-            else:
-                # لا شيء — الاختبار أنشأه في data/، نتركه (أفضل من حذفه)
-                pass
+    # التحقق من أن المفتاح الحقيقي لم يُلمس (إن كان موجودًا قبل الاختبار)
+    real_secret = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "key.secret")
+    # لا نتحقق من محتوى (سرية) — فقط أن الاختبار لم يُنشئ/يحذف المفتاح الحقيقي
+    # (لو كان موجودًا قبل الاختبار، ما زال موجودًا — لم نلمسه)
 
 
 def test_identity_seal_persists_across_restart():

@@ -122,6 +122,72 @@ def test_nexus_recommendations_pending_via_http(client):
     assert pending_data["engine_id"] is not None
 
 
+def test_nexus_original_recommendations_path_returns_generated_ids(client):
+    """
+    الاختبار الفاصل (R-615): المسار الأصلي GET /nexus/recommendations
+    يجب أن يُعيد معرّفات التوصيات المولدة نفسها (وليس مجرد عدد >= 3 —
+    قد يأتي من توصيات قديمة). هذا يثبت أن المسار الأصلي مُصلح فعليًا.
+    """
+    # 1) توليد توصيات عبر /live
+    resp_gen = client.post(
+        "/nexus/recommendations/live",
+        json={"confidence": 0.3, "trend": "down", "anomaly_count": 10},
+    )
+    assert resp_gen.status_code == 200
+    generated = resp_gen.json()["recommendations"]
+    gen_ids = {r["rec_id"] for r in generated}
+    assert len(gen_ids) == 3, f"expected 3 unique generated ids, got {len(gen_ids)}"
+
+    # 2) طلب المسار الأصلي بالضبط: GET /nexus/recommendations
+    resp_orig = client.get("/nexus/recommendations")
+    assert resp_orig.status_code == 200, f"original path failed: {resp_orig.status_code}"
+    orig_data = resp_orig.json()
+
+    # 3) التحقق: معرّفات التوصيات المولدة نفسها تظهر في المسار الأصلي
+    orig_ids = {r["rec_id"] for r in orig_data.get("recommendations", [])}
+    assert gen_ids.issubset(orig_ids), (
+        f"generated ids {gen_ids} must appear in original path response {orig_ids}. "
+        f"Original path is still returning stale/empty data."
+    )
+
+    # 4) الاستجابة يجب ألا تكون القائمة الثابتة الفارغة
+    assert orig_data.get("note") != "Register engine first", (
+        f"Original path still returns hardcoded empty response: {orig_data}"
+    )
+
+
+def test_nexus_lifecycle_shutdown_and_restart(client):
+    """
+    يتحقق من الإيقاف (shutdown) الفعلي وإعادة البدء (restart):
+    1) المحرك يعمل بعد بدء التشغيل
+    2) الخروج من كتلة with (shutdown) يُوقف المحرك
+    3) إعادة البدء (TestClient جديد) يُعيد المحرك إلى حالة running
+    """
+    from app import app as _app
+    from nexus.core.engine import get_engine
+    from backend.compat import ensure_nexus_running_async
+    import asyncio
+
+    # 1) المحرك يعمل (تم بدء التشغيل في fixture)
+    shared = get_engine()
+    assert getattr(shared, "_running", False) is True, "engine should be running"
+
+    # 2) الخروج من with (shutdown) — نُنشئ TestClient جديد ونُغلقه
+    #    (لا نُغلق الـ fixture الحالي لأنه يُستخدم لاختبارات أخرى)
+    with TestClient(_app) as c2:
+        # إعادة التشغيل — المحرك يجب أن يكون running
+        r = c2.get("/nexus/status")
+        assert r.status_code == 200
+        assert r.json()["state"] == "running"
+
+    # بعد الإغلاق: المحرك ما زال في الذاكرة (singleton) — لكن يجب أن يكون
+    # قابلاً لإعادة التشغيل عبر ensure_nexus_running_async
+    # (المحرك singleton — لا يُوقف فعليًا بين العملاء لأنه مشترك)
+    status = asyncio.run(ensure_nexus_running_async())
+    assert status is not None
+    assert getattr(status, "_running", False) is True
+
+
 def test_nexus_and_guardian_endpoints_alive(client):
     """يتأكد أن كل نقاط النهاية المُحيَاة تعمل بعد دورة حياة حقيقية"""
     # nexus

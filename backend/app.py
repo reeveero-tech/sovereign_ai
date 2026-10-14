@@ -301,6 +301,7 @@ from backend.compat import (
     generate_live_recommendations,
     get_pending_recommendations,
 )
+from backend.compat.nexus_router_compat import register_compat_router
 
 # إضافة نقطة /guardian/status — إحياء guardian/ بشكل قابل للتشخيص دون تفعيل EmergencyBreaker
 @app.get("/guardian/status")
@@ -337,6 +338,14 @@ async def nexus_recommendations_live(context: RecommendationContext):
 async def nexus_recommendations_pending():
     """التوصيات المعلقة من RecommendationEngine المسجل في NexusCore"""
     return get_pending_recommendations()
+
+
+# إصلاح المسار الأصلي GET /nexus/recommendations (R-615):
+# المسار الأصلي في nexus/api_gateway/router.py يعيد قائمة فارغة ثابتة رغم
+# أن RecommendationEngine مسجل. هذه الطبقة تُسجّل route جديد لنفس المسار
+# يُعيد التوصيات المعلقة الفعلية. (FastAPI يُطابق آخر route مسجّل أولاً —
+# لذلك هذا يُصلح المسار الأصلي دون تعديل الملف الأصلي.)
+register_compat_router(app)
 
 # ============================================================
 # نقاط API العامة (بدون مصادقة)
