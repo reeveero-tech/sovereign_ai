@@ -633,8 +633,8 @@ class SovereignCompressor:
         # إعادة تحميل الفهرس
         self._index = self._load_index()
     
-        # تسجيل حدث إعادة التهيئة
-        self.core.append_event(
+        # تسجيل حدث إعادة التهيئة (R-613: get_core بدلاً من self.core غير المعرّف)
+        get_core().append_event(
             event_type="memory::compress_reset",
             payload={
                 "timestamp": time.time(),
@@ -643,6 +643,13 @@ class SovereignCompressor:
         )
     
         logger.info("✅ إعادة تهيئة الضغط الأسطوري اكتملت - جاهز لضغط جديد")
+    def _load_index(self) -> Dict[str, Any]:
+        """تحميل فهرس الضغط (R-613: كان مفقوداً — reset() يستدعيه)"""
+        return {
+            "compressions": len(self.compression_history),
+            "last_updated": time.time()
+        }
+
     def __init__(self):
         self.symbolic = SymbolicCompressor()
         self.semantic = SemanticCompressor()

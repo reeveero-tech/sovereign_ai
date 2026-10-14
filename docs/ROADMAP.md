@@ -2,7 +2,7 @@
 
 > إلى أين نذهب؟ هذه الوثيقة هي **المرجع الوحيد** للعمل. لا يُعمل على بند غير موجود هنا.
 > كل دفعة يجب أن تحدّث بنداً في هذه الخارطة (قاعدة الدفعة الذرية).
-> آخر تحديث: 2026-10-14 (الدفعة M6 — R-612)
+> آخر تحديث: 2026-10-14 (الدفعة M6 — R-613)
 
 ---
 
@@ -566,11 +566,33 @@
 
 ---
 
+## 2) R-613 — التدقيق العميق: إصلاح 3 أخطاء حقيقية (إعادة تعيين المحاكاة + أداء التنبؤ + إعادة تعيين الضاغط)
+
+- **الهدف**: مواصلة التدقيق العميق للملفات الكبيرة (R-609/R-612) — إصلاح كل خطأ من نفس الصنف: استدعاء دوال غير معرّفة، مراجع ذاتية غير موجودة، وأداء بطيء يسبب انتهاء مهلة.
+- **ما كان مكسوراً (أخطاء حقيقية اكتشفها التدقيق)**:
+  1. **`SimulationEnvironmentManager.reset()` كان مكسوراً** (`backend/simulation/simulation_environment.py:170`) — يستدعي `_now_iso()` و`self._load_index()` غير المعرّفتين، ويشير إلى خصائص غير موجودة (`environment_state`, `environment_history`, `_index`, `policies`). كان يُستدعى من `simulation_controller.py:218` داخل `try/except pass` — الخطأ يُبتلع بصمت. (نفس صنف R-609)
+  2. **`/components/predictive` كان ينتهي بوقت (timeout >20s)** — سببان: (أ) `verify_integrity()` كان يمشي السجل الكامل (9141 حدثاً) في كل استدعاء لأن `_integrity_cache` كان يُصفَّر عند كل إضافة حدث (خلفية اللقطات) → فرع الكاش 60s لا يُصل أبداً؛ (ب) `get_simulation_results()`/`get_recommendations()` كانا يشغّلان محاكاة كاملة 100×12 عند قراءة حالة فقط (~3.4s).
+  3. **`SovereignCompressor.reset()` كان مكسوراً** (`backend/memory/compress.py:634`) — يستدعي `self._load_index()` غير المعرّفة و`self.core.append_event(...)` مع `self.core` غير المعيّن أبداً في `__init__`. (نفس صنف R-609)
+- **ما أُنجز**:
+  1. **إصلاح `reset()` للمحاكاة**: إعادة تعيين حقيقية للحالة (templates/parameter_sets/instances/active_template/active_parameter_set) + دالة `_now_iso()` على مستوى الوحدة. تحقق: `SimulationEnvironmentManager().reset()` و`SimulationController().reset()` يعملان.
+  2. **إصلاح أداء التنبؤ**: إزالة تصفير `_integrity_cache` عند الإضافة (كاش 60s يكفي) → `verify_integrity()` 0.0s بعد الإضافة (كان ~2.5s)؛ `get_simulation_results()`/`get_recommendations()` يشغّلان دورة صغيرة 10×6 بدل 100×12. `get_risk_status()` 1.61s (كان 13.65s)؛ النقطة 200 في 2.04s بارد / 0.002s دافئ (كانت timeout >20s).
+  3. **إصلاح `SovereignCompressor.reset()`**: `_load_index()` حقيقية (فهرس الضغط) + `get_core()` بدل `self.core` (مطابقاً لـ `compress_from_core`). تحقق: `reset()` يعمل مرتين.
+  4. **فحص ثابت شامل**: مسح كل ملفات backend — لا استدعاء `self.<method>()` بدون تعريف، ولا استدعاء دالة وحدة غير معرّفة (كل النتائج كانت استيرادات كسولة داخل الدوال — سليمة).
+  5. **فحص وقت تشغيل للملفات الكبيرة**: orchestrator, quantum_state, directives, simulation_analyzer, predictive_engine, memory/dynamic — كل واجهاتها العامة تعمل.
+  6. **6 اختبارات انحدار جديدة** (`tests/test_simulation_reset_r613.py`, `tests/test_compress_reset_r613.py`, `tests/test_predictive_perf_r613.py`) → 62 اختباراً تمر.
+- **النطاق**: `backend/simulation/simulation_environment.py`, `backend/memory/core.py`, `backend/predictive/predictive_simulation.py`, `backend/memory/compress.py`, `backend/app.py` (تنظيف متغيرات ميتة), `.gitignore` (استثناء `guardian/data/emergency/emergency_backups/*/data/`), 3 ملفات اختبار, وثائق الحوكمة.
+- **خارج النطاق**: لا تغيير في `Mr.py` (محمي D-005)؛ لا تغيير في قفل guardian (D-006)؛ لا إضافة نموذج LLM خارجي (D-010 قائم).
+- **معيار القبول**: `pytest tests/` → 62 passed؛ `SimulationEnvironmentManager().reset()` و`SovereignCompressor().reset()` لا يرميان؛ `/components/predictive` → 200 في <5s؛ `git status` نظيف بعد تشغيل كامل.
+- **دليل التحقق**: `python -m pytest tests/ -q` → `62 passed, 1 warning`؛ `SimulationEnvironmentManager().reset()` → templates 0/param_sets 0/instances 0؛ `SovereignCompressor().reset()` → `_index` يحتوي `compressions`؛ `/components/predictive` → 200 في 2.04s بارد؛ `git status --short` → نظيف.
+- **ملاحظات**: سُجل القرار D-026.
+
+---
+
 ## 3) ملخص الحالة
 
 | الحالة | العدد |
 |---|---|
-| done | 38 (R-001..R-003, R-101..R-112, R-201..R-203, R-301..R-303, R-401..R-403, R-501..R-502, R-601..R-612) |
+| done | 39 (R-001..R-003, R-101..R-112, R-201..R-203, R-301..R-303, R-401..R-403, R-501..R-502, R-601..R-613) |
 | in_progress | 0 |
 | proposed | 0 |
 | blocked | 0 |
@@ -594,3 +616,4 @@
 | 2026-10-14 | R-610: الهوية السيادية الدائمة — مفتاح سيد مستمر عبر إعادة التشغيل (data/key.secret) + 3 اختبارات + 51 اختباراً | M6 |
 | 2026-10-14 | R-611: تحصين الإنتاج — إصلاح نقطة دخول nexus/main.py + إلغاء تتبع بيانات وقت التشغيل (guardian_events.jsonl, nexus.db) + صفر تحذيرات Pydantic (ConfigDict) + مزامنة backend/requirements.txt | M6 |
 | 2026-10-14 | R-612: الذكاء السيادي الحقيقي — ربط NexusCore بدورة المنسق (لغة + مشاعر + نية) + إصلاح قرار المتحكم السيادي (final_decision) + ذاكرة طويلة حقيقية (store/audit) + ردود حقيقية + حذف memory.py الميت + 5 اختبارات + 56 اختباراً | M6 |
+| 2026-10-14 | R-613: التدقيق العميق — إصلاح 3 أخطاء حقيقية (reset المحاكاة، أداء التنبؤ، reset الضاغط) + فحص ثابت شامل + 6 اختبارات + 62 اختباراً | M6 |

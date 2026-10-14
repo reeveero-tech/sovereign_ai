@@ -301,7 +301,6 @@ async def health_check():
     فحص صحة النظام - يستخدمه مراقبو الخدمات (Kubernetes, Docker, etc.)
     """
     orchestrator = app.state.orchestrator
-    status = orchestrator.get_status()
     
     # التحقق من صحة المكونات الرئيسية
     components_healthy = all(
@@ -409,11 +408,9 @@ async def chat(message: ChatMessage, background_tasks: BackgroundTasks):
     if result.decision:
         action = result.decision.get('action', 'continue')
         source = result.decision.get('source', 'orchestrator')
-        reasoning = result.decision.get('reasoning', [])
         
         # فهم NexusCore: لغة + مشاعر + نية
         nexus_perception = (result.perception or {}).get("nexus", {})
-        lang = nexus_perception.get("language", {}).get("code", "")
         sentiment_label = nexus_perception.get("sentiment", {}).get("label", "")
         intent_name = nexus_perception.get("intent", {}).get("name", "")
         

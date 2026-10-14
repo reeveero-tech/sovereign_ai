@@ -90,3 +90,6 @@ nexus_data/files/
 nexus_data/keys/
 nexus_data/reports/
 nexus_data/security/
+
+# بيانات وقت تشغيل النسخ الاحتياطية للطوارئ (تُنشأ تلقائياً)
+guardian/data/emergency/emergency_backups/*/data/
