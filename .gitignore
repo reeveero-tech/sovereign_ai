@@ -57,6 +57,9 @@ nohup.out
 !forensics/gate4_red_v3.log
 !forensics/gate4_green_v3.log
 
+# R-680e: استثناء — سجل التشغيل النهائي (دليل جنائي — يجب أن يكون متتبعاً)
+!forensics/final_clean_run.log
+
 # R-667: استثناء — سجلات البوابة 5 (دليل جنائي — يجب أن تكون متتبعة)
 !forensics/gate5_baseline.log
 !forensics/gate5_green.log

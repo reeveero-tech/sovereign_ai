@@ -1,0 +1,47 @@
+...........s.....sss.....................ssss........................... [ 24%]
+............s................................s.......................... [ 49%]
+........................................................................ [ 74%]
+........................................................................ [ 98%]
+...                                                                      [100%]
+=============================== warnings summary ===============================
+../../usr/local/lib/python3.14/site-packages/ddtrace/internal/module.py:305
+  /usr/local/lib/python3.14/site-packages/ddtrace/internal/module.py:305: PendingDeprecationWarning: Please use `import python_multipart` instead.
+    self.loader.exec_module(module)
+
+../../home/user/.local/lib/python3.14/site-packages/starlette/testclient.py:40
+  /home/user/.local/lib/python3.14/site-packages/starlette/testclient.py:40: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.
+    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]
+
+../../home/user/.local/lib/python3.14/site-packages/starlette/_utils.py:40: 64 warnings
+tests/invariants/test_all_entrypoints_respond.py: 2 warnings
+tests/test_agent_ledger.py: 2 warnings
+tests/test_api.py: 21 warnings
+tests/test_gate1_actual_auth.py: 20 warnings
+tests/test_gate1_header_auth.py: 20 warnings
+tests/test_health.py: 10 warnings
+tests/test_ledger_verify_endpoint.py: 10 warnings
+tests/test_nexus_lifecycle_integration.py: 14 warnings
+tests/test_no_key_in_logs.py: 4 warnings
+tests/test_safety_layer.py: 4 warnings
+tests/test_sovereign_response_r614.py: 8 warnings
+tests/test_sovereignty_score.py: 2 warnings
+  /home/user/.local/lib/python3.14/site-packages/starlette/_utils.py:40: DeprecationWarning: 'asyncio.iscoroutinefunction' is deprecated and slated for removal in Python 3.16; use inspect.iscoroutinefunction() instead
+    return asyncio.iscoroutinefunction(obj) or (callable(obj) and asyncio.iscoroutinefunction(obj.__call__))
+
+../../home/user/.local/lib/python3.14/site-packages/fastapi/routing.py:233: 60 warnings
+  /home/user/.local/lib/python3.14/site-packages/fastapi/routing.py:233: DeprecationWarning: 'asyncio.iscoroutinefunction' is deprecated and slated for removal in Python 3.16; use inspect.iscoroutinefunction() instead
+    is_coroutine = asyncio.iscoroutinefunction(dependant.call)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+SKIPPED [1] tests/invariants/test_keyring_immutability.py:121: key.secret not found in clean clone (R-680c) — config.py will generate it on first run (Source 4, R-610)
+SKIPPED [1] tests/invariants/test_no_unsigned_ledger_events.py:39: real ledger not found
+SKIPPED [1] tests/invariants/test_no_unsigned_ledger_events.py:125: ledger.jsonl not present (runtime data — not tracked in git). Anchors reference events that don't exist in a clean clone. This is expected behavior, not a failure.
+SKIPPED [1] tests/invariants/test_no_unsigned_ledger_events.py:170: real ledger not found
+SKIPPED [1] tests/test_api_key_rotation_gate1.py:42: key.secret not found in clean clone (R-680c)
+SKIPPED [1] tests/test_api_key_rotation_gate1.py:50: key.secret not found in clean clone (R-680c)
+SKIPPED [1] tests/test_api_key_rotation_gate1.py:62: key.secret not found in clean clone (R-680c)
+SKIPPED [1] tests/test_api_key_rotation_gate1.py:72: key.secret not found in clean clone (R-680c)
+SKIPPED [1] tests/test_gate1_operational_auth.py:35: R-661: operational test requires --run-operational (reads host secrets, writes real data — not for regular suite)
+SKIPPED [1] tests/test_ledger_anchor.py:319: real ledger not found: /tmp/cleanclone9/data/sovereign_core/ledger.jsonl
+281 passed, 10 skipped, 243 warnings in 134.28s (0:02:14)

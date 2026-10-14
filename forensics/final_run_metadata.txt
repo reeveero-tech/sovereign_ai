@@ -1,0 +1,9 @@
+# R-680e — تقرير التشغيل النهائي (metadata)
+Date: 2026-10-15 (Asia/Riyadh)
+HEAD: 7743d62d35d54a12731a2d392103b4a5a5f3279a
+Source: git clone https://git-agent-proxy.perplexity.ai/reeveero-tech/sovereign_ai.git
+Command: python3 -m pytest tests/ backend/tests/ -q -rs --junitxml=results.xml
+Environment: Python 3.14.3, Linux, sandbox
+Result: 281 passed + 10 skipped = 291, 0 failed, exit=0
+JUnit file: forensics/pytest_results.xml
+Raw log: forensics/final_clean_run.log
