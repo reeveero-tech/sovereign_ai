@@ -79,3 +79,14 @@ guardian/data/guardian_events.jsonl
 
 # قاعدة بيانات NexusCore (تُنشأ تلقائياً)
 nexus_data/nexus.db
+
+# بيانات وقت تشغيل NexusCore (تُنشأ تلقائياً عند كل دورة)
+nexus_data/store/
+nexus_data/audit/
+nexus_data/backups/
+nexus_data/emergency/
+nexus_data/exports/
+nexus_data/files/
+nexus_data/keys/
+nexus_data/reports/
+nexus_data/security/

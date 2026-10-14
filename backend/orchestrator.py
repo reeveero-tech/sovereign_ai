@@ -837,6 +837,88 @@ class SovereignOrchestrator:
             quantum_status = self._safe_call(self.quantum, "get_controller_status", default={})
             perception["quantum"] = quantum_status
         
+        # ========================================================
+        # R-612: فهم النص عبر NexusCore (S-7) — الذكاء السيادي
+        # يقرأ ما يقوله السيد فعلياً: اللغة، المشاعر، النية، الكلمات
+        # ========================================================
+        if self.nexus:
+            text = ""
+            if isinstance(input_data, dict):
+                text = input_data.get("text", "") or ""
+            if text:
+                nexus_perception = {}
+                
+                # معالجة النص (تنظيف + ترميز + كلمات مفتاحية)
+                text_proc = self.nexus.get_component("text_proc")
+                if text_proc:
+                    processed = self._safe_call(text_proc, "process", text, default=None)
+                    if processed is not None:
+                        nexus_perception["processed"] = {
+                            "word_count": getattr(processed, "word_count", 0),
+                            "char_count": getattr(processed, "char_count", 0),
+                            "keywords": getattr(processed, "keywords", []),
+                            "sentences": getattr(processed, "sentences", []),
+                            "language": getattr(processed, "language", ""),
+                        }
+                
+                # كشف اللغة
+                lang_detect = self.nexus.get_component("lang_detect")
+                if lang_detect:
+                    lang = self._safe_call(lang_detect, "detect", text, default=None)
+                    if lang is not None:
+                        nexus_perception["language"] = {
+                            "code": getattr(lang, "language", ""),
+                            "confidence": getattr(lang, "confidence", 0.0),
+                            "script": getattr(lang, "script", ""),
+                            "mixed": getattr(lang, "mixed", False),
+                        }
+                
+                # تحليل المشاعر
+                sentiment = self.nexus.get_component("sentiment")
+                if sentiment:
+                    senti = self._safe_call(sentiment, "analyze", text, default=None)
+                    if senti is not None:
+                        nexus_perception["sentiment"] = {
+                            "score": getattr(senti, "score", 0.0),
+                            "label": getattr(senti, "label", "neutral"),
+                            "confidence": getattr(senti, "confidence", 0.0),
+                            "language": getattr(senti, "language", ""),
+                        }
+                
+                # كشف النية
+                intent = self.nexus.get_component("intent")
+                if intent:
+                    detected = self._safe_call(intent, "recognize", text, default=None)
+                    if detected is not None:
+                        nexus_perception["intent"] = {
+                            "name": getattr(detected, "name", "unknown"),
+                            "confidence": getattr(detected, "confidence", 0.0),
+                            "matched_patterns": getattr(detected, "matched_patterns", []),
+                            "entities": getattr(detected, "entities", {}),
+                        }
+                
+                # استخراج الكيانات
+                if text_proc:
+                    entities = self._safe_call(text_proc, "extract_entities", text, default={})
+                    if entities:
+                        nexus_perception["entities"] = entities
+                
+                # تسجيل الحدث في NexusCore (المجمع + السجل)
+                collector = self.nexus.get_component("collector")
+                if collector:
+                    self._safe_call(collector, "ingest", "orchestrator", {
+                        "text": text[:500],
+                        "cycle_id": cycle_id,
+                        "perception": nexus_perception,
+                    }, {"source": "orchestrator_cycle"})
+                
+                perception["nexus"] = nexus_perception
+                self._log("info", "🧠 NexusCore فهم النص", {
+                    "language": nexus_perception.get("language", {}).get("code", ""),
+                    "sentiment": nexus_perception.get("sentiment", {}).get("label", ""),
+                    "intent": nexus_perception.get("intent", {}).get("name", ""),
+                })
+        
         return perception
     
     def _analyze_future(self, perception: Dict[str, Any], cycle_id: str) -> Dict[str, Any]:
@@ -991,11 +1073,49 @@ class SovereignOrchestrator:
         if controller:
             controller_decision = self._safe_call(controller, "controller_cycle", default=None)
             if controller_decision:
-                if hasattr(controller_decision, "sovereign_decision"):
-                    decision["action"] = controller_decision.sovereign_decision.get("primary_directive", "noop")
-                    decision["confidence"] = controller_decision.global_priority
+                # R-612: ControllerSnapshot يحمل final_decision (FinalDecision)
+                # وليس sovereign_decision — كان القرار السيادي يُتجاهل دائماً
+                final_decision = getattr(controller_decision, "final_decision", None)
+                if final_decision is not None:
+                    command_name = getattr(final_decision, "command_name", "continue")
+                    # خريطة أوامر المتحكم السيادي إلى إجراءات المنسق
+                    _controller_action_map = {
+                        "continue": "continue",
+                        "emergency_shutdown": "activate_defense",
+                        "recalibrate": "monitor",
+                        "adjust_priorities": "monitor",
+                        "realign": "monitor",
+                    }
+                    decision["action"] = _controller_action_map.get(command_name, "continue")
+                    decision["confidence"] = getattr(controller_decision, "global_priority", 0.5)
                     decision["source"] = "sovereign_controller"
-                    decision["reasoning"].append(f"قرار من متحكم السيادة: {decision['action']}")
+                    decision["reasoning"].append(f"قرار من متحكم السيادة: {command_name}")
+        
+        # R-612: توجيه القرار بنية المستخدم (NexusCore) — إذا طلب السيد
+        # تحليلاً أو تنبؤاً أو حالة، يستجيب الذكاء السيادي مباشرة
+        if decision["action"] == "continue":
+            nexus_perception = perception.get("nexus", {})
+            intent_name = nexus_perception.get("intent", {}).get("name", "")
+            if intent_name == "analyze":
+                decision["action"] = "explore"
+                decision["confidence"] = max(decision["confidence"], 0.7)
+                decision["source"] = "nexus_intent"
+                decision["reasoning"].append("نية المستخدم: تحليل — تفعيل الاستكشاف")
+            elif intent_name == "forecast":
+                decision["action"] = "monitor"
+                decision["confidence"] = max(decision["confidence"], 0.65)
+                decision["source"] = "nexus_intent"
+                decision["reasoning"].append("نية المستخدم: تنبؤ — تفعيل المراقبة")
+            elif intent_name == "status":
+                decision["action"] = "monitor"
+                decision["confidence"] = max(decision["confidence"], 0.6)
+                decision["source"] = "nexus_intent"
+                decision["reasoning"].append("نية المستخدم: حالة — تفعيل المراقبة")
+            elif intent_name == "alert":
+                decision["action"] = "activate_defense"
+                decision["confidence"] = max(decision["confidence"], 0.8)
+                decision["source"] = "nexus_intent"
+                decision["reasoning"].append("نية المستخدم: تنبيه — تفعيل الدفاع")
         
         # إذا لم يكن هناك قرار من السيادة، استخدم التحليل
         if decision["action"] == "noop":
@@ -1130,6 +1250,22 @@ class SovereignOrchestrator:
                           {"consciousness": compression.get("consciousness", "")[:16]})
         except Exception as _compress_err:
             memory_update["compression"] = {"active": False, "error": str(_compress_err)[:100]}
+        
+        # ========================================================
+        # R-612: تخزين الدورة في NexusCore (S-7) — الذاكرة الطويلة
+        # + سجل التدقيق الموقّع
+        # ========================================================
+        if self.nexus:
+            store = self.nexus.get_component("store")
+            if store:
+                self._safe_call(store, "save", "cycles", cycle_id, record,
+                                {"source": "orchestrator", "action": decision.get("action", "")})
+                memory_update["status"] = "stored_in_nexus"
+            
+            audit = self.nexus.get_component("audit")
+            if audit:
+                self._safe_call(audit, "log", "orchestrator", "cycle", f"cycle:{cycle_id}",
+                                {"action": decision.get("action", ""), "success": execution_result.get("status", "")})
         
         memory_update["details"] = {"record_size": len(str(record))}
         

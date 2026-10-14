@@ -619,10 +619,29 @@ async def websocket_endpoint(websocket: WebSocket):
                     
                     result = orch.run_cycle(input_data)
                     
-                    # توليد رد الذكاء
+                    # توليد رد الذكاء — R-612: رد حقيقي مبني على فهم النص
                     reply = "تم استلام رسالتك. الذكاء السيادي يعالج طلبك."
                     if result.success and result.decision:
-                        reply = f"تم تنفيذ القرار: {result.decision.get('action', 'continue')}"
+                        action = result.decision.get('action', 'continue')
+                        source = result.decision.get('source', 'orchestrator')
+                        nexus_perception = (result.perception or {}).get("nexus", {})
+                        intent_name = nexus_perception.get("intent", {}).get("name", "")
+                        sentiment_label = nexus_perception.get("sentiment", {}).get("label", "")
+                        
+                        if source == "nexus_intent" and intent_name:
+                            intent_ar = {
+                                "greet": "تحية", "help": "مساعدة", "status": "حالة النظام",
+                                "analyze": "تحليل", "forecast": "تنبؤ", "alert": "تنبيه", "stop": "إيقاف",
+                            }.get(intent_name, intent_name)
+                            reply = f"فهمت — نيتك: {intent_ar}. القرار: {action}."
+                        elif source == "sovereign_controller":
+                            reply = f"قرار المتحكم السيادي: {action}."
+                        else:
+                            reply = f"تم تنفيذ القرار: {action}."
+                        
+                        if sentiment_label and sentiment_label != "neutral":
+                            sentiment_ar = {"positive": "إيجابية", "negative": "سلبية"}.get(sentiment_label, sentiment_label)
+                            reply += f" (مشاعرك: {sentiment_ar})"
                     
                     await manager.send_message(client_id, {
                         "type": "ai_message",

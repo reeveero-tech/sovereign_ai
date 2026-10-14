@@ -404,10 +404,39 @@ async def chat(message: ChatMessage, background_tasks: BackgroundTasks):
     
     processing_time = (time.time() - start_time) * 1000
     
-    # استخراج الرد من النتيجة
+    # استخراج الرد من النتيجة — R-612: رد حقيقي مبني على فهم النص
     reply = "تم استلام رسالتك. أنا الذكاء السيادي، جاهز لخدمتك."
     if result.decision:
-        reply = f"تم تنفيذ القرار: {result.decision.get('action', 'continue')}"
+        action = result.decision.get('action', 'continue')
+        source = result.decision.get('source', 'orchestrator')
+        reasoning = result.decision.get('reasoning', [])
+        
+        # فهم NexusCore: لغة + مشاعر + نية
+        nexus_perception = (result.perception or {}).get("nexus", {})
+        lang = nexus_perception.get("language", {}).get("code", "")
+        sentiment_label = nexus_perception.get("sentiment", {}).get("label", "")
+        intent_name = nexus_perception.get("intent", {}).get("name", "")
+        
+        if source == "nexus_intent" and intent_name:
+            intent_ar = {
+                "greet": "تحية",
+                "help": "مساعدة",
+                "status": "حالة النظام",
+                "analyze": "تحليل",
+                "forecast": "تنبؤ",
+                "alert": "تنبيه",
+                "stop": "إيقاف",
+            }.get(intent_name, intent_name)
+            reply = f"فهمت — نيتك: {intent_ar}. القرار: {action}."
+        elif source == "sovereign_controller":
+            reply = f"قرار المتحكم السيادي: {action}."
+        else:
+            reply = f"تم تنفيذ القرار: {action}."
+        
+        # إضافة فهم المشاعر إن وُجد
+        if sentiment_label and sentiment_label != "neutral":
+            sentiment_ar = {"positive": "إيجابية", "negative": "سلبية"}.get(sentiment_label, sentiment_label)
+            reply += f" (مشاعرك: {sentiment_ar})"
     
     return ChatResponse(
         reply=reply,
@@ -890,10 +919,29 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str):
             
             result = orchestrator.run_cycle(input_data)
             
-            # إرسال الرد
+            # إرسال الرد — R-612: رد حقيقي مبني على فهم النص
             reply = f"تم استلام رسالتك: '{text}'. أنا الذكاء السيادي."
             if result.decision:
-                reply = f"القرار: {result.decision.get('action', 'continue')}"
+                action = result.decision.get('action', 'continue')
+                source = result.decision.get('source', 'orchestrator')
+                nexus_perception = (result.perception or {}).get("nexus", {})
+                intent_name = nexus_perception.get("intent", {}).get("name", "")
+                sentiment_label = nexus_perception.get("sentiment", {}).get("label", "")
+                
+                if source == "nexus_intent" and intent_name:
+                    intent_ar = {
+                        "greet": "تحية", "help": "مساعدة", "status": "حالة النظام",
+                        "analyze": "تحليل", "forecast": "تنبؤ", "alert": "تنبيه", "stop": "إيقاف",
+                    }.get(intent_name, intent_name)
+                    reply = f"فهمت — نيتك: {intent_ar}. القرار: {action}."
+                elif source == "sovereign_controller":
+                    reply = f"قرار المتحكم السيادي: {action}."
+                else:
+                    reply = f"تم تنفيذ القرار: {action}."
+                
+                if sentiment_label and sentiment_label != "neutral":
+                    sentiment_ar = {"positive": "إيجابية", "negative": "سلبية"}.get(sentiment_label, sentiment_label)
+                    reply += f" (مشاعرك: {sentiment_ar})"
             
             await manager.send_message(session_id, json.dumps({
                 "type": "reply",
