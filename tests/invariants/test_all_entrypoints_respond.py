@@ -32,6 +32,7 @@ REQUIRED_ENDPOINTS = [
     "/guardian/status",
     "/ledger/verify",
     "/compat/status",
+    "/sovereignty/score",
 ]
 
 

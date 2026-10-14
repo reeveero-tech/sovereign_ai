@@ -443,6 +443,36 @@ async def root():
     return HTMLResponse(content="<h1>Sovereign AI</h1><p>Frontend not found</p>")
 
 
+@app.get("/sovereignty/score")
+async def sovereignty_score():
+    """
+    درجة السيادة (Sovereignty Score) — المرحلة 5 من ROADMAP_V2.
+    يقيس المسافة بين 'يعمل' و 'سيادي' برقم واحد (0-100).
+    """
+    from backend.sovereign.score import SovereigntyScorer
+
+    scorer = SovereigntyScorer()
+    report = scorer.compute()
+
+    return {
+        "total_score": report.total_score,
+        "grade": report.grade,
+        "timestamp": report.timestamp,
+        "axes": [
+            {
+                "name": a.name,
+                "score": round(a.score, 2),
+                "weight": a.weight,
+                "weighted_score": round(a.weighted_score, 2),
+                "details": a.details,
+                "issues": a.issues,
+            }
+            for a in report.axes
+        ],
+        "summary": report.summary,
+    }
+
+
 @app.get("/compat/status")
 async def compat_status():
     """
