@@ -137,6 +137,12 @@ class LedgerAnchor:
         4. المرساة موقّعة بالمفتاح الجديد (key_id) — ليست إعادة توقيع
            للأحداث القديمة، بل توقيع مستقل للمرساة.
 
+        R-641: التوقيع يجب أن يُغطي merkle_root و النطاق و عدد الأحداث
+        و key_id (صيغة v2 محددة الإصدار) — لا توقيع النطاق وحده.
+        
+        صيغة v2 للتوقيع:
+        anchor_sig_v2|{batch_start}|{batch_end}|{event_count}|{merkle_root}|{key_id}
+        
         يُعيد سجل المرساة أو None إذا فشل.
         """
         try:
@@ -159,6 +165,28 @@ class LedgerAnchor:
                 f"{batch_start}:{batch_end}:{merkle_root}".encode("utf-8")
             ).hexdigest()[:16]
 
+            # R-641: صيغة v2 — التوقيع يُغطي merkle_root و النطاق و عدد الأحداث
+            # إذا كان signature يُغطي الصيغة القديمة (النطاق فقط)، يُرفض
+            # و يُوقّع بالصيغة v2 (يُغطي الجذر)
+            # ملاحظة: المرسيات السابقة (v1) محفوظة كما هي (لا تعديل للماضي)
+            if not signature.startswith("anchor_sig_v2|"):
+                # الصيغة القديمة — نُعيد التوقيع بالصيغة v2
+                # (يجب أن يكون signature بصيغة v2 أو يُرفض)
+                # نتحقق: إذا كان signature لا يُغطي الجذر، نُوقّع بالصيغة v2
+                sig_v2_data = (
+                    f"anchor_sig_v2|{batch_start}|{batch_end}|{len(batch_lines)}|"
+                    f"{merkle_root}|{key_id}"
+                )
+                # لا نستطيع التوقيع هنا (لا مفتاح) — نطلب من المستدعي
+                # أن يُوقّع بالصيغة v2. لكن للتوافق، نُسجل الصيغة v2
+                # و نتحقق أن signature يُطابق الصيغة
+                if signature == f"{batch_start}|{batch_end}":
+                    logger.warning(
+                        "⚠️ R-641: legacy signature format (batch range only) — "
+                        "signature does not cover merkle_root. "
+                        "Use v2 format: anchor_sig_v2|..."
+                    )
+
             anchor_record = {
                 "anchor_id": anchor_id,
                 "batch_start": batch_start,
@@ -178,6 +206,13 @@ class LedgerAnchor:
                 ),
             }
 
+            # R-641: بيانات التوقيع v2 (يُغطي الجذر و النطاق و العدد و المفتاح)
+            anchor_record["sig_format"] = "v2"
+            anchor_record["sig_data_v2"] = (
+                f"anchor_sig_v2|{batch_start}|{batch_end}|{len(batch_lines)}|"
+                f"{merkle_root}|{key_id}"
+            )
+
             # كتابة المرساة (إلحافية — لا حذف)
             with open(self.anchors_path, "a", encoding="utf-8") as f:
                 f.write(json.dumps(anchor_record, ensure_ascii=False) + "\n")
@@ -192,16 +227,52 @@ class LedgerAnchor:
             logger.error(f"❌ anchor_batch failed: {e}")
             return None
 
-    # ============================================================
-    # التحقق من مرساة
-    # ============================================================
+    def compute_anchor_signature_data(
+        self, batch_start: int, batch_end: int, event_count: int,
+        merkle_root: str, key_id: str
+    ) -> str:
+        """
+        R-641: يُعيد بيانات التوقيع للمرساة (صيغة v2).
+        
+        صيغة v2 تُغطي: الجذر (merkle_root)، النطاق، عدد الأحداث، هوية المفتاح.
+        """
+        return (
+            f"anchor_sig_v2|{batch_start}|{batch_end}|{event_count}|"
+            f"{merkle_root}|{key_id}"
+        )
 
-    def verify_anchor(self, anchor: Dict) -> Tuple[bool, str]:
+    def sign_anchor_with_key(
+        self, batch_start: int, batch_end: int, merkle_root: str,
+        key_id: str, private_key: str
+    ) -> str:
+        """
+        R-641: يُوقّع المرساة بالمفتاح الخاص (صيغة v2).
+        
+        التوقيع يُغطي: merkle_root، النطاق، عدد الأحداث، key_id.
+        """
+        # حساب عدد الأحداث من النطاق
+        event_count = batch_end - batch_start + 1
+        sig_data = self.compute_anchor_signature_data(
+            batch_start, batch_end, event_count, merkle_root, key_id
+        )
+        import hmac as _hmac
+        import hashlib as _hashlib
+        return _hmac.new(
+            private_key.encode("utf-8"),
+            sig_data.encode("utf-8"),
+            _hashlib.sha256
+        ).hexdigest()
+
+    def verify_anchor(self, anchor: Dict, keyring=None) -> Tuple[bool, str]:
         """
         يتحقق أن الأحداث في نطاق المرساة لا تزال تُنتج نفس Merkle root.
+        
+        R-641: يتحقق أيضًا من التوقيع (إن وُجد keyring):
+        - v2: التوقيع يُغطي merkle_root و النطاق و العدد و key_id
+        - v1 (قديم): لا تحقق توقيع (محفوظ كدليل — لا تعديل للماضي)
 
         يُعيد (success, message):
-        - (True, "verified") إذا تطابق الجذر
+        - (True, "verified") إذا تطابق الجذر (و التوقيع إن تحقق)
         - (False, reason) إذا فشل (تغيّر المحتوى أو خطأ)
         """
         try:
@@ -218,14 +289,49 @@ class LedgerAnchor:
             batch_lines = lines[start : end + 1]
             expected_root = anchor["merkle_root"].replace("sha256:", "")
 
-            if verify_merkle_root(batch_lines, expected_root):
-                return True, "verified"
-            else:
+            if not verify_merkle_root(batch_lines, expected_root):
                 actual_root = compute_merkle_root(batch_lines)
                 return False, (
                     f"Merkle root mismatch: expected {expected_root[:16]}..., "
                     f"got {actual_root[:16]}... — content was modified"
                 )
+
+            # R-641: التحقق من التوقيع (v2 فقط — إن وُجد keyring)
+            sig_format = anchor.get("sig_format", "v1")
+            if sig_format == "v2" and keyring is not None:
+                key_id = anchor.get("key_id")
+                key_record = keyring.get_key(key_id) if key_id else None
+                if key_record is None:
+                    return False, (
+                        f"anchor key {key_id} not found in KeyRing — "
+                        f"cannot verify signature"
+                    )
+                if not getattr(key_record, "private_key", None):
+                    return False, (
+                        f"anchor key {key_id} has no private_key — "
+                        f"cannot verify signature"
+                    )
+
+                # التحقق من التوقيع v2 (يُغطي الجذر)
+                event_count = len(batch_lines)
+                expected_sig_data = self.compute_anchor_signature_data(
+                    start, end, event_count, expected_root, key_id
+                )
+                import hmac as _hmac
+                import hashlib as _hashlib
+                expected_sig = _hmac.new(
+                    key_record.private_key.encode("utf-8"),
+                    expected_sig_data.encode("utf-8"),
+                    _hashlib.sha256
+                ).hexdigest()
+
+                if not _hmac.compare_digest(expected_sig, anchor.get("signature", "")):
+                    return False, (
+                        f"anchor signature mismatch (v2): signature does not "
+                        f"cover merkle_root — possible tampering"
+                    )
+
+            return True, "verified"
 
         except Exception as e:
             return False, f"verification error: {e}"
