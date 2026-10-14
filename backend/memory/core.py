@@ -258,6 +258,24 @@ class BlobStore:
         """التحقق من وجود blob"""
         return self._blob_path(blob_hash).exists()
     
+    def verify_content_hash(self, blob_hash: str) -> bool:
+        """
+        R-648: التحقق من أن محتوى blob يُطابق تجزئته.
+        
+        يقرأ البيانات المضغوطة و يُعيد حساب التجزئة — إذا تغيّر المحتوى
+        (تزييف)، التجزئة لن تُطابق blob_hash المُسجل.
+        """
+        path = self._blob_path(blob_hash)
+        if not path.exists():
+            return False
+        try:
+            with open(path, "rb") as f:
+                stored = f.read()
+            actual_hash = sha256_hash(stored)
+            return actual_hash == blob_hash
+        except Exception:
+            return False
+    
     def delete(self, blob_hash: str) -> bool:
         """حذف blob (نادراً ما يُستخدم، السيادة تعني عدم الحذف)"""
         path = self._blob_path(blob_hash)
@@ -915,9 +933,9 @@ class SovereignCore:
                         logger.error(f"❌ فشل في السطر {line_num}: تجزئة الحدث غير متطابقة")
                         return IntegrityStatus.CORRUPTED
                     
-                    # 3) التحقق من وجود الـ blob
-                    if not self.blob_store.exists(event['blob']):
-                        logger.error(f"❌ فشل في السطر {line_num}: blob غير موجود: {event['blob'][:16]}...")
+                    # 3) التحقق من وجود الـ blob و محتواه (R-648 — hash)
+                    if not self.blob_store.verify_content_hash(event['blob']):
+                        logger.error(f"❌ فشل في السطر {line_num}: blob غير موجود أو محتواه مُعدّل: {event['blob'][:16]}...")
                         return IntegrityStatus.CORRUPTED
                     
                     prev_hash = event['hash']

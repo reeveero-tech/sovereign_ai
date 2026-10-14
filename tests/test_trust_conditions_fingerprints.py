@@ -205,7 +205,12 @@ class TestAnchorTrustConditions:
         assert detailed["trusted"] is True
 
     def test_content_modified_root_recalculated_no_resign_fails(self, tmp_path):
-        """تعديل المحتوى و إعادة حساب الجذر دون إعادة التوقيع: فشل التوقيع."""
+        """تعديل المحتوى و إعادة حساب الجذر (تحديث المرساة) دون إعادة التوقيع:
+        الجذر ينجح لكن التوقيع يفشل — لا تغطية موثوقة.
+        
+        R-649: هذا يختبر السيناريو الفعلي: المهاجم يُعدّل المحتوى و يُحدّث
+        الجذر في المرساة لكنه لا يستطيع إعادة التوقيع (لا يملك المفتاح).
+        """
         keyring = self._make_keyring(tmp_path)
         anchor = self._make_anchor(tmp_path)
         active = keyring.get_active_key()
@@ -224,10 +229,23 @@ class TestAnchorTrustConditions:
         modified_lines[2] = json.dumps(modified_event)
         ledger_file.write_text("\n".join(modified_lines) + "\n")
 
-        # التحقق — الجذر يجب أن يفشل (المحتوى تغيّر)
-        detailed = anchor.verify_anchor_detailed(result, keyring=keyring)
-        assert detailed["root_verified"] is False, (
-            "tampered content must fail root verification"
+        # R-649: المهاجم يُحدّث الجذر في نسخة المرساة (دون إعادة التوقيع)
+        tampered_lines = anchor.read_ledger_lines()
+        new_merkle_root = compute_merkle_root(tampered_lines)
+        tampered_anchor = dict(result)
+        tampered_anchor["merkle_root"] = f"sha256:{new_merkle_root}"
+        # التوقيع يبقى القديم (لا يُعاد — المهاجم لا يملك المفتاح)
+
+        # التحقق — الجذر ينجح (المهاجر حدّثه) لكن التوقيع يفشل
+        detailed = anchor.verify_anchor_detailed(tampered_anchor, keyring=keyring)
+        assert detailed["root_verified"] is True, (
+            f"root should verify (attacker updated it): {detailed['message']}"
+        )
+        assert detailed["signature_verified"] is False, (
+            f"signature must FAIL (old sig does not cover new root): {detailed['message']}"
+        )
+        assert detailed["trusted"] is False, (
+            f"must not be trusted (sig does not cover new root): {detailed['message']}"
         )
 
     def test_changed_event_count_fails(self, tmp_path):
@@ -314,10 +332,14 @@ class TestAnchorTrustConditions:
 
 
 class TestBlobContentIntegrity:
-    """R-646: فحص تغيير محتوى blob موجود."""
+    """R-646/R-648: فحص تغيير محتوى blob موجود (hash، ليس الوجود فقط)."""
 
     def test_blob_content_change_detected(self, tmp_path):
-        """تغيير محتوى blob موجود: يُكتشف (سلامة المحتوى)."""
+        """تغيير محتوى blob موجود: يُكتشف (CORRUPTED) — سلامة المحتوى.
+        
+        R-648: verify_content_integrity يفحص hash المحتوى (وليس الوجود فقط).
+        المحتوى المُعدّل يجب أن يُنتج CORRUPTED (ليس VERIFIED).
+        """
         _keys_dir = tmp_path / "keys"
         _keys_dir.mkdir(exist_ok=True)
         keyring = KeyRing(keys_dir=_keys_dir)
@@ -345,29 +367,55 @@ class TestBlobContentIntegrity:
         status_before = core.verify_content_integrity()
         assert status_before.value == "verified", f"content integrity before: {status_before}"
 
-        # تغيير محتوى blob (تزييف)
-        blob_files = list((_core_dir / "blobs").rglob("*"))
-        blob_files = [f for f in blob_files if f.is_file()]
-        assert len(blob_files) > 0, "must have at least one blob"
+        # R-648: تحديد ملف blob المرتبط تحديدًا بـ blob_hash (وليس أول ملف)
+        blob_path = core.blob_store._blob_path(blob_hash)
+        assert blob_path.exists(), f"blob file must exist: {blob_path}"
+        original_content = blob_path.read_bytes()
 
-        # تعديل محتوى الـ blob
-        blob_file = blob_files[0]
-        original_content = blob_file.read_bytes()
-        # تغيير المحتوى (إضافة بايت)
-        blob_file.write_bytes(original_content + b"\x00tampered")
+        # تغيير محتوى blob (تزييف) — إضافة بايت
+        blob_path.write_bytes(original_content + b"\x00tampered")
 
-        # التحقق بعد التغيير — يجب أن يفشل (blob hash لن يُطابق)
+        # R-648: التحقق بعد التغيير — يجب أن يُعيد CORRUPTED
+        # (hash المحتوى المُعدّل لا يُطابق blob_hash المُسجل)
         status_after = core.verify_content_integrity()
-        # قد يفشل (blob_hash mismatch) أو ينجح إذا كان التحقق من الوجود فقط
-        # المهم: لا ينجح مع محتوى مُعدّل
-        # (إذا كان التحقق من الوجود فقط، نتحقق من hash)
-        assert status_after.value in ("corrupted", "verified"), (
-            f"unexpected status after blob tampering: {status_after}"
+        assert status_after.value == "corrupted", (
+            f"tampered blob content must produce CORRUPTED, got: {status_after} — "
+            f"verify_content_integrity must check content hash (not existence only)"
         )
-        # التحقق من hash مباشرة
-        import hashlib as _hashlib
-        new_hash = _hashlib.sha256(blob_file.read_bytes()).hexdigest()
-        # الـ blob_hash المسجل في الحدث
-        assert new_hash != blob_hash or blob_hash not in new_hash, (
-            "tampered blob content must produce different hash"
+
+    def test_blob_verify_content_hash_detects_tamper(self, tmp_path):
+        """R-648: verify_content_hash يكتشف المحتوى المُعدّل."""
+        _keys_dir = tmp_path / "keys"
+        _keys_dir.mkdir(exist_ok=True)
+        keyring = KeyRing(keys_dir=_keys_dir)
+        keyring.generate_new_key(reason="blob_hash_test")
+        keyring.save_to_disk()
+
+        _core_dir = tmp_path / "sovereign_core"
+        _core_dir.mkdir(parents=True, exist_ok=True)
+        (_core_dir / "blobs").mkdir(exist_ok=True)
+
+        core = SovereignCore(
+            log_file=_core_dir / "ledger.jsonl",
+            blobs_dir=_core_dir / "blobs",
+            index_file=_core_dir / "index.json",
+            meta_file=_core_dir / "meta.json",
+            integrity_file=_core_dir / "integrity.json",
+            keyring=keyring,
+        )
+
+        # كتابة حدث
+        r = core.append_event(EventType.INTERACTION, {"test": "hash_check"}, user="test")
+        blob_hash = r["blob"]
+
+        # قبل التغيير — hash صحيح
+        assert core.blob_store.verify_content_hash(blob_hash) is True
+
+        # تعديل المحتوى
+        blob_path = core.blob_store._blob_path(blob_hash)
+        blob_path.write_bytes(blob_path.read_bytes() + b"tampered")
+
+        # بعد التغيير — hash لا يُطابق
+        assert core.blob_store.verify_content_hash(blob_hash) is False, (
+            "verify_content_hash must detect tampered content"
         )
