@@ -185,14 +185,26 @@ def _scan_silent_exceptions():
 
         try:
             src = p.read_text(encoding="utf-8")
-        # TOLERATED: unreadable file — excluded from scan (R-680d)
-        except Exception:
+        # R-681 (open item 4): warn on unreadable files, do NOT silently skip
+        except Exception as e:
+            import warnings
+            warnings.warn(
+                f"Scanner: file unreadable and excluded from scan: {rel_posix} ({type(e).__name__}: {e}). "
+                f"This file was NOT scanned for silent exceptions. "
+                f"Investigate manually if it contains production code."
+            )
             continue
 
         try:
             tree = ast.parse(src)
-        # TOLERATED: unparsable AST — excluded from scan (R-680d)
-        except SyntaxError:
+        # R-681 (open item 4): warn on unparsable AST, do NOT silently skip
+        except SyntaxError as e:
+            import warnings
+            warnings.warn(
+                f"Scanner: file has syntax error and excluded from scan: {rel_posix} (line {e.lineno}: {e.msg}). "
+                f"This file was NOT scanned for silent exceptions. "
+                f"Investigate manually if it contains production code."
+            )
             continue
 
         lines = src.split("\n")

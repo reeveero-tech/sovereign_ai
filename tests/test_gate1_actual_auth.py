@@ -154,9 +154,12 @@ class TestActualAuthentication:
         app_module = self._setup_app_key(monkeypatch, new_key)
 
         # R-653: إسكات سجلات httpx (يُسجّل رابط الطلب — يحتوي master_key)
-        httpx_logger = logging.getLogger("httpx")
-        httpx_logger.setLevel(logging.WARNING)
-        httpx_logger.propagate = False
+        # R-681: httpx >=0.28 uses logger name "httpx2" instead of "httpx".
+        # Silence both names to cover old and new httpx versions.
+        for logger_name in ("httpx", "httpx2"):
+            httpx_logger = logging.getLogger(logger_name)
+            httpx_logger.setLevel(logging.WARNING)
+            httpx_logger.propagate = False
 
         import io
         log_capture = io.StringIO()
@@ -178,5 +181,6 @@ class TestActualAuthentication:
             assert new_key[:10] not in log_content, "logs must not contain key prefix"
         finally:
             root_logger.removeHandler(handler)
-            # استعادة httpx
-            httpx_logger.propagate = True
+            # استعادة httpx (R-681: كلا الاسمين httpx و httpx2)
+            for logger_name in ("httpx", "httpx2"):
+                logging.getLogger(logger_name).propagate = True
