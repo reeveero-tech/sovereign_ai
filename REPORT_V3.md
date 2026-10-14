@@ -357,7 +357,100 @@ if key_record.status in (KeyStatus.COMPROMISED, KeyStatus.EXPIRED, KeyStatus.RET
 `data/keys/keyring.json` لم يُحذف منه أي مفتاح — كل المفاتيح
 (بما فيها LOST/COMPROMISED) محفوظة كأثر جنائي.
 
-### تدقيق حدود التدقيق (R-669)
+### البوابة 3: سلامة تعريف المقياس — CLOSED (R-671)
+
+التاريخ: 2026-10-14
+المنهج: فصل المؤشرات الأولية عن الدرجة المُركّبة
+
+### الاعتراف (من المالك)
+
+> "الرقم يفشل في مبدأ واحد: لا يمكن التحقق منه من خارج المشروع."
+> "الأرقام التي تنتجها نفس الدالة التي تتحقق منها ليست درجة — هي مرآة."
+> "عندما نكتب اختبارات invariants ثم نضيفها إلى required_files في score.py،
+>  فإننا نرفع الدرجة بأنفسنا. هذا ليس قياساً، هذا أداء."
+
+### الإصلاح
+
+فصلت المقياس إلى طبقتين:
+
+**(A) المؤشرات الأولية (Primitives)** — `backend/sovereign/primitives.py`
+
+كل مؤشر قيمة واحدة قابلة للتحقق الخارجي:
+1. `files_total_count` — 272
+2. `files_imported_count` — 114
+3. `keys_stats` — ratio: 1.0 (2/2 keys have state)
+4. `ledger_events_stats` — ratio: 1.0 (116,913/116,913 signed)
+5. `anchors_stats` — ratio: 1.0 (6/6 verified)
+6. `invariants_stats` — 76 invariants
+7. `mocks_outside_tests_count` — 0
+8. `tests_passing_count` — تشغيلي (pytest)
+
+**(B) الدرجة المُركّبة (Composite)** — `backend/sovereign/composite.py`
+
+صيغة رياضية صريحة (كل مؤشر بوزن):
+```
+composite = (
+    0.25 * ledger_signed_ratio +
+    0.25 * anchors_verified_ratio +
+    0.20 * keys_state_ratio +
+    0.20 * no_mocks_in_production +
+    0.10 * no_orphan_modules
+) * 100
+```
+
+**النتيجة الحالية:** 100.0
+
+### الفرق بين الرقمين
+
+| | الرقم القديم (score.py) | الرقم الجديد (composite.py) |
+|---|---|---|
+| المنهج | 6 محاور معقدة (60 نقطة من required_files) | 5 مؤشرات أولية بأوزان صريحة |
+| قابلية التحقق الخارجي | ❌ لا (لا يستطيع طرف ثالث حساب 97.20) | ✅ نعم (كل مؤشر قابل للتحقق من الملفات) |
+| المرآة | ✅ نعم (نضيف invariants → نرفع الدرجة) | ❌ لا (المؤشرات مستقلة عن الاختبارات) |
+
+### الاختبار
+
+`backend/tests/invariants/test_gate3_primitives.py` — 14 اختبارًا
+- كل مؤشر أولي قابل للتحقق
+- الدرجة المُركّبة لها صيغة صريحة
+- الأوزان مجموعها 1.0
+- الدرجة 0-100
+
+## تدقيق Asymmetric Defense (R-670)
+
+**السبب:** النمط تكرر مرتين (البوابة 4 و البوابة 5).
+**النمط:** مسار الكتابة محمي، مسار القراءة/التحقق مكشوف.
+
+### المنهجية (تدقيق واسع — 1768 دالة)
+
+1. بحث AST لكل ملفات `backend/` (بدون tests/)
+2. لكل مسار كتابة (`create/sign/append/...`)، ابحث عن المسار المقابل في القراءة (`verify/check/get/...`)
+3. كل دالة تبدأ بـ `verify/check/validate/assert/confirm` — تُعيد `True` بشروط أضعف؟
+4. كل دالة تبدأ بـ `is_/has_/can_/should_` — تُعيد `True` بشروط أضعف؟
+
+### النتيجة
+
+**0 من 1768 دالة** تعاني من Asymmetric Defense لم تُصلح.
+- الثغرتان الأصليتان (R-664/R-665 و R-668) أُصلحتا
+- 5 مرشحين فُحصوا يدويًا — كلهم آمنون
+
+**التقرير:** `forensics/asymmetric_defense_audit.md`
+
+## تدقيق .gitignore (R-670)
+
+**السبب:** سؤال المالك — "baseline و true_red كانا مستثنيين. استثناء من ماذا؟"
+
+**الجواب:** الاستثناء كان من `*.log` في `.gitignore`. أي ملف جنائي جديد بامتداد `.log` لا يُدفع إلا إذا أُضيف استثناء صريح.
+
+### الإصلاح
+
+- `data/keys/HISTORY.jsonl` — أُضيف استثناء (مفاتيح عامة فقط — سجل جنائي)
+- `data/keys/keyring.json` — بقي مستثنى (سر فعلي — private_key)
+- `data/identity/identity_seal.bin` — بقي مستثنى (سر فعلي)
+
+**التقرير:** `forensics/GITIGNORE_AUDIT.md`
+
+## تدقيق حدود التدقيق (R-669)
 
 **الأرقام الفعلية (إعادة تشغيل):**
 - كل الدوال في backend/ (بدون tests/): **1596**

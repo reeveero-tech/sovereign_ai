@@ -1,0 +1,3 @@
+{"ts": "2026-10-14T06:49:28Z", "action": "KEY_CREATED", "key_id": "b8bf12ab28abfc01", "public_key": "963f5d3ca0f4b9f3b9d1d23693a0fd644dbf7244dc5a39ed2cd5c7e65aad20f4", "reason": "R-615: anchor for legacy events (original key lost)"}
+{"ts": "2026-10-14T11:02:48Z", "action": "KEY_CREATED", "key_id": "433759679aca9268", "public_key": "e291f5b90e3b5a8a1aaa034d12e9926503717b282619f47333abb2c2b4d14f07", "reason": "R-616: replacement for compromised key (exposed in git)"}
+{"ts": "2026-10-14T11:12:47Z", "action": "KEY_CREATED", "key_id": "979e95cbd4469226", "public_key": "9dc960015886f514899b142b3c502ab6eacf0935f0dcb6e77ed5b1609fdd02b5", "reason": "R-621 test"}

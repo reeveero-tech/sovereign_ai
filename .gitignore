@@ -115,9 +115,13 @@ nexus_data/security/
 
 # بيانات وقت تشغيل النسخ الاحتياطية للطوارئ (تُنشأ تلقائياً)
 guardian/data/emergency/emergency_backups/*/data/
+
+# R-670: ملفات جنائية في data/keys — تُدفع (لا تحتوي أسرار)
+# - HISTORY.jsonl: سجل إنشاء المفاتيح (مفاتيح عامة فقط — لا private)
+# - keyring.json: يحتوي private_key — سر فعلي، لا يُدفع
 data/keys/keyring.json
-data/keys/HISTORY.jsonl
 data/key.secret.old_rotated_2026_10_14
+!data/keys/HISTORY.jsonl
 
 # R-657: استعادة — سر، لا يُدفع
 data/key.secret.new
