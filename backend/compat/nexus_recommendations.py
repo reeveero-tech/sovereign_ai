@@ -62,8 +62,15 @@ def generate_live_recommendations(context: dict) -> dict:
     # توليد التوصيات من السياق المُمرَّر
     recs = recommender.generate(context or {})
 
+    # معرّف المحرك الحقيقي (المشترك) — لا None ثابت
+    try:
+        from nexus.core.engine import get_engine
+        engine_id = getattr(get_engine(), "engine_id", None)
+    except Exception:
+        engine_id = None
+
     return {
-        "engine_id": getattr(recommender, "_uuid", None) and None or None,
+        "engine_id": engine_id,
         "recommendations": [
             {
                 "rec_id": r.rec_id,
@@ -79,6 +86,51 @@ def generate_live_recommendations(context: dict) -> dict:
         ],
         "pending_count": len(getattr(recommender, "recommendations", [])),
         "note": "generated from live RecommendationEngine component",
+    }
+
+
+def get_pending_recommendations() -> dict:
+    """
+    يُعيد التوصيات المعلقة (pending) من RecommendationEngine المسجل —
+    هذا يصلح فجوة المسار الأصلي GET /nexus/recommendations الذي يعيد
+    قائمة فارغة ثابتة. المسار الجديد GET /nexus/recommendations/pending
+    يُعيد التوصيات المعلقة الفعلية من المكوّن المشترك.
+    """
+    recommender = get_recommendation_engine()
+    if recommender is None:
+        return {
+            "recommendations": [],
+            "error": "recommender component not registered — call initialize_nexus() first",
+            "engine_id": None,
+        }
+
+    # التوصيات المعلقة هي التي accepted is None (لم يُقرر عليها)
+    pending = [r for r in getattr(recommender, "recommendations", []) if getattr(r, "accepted", None) is None]
+
+    try:
+        from nexus.core.engine import get_engine
+        engine_id = getattr(get_engine(), "engine_id", None)
+    except Exception:
+        engine_id = None
+
+    return {
+        "engine_id": engine_id,
+        "recommendations": [
+            {
+                "rec_id": r.rec_id,
+                "title": r.title,
+                "description": r.description,
+                "category": r.category,
+                "priority": r.priority,
+                "confidence": r.confidence,
+                "requires_human_approval": r.requires_human_approval,
+                "data_basis": r.data_basis,
+                "accepted": getattr(r, "accepted", None),
+            }
+            for r in pending
+        ],
+        "pending_count": len(pending),
+        "note": "pending recommendations from live RecommendationEngine component",
     }
 
 

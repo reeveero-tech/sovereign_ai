@@ -295,7 +295,12 @@ except Exception as _nexus_err:
 # + إحياء guardian عبر /guardian/status (قراءة فقط)
 # لا يُحذف أو يُعدَّل أي ملف أصلي — هذه إضافات توافقية فقط.
 # ============================================================
-from backend.compat import ensure_nexus_running_async, guardian_status_snapshot, generate_live_recommendations
+from backend.compat import (
+    ensure_nexus_running_async,
+    guardian_status_snapshot,
+    generate_live_recommendations,
+    get_pending_recommendations,
+)
 
 # إضافة نقطة /guardian/status — إحياء guardian/ بشكل قابل للتشخيص دون تفعيل EmergencyBreaker
 @app.get("/guardian/status")
@@ -323,6 +328,15 @@ class RecommendationContext(_BM):
 async def nexus_recommendations_live(context: RecommendationContext):
     """توليد توصيات فعلية من RecommendationEngine المسجل في NexusCore"""
     return generate_live_recommendations(context.model_dump())
+
+
+# إضافة نقطة /nexus/recommendations/pending — يصلح فجوة المسار الأصلي
+# GET /nexus/recommendations (يعيد قائمة فارغة ثابتة). هذه النقطة تُعيد
+# التوصيات المعلقة الفعلية من المكوّن المشترك (accepted is None).
+@app.get("/nexus/recommendations/pending")
+async def nexus_recommendations_pending():
+    """التوصيات المعلقة من RecommendationEngine المسجل في NexusCore"""
+    return get_pending_recommendations()
 
 # ============================================================
 # نقاط API العامة (بدون مصادقة)

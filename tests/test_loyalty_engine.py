@@ -52,6 +52,13 @@ os._exit(0)  # رمز خروج متوقع: 0 عند النجاح (يُتجاهل
     )
     for line in (proc.stdout or "").splitlines():
         if line.startswith("__RESULT__"):
+            # تحقق صارم: رمز الخروج يجب أن يكون 0 (النجاح الفعلي)
+            # — لا قبول أي نتيجة من عملية فاشلة
+            if proc.returncode != 0:
+                pytest.fail(
+                    f"subprocess returned __RESULT__ but exit code is {proc.returncode} "
+                    f"(expected 0). stderr={proc.stderr!r}"
+                )
             return json.loads(line[len("__RESULT__"):])
 
     pytest.fail(
@@ -83,26 +90,35 @@ sys.path.insert(0, {str(_REPO_ROOT)!r})
 import Mr
 # استدعاء بدون bind_master → يجب أن يُشغّل الموت
 Mr.cannot_exist_without_master_code()
-sys.stdout.write("__UNEXPECTED__survived\n")
+sys.stdout.write("__UNEXPECTED__survived" + chr(10))
 sys.stdout.flush()
 os._exit(0)
 """
+    # تحقق أولي: wrapper قابل للترجمة (يمنع نجاحًا كاذبًا بسبب SyntaxError)
+    try:
+        compile(wrapper, "<loyalty-death-test>", "exec")
+    except SyntaxError as e:
+        pytest.fail(f"wrapper has SyntaxError (would cause false positive): {e}")
+
     proc = subprocess.run(
         [sys.executable, "-c", wrapper],
         capture_output=True, text=True, timeout=30,
         cwd=str(_REPO_ROOT),
     )
-    # العملية يجب ألا تُكمل إلى "__UNEXPECTED__survived" — أي أن الموت حدث
-    assert "__UNEXPECTED__survived" not in (proc.stdout or ""), (
+    stdout = proc.stdout or ""
+
+    # 1) علامة الموت الفعلية يجب أن تكون موجودة (الدليل الصارم)
+    # ملاحظة: Mr.py يستخدم sys.exit(0) للموت — لذلك لا يمكن الاعتماد على
+    # رمز خروج غير صفري. العلامة النصية هي الدليل الحاسم.
+    assert "SOVRA IS DEAD" in stdout, (
+        f"Death marker 'SOVRA IS DEAD' must be in stdout. "
+        f"returncode={proc.returncode}, stdout={stdout!r}, stderr={proc.stderr!r}"
+    )
+
+    # 2) العملية يجب ألا تُكمل إلى "__UNEXPECTED__survived"
+    assert "__UNEXPECTED__survived" not in stdout, (
         "cannot_exist_without_master_code() without bind should trigger death, "
         "but the subprocess survived unexpectedly."
-    )
-    # رمز الخروج يجب أن يكون غير صفر (الموت عبر os._exit / sys.exit)
-    # أو أن العملية طُبعت رسالة الموت. نتحقق من عدم النجاح العام.
-    death_marker = "SOVRA IS DEAD" in (proc.stdout or "") or "LOYALTY SEALED IN DEATH" in (proc.stdout or "")
-    assert death_marker or proc.returncode != 0, (
-        f"Expected death marker or non-zero exit code. "
-        f"returncode={proc.returncode}, stdout={proc.stdout!r}, stderr={proc.stderr!r}"
     )
 
 

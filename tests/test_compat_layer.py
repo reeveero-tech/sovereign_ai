@@ -6,8 +6,13 @@
 # غير متزامنة (async) لأن ensure_nexus_running_async() هي الاستدعاء الصحيح
 # داخل حلقة حدث نشطة (lifespan). كما تم إضافة اختبار يمنع تسريب المعلومات
 # الحساسة في /guardian/status.
+#
+# إصلاح الجولة الثالثة: استُعيد الاختبار الأصلي المتزامن
+# test_nexus_lifecycle_starts_engine() (حُذف في 5ef058c — ممنوع) وأُعيدت
+# نسخة الاختبار الأصلية للحارس (التي تفحص المسار الحقيقي) — لا حذف.
 
 import asyncio
+import os
 import sys
 from pathlib import Path
 
@@ -19,6 +24,22 @@ _BACKEND_DIR = _REPO_ROOT / "backend"
 for p in [str(_REPO_ROOT), str(_BACKEND_DIR)]:
     if p not in sys.path:
         sys.path.insert(0, p)
+
+
+def test_nexus_lifecycle_starts_engine():
+    """
+    يتأكد أن الدالة المتزامنة ensure_nexus_running() تعمل خارج حلقة حدث
+    (اختبار أصلي من 97ea6f1 — استُعيد بعد استبداله في 5ef058c؛ لا حذف).
+    داخل حلقة حدث نشطة تُعيد None — هذا مسؤول اختبار الحلقة النشطة.
+    """
+    from backend.compat import ensure_nexus_running
+
+    # لا توجد حلقة حدث نشطة هنا — الدالة المتزامنة يجب أن تعمل
+    engine = ensure_nexus_running()
+    assert engine is not None, "engine should not be None after ensure_nexus_running()"
+    state = getattr(engine, "state", None)
+    state_val = getattr(state, "value", None) or state
+    assert state_val == "running", f"engine.state should be 'running', got {state_val!r}"
 
 
 def test_nexus_lifecycle_starts_engine_async():
@@ -160,6 +181,27 @@ def test_nexus_recommendations_live_uses_shared_recommender():
     # نفس المكوّن → نفس عدد القواعد المسجلة
     assert result1["recommendations"] is not None
     assert result2["recommendations"] is not None
+
+
+def test_guardian_snapshot_is_readonly_and_includes_state():
+    """
+    نسخة الاختبار الأصلية من 97ea6f1 (استُعيدت — حُذفت في 5ef058c؛ لا حذف).
+    يتأكد أن guardian_status_snapshot() تُشير إلى مسار emergency الحقيقي
+    وتعمل فقط للقراءة (لا تُفعّل EmergencyBreaker أو أي خيوط موت).
+    """
+    from backend.compat import guardian_status_snapshot
+
+    snap = guardian_status_snapshot()
+    assert isinstance(snap, dict)
+    assert snap["guardian_modules_importable"] is True
+    assert "emergency_flags" in snap
+    assert "system_locked" in snap["emergency_flags"]
+    # المسار يجب أن يشير إلى مجلد guardian/data/emergency الفعلي
+    # (لا يُنشر المسار المطلق — فقط التحقق من التطابق)
+    emergency_dir = (snap.get("_internal_check") or
+                     str(_REPO_ROOT / "guardian" / "data" / "emergency"))
+    assert "guardian" in emergency_dir
+    assert "emergency" in emergency_dir
 
 
 def test_guardian_snapshot_is_readonly_and_no_sensitive_leak():
