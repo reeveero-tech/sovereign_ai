@@ -4,9 +4,13 @@
 # الإصلاح (طبقة توافق — لا تعديل للأصل): تُزوّد لحظة حالة للقراءة فقط
 # بحيث يصبح نظام الحارس مُتاحًا عبر /guardian/status دون أن يُفعّل EmergencyBreaker
 # تلقائيًا (لأن هذا سيجمّد النظام أثناء التطوير).
+#
+# إصلاح الجولة الثانية (ملاحظات المراجعة): كانت النسخة الأولى تعيد محتويات
+# ملفات القفل الخام (بما فيها reactivation_code_hash والمسارات المطلقة الداخلية).
+# هذا تسريب معلومات حساسة عبر نقطة نهاية عامة. النسخة الحالية تُعيد فقط
+# أعلام حالة تشخيصية غير حساسة (present / locked / frozen) دون أي محتوى خام.
 
 import logging
-import os
 import sys
 import time
 from pathlib import Path
@@ -22,21 +26,23 @@ if str(_REPO_ROOT) not in sys.path:
 _EMERGENCY_DIR = _REPO_ROOT / "guardian" / "data" / "emergency"
 
 
-def _read_flag(path: Path) -> Optional[dict]:
-    """يقرأ ملف علم/قفل الحارس إن وُجد — يُعيد None إذا لم يكن موجودًا"""
+def _flag_present(path: Path) -> bool:
+    """
+    يتحقق فقط من وجود ملف علم/قفل الحارس — لا يقرأ محتواه.
+    (لا يُعيد reactivation_code_hash أو أي بيانات حساسة)
+    """
     try:
-        if path.is_file():
-            import json
-            return {"present": True, "content": json.loads(path.read_text(encoding="utf-8"))}
+        return path.is_file()
     except Exception as e:
-        return {"present": True, "error": str(e)}
-    return None
+        logger.warning(f"⚠️ Guardian flag check failed for {path.name}: {e}")
+        return False
 
 
 def guardian_status_snapshot() -> dict:
     """
     يُعيد لحظة حالة نظام الحارس (قراءة فقط — لا يُفعّل أي إجراء).
-    يُستخدم لعرض /guardian/status والتشخيص دون المساس بحالة التشغيل.
+    تُستخدم لعرض /guardian/status والتشخيص دون المساس بحالة التشغيل.
+    لا تُعيد أي محتوى خام من ملفات emergency — فقط أعلام الحضور.
     """
     try:
         # محاولة استيراد الحارس (اختياري — يفشل بسلام إذا وُجد خلل)
@@ -46,13 +52,15 @@ def guardian_status_snapshot() -> dict:
         logger.warning(f"⚠️ Guardian import failed: {e}")
         modules_ok = False
 
+    # أعلام تشخيصية فقط — لا محتوى خام، لا مسارات مطلقة، لا تجزئات
     snapshot = {
         "guardian_modules_importable": modules_ok,
-        "emergency_state": {
-            "system_locked": _read_flag(_EMERGENCY_DIR / "SYSTEM_LOCKED.lock"),
-            "ai_frozen": _read_flag(_EMERGENCY_DIR / "AI_FROZEN.flag"),
-            "emergency_dir": str(_EMERGENCY_DIR),
+        "emergency_flags": {
+            # فقط present/absent — لا يُعاد أي محتوى الملف
+            "system_locked": _flag_present(_EMERGENCY_DIR / "SYSTEM_LOCKED.lock"),
+            "ai_frozen": _flag_present(_EMERGENCY_DIR / "AI_FROZEN.flag"),
         },
+        "note": "read-only diagnostic snapshot; no raw emergency file contents are exposed",
         "timestamp": time.time(),
     }
     return snapshot

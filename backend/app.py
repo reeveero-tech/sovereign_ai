@@ -212,8 +212,9 @@ async def lifespan(app: FastAPI):
     logger.info(f"📖 التوثيق: http://localhost:8000/docs")
     # طبقة توافق: تشغيل محرك NexusCore فعليًا (يصلح state=initializing الدائم)
     # انظر backend/compat/nexus_lifecycle.py — لا تعديل للأصل، بل استدعاء engine.start()
+    # ملاحظة: تُستخدم النسخة غير المتزامنة لأننا داخل حلقة حدث نشطة (lifespan)
     try:
-        ensure_nexus_running()
+        await ensure_nexus_running_async()
     except Exception as _nexus_lifecycle_err:
         logger.warning(f"⚠️ NexusCore lifecycle: {_nexus_lifecycle_err}")
     
@@ -294,7 +295,7 @@ except Exception as _nexus_err:
 # + إحياء guardian عبر /guardian/status (قراءة فقط)
 # لا يُحذف أو يُعدَّل أي ملف أصلي — هذه إضافات توافقية فقط.
 # ============================================================
-from backend.compat import ensure_nexus_running, guardian_status_snapshot
+from backend.compat import ensure_nexus_running_async, guardian_status_snapshot
 
 # إضافة نقطة /guardian/status — إحياء guardian/ بشكل قابل للتشخيص دون تفعيل EmergencyBreaker
 @app.get("/guardian/status")

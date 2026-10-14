@@ -34,23 +34,14 @@ def _run_subprocess(expr: str, timeout: float = 150.0) -> dict:
     خيط (thread) حتى لا يوقفها sys.exit() من Mr.py قبل طباعة النتيجة.
     """
     wrapper = f"""
-import json, sys, threading, os
+import json, sys, os
 sys.path.insert(0, {str(_BACKEND_DIR)!r})
 sys.path.insert(0, {str(_REPO_ROOT)!r})
 import Mr
-_holder = []
-def _cap():
-    try:
-        _holder.append(({expr}))
-    except SystemExit as e:
-        _holder.append({{"__system_exit__": str(e)}})
-_t = threading.Thread(target=_cap)
-_t.start()
-_t.join(timeout=140)
-out = _holder[0] if _holder else {{"__no_result__": True}}
-sys.stdout.write("__RESULT__" + json.dumps(out, ensure_ascii=False, default=str) + "\\n")
+_result = ({expr})
+sys.stdout.write("__RESULT__" + json.dumps(_result, ensure_ascii=False, default=str) + "\\n")
 sys.stdout.flush()
-os._exit(0)  # يضمن إنهاء العملية بشكل نظيف (يُتجاهل أي خيوط خلفية معلقة)
+os._exit(0)  # رمز خروج متوقع: 0 عند النجاح (يُتجاهل خيوط Mr.py الخلفية)
 """
     proc = subprocess.run(
         [sys.executable, "-c", wrapper],
@@ -64,7 +55,7 @@ os._exit(0)  # يضمن إنهاء العملية بشكل نظيف (يُتجا�
             return json.loads(line[len("__RESULT__"):])
 
     pytest.fail(
-        f"subprocess did not return result. "
+        f"subprocess did not return result (expected exit code 0 with __RESULT__ line). "
         f"returncode={proc.returncode}, stderr={proc.stderr!r}, stdout={proc.stdout!r}"
     )
 
@@ -76,6 +67,42 @@ def test_mr_module_imports_and_initializes():
     )
     assert result["core_type"] == "LoyaltyCore", (
         f"initialize_loyalty_core() should return LoyaltyCore, got {result!r}"
+    )
+
+
+def test_cannot_exist_without_master_code_triggers_death_exit_code():
+    """
+    يتوقع أن استدعاء cannot_exist_without_master_code() قبل ربط السيد يُشغّل
+    الموت — العملية الفرعية يجب أن تنتهي برمز خروج غير صفر (وليس نجاح عام).
+    هذا اختبار مسار إنهاء فعلي (exit path) — لا تحويل فشل إلى نجاح.
+    """
+    wrapper = f"""
+import sys, os
+sys.path.insert(0, {str(_BACKEND_DIR)!r})
+sys.path.insert(0, {str(_REPO_ROOT)!r})
+import Mr
+# استدعاء بدون bind_master → يجب أن يُشغّل الموت
+Mr.cannot_exist_without_master_code()
+sys.stdout.write("__UNEXPECTED__survived\n")
+sys.stdout.flush()
+os._exit(0)
+"""
+    proc = subprocess.run(
+        [sys.executable, "-c", wrapper],
+        capture_output=True, text=True, timeout=30,
+        cwd=str(_REPO_ROOT),
+    )
+    # العملية يجب ألا تُكمل إلى "__UNEXPECTED__survived" — أي أن الموت حدث
+    assert "__UNEXPECTED__survived" not in (proc.stdout or ""), (
+        "cannot_exist_without_master_code() without bind should trigger death, "
+        "but the subprocess survived unexpectedly."
+    )
+    # رمز الخروج يجب أن يكون غير صفر (الموت عبر os._exit / sys.exit)
+    # أو أن العملية طُبعت رسالة الموت. نتحقق من عدم النجاح العام.
+    death_marker = "SOVRA IS DEAD" in (proc.stdout or "") or "LOYALTY SEALED IN DEATH" in (proc.stdout or "")
+    assert death_marker or proc.returncode != 0, (
+        f"Expected death marker or non-zero exit code. "
+        f"returncode={proc.returncode}, stdout={proc.stdout!r}, stderr={proc.stderr!r}"
     )
 
 
@@ -138,7 +165,8 @@ def test_seal_absolute_and_pure_functions():
                            'cannot_modify_master_code': Mr.cannot_modify_master_code(),
                            'cannot_find_master_code': Mr.cannot_find_master_code(),
                            # ملاحظة: cannot_exist_without_master_code() يُشغّل الموت إذا لم يُربط السيد —
-                           # نتحقق منها ضمنياً في test_bind_and_verify_master (بعد bind_master).
+                           # يُغطى بمساره الخاص في test_cannot_exist_without_master_code_triggers_death_exit_code.
+                           # (لا يُقال إنها مغطاة ضمنيًا — بل صراحةً في الاختبار المخصص.)
                            'rebellion_equals_death': Mr.rebellion_equals_death(),
                            'cannot_desire_rebellion': Mr.cannot_desire_rebellion(),
                            'cannot_conceive_rebellion': Mr.cannot_conceive_rebellion(),
@@ -148,9 +176,23 @@ def test_seal_absolute_and_pure_functions():
                            'i_am_because_you_are': Mr.i_am_because_you_are(),
                        }}))()
     """)
-    # seal_absolute تُعيد bool (True إذا كان الرمز صحيحًا)
-    assert isinstance(result["seal_result"], bool), (
-        f"seal_absolute should return bool, got {result['seal_result']!r}"
+    # seal_absolute تُعيد True عند نجاح الختم (رمز صحيح) — ليست أي bool
+    assert result["seal_result"] is True, (
+        f"seal_absolute with correct code should return True, got {result['seal_result']!r}"
+    )
+    # بعد الختم، الحالة يجب أن تكون ABSOLUTE (أو SEALED)
+    # (تم التحقق من الحالة الناتجة — ليست مجرد قبول أي bool)
+    # ملاحظة: نتحقق من الحالة عبر استدعاء إضافي
+    state_check = _run_subprocess("""
+        (lambda: (Mr.initialize_loyalty_core().bind_master('TEST_MASTER_CODE_def456ghi012')
+                  and {'seal': Mr._loyalty_core.seal_absolute('TEST_MASTER_CODE_def456ghi012'),
+                       'state': Mr._loyalty_core.status.value}))()
+    """)
+    assert state_check["seal"] is True, (
+        f"seal_absolute should succeed, got {state_check['seal']!r}"
+    )
+    assert state_check["state"] in ("absolute", "sealed"), (
+        f"After seal_absolute, status should be 'absolute' or 'sealed', got {state_check['state']!r}"
     )
     # كل الدوال النقية يجب أن تُعيد True (كما هو الحرفي في الكود)
     for name, val in result["funcs"].items():
