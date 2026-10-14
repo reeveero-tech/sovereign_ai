@@ -1,0 +1,75 @@
+================================================================
+GATE 5 — GREEN PHASE (Key State Machine — After Fix)
+================================================================
+Date: 2026-10-14
+Test: backend/tests/invariants/test_key_state_transitions.py
+Method: TDD (RED → GREEN → LOCK)
+Fix: R-667 — Key state machine (state_machine.py) with 5 states,
+      7 allowed transitions, 5+ forbidden transitions, explicit
+      signing/verification assertions, VerificationResult (not bool),
+      KeyStateError.
+
+RESULT: GREEN CONFIRMED — 22 of 22 tests PASSED
+
+Test results (AFTER fix):
+  - test_1_signing_with_lost_key_fails_explicitly: PASSED
+  - test_2_verification_with_lost_key_returns_unverifiable: PASSED
+  - test_3_signing_with_expired_key_fails: PASSED
+  - test_4_signing_with_compromised_key_fails: PASSED
+  - test_5_signing_with_rotated_key_fails: PASSED
+  - test_6_verification_with_rotated_key_succeeds: PASSED
+  - test_7_transition_expired_to_active_fails: PASSED
+  - test_8_transition_lost_to_active_fails: PASSED
+  - test_9_transition_rotated_to_active_fails: PASSED
+  - test_10_transition_compromised_to_active_fails: PASSED
+  - test_11_key_without_explicit_state_fails: PASSED
+  - test_12_active_to_expired_then_use_fails: PASSED
+  - test_13_active_key_can_sign: PASSED (positive control)
+  - test_14_active_key_can_verify: PASSED (positive control)
+  - test_15_allowed_transitions_active: PASSED
+  - test_16_expired_is_terminal: PASSED
+  - test_17_compromised_to_rotated_fails: PASSED
+  - test_18_verification_compromised_returns_unverifiable: PASSED
+  - test_19_verification_expired_returns_unverifiable: PASSED
+  - test_20_invalid_state_string_rejected: PASSED
+  - test_21_valid_state_string_converted: PASSED
+  - test_22_expired_to_any_fails: PASSED
+
+RESULT: 0 of 12 attack cases accept invalid key usage (all rejected)
+
+LOCK: All other tests pass
+
+Below is the RAW pytest output (unmodified — forensic evidence):
+================================================================
+
+============================= test session starts ==============================
+platform linux -- Python 3.14.3, pytest-9.1.1, pluggy-1.6.0 -- /usr/local/bin/python3
+cachedir: .pytest_cache
+rootdir: /home/user/workspace/sovereign_ai
+plugins: anyio-4.15.1, ddtrace-4.15.6
+collecting ... collected 22 items
+
+backend/tests/invariants/test_key_state_transitions.py::TestKeyStateTransitions::test_1_signing_with_lost_key_fails_explicitly PASSED [  4%]
+backend/tests/invariants/test_key_state_transitions.py::TestKeyStateTransitions::test_2_verification_with_lost_key_returns_unverifiable PASSED [  9%]
+backend/tests/invariants/test_key_state_transitions.py::TestKeyStateTransitions::test_3_signing_with_expired_key_fails PASSED [ 13%]
+backend/tests/invariants/test_key_state_transitions.py::TestKeyStateTransitions::test_4_signing_with_compromised_key_fails PASSED [ 18%]
+backend/tests/invariants/test_key_state_transitions.py::TestKeyStateTransitions::test_5_signing_with_rotated_key_fails PASSED [ 22%]
+backend/tests/invariants/test_key_state_transitions.py::TestKeyStateTransitions::test_6_verification_with_rotated_key_succeeds PASSED [ 27%]
+backend/tests/invariants/test_key_state_transitions.py::TestKeyStateTransitions::test_7_transition_expired_to_active_fails PASSED [ 31%]
+backend/tests/invariants/test_key_state_transitions.py::TestKeyStateTransitions::test_8_transition_lost_to_active_fails PASSED [ 36%]
+backend/tests/invariants/test_key_state_transitions.py::TestKeyStateTransitions::test_9_transition_rotated_to_active_fails PASSED [ 40%]
+backend/tests/invariants/test_key_state_transitions.py::TestKeyStateTransitions::test_10_transition_compromised_to_active_fails PASSED [ 45%]
+backend/tests/invariants/test_key_state_transitions.py::TestKeyStateTransitions::test_11_key_without_explicit_state_fails PASSED [ 50%]
+backend/tests/invariants/test_key_state_transitions.py::TestKeyStateTransitions::test_12_active_to_expired_then_use_fails PASSED [ 54%]
+backend/tests/invariants/test_key_state_transitions.py::TestKeyStateTransitions::test_13_active_key_can_sign PASSED [ 59%]
+backend/tests/invariants/test_key_state_transitions.py::TestKeyStateTransitions::test_14_active_key_can_verify PASSED [ 63%]
+backend/tests/invariants/test_key_state_transitions.py::TestKeyStateTransitions::test_15_allowed_transitions_active PASSED [ 68%]
+backend/tests/invariants/test_key_state_transitions.py::TestKeyStateTransitions::test_16_expired_is_terminal PASSED [ 72%]
+backend/tests/invariants/test_key_state_transitions.py::TestKeyStateTransitions::test_17_compromised_to_rotated_fails PASSED [ 77%]
+backend/tests/invariants/test_key_state_transitions.py::TestKeyStateTransitions::test_18_verification_compromised_returns_unverifiable PASSED [ 81%]
+backend/tests/invariants/test_key_state_transitions.py::TestKeyStateTransitions::test_19_verification_expired_returns_unverifiable PASSED [ 86%]
+backend/tests/invariants/test_key_state_transitions.py::TestKeyStateTransitions::test_20_invalid_state_string_rejected PASSED [ 90%]
+backend/tests/invariants/test_key_state_transitions.py::TestKeyStateTransitions::test_21_valid_state_string_converted PASSED [ 95%]
+backend/tests/invariants/test_key_state_transitions.py::TestKeyStateTransitions::test_22_expired_to_any_fails PASSED [100%]
+
+============================== 22 passed in 0.19s ==============================

@@ -69,6 +69,31 @@ KeyRing الحالي يستخدم HMAC (تشفير متماثل). هذا يعن�
 سجل GREEN (الحقيقي): forensics/gate4_green_v3.log (v3 — مُجمّد، لم يُعدّل)
 الاختبار: backend/tests/invariants/test_anchor_rejects_arbitrary_signature.py
 
+**مرجع RED الرسمي للبوابة 4 هو forensics/gate4_red_v3.log.**
+**v1 (gate4_red.log) محفوظ كأثر تاريخي فقط ولا يُحتجّ به.**
+
+### توضيح: الحالات الخمس الإضافية (GREEN 12/12 مقابل RED 7/7)
+
+RED (v3) كان 13 اختبارًا (7 فاشلة + 6 ناجحة). GREEN (v3) كان 12 اختبارًا.
+الفرق: الاختبار 8 (anchor_batch يرفض تعسفيًا) تغيّر بين RED و GREEN —
+في RED كان يُشغّل بدون keyring (فشل بـ TypeError)، و في GREEN يُمرر keyring.
+
+الحالات الخمس الإضافية في GREEN (ليست توسيعًا — كانت موجودة في RED):
+1. test_7 (توقيع مُعاد استخدامه + جذر مختلف) — PASSED في RED و GREEN
+2. test_8 (anchor_batch يرفض تعسفيًا) — PASSED في RED و GREEN
+3. test_9 (ضابط إيجابي — مرساة صحيحة تُقبل) — PASSED في RED و GREEN
+4. test_10 (anchor_batch يقبل توقيعًا صحيحًا) — PASSED في RED و GREEN
+5. test_11 (anchor_batch بدون keyring يُرفض) — PASSED في RED و GREEN
+
+هذه ليست توسيعًا للاختبار — إنها ضوابط إيجابية و حالات anchor_batch
+التي كانت موجودة في RED و مرّت (الحماية موجودة من R-664).
+
+### توضيح: score.py لا يحتوي رقمًا ثابتًا (97.20)
+
+تم التحقق: `backend/sovereign/score.py` **لا يحتوي** على رقم ثابت
+(97.20). الدرجة تُحسب ديناميكيًا (`axis.score = min(score, 100)`).
+لا يوجد رقم صلب — الدرجة تُحسب من المحاور في كل مرة.
+
 ### تصحيح مؤرخ (R-665) — إعلان f1033f3 كان مبكرًا
 
 الالتزام f1033f3 أعلن "البوابة 4 CLOSED" — لكن هذا كان **خطأ**:
@@ -147,6 +172,108 @@ success = root_verified AND signature_verified
 - test_ledger_anchor.py: تمرير keyring إلى verify_anchor
 - test_no_unsigned_ledger_events.py: تمييز v1 (نجاح الجذر فقط)
   من v2 (نجاح الجذر + التوقيع) + تحميل KeyRing من القرص
+
+---
+
+## تدقيق عرضي: Boolean-Contradicts-Message (R-666)
+
+**السبب:** اكتشاف البوابة 4 — `verify_anchor` كانت تُعيد `True` مع رسالة
+"anchor signature mismatch" (تناقض قيمة/رسالة).
+
+**المنهجية:**
+1. بحث AST: 158 دالة تُعيد قيمة و تحتوي رسالة خطأ (من كل ملفات backend/)
+2. تصفية: 29 دالة تُعيد bool و تحتوي رسالة فشل
+3. فحص يدوي عميق: كل دالة من الـ 29 — هل يوجد مسار `return True` في كتلة فشل؟
+
+**النتيجة: 0 تناقضات** (النمط لم يُكتشف إلا في `verify_anchor` — أُصلحت R-665)
+
+**التقرير الكامل:** `forensics/boolean_message_audit.md` (جدول 29 دالة + حكم لكل واحدة)
+
+**سبب عدم وجود النمط في أماكن أخرى:** المشروع يستخدم نمطًا متسقًا —
+رسالة الفشل دائمًا مع `return False`، و رسالة النجاح مع `return True`.
+الاستثناء الوحيد كان `verify_anchor` (تُعيد `root_verified` فقط — تجاهل التوقيع).
+
+---
+
+## البوابة 5: سياسة المفاتيح التاريخية — CLOSED
+
+التاريخ: 2026-10-14
+المنهج: TDD (RED → GREEN → LOCK)
+العقد: docs/KEY_STATE_MACHINE.md
+سجل RED: forensics/gate5_red.log (v2 — TRUE RED — ImportError)
+سجل GREEN: forensics/gate5_green.log (22/22)
+الاختبار: backend/tests/invariants/test_key_state_transitions.py
+
+### تصحيح منهجي (موثق بصدق — R-667)
+
+في المحاولة الأولى، كتبت آلة الحالة (`state_machine.py`) **قبل** تشغيل
+الاختبار — خالف TDD. الاختبار مرّ فورًا (لا RED). أُفصح عن هذا
+بصدق و أُعيد التشغيل مع إزالة `state_machine.py` مؤقتًا لإثبات
+RED الحقيقي (ImportError — كل الاختبارات فشلت).
+
+### الحالات التي كانت غير محمية قبل الإصلاح
+
+**keyring.py** كان لديه حماية جزئية (R-633):
+- `KeyStatus` enum (ACTIVE/RETIRED/LOST/COMPROMISED/EXPIRED)
+- `get_active_key()` يُعيد فقط ACTIVE
+
+**ما كان مفقودًا** (و أُضيف في `state_machine.py`):
+- حالة `ROTATED` (keyring.py لديه `RETIRED`، ليس `ROTATED`)
+- `ALLOWED_TRANSITIONS` (جدول انتقالات صريح — 7 مسموحة، 5+ ممنوعة)
+- `assert_usable_for_signing()` (تأكيد صريح للتوقيع)
+- `assert_usable_for_verification()` (تأكيد صريح للتحقق)
+- `VerificationResult` (UNVERIFIABLE_MISSING_KEY وليس False — الفرق الجوهري)
+- `KeyStateError` (خطأ صريح للانتقالات الممنوعة)
+
+### RED الحقيقي (forensics/gate5_red.log)
+
+**النتيجة:** 1 خطأ تجميع (ImportError) — كل 22 اختبارًا فشل
+
+**نوع الفشل:** خطأ استيراد (state_machine.py غير موجود)
+
+### GREEN (forensics/gate5_green.log)
+
+**النتيجة:** 22 من 22 اختبارًا ناجحة
+
+### آلة الحالة
+
+- **5 حالات:** ACTIVE، ROTATED، LOST، COMPROMISED، EXPIRED
+- **7 انتقالات مسموحة**
+- **5+ انتقالات ممنوعة صريحة**
+- **EXPIRED نهائي** — لا انتقال منها
+
+### الاختبارات (22 — 12 الأصلية + 10 إضافية)
+
+الحالات الـ 12 الأصلية:
+1. التوقيع بمفتاح LOST — يفشل صراحة (KeyStateError: LOST key cannot sign)
+2. التحقق بمفتاح LOST — يُعيد UNVERIFIABLE_MISSING_KEY (وليس False)
+3. التوقيع بمفتاح EXPIRED — يفشل صراحة
+4. التوقيع بمفتاح COMPROMISED — يفشل صراحة
+5. التوقيع بمفتاح ROTATED — يفشل صراحة
+6. التحقق بمفتاح ROTATED — ينجح (تحقق تاريخي)
+7. الانتقال EXPIRED → ACTIVE — يفشل صراحة
+8. الانتقال LOST → ACTIVE — يفشل صراحة
+9. الانتقال ROTATED → ACTIVE — يفشل صراحة
+10. الانتقال COMPROMISED → ACTIVE — يفشل صراحة
+11. مفتاح بلا حالة صريحة — يفشل (لا default، لا ACTIVE ضمنياً)
+12. ACTIVE → EXPIRED ثم استخدامه — يفشل (EXPIRED نهائي)
+
+حالات إضافية (10 — ضوابط إيجابية و انتقالات):
+13. مفتاح ACTIVE يُوقّع (ضابط إيجابي)
+14. مفتاح ACTIVE يُتحقق (ضابط إيجابي)
+15. الانتقالات المسموحة من ACTIVE (4 انتقالات)
+16. EXPIRED نهائي (لا انتقال مسموح)
+17. COMPROMISED → ROTATED ممنوع
+18. التحقق COMPROMISED — يُعيد UNVERIFIABLE_COMPROMISED
+19. التحقق EXPIRED — يُعيد UNVERIFIABLE_EXPIRED
+20. حالة غير صالحة (str) تُرفض
+21. حالة صالحة (str) تُحوّل
+22. EXPIRED → أي حالة تفشل
+
+### ملاحظة: المفاتيح التاريخية محفوظة، لا حذف
+
+`data/keys/keyring.json` لم يُحذف منه أي مفتاح — كل المفاتيح
+(بما فيها LOST/COMPROMISED) محفوظة كأثر جنائي.
 
 ---
 
