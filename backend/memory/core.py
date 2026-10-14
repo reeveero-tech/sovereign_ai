@@ -873,6 +873,149 @@ class SovereignCore:
         for event in events[start_index:end_index]:
             yield event
     
+    def verify_content_integrity(self) -> "IntegrityStatus":
+        """
+        R-639: سلامة المحتوى فقط — فصل سلامة المحتوى عن قابلية توثيق التوقيع.
+        
+        يتحقق من:
+        - سلسلة التجزئة (prev_hash متصل)
+        - تجزئة الحدث (hash متطابقة)
+        - وجود الـ blobs
+        
+        لا يتحقق من التوقيعات (غياب المفتاح التاريخي ليس إثبات تلاعب —
+        راجع verify_signatures_report للتقرير المنفصل).
+        """
+        if not self.log_file.exists():
+            logger.warning("السجل غير موجود")
+            return IntegrityStatus.NOT_CHECKED
+        
+        prev_hash = "GENESIS"
+        event_count = 0
+        
+        with open(self.log_file, 'r', encoding='utf-8') as f:
+            for line_num, line in enumerate(f, 1):
+                line = line.strip()
+                if not line:
+                    continue
+                
+                try:
+                    event = json.loads(line)
+                    event_count += 1
+                    
+                    # 1) التحقق من prev_hash (سلسلة متصلة)
+                    if event.get('prev_hash') != prev_hash:
+                        logger.error(f"❌ فشل في السطر {line_num}: prev_hash غير متطابق")
+                        return IntegrityStatus.CORRUPTED
+                    
+                    # 2) التحقق من تجزئة الحدث
+                    expected_hash = self._compute_event_hash(
+                        event['prev_hash'], event['blob'], event['time'], event['type']
+                    )
+                    if event['hash'] != expected_hash:
+                        logger.error(f"❌ فشل في السطر {line_num}: تجزئة الحدث غير متطابقة")
+                        return IntegrityStatus.CORRUPTED
+                    
+                    # 3) التحقق من وجود الـ blob
+                    if not self.blob_store.exists(event['blob']):
+                        logger.error(f"❌ فشل في السطر {line_num}: blob غير موجود: {event['blob'][:16]}...")
+                        return IntegrityStatus.CORRUPTED
+                    
+                    prev_hash = event['hash']
+                except json.JSONDecodeError:
+                    logger.error(f"❌ فشل في السطر {line_num}: JSON غير صالح")
+                    return IntegrityStatus.CORRUPTED
+                except KeyError as e:
+                    logger.error(f"❌ فشل في السطر {line_num}: حقل مفقود {e}")
+                    return IntegrityStatus.CORRUPTED
+        
+        if event_count == 0:
+            logger.warning("السجل فارغ")
+            return IntegrityStatus.NOT_CHECKED
+        
+        logger.info(f"✅ سلامة المحتوى: {event_count} حدث، السلسلة متصلة")
+        return IntegrityStatus.VERIFIED
+    
+    def verify_signatures_report(self) -> dict:
+        """
+        R-639: تقرير التوقيعات المنفصل — فصل قابلية توثيق التوقيع عن سلامة المحتوى.
+        
+        يُعيد تقريرًا (وليس IntegrityStatus):
+        - total: إجمالي الأحداث
+        - verified: أحداث مُتحقّقة (مفتاح معروف، توقيع صحيح)
+        - unverifiable_missing_key: أحداث بمفتاح غير معروف (ليس إثبات تلاعب)
+        - invalid: أحداث بمفتاح معروف لكن التوقيع لا يطابق (مؤشر تلاعب)
+        - legacy_pre_keyring: أحداث تاريخية (بلا key_id)
+        """
+        report = {
+            "total": 0,
+            "verified": 0,
+            "unverifiable_missing_key": 0,
+            "invalid": 0,
+            "legacy_pre_keyring": 0,
+        }
+        
+        if not self.log_file.exists():
+            logger.warning("السجل غير موجود")
+            return report
+        
+        # تحميل KeyRing (إن وُجد)
+        keyring = None
+        if self._keyring is not None:
+            keyring = self._keyring
+        else:
+            try:
+                from backend.sovereign.keys import KeyRing as _KR
+                kr = _KR()
+                kr.load_from_disk()
+                if kr.get_active_key() is not None:
+                    keyring = kr
+            except Exception:
+                pass
+        
+        from backend.sovereign.keys import SignatureVerifier
+        verifier = SignatureVerifier(keyring) if keyring else None
+        
+        with open(self.log_file, 'r', encoding='utf-8') as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                
+                try:
+                    event = json.loads(line)
+                    report["total"] += 1
+                    
+                    if verifier is None:
+                        # لا KeyRing — كل الأحداث unverifiable (ليس إثبات تلاعب)
+                        if "key_id" in event:
+                            report["unverifiable_missing_key"] += 1
+                        else:
+                            report["legacy_pre_keyring"] += 1
+                        continue
+                    
+                    result = verifier.verify_event(event)
+                    status_val = result.status.value
+                    if status_val == "verified":
+                        report["verified"] += 1
+                    elif status_val == "unverifiable_missing_key":
+                        if "key_id" in event:
+                            report["unverifiable_missing_key"] += 1
+                        else:
+                            report["legacy_pre_keyring"] += 1
+                    elif status_val == "invalid":
+                        report["invalid"] += 1
+                except Exception:
+                    # حدث غير قابل للقراءة — يُحسب unverifiable (ليس إثبات تلاعب)
+                    report["unverifiable_missing_key"] += 1
+        
+        logger.info(
+            f"📋 تقرير التوقيعات: {report['total']} إجمالي، "
+            f"{report['verified']} مُتحقّق، {report['invalid']} غير صالح، "
+            f"{report['unverifiable_missing_key']} بمفتاح غير معروف، "
+            f"{report['legacy_pre_keyring']} تاريخي"
+        )
+        return report
+    
     def verify_integrity(self, verbose: bool = False) -> IntegrityStatus:
         """
         التحقق من سلامة السجل بأكمله.
