@@ -1,4 +1,8 @@
 # backend/compat/nexus_router_compat.py
+
+# SUNSET_CRITERIA (المرحلة 4 من ROADMAP_V2 — نمط التين الخانق):
+# معيار إزالة هذه الوحدة — تُنقل إلى backend/compat/_legacy/ (لا تُحذف أبدًا)
+# عندما يتحقق: انظر backend/compat/__meta__.py → COMPAT_LIFECYCLE['nexus_router_compat']
 # إصلاح المسار الأصلي GET /nexus/recommendations (R-615)
 #
 # المشكلة: المسار الأصلي في nexus/api_gateway/router.py يعيد قائمة فارغة

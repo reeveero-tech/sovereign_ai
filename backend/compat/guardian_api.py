@@ -1,4 +1,8 @@
 # backend/compat/guardian_api.py
+
+# SUNSET_CRITERIA (المرحلة 4 من ROADMAP_V2 — نمط التين الخانق):
+# معيار إزالة هذه الوحدة — تُنقل إلى backend/compat/_legacy/ (لا تُحذف أبدًا)
+# عندما يتحقق: انظر backend/compat/__meta__.py → COMPAT_LIFECYCLE['guardian_api']
 # إحياء وحدات guardian/ (MasterGuardian, EmergencyBreaker, IntegrityChecker, SelfEvolver)
 # المشكلة الأصلية: هذه الوحدات موجودة وكاملة لكنها غير مستدعاة من أي مدخل حي.
 # الإصلاح (طبقة توافق — لا تعديل للأصل): تُزوّد لحظة حالة للقراءة فقط

@@ -1,4 +1,8 @@
 # backend/compat/nexus_recommendations.py
+
+# SUNSET_CRITERIA (المرحلة 4 من ROADMAP_V2 — نمط التين الخانق):
+# معيار إزالة هذه الوحدة — تُنقل إلى backend/compat/_legacy/ (لا تُحذف أبدًا)
+# عندما يتحقق: انظر backend/compat/__meta__.py → COMPAT_LIFECYCLE['nexus_recommendations']
 # إصلاح فجوة حقيقية: /nexus/recommendations كان يعيد قائمة فارغة دائمًا
 # مع رسالة ثابتة "Register engine first" — رغم أن RecommendationEngine
 # مسجل فعلاً في initialize_nexus() كمكوّن "recommender".

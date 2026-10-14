@@ -443,6 +443,25 @@ async def root():
     return HTMLResponse(content="<h1>Sovereign AI</h1><p>Frontend not found</p>")
 
 
+@app.get("/compat/status")
+async def compat_status():
+    """
+    تقرير حالة طبقة التوافق (نمط التين الخانق — المرحلة 4 من ROADMAP_V2).
+    يُعيد lifecycle لكل وحدة compat: عدد الاستدعاءات + معيار الإزالة.
+    """
+    from backend.compat.__meta__ import get_lifecycle_summary
+
+    summary = get_lifecycle_summary()
+    return {
+        "total_modules": summary["total_modules"],
+        "active": summary["active"],
+        "pending_sunset": summary["pending_sunset"],
+        "legacy_retained": summary["legacy_retained"],
+        "modules": summary["modules"],
+        "policy": "لا يُحذف أي وحدة compat أبدًا — تُنقل إلى _legacy/ فقط",
+    }
+
+
 @app.get("/health")
 async def health_check():
     """

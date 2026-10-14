@@ -1,4 +1,8 @@
 # backend/compat/nexus_lifecycle.py
+
+# SUNSET_CRITERIA (المرحلة 4 من ROADMAP_V2 — نمط التين الخانق):
+# معيار إزالة هذه الوحدة — تُنقل إلى backend/compat/_legacy/ (لا تُحذف أبدًا)
+# عندما يتحقق: انظر backend/compat/__meta__.py → COMPAT_LIFECYCLE['nexus_lifecycle']
 # إصلاح عيب نيجاتي: initialize_nexus() يسجل المكونات لكنه لا يستدعي engine.start()
 # النتيجة قبل الإصلاح: /nexus/status تُظهر state="initializing" رغم أن كل المكونات صحية
 # النتيجة بعد الإصلاح: engine.state == RUNNING و /nexus/status تعيد الحالة الفعلية
