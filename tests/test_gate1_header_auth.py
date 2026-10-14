@@ -125,17 +125,24 @@ class TestHeaderAuthentication:
     def test_logs_do_not_contain_key_via_header(self, tmp_path, monkeypatch):
         """السجلات لا تحتوي المفتاح — دون إسكات التسجيل.
 
-        R-658: المفتاح في الرأس لا يُسجّل في روابط الطلب
+        R-658/R-662: المفتاح في الرأس لا يُسجّل في روابط الطلب
         (httpx لا يُسجّل الرؤوس افتراضيًا — فقط روابط الطلب).
 
-        هذا الاختبار لا يُسكِت سجلات httpx — إذا سُجّل المفتاح،
-        الاختبار يفشل (لا نجاح زائف).
+        R-662: يُثبت وجود سجل طلب غير حساس (ضابط إيجابي) ثم
+        يتحقق من غياب المفتاح و من رموز الاستجابة.
+        لا إسكات — إذا سُجّل المفتاح، الاختبار يفشل.
         """
         new_key, old_key = self._load_test_keys(tmp_path)
         app_module = self._setup_app_key(monkeypatch, new_key)
 
-        # R-658: لا إسكات سجلات httpx — نختبر المسار الفعلي
+        # R-662: تفعيل INFO مؤقتًا + استعادة الحالة السابقة
         import io
+        httpx_logger = logging.getLogger("httpx")
+        prev_level = httpx_logger.level
+        prev_propagate = httpx_logger.propagate
+        httpx_logger.setLevel(logging.INFO)
+        httpx_logger.propagate = True
+
         log_capture = io.StringIO()
         handler = logging.StreamHandler(log_capture)
         root_logger = logging.getLogger()
@@ -144,10 +151,21 @@ class TestHeaderAuthentication:
         try:
             client = TestClient(app_module.app)
             # نجاح و فشل — عبر الرأس (لا query params)
-            client.get("/api-key-header", headers={"X-API-Key": new_key})
-            client.get("/api-key-header", headers={"X-API-Key": old_key})
+            r_ok = client.get("/api-key-header", headers={"X-API-Key": new_key})
+            r_fail = client.get("/api-key-header", headers={"X-API-Key": old_key})
+
+            # رموز الاستجابة
+            assert r_ok.status_code == 200
+            assert r_fail.status_code == 403
 
             log_content = log_capture.getvalue()
+
+            # R-662: ضابط إيجابي — يوجد سجل طلب (غير حساس)
+            assert "/api-key-header" in log_content or log_content.strip(), (
+                "positive control failed: no request logs captured "
+                "(cannot prove absence of key without logs)"
+            )
+
             # لا مفاتيح في السجلات
             assert new_key not in log_content, (
                 f"logs must not contain new key (via header path)"
@@ -160,3 +178,6 @@ class TestHeaderAuthentication:
             )
         finally:
             root_logger.removeHandler(handler)
+            # R-662: استعادة الحالة السابقة
+            httpx_logger.setLevel(prev_level)
+            httpx_logger.propagate = prev_propagate

@@ -1,11 +1,14 @@
 """
-اختبار البوابة 1 (التحقق التشغيلي المنفصل) — R-655
+اختبار البوابة 1 (التحقق التشغيلي المنفصل) — R-655/R-661
 
-هذا الاختبار يُشغّل في عملية Python جديدة (subprocess) و يُحمّل
-التطبيق بإعداداته الحقيقية (دون monkeypatch أو reload) ثم يختبر
-مسار المصادقة الفعلي ضد الاعتماد الحالي و القديم.
+**R-661: هذا الاختبار لا يُشغّل في المجموعة الاعتيادية (pytest tests/).**
+يقرأ أسرار المضيف و يكتب في البيانات الحقيقية — يُشغّل يدويًا فقط:
 
-R-655: الفشل يجب أن يفشل الاختبار (لا skip).
+    pytest tests/test_gate1_operational_auth.py --run-operational
+
+المجموعة الاعتيادية تستخدم بيانات و اعتمادات اختبارية معزولة.
+
+R-655: الفشل يجب أن يفشل الاختبار (لا skip) — عند التشغيل اليدوي.
 """
 
 import hashlib
@@ -19,26 +22,20 @@ import pytest
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent
 
-
-def _fp(key: str) -> str:
-    return hashlib.sha256(key.encode("utf-8")).hexdigest()[:16]
-
-
-def _load_key_from_file(path: Path) -> str:
-    with open(path, "r", encoding="utf-8") as f:
-        return f.read().strip()
-
-
+# R-661: لا يُشغّل في المجموعة الاعتيادية — يتطلب --run-operational
 class TestOperationalAuth:
-    """التحقق التشغيلي المنفصل — البوابة 1."""
+    """التحقق التشغيلي المنفصل — البوابة 1 (تشغيل يدوي فقط)."""
 
     def test_operational_auth_new_key_accepted_old_rejected(self):
         """التشغيل الفعلي: عملية Python جديدة تُحمّل التطبيق و تختبر المصادقة.
 
-        - يُحمّل التطبيق بإعداداته الحقيقية (data/key.secret)
-        - يختبر /api-key بالمفتاح الجديد (200) و القديم (403)
-        - لا monkeypatch، لا reload، لا skip — الفشل = فشل
+        R-661: يتطلب --run-operational (لا يُشغّل في المجموعة الاعتيادية).
         """
+        if "--run-operational" not in sys.argv:
+            pytest.skip(
+                "R-661: operational test requires --run-operational "
+                "(reads host secrets, writes real data — not for regular suite)"
+            )
         new_key_path = _REPO_ROOT / "data" / "key.secret"
         old_key_path = _REPO_ROOT / "data" / "key.secret.old_rotated_2026_10_14"
 
@@ -126,7 +123,7 @@ class TestOperationalAuth:
     def test_identity_seal_path_follows_code_definition(self):
         """R-655: مسار ختم الهوية يُتبّع التعريف الفعلي (IDENTITY_SEAL_FILE).
 
-        لا مسار مكتوب يدويًا — نستورد التعريف من الكود.
+        R-661: هذا الاختبار آمن — يتحقق فقط من وجود الملف (لا يقرأ أسرار).
         """
         # استيراد التعريف الفعلي (subprocess — لا تلوث)
         script = (

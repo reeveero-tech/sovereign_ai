@@ -1,0 +1,14 @@
+{
+  "issue": "identity_seal.bin was created with conftest.py TEST key (test_master_key_1234567890abcdef)",
+  "evidence": {
+    "sovereign_key_hash_in_seal": "d4468323a2a546a51cd46f9f692984f2...",
+    "sha3_512(test_key)": "d4468323a2a546a51cd46f9f692984f2... (matches)",
+    "sha3_512(current_new_key)": "27619152583b87033fb86bfeca461f8c... (does NOT match)",
+    "sha3_512(old_key)": "3385593132edc690747cefba430d39c3... (does NOT match)"
+  },
+  "conclusion": "Seal was created during TEST RUN (pollution from conftest.py SOVEREIGN_KEY env var). It is NOT a valid production seal.",
+  "action": "Documented as PRIOR POLLUTION (not a completed fix). Re-signing history is constitutionally forbidden. No re-signing performed.",
+  "implication": "The seal must be treated as INVALID until a NEW seal is created with the production key (via a new, intentional, non-test operation).",
+  "forensic_backup": "data/identity/identity_seal.bin.polluted_test_key_2026_10_14 (encrypted with test key — preserved)",
+  "re_encryption_note": "The file was re-encrypted with the current key (R-656) so it can be READ, but its CONTENT (signature, sovereign_key_hash) still proves it was created with the TEST key. Re-encryption does NOT make the seal valid."
+}

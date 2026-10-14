@@ -51,6 +51,9 @@ nohup.out
 !forensics/rotation/before.log
 !forensics/rotation/after.log
 
+# R-661: استثناء — تقرير تلوث الختم (توثيقي — ليس سر)
+!data/identity/SEAL_POLLUTION_REPORT.json
+
 # بيئات التطوير
 .replit
 .idea/

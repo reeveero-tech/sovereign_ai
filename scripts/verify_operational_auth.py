@@ -60,8 +60,9 @@ def check_all() -> bool:
         import app as app_module
 
         client = TestClient(app_module.app)
-        r_new = client.get("/api-key", params={"master_key": new_key})
-        r_old = client.get("/api-key", params={"master_key": old_key})
+        # R-661: استخدام الرأس (X-API-Key) — لا يُسجّل في روابط الطلب
+        r_new = client.get("/api-key-header", headers={"X-API-Key": new_key})
+        r_old = client.get("/api-key-header", headers={"X-API-Key": old_key})
 
         if r_new.status_code == 200:
             print(f"PASS: new key accepted (200)")
