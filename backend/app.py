@@ -416,19 +416,41 @@ async def ledger_verify():
             stats["invalid"] += 1
 
     # التحقق من كل المراسي
-    anchors_verification = anchor.verify_all_anchors()
+    # R-642/R-643: يُميّز التغطية الموثوقة تشخريًًا (trusted) من الاسمية
+    anchors_verification = anchor.verify_all_anchors(keyring=keyring)
 
     return {
         "ledger_summary": stats,
         "anchors": {
-            "total": len(anchors_list),
-            "verified": anchors_verification["verified"],
+            "total": anchors_verification["total_anchors"],
+            "root_verified": anchors_verification["root_verified_count"],
+            "trusted": anchors_verification["trusted_count"],
             "failed": anchors_verification["failed"],
+            "details": [
+                {
+                    "anchor_id": d["anchor_id"],
+                    "batch": d["batch"],
+                    "sig_format": d["sig_format"],
+                    "root_verified": d["root_verified"],
+                    "signature_verified": d["signature_verified"],
+                    "key_trusted": d["key_trusted"],
+                    "trusted": d["trusted"],
+                }
+                for d in anchors_verification["details"]
+            ],
         },
         "keyring_stats": keyring.stats(),
         "anchored_coverage_pct": round(
             (len(anchored_events) / len(lines)) * 100, 2
         ) if lines else 0.0,
+        "trusted_coverage_pct": round(
+            anchors_verification["trusted_coverage"] * 100, 2
+        ),
+        "nominal_coverage_pct": round(
+            anchors_verification["nominal_coverage"] * 100, 2
+        ),
+        "trusted_events_count": anchors_verification["trusted_events_count"],
+        "total_events": anchors_verification["total_events"],
         "timestamp": time.time(),
     }
 

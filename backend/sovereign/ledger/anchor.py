@@ -267,55 +267,118 @@ class LedgerAnchor:
         """
         يتحقق أن الأحداث في نطاق المرساة لا تزال تُنتج نفس Merkle root.
         
-        R-641: يتحقق أيضًا من التوقيع (إن وُجد keyring):
-        - v2: التوقيع يُغطي merkle_root و النطاق و العدد و key_id
-        - v1 (قديم): لا تحقق توقيع (محفوظ كدليل — لا تعديل للماضي)
-
-        يُعيد (success, message):
-        - (True, "verified") إذا تطابق الجذر (و التوقيع إن تحقق)
-        - (False, reason) إذا فشل (تغيّر المحتوى أو خطأ)
+        R-642: يميّز صراحةً بين:
+        - root_verified: الجذر يُطابق المحتوى (فحص المحتوى فقط)
+        - signature_verified: التوقيع v2 يُغطي الجذر و يُتحقق بالمفتاح
+        - key_trusted: المفتاح مقبول (ACTIVE — غير COMPROMISED)
+        
+        يُعيد (success, message) — success = root_verified فقط.
+        للحصول على التفاصيل، استخدم verify_anchor_detailed.
+        
+        R-642: التغطية الموثوقة تشخريًًا تتطلب root_verified +
+        signature_verified + key_trusted (كلها معًا).
         """
+        result = self.verify_anchor_detailed(anchor, keyring)
+        return result["root_verified"], result["message"]
+
+    def verify_anchor_detailed(self, anchor: Dict, keyring=None) -> Dict:
+        """
+        R-642: تحقق مفصل من المرساة — يُعيد:
+        - root_verified: الجذر يُطابق المحتوى
+        - signature_verified: التوقيع v2 يُغطي الجذر و يُتحقق
+        - key_trusted: المفتاح مقبول (ACTIVE — غير COMPROMISED)
+        - trusted: كل الشروط معًا (root + signature + key)
+        - message: وصف النتيجة
+        
+        ملاحظة:
+        - v1 (قديم): root_verified فقط (لا تحقق توقيع — محفوظ كدليل)
+        - v2: root_verified + signature_verified (إن وُجد keyring و مفتاح مقبول)
+        - المفتاح COMPROMISED: root_verified قد ينجح لكن key_trusted = False
+        """
+        result = {
+            "root_verified": False,
+            "signature_verified": False,
+            "key_trusted": False,
+            "trusted": False,
+            "message": "",
+        }
+        
         try:
             lines = self.read_ledger_lines()
             start = anchor["batch_start"]
             end = anchor["batch_end"]
 
             if end >= len(lines):
-                return False, (
+                result["message"] = (
                     f"ledger has only {len(lines)} lines, anchor range "
                     f"[{start}, {end}] exceeds it"
                 )
+                return result
 
             batch_lines = lines[start : end + 1]
             expected_root = anchor["merkle_root"].replace("sha256:", "")
 
+            # 1) فحص الجذر (root_verified)
             if not verify_merkle_root(batch_lines, expected_root):
                 actual_root = compute_merkle_root(batch_lines)
-                return False, (
+                result["message"] = (
                     f"Merkle root mismatch: expected {expected_root[:16]}..., "
                     f"got {actual_root[:16]}... — content was modified"
                 )
+                return result
+            result["root_verified"] = True
 
-            # R-641: التحقق من التوقيع (v2 فقط — إن وُجد keyring)
+            # 2) التحقق من التوقيع (v2 فقط)
             sig_format = anchor.get("sig_format", "v1")
-            if sig_format == "v2" and keyring is not None:
+            if sig_format == "v2":
+                if keyring is None:
+                    result["message"] = (
+                        "root verified, but no KeyRing provided — "
+                        "cannot verify v2 signature (not trusted)"
+                    )
+                    return result
+                
                 key_id = anchor.get("key_id")
                 key_record = keyring.get_key(key_id) if key_id else None
                 if key_record is None:
-                    return False, (
+                    result["message"] = (
                         f"anchor key {key_id} not found in KeyRing — "
-                        f"cannot verify signature"
+                        f"cannot verify signature (not trusted)"
                     )
+                    return result
                 if not getattr(key_record, "private_key", None):
-                    return False, (
+                    result["message"] = (
                         f"anchor key {key_id} has no private_key — "
-                        f"cannot verify signature"
+                        f"cannot verify signature (not trusted)"
                     )
-
+                    return result
+                
+                # R-642: تحقق من ثقة المفتاح (ACTIVE — غير COMPROMISED)
+                from backend.sovereign.keys.keyring import KeyStatus
+                if key_record.status == KeyStatus.COMPROMISED:
+                    result["message"] = (
+                        f"anchor key {key_id} is COMPROMISED — "
+                        f"signature may verify but key is not trusted"
+                    )
+                    # root_verified صحيح لكن key_trusted = False
+                    return result
+                if key_record.status != KeyStatus.ACTIVE:
+                    result["message"] = (
+                        f"anchor key {key_id} status={key_record.status} — "
+                        f"not trusted for coverage"
+                    )
+                    return result
+                result["key_trusted"] = True
+                
                 # التحقق من التوقيع v2 (يُغطي الجذر)
-                event_count = len(batch_lines)
+                # R-642: استخدم anchor['event_count'] (وليس len(batch_lines))
+                # — تغيير العدد المحفوظ يجب أن يُكتشف
+                event_count_from_anchor = anchor.get("event_count")
+                if event_count_from_anchor is None:
+                    event_count_from_anchor = len(batch_lines)
+                
                 expected_sig_data = self.compute_anchor_signature_data(
-                    start, end, event_count, expected_root, key_id
+                    start, end, event_count_from_anchor, expected_root, key_id
                 )
                 import hmac as _hmac
                 import hashlib as _hashlib
@@ -326,40 +389,95 @@ class LedgerAnchor:
                 ).hexdigest()
 
                 if not _hmac.compare_digest(expected_sig, anchor.get("signature", "")):
-                    return False, (
+                    result["message"] = (
                         f"anchor signature mismatch (v2): signature does not "
                         f"cover merkle_root — possible tampering"
                     )
-
-            return True, "verified"
+                    return result
+                result["signature_verified"] = True
+                result["message"] = "verified (root + signature v2 + trusted key)"
+            else:
+                # v1 (قديم) — root_verified فقط (لا تحقق توقيع)
+                result["message"] = (
+                    f"root verified (v1 — signature not verified, "
+                    f"not trusted for cryptographic coverage)"
+                )
+            
+            # R-642: trusted = كل الشروط معًا
+            result["trusted"] = (
+                result["root_verified"]
+                and result["signature_verified"]
+                and result["key_trusted"]
+            )
+            return result
 
         except Exception as e:
-            return False, f"verification error: {e}"
+            result["message"] = f"verification error: {e}"
+            return result
 
-    def verify_all_anchors(self) -> Dict:
+    def verify_all_anchors(self, keyring=None) -> Dict:
         """
         يتحقق من كل المراسي المسجلة ويُعيد تقريرًا كاملًا.
+        
+        R-642: يميّز صراحةً بين:
+        - root_verified_count: عدد المراسٍ التي تطابق جذرها المحتوى
+        - trusted_count: عدد المراسٍ الموثوقة تشخريًًا
+          (root + signature v2 + trusted key — كلها معًا)
+        - trusted_coverage: التغطية الموثوقة تشخريًًا
+          (اتحاد مجالات المراسٍ الموثوقة فقط)
+        - nominal_coverage: التغطية الاسمية (كل النطاقات المسجلة)
         """
         anchors = self.list_anchors()
         results = {
             "total_anchors": len(anchors),
-            "verified": 0,
+            "root_verified_count": 0,
+            "trusted_count": 0,
             "failed": 0,
+            "trusted_coverage": 0,
+            "nominal_coverage": 0,
             "details": [],
         }
 
+        trusted_events = set()
+        nominal_events = set()
+
         for anchor in anchors:
-            ok, msg = self.verify_anchor(anchor)
-            if ok:
-                results["verified"] += 1
+            detailed = self.verify_anchor_detailed(anchor, keyring)
+            
+            if detailed["root_verified"]:
+                results["root_verified_count"] += 1
             else:
                 results["failed"] += 1
+            
+            if detailed["trusted"]:
+                results["trusted_count"] += 1
+            
+            # إضافة الأحداث للتغطية
+            start, end = anchor["batch_start"], anchor["batch_end"]
+            for i in range(start, end + 1):
+                nominal_events.add(i)
+                if detailed["trusted"]:
+                    trusted_events.add(i)
+            
             results["details"].append({
                 "anchor_id": anchor["anchor_id"],
-                "batch": [anchor["batch_start"], anchor["batch_end"]],
-                "status": "verified" if ok else "failed",
-                "message": msg,
+                "batch": [start, end],
+                "sig_format": anchor.get("sig_format", "v1"),
+                "root_verified": detailed["root_verified"],
+                "signature_verified": detailed["signature_verified"],
+                "key_trusted": detailed["key_trusted"],
+                "trusted": detailed["trusted"],
+                "message": detailed["message"],
             })
+
+        # حساب التغطية
+        lines = self.read_ledger_lines()
+        total_events = len(lines)
+        if total_events > 0:
+            results["trusted_coverage"] = len(trusted_events) / total_events
+            results["nominal_coverage"] = len(nominal_events) / total_events
+        results["trusted_events_count"] = len(trusted_events)
+        results["total_events"] = total_events
 
         return results
 
@@ -387,14 +505,16 @@ class LedgerAnchor:
     # تقرير شامل
     # ============================================================
 
-    def full_report(self) -> Dict:
+    def full_report(self, keyring=None) -> Dict:
         """
         يُعيد تقريرًا شاملًا: عدد الأحداث المُرساة، عدد المراسي،
         حالة كل مرساة، والتغطية.
+        
+        R-642/R-643: يُميّز التغطية الموثوقة تشخريًًا (trusted) من الاسمية.
         """
         lines = self.read_ledger_lines()
         anchors = self.list_anchors()
-        verification = self.verify_all_anchors()
+        verification = self.verify_all_anchors(keyring=keyring)
 
         # حساب الأحداث المُغطاة بالمراسي
         anchored_events = set()
@@ -409,7 +529,16 @@ class LedgerAnchor:
             "anchored_coverage_pct": round(
                 (len(anchored_events) / len(lines)) * 100, 2
             ) if lines else 0.0,
-            "anchors_verified": verification["verified"],
+            # R-642: أسماء متوافقة مع الصيغة الجديدة
+            "anchors_verified": verification["root_verified_count"],
+            "anchors_trusted": verification["trusted_count"],
             "anchors_failed": verification["failed"],
+            "trusted_coverage_pct": round(
+                verification["trusted_coverage"] * 100, 2
+            ),
+            "nominal_coverage_pct": round(
+                verification["nominal_coverage"] * 100, 2
+            ),
+            "trusted_events_count": verification["trusted_events_count"],
             "anchor_details": verification["details"],
         }
