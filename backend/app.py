@@ -499,18 +499,14 @@ async def sovereignty_score():
     scorer = SovereigntyScorer()
     report = scorer.compute()
 
-    # R-680e: ربط فعلي بـ pytest من خلال تقرير JUnit (provenance).
+    # R-680f: ربط فعلي بـ pytest من خلال تقرير JUnit (provenance).
     # الملف يُولّده CI أو المستخدم بـ: python -m pytest --junitxml=forensics/pytest_results.xml
     # إذا الملف غير موجود → tests_passing_ratio = 0 (غير متاح، لا يمنح نقاطاً مجاناً).
-    _junit_candidates = [
-        pathlib.Path(__file__).resolve().parent.parent / "forensics" / "pytest_results.xml",
-        pathlib.Path("/tmp/evidence8/results.xml"),  # بيئة الاختبار المحلية
-    ]
+    # R-680f: مسار واحد قياسي فقط — لا اعتماد على أثر محلي (مثل /tmp/...)
     _junit_path = None
-    for _p in _junit_candidates:
-        if _p.exists():
-            _junit_path = str(_p)
-            break
+    _junit_std = pathlib.Path(__file__).resolve().parent.parent / "forensics" / "pytest_results.xml"
+    if _junit_std.exists():
+        _junit_path = str(_junit_std)
 
     # R-680: إضافة المؤشرات الأولية + الرقم المُركّب مع علامة "قابل للجدل"
     # تُحسب المؤشرات الأولية من ملفات المستودع (لا من تشغيل pytest).

@@ -202,3 +202,64 @@ class TestComposite:
         result = c.compute()
         assert "primitives" in result
         assert "files_total_count" in result["primitives"]
+
+    def test_11d_negative_junit_counters_rejected(self, repo_root, tmp_path):
+        """R-680f: العدادات السالبة في JUnit → غير صالح (0, 0)."""
+        import xml.etree.ElementTree as ET
+        xml_file = tmp_path / "bad_negative.xml"
+        xml_file.write_text(
+            '<?xml version="1.0"?><testsuites>'
+            '<testsuite tests="10" failures="-1" errors="1" skipped="0"/>'
+            '</testsuites>', encoding="utf-8")
+        c = Composite(Primitives(repo_root=repo_root), junit_xml_path=str(xml_file))
+        result = c.compute()
+        # عدادات سالبة → غير صالح → (0, 0)
+        assert result["tests_passing"] == 0
+        assert result["tests_total"] == 0
+
+    def test_11e_report_change_between_calls(self, repo_root, tmp_path):
+        """R-680f: تغيير التقرير بين استدعاءين للكائن نفسه يجب أن يُلاحظ."""
+        import xml.etree.ElementTree as ET
+        xml_file = tmp_path / "changing.xml"
+        # تقرير أول: 100/100
+        xml_file.write_text(
+            '<?xml version="1.0"?><testsuites>'
+            '<testsuite tests="100" failures="0" errors="0" skipped="0"/>'
+            '</testsuites>', encoding="utf-8")
+        c = Composite(Primitives(repo_root=repo_root), junit_xml_path=str(xml_file))
+        r1 = c.compute()
+        assert r1["tests_passing"] == 100
+        assert r1["tests_total"] == 100
+
+        # تقرير ثانٍ: 140/200 (تغيير)
+        xml_file.write_text(
+            '<?xml version="1.0"?><testsuites>'
+            '<testsuite tests="200" failures="50" errors="0" skipped="10"/>'
+            '</testsuites>', encoding="utf-8")
+        r2 = c.compute()
+        # يجب أن يُلاحظ التغيير (لا cache)
+        assert r2["tests_passing"] == 140, (
+            f"report change must be noticed — got {r2['tests_passing']}"
+        )
+        assert r2["tests_total"] == 200
+
+    def test_11f_manual_invalid_input_rejected(self, repo_root):
+        """R-680f: المدخلات اليدوية غير الصحيحة تُرفض (0, 0)."""
+        # passing > total
+        c = Composite(Primitives(repo_root=repo_root), tests_passing=150, tests_total=100)
+        result = c.compute()
+        assert result["tests_passing"] == 0
+        assert result["tests_total"] == 0
+
+        # passing سالب
+        c2 = Composite(Primitives(repo_root=repo_root), tests_passing=-5, tests_total=100)
+        result2 = c2.compute()
+        assert result2["tests_passing"] == 0
+        assert result2["tests_total"] == 0
+
+        # total سالب
+        c3 = Composite(Primitives(repo_root=repo_root), tests_passing=10, tests_total=-1)
+        result3 = c3.compute()
+        assert result3["tests_passing"] == 0
+        assert result3["tests_total"] == 0
+

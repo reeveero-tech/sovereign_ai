@@ -104,8 +104,13 @@ class Composite:
                     skipped = int(testsuites.get("skipped", 0))
                     passed = total - failures - errors - skipped
 
-                    # التحقق من صحة المدخلات (R-680e)
+                    # التحقق من صحة المدخلات (R-680f)
+                    # كل العدادات يجب أن تكون غير سالبة
+                    if any(v < 0 for v in (total, failures, errors, skipped)):
+                        return 0, 0  # عدادات سالبة — غير صالح
                     if total <= 0:
+                        return 0, 0  # غير صالح
+                    if failures > total or errors > total or skipped > total:
                         return 0, 0  # غير صالح
                     if passed < 0:
                         return 0, 0  # غير صالح (failures+errors+skipped > total)
@@ -154,12 +159,15 @@ class Composite:
         # هذا يمنع المقياس من إعطاء 100 بسهولة عندما تفشل الاختبارات.
         # لتعيين القيمة يدوياً: Composite(primitives, tests_passing=..., tests_total=...)
         # أو: self.set_tests_passing(...) قبل compute().
+        # R-680f: لا نُخزن النتيجة في self — حتى لا يُفضّل الاستدعاء التالي القيمة القديمة
+        # على إعادة قراءة XML (المستشار: "تخزين العددين يجعل الاستدعاء التالي يفضلهما").
         tests_passing, tests_total = self._get_tests_passing_from_provenance(p)
         if tests_total > 0 and tests_passing >= 0:
             tests_passing_ratio = tests_passing / tests_total
         else:
-            tests_passing_ratio = 0.0  # غير محسوب → 0 (لا يمنح نقاطاً مجاناً)
-        self.tests_passing, self.tests_total = tests_passing, tests_total
+            tests_passing_ratio = 0.0  # غير متاح → 0 (لا يمنح نقاطاً مجاناً)
+        self._last_tests_passing = tests_passing  # فقط للقراءة (لا يُستخدم في الحساب)
+        self._last_tests_total = tests_total      # فقط للقراءة (لا يُستخدم في الحساب)
 
         # R-680: عامل الضارب — إذا وُجد mock في الإنتاج → الدرجة = 0
         hard_kill_factor = (1 if mocks_count == 0 else 0)
