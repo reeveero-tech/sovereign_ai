@@ -1,7 +1,30 @@
 # CHANGELOG.md — سجل التغييرات
 
 > كل تغيير يُسجل هنا (قاعدة الدفعة الذرية).
-> آخر تحديث: 2026-10-14 (الدفعة M6 — R-612)
+> آخر تحديث: 2026-10-14 (الدفعة M6 — R-613)
+
+---
+
+## [M6] — 2026-10-14 — R-613: التدقيق العميق — إصلاح 3 أخطاء حقيقية
+
+### أُصلح
+- `backend/simulation/simulation_environment.py`: **`reset()` كان مكسوراً** — يستدعي `_now_iso()` و`self._load_index()` غير المعرّفتين ويشير إلى خصائص غير موجودة (`environment_state`, `environment_history`, `_index`, `policies`). كان يُستدعى من `simulation_controller.py:218` داخل `try/except pass` — الخطأ يُبتلع بصمت. أُصلح: إعادة تعيين حقيقية للحالة (templates/parameter_sets/instances/active_template/active_parameter_set) + دالة `_now_iso()` على مستوى الوحدة.
+- `backend/memory/core.py`: **`verify_integrity()` كان يمشي السجل الكامل (9141 حدثاً) في كل استدعاء** — `_integrity_cache` كان يُصفَّر عند كل إضافة حدث (خلفية اللقطات) → فرع الكاش 60s لا يُصل أبداً. أُزيل التصفير — الكاش 60s يكفي. `verify_integrity()` بعد الإضافة: 0.0s (كان ~2.5s).
+- `backend/predictive/predictive_simulation.py`: **`get_simulation_results()`/`get_recommendations()` كانا يشغّلان محاكاة كاملة 100×12 عند قراءة حالة فقط (~3.4s)** — الآن دورة صغيرة 10×6. `get_risk_status()` 1.61s (كان 13.65s)؛ `/components/predictive` 200 في 2.04s بارد / 0.002s دافئ (كانت timeout >20s).
+- `backend/memory/compress.py`: **`SovereignCompressor.reset()` كان مكسوراً** — يستدعي `self._load_index()` غير المعرّفة و`self.core.append_event(...)` مع `self.core` غير المعيّن أبداً في `__init__`. أُصلح: `_load_index()` حقيقية (فهرس الضغط) + `get_core()` بدل `self.core` (مطابقاً لـ `compress_from_core`).
+- `backend/app.py`: تنظيف متغيرات ميتة (`status` في `/health`، `reasoning` و`lang` في `/chat`).
+
+### أُضيف
+- `tests/test_simulation_reset_r613.py`: 2 اختبارات (إعادة تعيين بيئة المحاكاة تنظف الحالة الحقيقية؛ إعادة تعيين المتحكم لا ترمي).
+- `tests/test_compress_reset_r613.py`: 2 اختبارات (إعادة تعيين الضاغط تعمل؛ متماثلة).
+- `tests/test_predictive_perf_r613.py`: 2 اختبارات (كاش `verify_integrity` يبقى بعد الإضافة؛ `get_simulation_results` سريعة).
+
+### حُدث
+- `.gitignore`: استثناء `guardian/data/emergency/emergency_backups/*/data/` (بيانات وقت تشغيل).
+- وثائق الحوكمة: `ROADMAP.md`, `PROJECT_STATE.md`, `OPEN_QUESTIONS.md`.
+
+### ملاحظات
+- تحقق فعلي: `python -m pytest tests/ -q` → `62 passed, 1 warning` (كانت 56)؛ `SimulationEnvironmentManager().reset()` → templates 0/param_sets 0/instances 0؛ `SimulationController().reset()` يعمل؛ `SovereignCompressor().reset()` يعمل مرتين؛ `/components/predictive` → 200 في 2.04s بارد؛ فحص ثابت شامل: لا استدعاء `self.<method>()` بدون تعريف ولا دالة وحدة غير معرّفة في كل backend؛ `git status --short` نظيف بعد تشغيل كامل. سُجل القرار D-026.
 
 ---
 

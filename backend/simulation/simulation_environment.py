@@ -71,6 +71,12 @@ ENV_STATUS_DEPRECATED = "deprecated"
 ENV_STATUS_ARCHIVED = "archived"
 
 
+def _now_iso() -> str:
+    """إرجاع الوقت الحالي بصيغة ISO"""
+    from datetime import datetime, timezone
+    return datetime.now(timezone.utc).isoformat() + "Z"
+
+
 @dataclass
 class EnvironmentTemplate:
     """قالب بيئة محاكاة"""
@@ -151,19 +157,12 @@ class SimulationEnvironmentManager:
         إعادة تهيئة كاملة لبيئة المحاكاة.
         """
 
-        # مسح حالة البيئة
-        self.environment_state = {}
-        self.environment_history = []
-
-        # إعادة تحميل الفهرس
-        self._index = self._load_index()
-
-        # إعادة السياسات الافتراضية
-        self.policies = {
-            "environment_noise": 0.1,
-            "max_environment_changes": 10,
-            "stability_threshold": 0.5,
-        }
+        # مسح حالة البيئة (الحالة الفعلية للمدير)
+        self.templates = {}
+        self.parameter_sets = {}
+        self.instances = {}
+        self.active_template = None
+        self.active_parameter_set = None
 
         # تسجيل عملية إعادة التهيئة
         self.core.append_event("simulation::environment::reset", {

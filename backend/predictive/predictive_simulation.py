@@ -880,7 +880,9 @@ class PredictiveSimulation:
     def get_simulation_results(self) -> Dict[str, Any]:
         """نتائج آخر محاكاة"""
         if not self.current_batch:
-            self.simulation_cycle(runs=100, steps=12)
+            # R-613: لا تشغّل محاكاة كاملة (100×12) عند قراءة الحالة فقط —
+            # شغّل دفعة صغيرة سريعة حتى تعود النتائج فوراً.
+            self.simulation_cycle(runs=10, steps=6)
         
         batch = self.current_batch
         if not batch:
@@ -898,7 +900,7 @@ class PredictiveSimulation:
     def get_recommendations(self) -> List[Dict]:
         """التوصيات من آخر محاكاة"""
         if not self.current_batch:
-            self.simulation_cycle(runs=100, steps=12)
+            self.simulation_cycle(runs=10, steps=6)
         
         if self.current_batch:
             return self.current_batch.recommended_actions
