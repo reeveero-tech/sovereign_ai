@@ -221,32 +221,40 @@ class TestLegacyCompatibility:
 
 
 class TestNoKeyRing:
-    """اختبارات غياب KeyRing (R-626 — لا fallback إلى مفتاح الإعدادات)."""
+    """اختبارات غياب KeyRing (R-626/R-629 — فشل مُغلق، لا fallback)."""
 
-    def test_writer_without_keyring_uses_config_key_no_key_id(self):
-        """في غياب KeyRing، الكاتب يُوقّع بمفتاح الإعدادات و لا يُضيف key_id
-        (لا يُستخدم مفتاح إعدادات تحت هوية مفتاح KeyRing)."""
-        # عزل كامل — بدون keyring.json (لا fallback لأن المسار المعزول لا يحتويه)
-        # ملاحظة: fallback R-621 يقرأ من المسار الحقيقي إذا وُجد — للاختبار
-        # نستخدم keys_dir فارغ صريح
-        _empty_keys = tempfile.mkdtemp(prefix="sovereign_empty_keys_")
-        os.environ["SOVEREIGN_DATA_ROOT"] = tempfile.mkdtemp(prefix="sovereign_no_kr_")
+    def test_writer_without_keyring_rejects_append(self, tmp_path):
+        """في غياب KeyRing (fallback معطل)، الكاتب يرفض الإلحاق
+        (فشل مُغلق — لا توقيع بمفتاح الإعدادات تحت هوية KeyRing).
+        
+        R-631: هذا الاختبار يُستبدل بالنسخة الأكثر تفصيلًا في
+        tests/test_fail_closed_rotation.py (TestFailClosed). يبقى هنا
+        للتأكيد على نفس العقد (لا حذف).
+        """
+        _core_dir = tmp_path / "sovereign_core"
+        _core_dir.mkdir(parents=True, exist_ok=True)
+        (_core_dir / "blobs").mkdir(exist_ok=True)
 
-        # إنشاء KeyRing فارغ (بدون مفاتيح)
-        from backend.sovereign.keys import KeyRing as KR
-        kr = KR(keys_dir=Path(_empty_keys))
-        # لا نُحمّل أي مفاتيح
-
-        # SovereignCore بدون KeyRing نشط
-        core = SovereignCore()
-        # يجب ألا يربط KeyRing (لا مفتاح نشط)
-        # (إذا fallback قرأ من الحقيقي، نتجاهله لهذا الاختبار)
-        if core._keyring_key_id is None:
-            # لا مفتاح KeyRing — الحدث يجب ألا يحمل key_id
-            r = core.append_event(EventType.INTERACTION, {"test": "no_kr"}, user="test")
-            assert "key_id" not in r, (
-                "event without KeyRing must not have key_id (R-626 — no identity mismatch)"
+        # R-629: تعطيل fallback (لا تحميل تلقائي) — مع استعادة مضمونة
+        _orig = os.environ.get("SOVEREIGN_KEYRING_FALLBACK_DISABLED")
+        os.environ["SOVEREIGN_KEYRING_FALLBACK_DISABLED"] = "1"
+        try:
+            core = SovereignCore(
+                log_file=_core_dir / "ledger.jsonl",
+                blobs_dir=_core_dir / "blobs",
+                index_file=_core_dir / "index.json",
+                meta_file=_core_dir / "meta.json",
+                integrity_file=_core_dir / "integrity.json",
             )
-        else:
-            # fallback قرأ من الحقيقي — نتجاهل (الاختبار لا ينطبق)
-            pytest.skip("fallback loaded real keyring — test not applicable in this env")
+            # لا KeyRing (fallback معطل)
+            assert core._keyring is None, "fallback must be disabled"
+
+            # الإلحاق يجب أن يُرفض (فشل مُغلق — R-626)
+            with pytest.raises((RuntimeError, KeyError)):
+                core.append_event(EventType.INTERACTION, {"test": "no_kr"}, user="test")
+        finally:
+            # استعادة مضمونة (لا تسريب متغير البيئة)
+            if _orig is None:
+                os.environ.pop("SOVEREIGN_KEYRING_FALLBACK_DISABLED", None)
+            else:
+                os.environ["SOVEREIGN_KEYRING_FALLBACK_DISABLED"] = _orig

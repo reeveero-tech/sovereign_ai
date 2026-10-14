@@ -423,7 +423,8 @@ class SovereignCore:
                  index_file: Path = INDEX_FILE,
                  meta_file: Path = META_FILE,
                  integrity_file: Path = INTEGRITY_FILE,
-                 sovereign_key: str = SOVEREIGN_KEY):
+                 sovereign_key: str = SOVEREIGN_KEY,
+                 keyring=None):
         
         self.log_file = log_file
         self.meta_file = meta_file
@@ -439,23 +440,40 @@ class SovereignCore:
             # توليد مفتاح جديد إذا كان افتراضياً
             self.signing_key = b'new_generated_key_here'
 
-        # R-618: KeyRing — ربط الأحداث الجديدة بمفتاحها في KeyRing
+        # R-618/R-629: KeyRing — ربط الأحداث الجديدة بمفتاحها في KeyRing
         # (حتى تكون قابلة للتحقق لاحقًا، بدل unverifiable_missing_key)
+        # R-629: حقن صريح — إذا مُرر keyring، يُستخدم (لا تحميل تلقائي).
+        # إذا لم يُمرر، يُحمّل من المسار الافتراضي (fallback R-621 معطل في الاختبارات
+        # عبر تعطيل SOVEREIGN_KEYRING_FALLBACK).
         self._keyring = None
         self._keyring_key_id = None
-        try:
-            from backend.sovereign.keys import KeyRing
-            kr = KeyRing()
-            kr.load_from_disk()
-            active = kr.get_active_key()
+        if keyring is not None:
+            # R-629: حقن صريح — KeyRing مُمرر (لا تحميل تلقائي، لا fallback)
+            self._keyring = keyring
+            active = keyring.get_active_key()
             if active is not None:
-                self._keyring = kr
                 self._keyring_key_id = active.key_id
-                logger.info(f"🔑 KeyRing linked: {active.key_id}")
+                logger.info(f"🔑 KeyRing injected: {active.key_id}")
             else:
-                logger.warning("⚠️ KeyRing has no active key — events will be unverifiable")
-        except Exception as e:
-            logger.warning(f"⚠️ KeyRing not available: {e}")
+                logger.warning("⚠️ Injected KeyRing has no active key — events will be unverifiable")
+        elif not os.environ.get("SOVEREIGN_KEYRING_FALLBACK_DISABLED"):
+            # التحميل الافتراضي (التشغيل العادي — fallback R-621 يقرأ من المسار الحقيقي)
+            try:
+                from backend.sovereign.keys import KeyRing
+                kr = KeyRing()
+                kr.load_from_disk()
+                active = kr.get_active_key()
+                if active is not None:
+                    self._keyring = kr
+                    self._keyring_key_id = active.key_id
+                    logger.info(f"🔑 KeyRing linked: {active.key_id}")
+                else:
+                    logger.warning("⚠️ KeyRing has no active key — events will be unverifiable")
+            except Exception as e:
+                logger.warning(f"⚠️ KeyRing not available: {e}")
+        else:
+            # R-629: fallback معطل (بيئة اختبار) — لا تحميل تلقائي
+            logger.info("🔑 KeyRing fallback disabled (SOVEREIGN_KEYRING_FALLBACK_DISABLED) — no auto-load")
 
         # حالة السجل
         self._last_hash = self._load_last_hash()
@@ -618,16 +636,34 @@ class SovereignCore:
         if self._keyring is not None and _use_key_id:
             try:
                 key_record = self._keyring.get_key(_use_key_id)
-                if key_record is not None and hasattr(key_record, 'private_key'):
+                if key_record is not None and hasattr(key_record, 'private_key') and key_record.private_key is not None:
                     # توقيع HMAC بالمفتاح الخاص من KeyRing
                     import hmac as _hmac
                     key_bytes = key_record.private_key.encode('utf-8') if isinstance(key_record.private_key, str) else key_record.private_key
                     return _hmac.new(key_bytes, data.encode('utf-8'), __import__('hashlib').sha256).hexdigest()
+                else:
+                    # R-626: مفتاح KeyRing غير صالح (غير موجود أو بدون private_key)
+                    # — فشل مُغلق (لا fallback إلى مفتاح الإعدادات تحت هوية KeyRing)
+                    raise KeyError(
+                        f"R-626: KeyRing key {_use_key_id} not available for signing "
+                        f"(not found or private_key is None) — refusing to sign "
+                        f"with config key under KeyRing identity"
+                    )
+            except KeyError:
+                # R-626: إعادة رفع فشل التوقيع (فشل مُغلق — لا fallback)
+                raise
             except Exception as e:
                 logger.warning(f"⚠️ KeyRing signing failed: {e}")
+                # R-626: فشل مُغلق — لا fallback إلى مفتاح الإعدادات
+                raise
         
-        # احتياط: التوقيع بمفتاح الإعدادات (كما كان)
-        return compute_hmac(data.encode('utf-8'), self.signing_key)
+        # R-626: لا مفتاح KeyRing متاح — فشل مُغلق
+        # (لا يُوقّع بمفتاح الإعدادات تحت هوية مفتاح KeyRing)
+        raise RuntimeError(
+            "R-626: No KeyRing key available for signing — refusing to sign "
+            "with config key (fail-closed). Initialize KeyRing with an active key "
+            "before appending events."
+        )
     
     def append_event(self, event_type: EventType, payload: Dict[str, Any],
                      user: Optional[str] = None) -> Dict[str, Any]:
