@@ -20,7 +20,7 @@
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, HTTPException, status
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from typing import Dict, Any, Optional, List
 import json
 import time
@@ -65,26 +65,28 @@ class RunCycleRequest(BaseModel):
     event_type: str = "manual_run"
     payload: Dict[str, Any] = {}
     
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "event_type": "manual_run",
                 "payload": {"source": "user", "command": "status"}
             }
         }
+    )
 
 class ResetRequest(BaseModel):
     """طلب إعادة تهيئة"""
     preserve_data: bool = False
     component: Optional[str] = None
     
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "preserve_data": False,
                 "component": None
             }
         }
+    )
 
 class EventRequest(BaseModel):
     """طلب إرسال حدث"""
@@ -92,14 +94,15 @@ class EventRequest(BaseModel):
     payload: Dict[str, Any] = {}
     source: str = "api"
     
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "type": "user_action",
                 "payload": {"action": "click", "target": "reset_button"},
                 "source": "web_ui"
             }
         }
+    )
 
 # ============================================================
 # 3. مدير اتصالات WebSocket

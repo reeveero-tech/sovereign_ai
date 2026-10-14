@@ -180,6 +180,14 @@ def initialize_guardian(master_passphrase: Optional[str] = None) -> dict:
 
 
 if __name__ == "__main__":
+    # R-611: اجعل `python nexus/main.py` يعمل من أي دليل (كان يفشل بـ ModuleNotFoundError)
+    import os
+    import sys
+
+    _repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    if _repo_root not in sys.path:
+        sys.path.insert(0, _repo_root)
+
     print("🚀 Initializing NexusCore...")
     engine  = initialize_nexus()
     systems = initialize_guardian()

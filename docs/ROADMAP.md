@@ -527,11 +527,27 @@
 
 ---
 
+## 2) R-611 — تحصين الإنتاج: نقطة دخول Nexus + نظافة شجرة العمل + صفر تحذيرات Pydantic
+
+- **الهدف**: إغلاق 5 ثغرات حقيقية اكتشفها تدقيق خارجي شامل (تشغيل فعلي لكل ملف):
+  1. `python3 nexus/main.py` كان يفشل بـ `ModuleNotFoundError: No module named 'nexus'` — نقطة الدخول تعمل فقط عبر `python3 -m nexus.main`. أُصلح بإضافة جذر المستودع إلى `sys.path` في كتلة `__main__` — الآن تعمل من أي دليل.
+  2. `guardian/data/guardian_events.jsonl` كان ملف بيانات وقت تشغيل **مُتتبعاً** يتغير عند كل تشغيل (تلويث شجرة العمل) — نُقل إلى `.gitignore` (نفس فئة R-605).
+  3. `nexus_data/nexus.db` كان قاعدة بيانات وقت تشغيل **مُتتبعة** (تُنشأ تلقائياً، `*.db` مستثنى أصلاً) — نُقل إلى `.gitignore`.
+  4. 5 تحذيرات `PydanticDeprecatedSince20` (class-based `Config`) في `backend/app.py` (ChatMessage, SovereignCommand) و`backend/api.py` (RunCycleRequest, ResetRequest, EventRequest) — حُوّلت إلى `model_config = ConfigDict(...)`. التحذيرات انخفضت من 6 إلى 1 (المتبقي من مكتبة starlette الخارجية).
+  5. `backend/requirements.txt` كان غير متزامن مع الجذر — ينقصه `pycryptodome` (تشفير AES-256-CBC) و`pytest` (الاختبارات). حُدّث ليطابق الجذر تماماً.
+- **النطاق**: `nexus/main.py`, `.gitignore`, `backend/app.py`, `backend/api.py`, `backend/requirements.txt`, وثائق الحوكمة.
+- **خارج النطاق**: لا تغيير في `Mr.py` (محمي D-005)؛ لا تغيير في قفل guardian (D-006)؛ لا تغيير في `guardian/data/integrity_baseline.json` أو `emergency_events.jsonl` (ملفات حالة مستقرة تبقى مُتتبعة).
+- **معيار القبول**: `python3 nexus/main.py` يعمل من أي دليل (47 مكوّناً + Guardian ACTIVE)؛ `git status` نظيف بعد تشغيل كامل؛ 51 اختباراً تمر بتحذير واحد فقط (خارجي)؛ `backend/requirements.txt` مطابق للجذر؛ كل نقاط HTTP وWebSocket تعمل وتمنع الرسائل الخطيرة.
+- **دليل التحقق**: `python3 nexus/main.py` → `✅ NexusCore: 47 components` + `🛡️ Guardian: ACTIVE`؛ `python -m pytest tests/ -q` → `51 passed, 1 warning` (كانت 6)؛ `git status --short` → نظيف بعد تشغيل الخادم والاختبارات؛ `/chat` و`/ws/{user_id}` و`/api/ws` كلها تمنع `shutdown the system` بـ `safety-block`؛ `diff` بين `requirements.txt` و`backend/requirements.txt` → متطابقان.
+- **ملاحظات**: سُجل القرار D-024.
+
+---
+
 ## 3) ملخص الحالة
 
 | الحالة | العدد |
 |---|---|
-| done | 36 (R-001..R-003, R-101..R-112, R-201..R-203, R-301..R-303, R-401..R-403, R-501..R-502, R-601..R-610) |
+| done | 37 (R-001..R-003, R-101..R-112, R-201..R-203, R-301..R-303, R-401..R-403, R-501..R-502, R-601..R-611) |
 | in_progress | 0 |
 | proposed | 0 |
 | blocked | 0 |
@@ -553,3 +569,4 @@
 | 2026-10-13 | R-608: إحياء طبقة الأمان الكاملة (safety.py + api_gateway + compress.py) — فحص كل المدخلات + 6 نقاط /nexus/* + إصلاح بنيوي للضاغط + حذف نسختين مكررتين أصغر | M6 |
 | 2026-10-14 | R-609: تدقيق شامل — إصلاح 6 أخطاء حقيقية (نقطة predictive، ingest، إعادة تعيين التنبؤ، فجوة أمان WebSocket) + تشفير AES-256-CBC + 48 اختباراً | M6 |
 | 2026-10-14 | R-610: الهوية السيادية الدائمة — مفتاح سيد مستمر عبر إعادة التشغيل (data/key.secret) + 3 اختبارات + 51 اختباراً | M6 |
+| 2026-10-14 | R-611: تحصين الإنتاج — إصلاح نقطة دخول nexus/main.py + إلغاء تتبع بيانات وقت التشغيل (guardian_events.jsonl, nexus.db) + صفر تحذيرات Pydantic (ConfigDict) + مزامنة backend/requirements.txt | M6 |
