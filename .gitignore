@@ -99,3 +99,4 @@ nexus_data/security/
 guardian/data/emergency/emergency_backups/*/data/
 data/keys/keyring.json
 data/keys/HISTORY.jsonl
+data/key.secret.old_rotated_2026_10_14
