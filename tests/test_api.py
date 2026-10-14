@@ -20,11 +20,16 @@ def test_api_key_requires_master_key():
 
 
 def test_api_key_with_master_key():
-    """/api-key يعيد المفتاح مع مفتاح السيد الصحيح"""
+    """/api-key يعيد بصمة المفتاح (لا المفتاح نفسه) مع مفتاح السيد الصحيح"""
     with _client() as client:
         r = client.get("/api-key", params={"master_key": MASTER_KEY})
         assert r.status_code == 200
-        assert "api_key" in r.json()
+        data = r.json()
+        # R-614/S-5: لا يُكشف المفتاح أبداً — فقط البصمة ومصدر الثبات
+        assert "api_key" not in data
+        assert "fingerprint" in data
+        assert len(data["fingerprint"]) == 16
+        assert "persistent" in data
 
 
 def test_api_key_wrong_master_key():

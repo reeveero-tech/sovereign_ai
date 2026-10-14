@@ -403,8 +403,9 @@ async def chat(message: ChatMessage, background_tasks: BackgroundTasks):
     
     processing_time = (time.time() - start_time) * 1000
     
-    # استخراج الرد من النتيجة — R-612: رد حقيقي مبني على فهم النص
+    # استخراج الرد من النتيجة — R-614/S-9: رد حقيقي مبني على حالة النظام الحية
     reply = "تم استلام رسالتك. أنا الذكاء السيادي، جاهز لخدمتك."
+    intent_name = ""
     if result.decision:
         action = result.decision.get('action', 'continue')
         source = result.decision.get('source', 'orchestrator')
@@ -414,24 +415,30 @@ async def chat(message: ChatMessage, background_tasks: BackgroundTasks):
         sentiment_label = nexus_perception.get("sentiment", {}).get("label", "")
         intent_name = nexus_perception.get("intent", {}).get("name", "")
         
-        if source == "nexus_intent" and intent_name:
-            intent_ar = {
-                "greet": "تحية",
-                "help": "مساعدة",
-                "status": "حالة النظام",
-                "analyze": "تحليل",
-                "forecast": "تنبؤ",
-                "alert": "تنبيه",
-                "stop": "إيقاف",
-            }.get(intent_name, intent_name)
-            reply = f"فهمت — نيتك: {intent_ar}. القرار: {action}."
-        elif source == "sovereign_controller":
-            reply = f"قرار المتحكم السيادي: {action}."
-        else:
-            reply = f"تم تنفيذ القرار: {action}."
+        # R-614: محرك الردود السيادي — يبني الرد من حالة النظام الحية
+        try:
+            from sovereign_response import build_reply
+            reply = build_reply(intent_name, message.text, result)
+        except Exception as e:
+            logger.warning(f"sovereign_response failed, falling back: {e}")
+            if source == "nexus_intent" and intent_name:
+                intent_ar = {
+                    "greet": "تحية",
+                    "help": "مساعدة",
+                    "status": "حالة النظام",
+                    "analyze": "تحليل",
+                    "forecast": "تنبؤ",
+                    "alert": "تنبيه",
+                    "stop": "إيقاف",
+                }.get(intent_name, intent_name)
+                reply = f"فهمت — نيتك: {intent_ar}. القرار: {action}."
+            elif source == "sovereign_controller":
+                reply = f"قرار المتحكم السيادي: {action}."
+            else:
+                reply = f"تم تنفيذ القرار: {action}."
         
-        # إضافة فهم المشاعر إن وُجد
-        if sentiment_label and sentiment_label != "neutral":
+        # إضافة فهم المشاعر إن وُجد (فقط إن لم يضفها المحرك)
+        if sentiment_label and sentiment_label != "neutral" and "مشاعرك" not in reply:
             sentiment_ar = {"positive": "إيجابية", "negative": "سلبية"}.get(sentiment_label, sentiment_label)
             reply += f" (مشاعرك: {sentiment_ar})"
     
@@ -959,14 +966,21 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str):
 @app.get("/api-key")
 async def get_api_key(master_key: str = Query(None, description="مفتاح السيد للتحقق")):
     """
-    الحصول على مفتاح API للسيد.
-    M1: يتطلب مفتاح السيد (SOVEREIGN_KEY) كمعامل للتحقق — لا يُكشف لأي طلب.
+    حالة مفتاح API للسيد (R-614/S-5).
+    لا يُكشف المفتاح نفسه أبداً — يُعاد فقط بصمة المفتاح (SHA-256) ومصدره
+    ومدى ثباته عبر إعادة التشغيل. المفتاح الحقيقي يُدار عبر متغير البيئة
+    SOVEREIGN_KEY أو ملف data/key.secret (مستثنى من git، صلاحيات 0600).
     """
     if not master_key or master_key != SOVEREIGN_API_KEY:
         raise HTTPException(status_code=403, detail="غير مصرح: مطلوب مفتاح السيد")
+    from config import SOVEREIGN_KEY_FINGERPRINT, DATA_DIR, IS_DEVELOPMENT
+    secret_file = DATA_DIR / "key.secret"
     return {
-        "api_key": SOVEREIGN_API_KEY,
-        "warning": "احفظ هذا المفتاح في مكان آمن. لا تشاركه مع أي شخص.",
+        "fingerprint": SOVEREIGN_KEY_FINGERPRINT,
+        "persistent": secret_file.exists() or bool(os.getenv("SOVEREIGN_KEY")),
+        "source": "env" if os.getenv("SOVEREIGN_KEY") else ("key.secret" if secret_file.exists() else "ephemeral"),
+        "development": IS_DEVELOPMENT,
+        "note": "المفتاح لا يُكشف عبر API. أعد تعيينه عبر SOVEREIGN_KEY أو data/key.secret.",
         "timestamp": time.time()
     }
 
