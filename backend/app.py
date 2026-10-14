@@ -488,11 +488,23 @@ async def sovereignty_score():
     """
     درجة السيادة (Sovereignty Score) — المرحلة 5 من ROADMAP_V2.
     يقيس المسافة بين 'يعمل' و 'سيادي' برقم واحد (0-100).
+
+    R-680: يُعيد جدول المؤشرات الأولية (primitives) + المقياس
+    المُركّب (composite) في آخر سطر مع علامة "قابل للجدل".
     """
     from backend.sovereign.score import SovereigntyScorer
+    from backend.sovereign.primitives import Primitives
+    from backend.sovereign.composite import Composite
 
     scorer = SovereigntyScorer()
     report = scorer.compute()
+
+    # R-680: إضافة المؤشرات الأولية + الرقم المُركّب مع علامة "قابل للجدل"
+    # تُحسب المؤشرات الأولية من ملفات المستودع (لا من تشغيل pytest).
+    # يُحسب الرقم المُركّب باستخدام composite.py (المُعدّل بـ R-680).
+    primitives_obj = Primitives()
+    composite_obj = Composite(primitives_obj)
+    composite_result = composite_obj.compute()
 
     return {
         "total_score": report.total_score,
@@ -510,6 +522,24 @@ async def sovereignty_score():
             for a in report.axes
         ],
         "summary": report.summary,
+        # R-680: المؤشرات الأولية — كل واحد قابل للتحقق الخارجي.
+        "primitives": {
+            "tests_passing_count": composite_result["primitives"]["tests_passing_count"],
+            "files_total_count": composite_result["primitives"]["files_total_count"],
+            "files_imported_count": composite_result["primitives"]["files_imported_count"],
+            "mocks_outside_tests_count": composite_result["primitives"]["mocks_outside_tests_count"],
+            "keys_stats": composite_result["primitives"]["keys_stats"],
+            "ledger_events_stats": composite_result["primitives"]["ledger_events_stats"],
+            "anchors_stats": composite_result["primitives"]["anchors_stats"],
+            "invariants_stats": composite_result["primitives"]["invariants_stats"],
+        },
+        # R-680: الرقم المُركّب — في آخر سطر مع علامة "قابل للجدل".
+        "composite": {
+            "score": composite_result["composite_score"],
+            "formula": composite_result["formula"],
+            "components": composite_result["components"],
+            "disputed": True,  # ⚠️ قابل للجدل — راجع forensics/clean_build_skips.md
+        },
     }
 
 

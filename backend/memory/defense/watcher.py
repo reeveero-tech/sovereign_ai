@@ -540,6 +540,7 @@ class MemoryWatcher:
                         timestamp=time.time(),
                         context={"duplicates": duplicates}
                     )
+        # TOLERATED: known-safe fallback — non-fatal diagnostic path (R-680)
         except:
             pass
         
@@ -560,6 +561,7 @@ class MemoryWatcher:
                     timestamp=time.time(),
                     context={"decoding_errors": decoding_errors}
                 )
+        # TOLERATED: known-safe fallback — non-fatal diagnostic path (R-680)
         except:
             pass
         

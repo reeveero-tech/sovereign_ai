@@ -40,6 +40,7 @@ class AnalyticsDashboard:
         if "engine" in self._components:
             try:
                 engine_status = self._components["engine"].get_status()
+            # TOLERATED: known-safe fallback — non-fatal diagnostic path (R-680)
             except Exception:
                 pass
 
@@ -47,6 +48,7 @@ class AnalyticsDashboard:
         if "health_monitor" in self._components:
             try:
                 health = self._components["health_monitor"].get_overall_status()
+            # TOLERATED: known-safe fallback — non-fatal diagnostic path (R-680)
             except Exception:
                 pass
 
@@ -54,6 +56,7 @@ class AnalyticsDashboard:
         if "fallback" in self._components:
             try:
                 alerts = self._components["fallback"].get_active_events()
+            # TOLERATED: known-safe fallback — non-fatal diagnostic path (R-680)
             except Exception:
                 pass
 

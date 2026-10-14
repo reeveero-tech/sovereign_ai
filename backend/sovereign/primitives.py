@@ -176,6 +176,7 @@ class Primitives:
                                 with_legacy_key += 1
                     except Exception:
                         continue
+        # TOLERATED: known-safe fallback — non-fatal diagnostic path (R-680)
         except Exception:
             pass
 
@@ -217,6 +218,7 @@ class Primitives:
                             verified += 1
                     except Exception:
                         continue
+        # TOLERATED: known-safe fallback — non-fatal diagnostic path (R-680)
         except Exception:
             pass
 

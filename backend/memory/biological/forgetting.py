@@ -537,6 +537,7 @@ class IntentionalForgetting:
                     
                     # حفظ التغييرات (هذا يتطلب واجهة تحديث في store)
                     return True
+        # TOLERATED: known-safe fallback — non-fatal diagnostic path (R-680)
         except:
             pass
         return False

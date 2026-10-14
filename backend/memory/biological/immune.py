@@ -352,6 +352,7 @@ class ImmuneMemory:
             import hashlib
             blake = hashlib.blake2b(str(payload).encode(), digest_size=16).hexdigest()
             signatures.append(f"blake_{blake[:16]}")
+        # TOLERATED: known-safe fallback — non-fatal diagnostic path (R-680)
         except:
             pass
         

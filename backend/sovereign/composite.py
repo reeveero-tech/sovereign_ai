@@ -25,21 +25,26 @@ from backend.sovereign.primitives import Primitives
 #   + w3 * (keys_with_state / keys_total)                   # نسبة المفاتيح ذات الحالة الصريحة
 #   + w4 * (1 if mocks_outside_tests == 0 else 0)           # لا mocks في الإنتاج
 #   + w5 * (1 if files_imported > 0 else 0)                 # لا وحدات يتيمة
-# ) * 100
+#   + w6 * (tests_passing_count / tests_total)              # نسبة الاختبارات الناجحة
+# ) * (1 if mocks_outside_tests_count == 0 else 0) * 100    # عامل ضارب (R-680)
 #
 # حيث:
-# w1 = 0.25 (الأحداث الموقّعة — 25%)
-# w2 = 0.25 (المراسي المُتحقّقة — 25%)
-# w3 = 0.20 (المفاتيح ذات الحالة — 20%)
-# w4 = 0.20 (لا mocks — 20%)
+# w1 = 0.15 (الأحداث الموقّعة — 15%)
+# w2 = 0.15 (المراسي المُتحقّقة — 15%)
+# w3 = 0.10 (المفاتيح ذات الحالة — 10%)
+# w4 = 0.10 (لا mocks — 10%)
 # w5 = 0.10 (لا يتيمة — 10%)
+# w6 = 0.40 (الاختبارات الناجحة — 40%)  ← R-680: يُحسب من تشغيل pytest، لا من الملفات
+#
+# عامل الضارب: إذا mocks_outside_tests_count > 0 → الدرجة = 0 (R-680)
 
 COMPOSITE_WEIGHTS = {
-    "ledger_signed_ratio": 0.25,
-    "anchors_verified_ratio": 0.25,
-    "keys_state_ratio": 0.20,
-    "no_mocks_in_production": 0.20,
+    "ledger_signed_ratio": 0.15,
+    "anchors_verified_ratio": 0.15,
+    "keys_state_ratio": 0.10,
+    "no_mocks_in_production": 0.10,
     "no_orphan_modules": 0.10,
+    "tests_passing_count_ratio": 0.40,
 }
 
 
@@ -75,6 +80,22 @@ class Composite:
         files_imported = p["files_imported_count"]
         no_orphans = 1.0 if files_imported > 0 else 0.0
 
+        # R-680: tests_passing_count_ratio — يُحسب من تشغيل pytest، لا من الملفات.
+        # المشكلة الأصلية: tests_passing_count كان دائماً -1 (تشغيلي، لا يُحسب هنا).
+        # الحل: نقبل من المستخدم/السياق قيمة pytest الخارجية، أو نستخدم 0 (غير محسوب).
+        # هذا يمنع المقياس من إعطاء 100 بسهولة عندما تفشل الاختبارات.
+        # تُمرر قيمة pytest عبر Composite(primitives, tests_passing=..., tests_total=...)
+        # أو عبر self.set_tests_passing(...) قبل compute().
+        tests_passing = getattr(self, "tests_passing", 0)
+        tests_total = getattr(self, "tests_total", 0)
+        if tests_total > 0 and tests_passing >= 0:
+            tests_passing_ratio = tests_passing / tests_total
+        else:
+            tests_passing_ratio = 0.0  # غير محسوب → 0 (لا يمنح نقاطاً مجاناً)
+
+        # R-680: عامل الضارب — إذا وُجد mock في الإنتاج → الدرجة = 0
+        hard_kill_factor = (1 if mocks_count == 0 else 0)
+
         # الصيغة الصريحة
         composite = (
             self._weights["ledger_signed_ratio"] * ledger_ratio
@@ -82,7 +103,8 @@ class Composite:
             + self._weights["keys_state_ratio"] * keys_ratio
             + self._weights["no_mocks_in_production"] * no_mocks
             + self._weights["no_orphan_modules"] * no_orphans
-        ) * 100
+            + self._weights["tests_passing_count_ratio"] * tests_passing_ratio
+        ) * hard_kill_factor * 100
 
         # التفصيل
         components = {
@@ -111,6 +133,16 @@ class Composite:
                 "weight": self._weights["no_orphan_modules"],
                 "contribution": self._weights["no_orphan_modules"] * no_orphans * 100,
             },
+            "tests_passing_count_ratio": {
+                "value": tests_passing_ratio,
+                "weight": self._weights["tests_passing_count_ratio"],
+                "contribution": self._weights["tests_passing_count_ratio"] * tests_passing_ratio * 100,
+            },
+            "hard_kill_factor": {
+                "value": hard_kill_factor,
+                "weight": "(R-680) عامل ضارب — أي mock في الإنتاج = 0",
+                "contribution": None,
+            },
         }
 
         formula = (
@@ -119,8 +151,9 @@ class Composite:
             f"+ {self._weights['anchors_verified_ratio']} * {anchors_ratio:.4f} "
             f"+ {self._weights['keys_state_ratio']} * {keys_ratio:.4f} "
             f"+ {self._weights['no_mocks_in_production']} * {no_mocks} "
-            f"+ {self._weights['no_orphan_modules']} * {no_orphans}"
-            f") * 100 = {composite:.2f}"
+            f"+ {self._weights['no_orphan_modules']} * {no_orphans} "
+            f"+ {self._weights['tests_passing_count_ratio']} * {tests_passing_ratio:.4f}"
+            f") * {hard_kill_factor} * 100 = {composite:.2f}"
         )
 
         return {
@@ -132,6 +165,9 @@ class Composite:
                 "⚠️ هذا الرقم ليس تحققًا. هو إحصائية اختيارية. "
                 "التحقق الحقيقي من المؤشرات الأولية "
                 "(backend/sovereign/primitives.py) — "
-                "كل واحد قابل للتحقق الخارجي من طرف ثالث."
+                "كل واحد قابل للتحقق الخارجي من طرف ثالث. "
+                "⚠️ قابل للجدل — composite قد لا يعكس كل جودة المشروع "
+                "(R-680: يُدرج tests_passing_count_ratio و عامل ضارب mocks_outside_tests_count)."
             ),
+            "disputed": True,
         }

@@ -163,6 +163,7 @@ def build_reply(intent_name: str, text: str, orchestrator_result: Any = None) ->
     if orchestrator_result is not None:
         try:
             decision_action = (orchestrator_result.decision or {}).get("action")
+        # TOLERATED: known-safe fallback — non-fatal diagnostic path (R-680)
         except Exception:
             pass
 

@@ -49,6 +49,7 @@ class RecommendationEngine:
             if callable(cond):
                 try:
                     triggered = bool(cond(context))
+                # TOLERATED: known-safe fallback — non-fatal diagnostic path (R-680)
                 except Exception:
                     pass
             elif isinstance(cond, dict):

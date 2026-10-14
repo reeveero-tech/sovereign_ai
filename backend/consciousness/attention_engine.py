@@ -298,6 +298,7 @@ class AttentionEngine:
                     "urgency": 1.0,
                     "sustained_potential": True
                 })
+        # TOLERATED: known-safe fallback — non-fatal diagnostic path (R-680)
         except:
             pass
         

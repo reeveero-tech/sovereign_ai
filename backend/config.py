@@ -126,6 +126,7 @@ def load_sovereign_key() -> str:
                         key = line.split("=", 1)[1].strip().strip('"').strip("'")
                         if key and len(key) >= 16:
                             return key
+        # TOLERATED: .env file exists but is unreadable/malformed — fall through to next source (R-680)
         except:
             pass
     
@@ -137,6 +138,7 @@ def load_sovereign_key() -> str:
                 key = f.read().strip()
                 if key and len(key) >= 16:
                     return key
+        # TOLERATED: key.secret exists but is unreadable — skip to next source (R-680)
         except:
             pass
     
@@ -161,8 +163,10 @@ def load_sovereign_key() -> str:
                     key = f.read().strip()
                     if key and len(key) >= 16:
                         return key
+            # TOLERATED: race-condition re-read failed — treat as generation failure (R-680)
             except Exception:
                 pass
+        # TOLERATED: persistent key generation failed — fall through to ephemeral/production check (R-680)
         except Exception:
             pass
 
@@ -190,6 +194,7 @@ SOVEREIGN_KEY_FINGERPRINT = secrets.token_hex(8)  # مؤقت، سيتم استب
 try:
     import hashlib
     SOVEREIGN_KEY_FINGERPRINT = hashlib.sha256(SOVEREIGN_KEY.encode()).hexdigest()[:16]
+# TOLERATED: fingerprint computation is cosmetic-only (debug logging) — fallback value retained (R-680)
 except:
     pass
 
@@ -253,6 +258,7 @@ def load_forbidden_words() -> List[str]:
                 words = json.load(f)
                 if isinstance(words, list) and words:
                     return words
+        # TOLERATED: malformed forbidden-words JSON — fall back to hardcoded default list (R-680)
         except:
             pass
     
@@ -319,6 +325,7 @@ def save_config_backup():
     try:
         with open(CONFIG_BACKUP_FILE, "w", encoding="utf-8") as f:
             json.dump(backup, f, ensure_ascii=False, indent=2)
+    # TOLERATED: config backup is best-effort diagnostic — not required for correct startup (R-680)
     except:
         pass
 

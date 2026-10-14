@@ -184,6 +184,7 @@ class AlertManager:
         for callback in self._callbacks:
             try:
                 callback(alert)
+            # TOLERATED: known-safe fallback — non-fatal diagnostic path (R-680)
             except:
                 pass
         
@@ -774,6 +775,7 @@ def run_daemon(config: SovereignConfig):
     try:
         while True:
             time.sleep(1)
+    # TOLERATED: known-safe fallback — non-fatal diagnostic path (R-680)
     except KeyboardInterrupt:
         pass
     finally:

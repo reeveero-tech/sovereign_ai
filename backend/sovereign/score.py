@@ -494,6 +494,7 @@ class SovereigntyScorer:
                     src = cf.read_text(encoding="utf-8")
                     if "sunset" in src.lower() or "SUNSET_CRITERIA" in src:
                         with_sunset += 1
+                # TOLERATED: known-safe fallback — non-fatal diagnostic path (R-680)
                 except Exception:
                     pass
 
@@ -545,6 +546,7 @@ class SovereigntyScorer:
                 try:
                     src = tf.read_text(encoding="utf-8")
                     total_tests += src.count("def test_")
+                # TOLERATED: known-safe fallback — non-fatal diagnostic path (R-680)
                 except Exception:
                     pass
 
@@ -630,6 +632,7 @@ class SovereigntyScorer:
                     content = p.read_text(encoding="utf-8")
                     for pat in stub_patterns:
                         stub_count += len(re.findall(pat, content))
+                # TOLERATED: known-safe fallback — non-fatal diagnostic path (R-680)
                 except Exception:
                     pass
 

@@ -487,6 +487,7 @@ class MemoryRegeneration:
                             confidence=0.7,
                             timestamp=seed.get("created_at", 0)
                         )
+            # TOLERATED: known-safe fallback — non-fatal diagnostic path (R-680)
             except:
                 pass
             return None

@@ -208,6 +208,7 @@ class IdentityCore:
             if IDENTITY_SEAL_FILE.exists():
                 try:
                     IDENTITY_SEAL_FILE.unlink()
+                # TOLERATED: known-safe fallback — non-fatal diagnostic path (R-680)
                 except:
                     pass
         

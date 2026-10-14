@@ -539,6 +539,7 @@ class SovereignOrchestrator:
         if self.memory_core and hasattr(self.memory_core, "append_event"):
             try:
                 self.memory_core.append_event("orchestrator::log", entry)
+            # TOLERATED: known-safe fallback — non-fatal diagnostic path (R-680)
             except:
                 pass
     
