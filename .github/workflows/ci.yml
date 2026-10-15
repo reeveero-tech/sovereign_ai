@@ -12,6 +12,16 @@ on:
         required: false
         default: false
         type: boolean
+      run_verify_full:
+        description: 'R-682 (items 11/13): run verify.sh --full on this runner (Python 3.11)'
+        required: false
+        default: false
+        type: boolean
+      ci_run_id:
+        description: 'R-682: explicit reference CI run ID for comparison (prevents self-selection)'
+        required: false
+        default: ''
+        type: string
 
 jobs:
   test:
@@ -30,6 +40,18 @@ jobs:
         run: |
           pip install --upgrade pip
           pip install -r requirements.txt
+
+      # R-682 (البند ١١): إفصاح بيئة التحقق — يطبع إصدار Python الكامل
+      # وقائمة الحزم المثبتة فعليًا وpip check — خام، لإثبات PY311_VERIFICATION.md
+      - name: 'R-682: Disclose verification environment (python -VV + pip freeze + pip check)'
+        run: |
+          echo "=== python -VV ==="
+          python -VV
+          echo "=== pip freeze (installed) ==="
+          pip freeze
+          echo "=== pip check ==="
+          pip check
+          echo "=== END environment disclosure ==="
 
       - name: 'R-681: Generate ephemeral data/key.secret for CI (root fix for skips)'
         run: |
@@ -218,3 +240,43 @@ jobs:
           name: junit-operational-${{ steps.sha.outputs.short }}
           path: forensics/pytest_operational.xml
           if-no-files-found: warn
+
+  # R-682 (البندان ١١ و١٣): مهمة التحقق الكامل على Python 3.11 داخل Actions —
+  # تشغّل verify.sh --full (بوابة الإصدار ترفض غير 3.11) مع اختيار صريح
+  # لتشغيل CI المرجعي (ci_run_id) يمنع الانتقاء الذاتي.
+  verify-full:
+    name: Full verification (verify.sh --full, manual only)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.run_verify_full == 'true'
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: 'R-681: Generate ephemeral data/key.secret for CI'
+        run: |
+          set -euo pipefail
+          mkdir -p data
+          python -c "import secrets; print(secrets.token_urlsafe(32))" > data/key.secret
+          chmod 600 data/key.secret
+          echo "key.secret auto-generated for CI (ephemeral — not committed)"
+
+      - name: Run verify.sh --full (explicit CI run selection)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CI_RUN_ID: ${{ github.event.inputs.ci_run_id }}
+        run: |
+          set -euo pipefail
+          bash verify.sh --full

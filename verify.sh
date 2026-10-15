@@ -16,6 +16,16 @@ set -euo pipefail
 
 FULL_MODE="${1:-}"
 
+# --- 0) R-682 (البند ١٢): بوابة إصدار Python — 3.11.x فقط، كل الأنماط، بلا علم تجاوز ---
+PY_GATE=$(python3 -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
+if [ "$PY_GATE" != "3.11" ]; then
+    echo "❌ [بوابة الإصدار] Python $PY_GATE مكتشف — هذا المشروع يتطلب Python 3.11.x (بيئة CI المعلنة)."
+    echo "   البند ١٢ من جولة R-682: ترفض البوابة أي Python آخر في كل الأنماط — لا علم تجاوز."
+    python3 -VV || true
+    exit 1
+fi
+echo "✅ [بوابة الإصدار] Python $PY_GATE — مقبول (3.11.x)"
+
 echo "=========================================="
 echo " R-682 Verification Script"
 echo "=========================================="
@@ -84,21 +94,49 @@ if [ "$FULL_MODE" = "--full" ]; then
     echo " [FULL MODE] CI + Clean Clone comparison"
     echo "=========================================="
 
-    # 6a) Find CI run for THIS EXACT SHA (not just latest)
+    # 6a) Find CI run for THIS EXACT SHA — مع اختيار صريح اختياري
+    # R-682 (البند ١١): CI_RUN_ID يمنع انتقاء تشغيل يضم التحقق نفسه (الاختيار الذاتي)،
+    # والافتراضي يفضل تشغيل push للـ SHA نفسه (لا تشغيل operational المُرسل يدويًا).
     echo ""
     echo "[3/4] Fetching CI run for HEAD SHA=$SHORT_SHA..."
-    CI_RUNS=$(gh run list --repo reeveero-tech/sovereign_ai --limit 20 --json databaseId,headSha,status,conclusion)
+    CI_RUNS=$(gh run list --repo reeveero-tech/sovereign_ai --limit 50 --json databaseId,headSha,status,conclusion,event)
     CI_RUN_ID=$(echo "$CI_RUNS" | python3 -c "
 import sys, json
 runs = json.load(sys.stdin)
 target_sha = '$SHA'
-for r in runs:
-    if r['headSha'] == target_sha:
-        print(r['databaseId'])
-        break
+explicit = '${CI_RUN_ID:-}'.strip()
+if explicit:
+    for r in runs:
+        if r['databaseId'] == int(explicit):
+            if r['headSha'] != target_sha:
+                print('SHA_MISMATCH')
+            else:
+                print(r['databaseId'])
+            break
+    else:
+        print('NOT_FOUND')
 else:
-    print('')
+    # الأفضلية: تشغيل push على الـ SHA نفسه؛ وإلا أول تشغيل للـ SHA
+    for r in runs:
+        if r['headSha'] == target_sha and r.get('event') == 'push':
+            print(r['databaseId'])
+            break
+    else:
+        for r in runs:
+            if r['headSha'] == target_sha:
+                print(r['databaseId'])
+                break
+        else:
+            print('')
 ")
+    if [ "$CI_RUN_ID" = "SHA_MISMATCH" ]; then
+        echo "❌ CI_RUN_ID=$CI_RUN_ID doesn't match HEAD SHA $SHA — explicit selection mismatch"
+        exit 1
+    fi
+    if [ "$CI_RUN_ID" = "NOT_FOUND" ]; then
+        echo "❌ CI_RUN_ID=$CI_RUN_ID not found in recent runs"
+        exit 1
+    fi
 
     if [ -z "$CI_RUN_ID" ]; then
         echo "❌ No CI run found for HEAD SHA $SHA — cannot verify"
