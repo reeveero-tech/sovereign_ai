@@ -2145,6 +2145,146 @@ class TestUndecidedDeathOutcome:
 
 
 # ============================================================
+# Part 1i: جولة 14 — الاستبدال-بلا-تأكيد-متانة + التوفيق مع سجل الأحداث
+# ============================================================
+
+class TestCommitDurabilityWindows:
+    """R-682 (جولة 14 — اعتراض advisor التاسع): _save_state تعيد False لحالتين
+    مختلفتين — استبدال لم يقع، واستبدال وقع دون تأكيد متانة. والتحميل كان
+    يصنف كل علامة معلقة فاشلة دون فحص الحدث. الحل: تمييز الحالتين في الإنهاء
+    + توفيق التحميل مع الدليل الدائم (سجل الأحداث) عبر op_id."""
+
+    def _real_env(self, tmp_path, monkeypatch):
+        import backend.memory.defense.ransomware as rw
+        import backend.memory.store as store_mod
+        from backend.memory.core import SovereignCore
+        core_dir = tmp_path / "core"
+        core_dir.mkdir()
+        (core_dir / "blobs").mkdir()
+        core = SovereignCore(
+            log_file=core_dir / "ledger.jsonl",
+            blobs_dir=core_dir / "blobs",
+            index_file=core_dir / "index.json",
+            meta_file=core_dir / "meta.json",
+            integrity_file=core_dir / "integrity.json",
+        )
+        core.append_event("phoenix::commit_test", {"data": "seed_event"}, user="test")
+        seeds_dir = tmp_path / "seeds"
+        seeds_dir.mkdir(exist_ok=True)
+        monkeypatch.setattr(rw, "PHOENIX_SEEDS_DIR", seeds_dir)
+        monkeypatch.setattr(rw, "PHOENIX_STATE_FILE", tmp_path / "phoenix_state.json")
+        monkeypatch.setattr(rw, "get_core", lambda: core)
+        monkeypatch.setattr(rw, "get_encoder", lambda: MagicMock())
+        monkeypatch.setattr(rw, "get_watcher", lambda: MagicMock())
+        empty = _IsolatedStore()
+        monkeypatch.setattr(store_mod, "get_store", lambda: empty)
+        import threading as _th
+        monkeypatch.setattr(_th, "Thread", _NoThreads)
+        return rw, core
+
+    def test_commit_replaced_unconfirmed_completed(self, tmp_path, monkeypatch, caplog):
+        """الاستبدال وقع في حفظ رفع العلامة لكن مزامنة المجلد فشلت:
+        الملف الجديد (بلا علامة) هو الموجود فعلًا — العملية مكتملة ماديًا،
+        والنتيجة يجب أن تكون متسقة مع القرص (نجاح مع تحذير متانة)، لا فشلًا
+        يترك القرص DEAD بلا علامة لا تنطبق عليه أي تسوية."""
+        import json as _json
+        import os as _os
+        import stat as _stat
+        rw, core = self._real_env(tmp_path, monkeypatch)
+        state_file = tmp_path / "phoenix_state.json"
+        obj = rw.RansomwareDefense()
+
+        # الحقن في مسار الحفظ الحقيقي: فشل مزامنة المجلد تحديدًا (المرحلة 3)،
+        # يُنشَّط عند استدعاء الحفظ الثالث فأكثر (1=بذرة، 2=نهائي، 3=رفع العلامة)
+        real_fsync = _os.fsync
+        calls = {"n": 0}
+        def dir_failing_fsync(fd):
+            if _stat.S_ISDIR(_os.fstat(fd).st_mode):
+                raise OSError("inject: dir fsync failed")
+            return real_fsync(fd)
+        orig_save = obj._save_state
+        def counting_save():
+            calls["n"] += 1
+            if calls["n"] >= 3:
+                _os.fsync = dir_failing_fsync
+            try:
+                return orig_save()
+            finally:
+                _os.fsync = real_fsync
+        obj._save_state = counting_save
+
+        result = obj.initiate_death(reason="commit-durability-test")
+        assert calls["n"] >= 3, "الحقن وصل مرحلة رفع العلامة فعلًا"
+        # النتيجة متسقة مع القرص: الاستبدال وقع — الموت مكتمل (متانة غير مؤكدة)
+        assert result is True, \
+            "الاستبدال وقع والحدث مُلحق — القرص يحمل الحالة النهائية؛ " \
+            "فشل تأكيد المتانة ليس فشل العملية"
+        # القرص فعليًا: DEAD بلا علامة (الاستبدال كتب الحالة الجديدة)
+        disk_state = _json.loads(state_file.read_text())
+        assert disk_state["phoenix_phase"] == "dead"
+        assert disk_state.get("pending_outcome") is None
+        # إعادة التهيئة: يُحمَّل كموت مكتمل — لا تسوية تلزم
+        obj2 = rw.RansomwareDefense()
+        assert obj2.phoenix_phase == rw.PhoenixPhase.DEAD
+        assert obj2.is_transforming is False
+        assert obj2._pending_outcome is None
+
+    def test_pending_marker_reconciled_with_event_log(self, tmp_path, monkeypatch):
+        """نافذة الانقطاع: حدث الإكمال أُلحق فعلًا ثم فشل حفظ رفع العلامة
+        (قبل الاستبدال) وفشل التراجع أيضًا وفشل إلحاق حدث التصحيح — القرص
+        DEAD+علامة، والسجل يحمل phoenix::death فقط. التحميل يوفّق مع الدليل
+        الدائم: العملية اكتملت (DEAD) — لا يُحوَّل غير المحسوم آليًا إلى فاشل."""
+        import json as _json
+        import os as _os
+        rw, core = self._real_env(tmp_path, monkeypatch)
+        state_file = tmp_path / "phoenix_state.json"
+        obj = rw.RansomwareDefense()
+
+        # الحقن: فشل الاستبدال في الحفظ الثالث فأكثر (رفع العلامة + التراجع)
+        real_replace = _os.replace
+        calls = {"n": 0}
+        def failing_replace(a, b):
+            raise OSError("inject: replace failed")
+        orig_save = obj._save_state
+        def counting_save():
+            calls["n"] += 1
+            if calls["n"] >= 3:
+                _os.replace = failing_replace
+            try:
+                return orig_save()
+            finally:
+                _os.replace = real_replace
+        obj._save_state = counting_save
+        # وفشل إلحاق حدث التصحيح تحديدًا (المسار الخامس — فشل حقيقي بالسجل)
+        real_append = core.append_event
+        def no_correction_append(*args, **kwargs):
+            et = kwargs.get("event_type") or (args[0] if args else None)
+            if et == "phoenix::death_failed":
+                raise RuntimeError("inject: correction event failed")
+            return real_append(*args, **kwargs)
+        core.append_event = no_correction_append
+
+        result = obj.initiate_death(reason="reconcile-window-test")
+        assert result is False  # التراجع فشل — غير محسوم وقت التشغيل
+        assert calls["n"] >= 4, "رفع العلامة والتراجع كلاهما حاولا فعلًا"
+        # القرص: DEAD + العلامة (فشل الاستبدال قبل وقوعه)
+        disk_state = _json.loads(state_file.read_text())
+        assert disk_state["phoenix_phase"] == "dead"
+        assert disk_state.get("pending_outcome"), "العلامة المعلقة على القرص"
+        # والسجل يحمل حدث الإكمال فعلًا (بلا تصحيح)
+        death_events = [e for e in core.iterate_events(limit=100)
+                        if e.get("type") == "phoenix::death"]
+        assert death_events, "حدث الإكمال مُلحق فعلًا في السجل"
+
+        # التحميل يوفّق مع الدليل الدائم: العملية اكتملت — لا فشلًا آليًا
+        obj2 = rw.RansomwareDefense()
+        assert obj2.phoenix_phase == rw.PhoenixPhase.DEAD, \
+            "التوفيق مع سجل الأحداث: حدث الإكمال موجود — العملية اكتملت"
+        assert obj2._pending_outcome is None, "العلامة رُفعت بعد التوفيق"
+        assert obj2.is_transforming is False
+
+
+# ============================================================
 # Part 2: المواقع منخفضة الخطورة — اختبارات سلوكية
 # ============================================================
 

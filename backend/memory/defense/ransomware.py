@@ -757,6 +757,7 @@ class RansomwareDefense:
             "recovery_ready": recovery_ready,
             "assets_hidden": False,
             "protection_complete": False,
+            "op_id": death_record.id,
             "seed_id": final_seed.id if final_seed else None,
             "timestamp": time.time()
         }
@@ -780,13 +781,24 @@ class RansomwareDefense:
                     f"تراجع كامل: {e}"
                 )
                 return _failed_outcome("death event recording failed")
-            # الحدث أُلحق — رفع العلامة (commit). فشل حفظ الرفع = العملية
-            # غير محسومة: القرص DEAD+علامة → تُحمَّل كعملية فاشلة (فاشل-مغلق)
+            # الحدث أُلحق — رفع العلامة (commit). التمييز الثلاثي:
+            # (أ) حفظ متين → مكتمل؛ (ب) الاستبدال وقع لكن المتانة غير مؤكدة →
+            # الملف الجديد (بلا علامة) هو الموجود فعلًا والحدث مُلحق — العملية
+            # مكتملة ماديًا (نجاح مع تحذير متانة، متسق مع القرص)؛
+            # (ج) الاستبدال لم يقع → غير محسوم: تراجع كامل.
             self._pending_outcome = None
             if not self._save_state():
+                if getattr(self, "_last_save_replaced_unconfirmed", False):
+                    logger.warning(
+                        "R-682: الموت مكتمل على القرص (الاستبدال وقع والحدث "
+                        "مُلحق) لكن متانة الحفظ غير مؤكدة (فشل مزامنة المجلد) — "
+                        "النتيجة متسقة مع القرص: نجاح مع تحذير متانة"
+                    )
+                    return True
                 logger.error(
-                    "R-682 [SECURITY-FAIL]: فشل حفظ رفع علامة الإنهاء — العملية "
-                    "غير محسومة ولا يُعلن موت (تُسوّى عند التحميل كعملية فاشلة)"
+                    "R-682 [SECURITY-FAIL]: فشل حفظ رفع علامة الإنهاء (قبل "
+                    "الاستبدال) — العملية غير محسومة ولا يُعلن موت (التوفيق مع "
+                    "سجل الأحداث عند التحميل يحدد النتيجة)"
                 )
                 return _failed_outcome("pending-outcome commit save failed")
             logger.warning(
@@ -1555,7 +1567,13 @@ class RansomwareDefense:
             return None
 
     def _save_state(self) -> bool:
-        """حفظ حالة نظام الفينيق — يُرجع نجاح الحفظ (متانة قبل إعلان أي نجاح لاحق)."""
+        """حفظ حالة نظام الفينيق — يُرجع نجاح الحفظ (متانة قبل إعلان أي نجاح لاحق).
+
+        R-682 (جولة 14): False لا يعني بالضرورة أن الملف القديم بقي — الاستبدال
+        قد يقع ثم تفشل مزامنة المجلد (متانة غير مؤكدة، الملف الجديد هو الموجود).
+        العلم _last_save_replaced_unconfirmed يميز الحالتين للمُستدعي."""
+        # إعادة الضبط في كل حفظ (قبل أي مسار)
+        self._last_save_replaced_unconfirmed = False
         try:
             state = {
                 "phoenix_phase": self.phoenix_phase.value,
@@ -1626,6 +1644,9 @@ class RansomwareDefense:
                     f"(dir fsync failed — file is the NEW one, do not claim "
                     f"the old file remained). exc={e}"
                 )
+                # الاستبدال وقع فعليًا — الملف الجديد هو الموجود؛ المتانة فقط
+                # غير مؤكدة. يميز المُستدعي هذه الحالة عن فشل ما قبل الاستبدال.
+                self._last_save_replaced_unconfirmed = True
                 return False
             return True
         except Exception as e:
@@ -1639,6 +1660,40 @@ class RansomwareDefense:
                 tmp_path.unlink()
         except OSError:  # R-682: best-effort cleanup only — the original file was never touched
             pass  # تنظيف أفضل-جهد فقط — الملف الأصلي لم يُمس
+
+    def _reconcile_pending_outcome(self, pending: Dict[str, Any]) -> Optional[str]:
+        """التوفيق بين عملية معلقة والدليل الدائم (سجل الأحداث).
+
+        يبحث في أحداث النتيجة (phoenix::death / phoenix::death_failed) عن
+        معرف العملية (op_id) — الأحدث أولًا — ويعيد نوع الحدث الفاصل، أو
+        None إن لم يوجد دليل. تعذر الفحص = لا دليل (فاشل-مغلق عند المُستدعي).
+        """
+        op_id = (pending or {}).get("id")
+        if not op_id:
+            return None
+        try:
+            for event in self.core.iterate_events(reverse=True, limit=100):
+                et = event.get("type")
+                if et not in ("phoenix::death", "phoenix::death_failed"):
+                    continue
+                blob_hash = event.get("blob")
+                if not blob_hash:
+                    continue
+                # R-682: حدث نتيجة غير قابل للقراءة (blob مفقود/تالف) — لا دليل
+                # منه؛ يتجاوزه التوفيق (الأحداث الأخرى أو لا دليل = فاشل-مغلق)
+                try:
+                    payload_bytes = self.core.blob_store.get(blob_hash, decompress=True)
+                    payload = json.loads(payload_bytes)
+                except Exception:
+                    continue
+                if payload.get("op_id") == op_id:
+                    return et
+        except Exception as e:
+            logger.error(
+                f"R-682: تعذر فحص سجل الأحداث للتوفيق مع العملية المعلقة: {e} "
+                "— لا دليل (فاشل-مغلق)"
+            )
+        return None
 
     def _load_state(self) -> bool:
         """تحميل حالة نظام الفينيق — يُرجع النجاح.
@@ -1660,15 +1715,31 @@ class RansomwareDefense:
                     # DEAD كموت مكتمل أبدًا.
                     _pending = state.get("pending_outcome")
                     if _pending:
-                        logger.warning(
-                            f"R-682: علامة إنهاء معلقة في الحالة المحفوظة "
-                            f"({_pending}) — عملية لم يُؤكد اكتمالها: تُعامل كعملية "
-                            "فاشلة (LIVING) لا كموت مكتمل، ومواد الاسترداد محفوظة"
-                        )
+                        # R-682 (جولة 14): التوفيق مع الدليل الدائم — لا يُصنف
+                        # غير المحسوم آليًا فاشلًا: إن كان حدث الإكمال مُلحقًا
+                        # فعليًا فالعملية اكتملت (المؤجل رفع العلامة فقط).
                         self._pending_outcome = None
-                        self.phoenix_phase = PhoenixPhase.LIVING
-                        self.resurrection_level = RESURRECTION_LEVEL_NONE
-                        self.is_transforming = False
+                        outcome_event = self._reconcile_pending_outcome(_pending)
+                        if outcome_event == "phoenix::death":
+                            logger.warning(
+                                f"R-682: علامة إنهاء معلقة ({_pending}) لكن حدث "
+                                "الإكمال مُلحق فعلًا في السجل — العملية اكتملت "
+                                "(المؤجل كان رفع العلامة فقط)"
+                            )
+                            # الحالة كما هي (DEAD) — العملية مكتملة
+                        else:
+                            if outcome_event == "phoenix::death_failed":
+                                _why = "حدث الفشل مُلحق — عملية فاشلة"
+                            else:
+                                _why = "لا دليل نتيجة في السجل — غير محسوم: فاشل-مغلق"
+                            logger.warning(
+                                f"R-682: علامة إنهاء معلقة ({_pending}) — {_why}: "
+                                "تُعامل كعملية فاشلة (LIVING) لا كموت مكتمل، "
+                                "ومواد الاسترداد محفوظة"
+                            )
+                            self.phoenix_phase = PhoenixPhase.LIVING
+                            self.resurrection_level = RESURRECTION_LEVEL_NONE
+                            self.is_transforming = False
                     # R-682 (جولة 12): تسوية الحالة الانتقالية المعلقة — علم تحول
                     # محفوظ لا يمكن أن يكون جاريًا في عملية جديدة (لا عملية تعبر
                     # العمليات): يُعامل كعملية منقطعة لا كتحول يمنع المحاولة.
