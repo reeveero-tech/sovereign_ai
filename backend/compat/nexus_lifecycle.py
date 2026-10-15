@@ -84,7 +84,7 @@ async def ensure_nexus_running_async() -> Optional[object]:
             )
         except Exception as e:
             _START_ERROR = str(e)
-            logger.error(f"❌ Nexus lifecycle init failure: {e}")
+            logger.exception(f"R-682: Nexus lifecycle init failure — silently swallowing. exc={e}")
             return None
 
     # إذا كان المحرك فارغًا (لا مكونات مسجلة)، قم بتهيئة المكونات
@@ -111,7 +111,7 @@ async def ensure_nexus_running_async() -> Optional[object]:
             )
         except Exception as e:
             _START_ERROR = str(e)
-            logger.error(f"❌ Nexus lifecycle component init failure: {e}")
+            logger.exception(f"R-682: Nexus lifecycle component init failure — silently swallowing. exc={e}")
             return None
 
     _LAST_START_TIME = asyncio.get_running_loop().time()

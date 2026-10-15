@@ -49,7 +49,7 @@ class LongTermStore:
             record = json.loads(file_path.read_text(encoding="utf-8"))
             return record.get("data")
         except Exception as exc:
-            logger.error(f"Load error [{collection}/{key}]: {exc}")
+            logger.exception(f"R-682: Load error [{collection}/{key}] — silently swallowing. exc={exc}")
             return None
 
     def delete(self, collection: str, key: str) -> bool:

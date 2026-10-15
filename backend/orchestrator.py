@@ -287,6 +287,8 @@ class SovereignOrchestrator:
             return core
         except Exception as e:
             self._update_component_health("memory_core", False, str(e))
+            # R-682 [open item 2]: warn on silent failure
+            logger.warning(f"R-682: memory_core init failed — returning None. exc={e}")
             return None
     
     def _load_memory_dynamic(self) -> Optional[Any]:
@@ -298,6 +300,8 @@ class SovereignOrchestrator:
             return dynamic
         except Exception as e:
             self._update_component_health("memory_dynamic", False, str(e))
+            # R-682 [open item 2]: warn on silent failure
+            logger.warning(f"R-682: memory_dynamic init failed — returning None. exc={e}")
             return None
     
     def _load_memory_store(self) -> Optional[Any]:
@@ -309,6 +313,8 @@ class SovereignOrchestrator:
             return store
         except Exception as e:
             self._update_component_health("memory_store", False, str(e))
+            # R-682 [open item 2]: warn on silent failure
+            logger.warning(f"R-682: memory_store init failed — returning None. exc={e}")
             return None
     
     def _load_biological(self) -> Dict[str, Any]:
@@ -424,6 +430,8 @@ class SovereignOrchestrator:
             return controller
         except Exception as e:
             self._update_component_health("quantum_controller", False, str(e))
+            # R-682 [open item 2]: warn on silent failure
+            logger.warning(f"R-682: quantum_controller init failed — returning None. exc={e}")
             return None
     
     def _load_nexus(self) -> Optional[Any]:
@@ -441,6 +449,8 @@ class SovereignOrchestrator:
             return engine
         except Exception as e:
             self._update_component_health("nexus_engine", False, str(e))
+            # R-682 [open item 2]: warn on silent failure
+            logger.warning(f"R-682: nexus_engine init failed — returning None. exc={e}")
             return None
     
     def _update_component_health(self, name: str, success: bool, error: str = None):

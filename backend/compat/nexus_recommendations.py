@@ -41,7 +41,7 @@ def get_recommendation_engine():
             return None
         return recommender
     except Exception as e:
-        logger.error(f"❌ Failed to get recommender: {e}")
+        logger.exception(f"R-682: Failed to get recommender — silently swallowing. exc={e}")
         return None
 
 

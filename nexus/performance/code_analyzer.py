@@ -49,7 +49,7 @@ class CodeAnalyzer:
             source = p.read_text(encoding="utf-8")
             tree   = ast.parse(source)
         except Exception as exc:
-            logger.warning(f"Parse error {file_path}: {exc}")
+            logger.warning(f"R-682: Parse error {file_path} — silently swallowing. exc={exc}")
             return None
 
         lines     = source.count("\n") + 1

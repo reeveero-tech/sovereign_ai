@@ -453,7 +453,7 @@ class QuantumLikeEncryption:
                 return decrypted
                 
         except Exception as e:
-            logger.error(f"فشل فك التشفير: {e}")
+            logger.exception(f"R-682: فشل فك التشفير — silently swallowing. exc={e}")
             return None
 
 

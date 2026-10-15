@@ -409,7 +409,7 @@ class MemoryEvolution:
             return result_concept
             
         except Exception as e:
-            logger.error(f"فشل الطفرة: {e}")
+            logger.exception(f"R-682: فشل الطفرة — silently swallowing. exc={e}")
             mutation = EvolutionMutation(
                 id=mutation_id,
                 mutation_type=mutation_type,

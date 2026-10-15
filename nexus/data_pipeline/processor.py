@@ -53,7 +53,7 @@ class DataProcessor:
             self.stats["total_ms"] += (time.time() - start) * 1000
             return record
         except Exception as exc:
-            logger.error(f"Process error [{source}]: {exc}")
+            logger.exception(f"R-682: Process error [{source}] — silently swallowing. exc={exc}")
             self.stats["failed"] += 1
             return None
 

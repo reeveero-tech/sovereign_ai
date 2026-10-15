@@ -718,7 +718,7 @@ class SovereignCore:
             self._keyring_key_id = active.key_id
             return active.key_id
         except Exception as e:
-            logger.warning(f"⚠️ Failed to get current signing key: {e}")
+            logger.exception(f"R-682: Failed to get current signing key — silently swallowing. exc={e}")
             return None
     
     def append_event(self, event_type: EventType, payload: Dict[str, Any],

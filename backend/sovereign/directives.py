@@ -41,6 +41,12 @@ except ImportError:
     try:
         from .will import get_sovereign_will
     except ImportError:
+        # R-682 [open item 2]: placeholder for future condition — log loudly
+        import logging
+        logging.getLogger(__name__).warning(
+            "R-682: get_sovereign_will not importable — returning None placeholder. "
+            "This is expected during partial init, but if persists investigate will.py."
+        )
         # تعريف مؤقت للدالة إذا لم تكن موجودة
         def get_sovereign_will():
             return None
