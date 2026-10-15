@@ -28,6 +28,23 @@ from backend.sovereign.ledger import (
     verify_merkle_root,
     hash_leaf,
 )
+
+# R-682 (Task 3.1): synthetic ledger fixture — replaces 45MB runtime data dependency.
+# (استيراد مباشر — لا يعتمد على tests/__init__.py لأنه يكسر جمع backend/tests)
+import importlib.util as _ilu
+_synthetic_path = _REPO_ROOT / "tests" / "fixtures" / "synthetic_ledger.py"
+_spec = _ilu.spec_from_file_location("synthetic_ledger", str(_synthetic_path))
+_sl_mod = _ilu.module_from_spec(_spec)
+_spec.loader.exec_module(_sl_mod)
+build_synthetic_ledger = _sl_mod.build_synthetic_ledger
+
+
+@pytest.fixture
+def synthetic_ledger(tmp_path):
+    """Build a small signed ledger + anchors + keys in tmp_path."""
+    return build_synthetic_ledger(tmp_path / "data")
+
+
 from backend.sovereign.keys.keyring import KeyRing, KeyStatus
 
 
@@ -305,7 +322,7 @@ def test_full_report(isolated_anchor, tmp_path):
 # اختبار المرساة الفعلية للبيانات الحقيقية (11,777 حدثًا)
 # ============================================================
 
-def test_anchor_real_ledger_data():
+def test_anchor_real_ledger_data(synthetic_ledger):
     """
     اختبار حقيقي: حساب Merkle root لكل الأحداث الفعلية في ledger.jsonl
     (11,777 حدثًا فاشلة التوقيع). يتحقق أن:
@@ -313,10 +330,10 @@ def test_anchor_real_ledger_data():
     2. الجذر حتمي (نفس النتيجة مرتين)
     3. التحقق ينجح (المحتوى لم يتغير)
     4. تعديل حدث واحد يُكشف
+
+    R-682 (Task 3.1): uses synthetic_ledger fixture instead of 45MB runtime data.
     """
-    real_ledger = _REPO_ROOT / "data" / "sovereign_core" / "ledger.jsonl"
-    if not real_ledger.exists():
-        pytest.skip(f"real ledger not found: {real_ledger}")
+    real_ledger = synthetic_ledger["ledger"]
 
     lines = []
     with open(real_ledger, "r", encoding="utf-8") as f:
@@ -326,7 +343,7 @@ def test_anchor_real_ledger_data():
                 lines.append(line)
 
     total = len(lines)
-    assert total > 0, "real ledger must have events"
+    assert total > 0, "fixture ledger must have events"
 
     # حساب الجذر مرتين (حتمية)
     root1 = compute_merkle_root(lines)

@@ -25,18 +25,32 @@ from backend.sovereign.ledger import LedgerAnchor
 from backend.sovereign.keys import KeyRing, SignatureVerifier, VerificationStatus
 
 
-def test_no_unsigned_ledger_events():
+# R-682 (Task 3.1): synthetic ledger fixture — replaces 45MB runtime data dependency.
+# (استيراد مباشر — لا يعتمد على tests/__init__.py لأنه يكسر جمع backend/tests)
+import importlib.util as _ilu
+_synthetic_path = _REPO_ROOT / "tests" / "fixtures" / "synthetic_ledger.py"
+_spec = _ilu.spec_from_file_location("synthetic_ledger", str(_synthetic_path))
+_sl_mod = _ilu.module_from_spec(_spec)
+_spec.loader.exec_module(_sl_mod)
+build_synthetic_ledger = _sl_mod.build_synthetic_ledger
+
+
+@pytest.fixture
+def synthetic_ledger(tmp_path):
+    """Build a small signed ledger + anchors + keys in tmp_path."""
+    return build_synthetic_ledger(tmp_path / "data")
+
+
+def test_no_unsigned_ledger_events(synthetic_ledger):
     """
     Invariant: كل حدث في اليدجر يجب أن يكون مصنّفًا (signed/anchored/unverifiable).
     لا حدث 'مجهول' بدون تصنيف.
 
-    ملاحظة: يقرأ السجل الحقيقي (data/sovereign_core/ledger.jsonl) مباشرة —
-    ليس السجل المعزول في SOVEREIGN_DATA_ROOT (راجع R-619).
+    R-682 (Task 3.1): uses synthetic_ledger fixture instead of 45MB runtime data.
     """
-    # R-619: قراءة السجل الحقيقي مباشرة (وليس المعزول)
-    _real_ledger = _REPO_ROOT / "data" / "sovereign_core" / "ledger.jsonl"
-    if not _real_ledger.exists():
-        pytest.skip("real ledger not found")
+    _real_ledger = synthetic_ledger["ledger"]
+    _real_anchors = synthetic_ledger["anchors"]
+    _keys_dir = synthetic_ledger["keys_dir"]
 
     # قراءة الأسطر مباشرة
     lines = []
@@ -46,16 +60,13 @@ def test_no_unsigned_ledger_events():
             if line.strip():
                 lines.append(line)
 
-    if not lines:
-        pytest.skip("real ledger is empty — nothing to verify")
+    assert lines, "fixture: empty ledger"
 
-    # تحميل KeyRing
-    keyring = KeyRing()
+    # تحميل KeyRing (من الـ fixture dir — ليس من data/keys الحقيقي)
+    keyring = KeyRing(keys_dir=_keys_dir)
     keyring.load_from_disk()
     verifier = SignatureVerifier(keyring)
 
-    # R-619: المراسي — استخدام المسارات الحقيقية
-    _real_anchors = _REPO_ROOT / "data" / "sovereign_core" / "ledger.anchors.jsonl"
     anchor = LedgerAnchor(ledger_path=_real_ledger, anchors_path=_real_anchors)
 
     # الأحداث المُغطاة بالمراسي
@@ -106,43 +117,26 @@ def test_no_unsigned_ledger_events():
     )
 
 
-def test_all_anchors_valid():
+def test_all_anchors_valid(synthetic_ledger):
     """كل المراسي المسجلة يجب أن تكون مُتحقّقة (المحتوى لم يتغير).
 
-    R-665 (البوابة 4): المراسي v1 (لا توقيع v2) لا تُوثّق تشفيريًا —
-    الجذر ينجح لكن التوقيع لا. المراسي v2 (مع توقيع) تُتحقق بالكامل.
-    نتحقق من الجذر لكل المراسي + التوقيع للمراسي v2 فقط.
+    R-682 (Task 3.1): uses synthetic_ledger fixture.
     """
-    # R-619: استخدام المسارات الحقيقية مباشرة
-    _real_ledger = _REPO_ROOT / "data" / "sovereign_core" / "ledger.jsonl"
-    _real_anchors = _REPO_ROOT / "data" / "sovereign_core" / "ledger.anchors.jsonl"
-
-    # R-671 (البوابة 2): في clone نظيف، ledger.jsonl غير موجود
-    # (بيانات وقت تشغيل — 45MB، لا تُدفع). المراسي تشير لأحداث
-    # غير موجودة → الجذر يفشل. هذا ليس خطأ في الكود — هو غياب بيانات.
-    # الاختبار يُتخطى (skip) — لا فشل.
-    if not _real_ledger.exists():
-        pytest.skip(
-            "ledger.jsonl not present (runtime data — not tracked in git). "
-            "Anchors reference events that don't exist in a clean clone. "
-            "This is expected behavior, not a failure."
-        )
+    _real_ledger = synthetic_ledger["ledger"]
+    _real_anchors = synthetic_ledger["anchors"]
+    _keys_dir = synthetic_ledger["keys_dir"]
 
     anchor = LedgerAnchor(ledger_path=_real_ledger, anchors_path=_real_anchors)
     anchors = anchor.list_anchors()
 
-    if not anchors:
-        pytest.skip("no anchors to verify")
+    assert anchors, "fixture: no anchors to verify"
 
-    # R-665: تحميل KeyRing الحقيقي (للتحقق من توقيع v2)
+    # R-682: تحميل KeyRing من الـ fixture dir
     from backend.sovereign.keys.keyring import KeyRing as _KeyRing
-    _real_keys_dir = _REPO_ROOT / "data" / "keys"
-    real_keyring = None
-    if _real_keys_dir.exists():
-        _kr = _KeyRing(keys_dir=_real_keys_dir)
-        _kr.load_from_disk()  # R-665: تحميل من القرص
-        if _kr._keys:
-            real_keyring = _kr
+    real_keyring = _KeyRing(keys_dir=_keys_dir)
+    real_keyring.load_from_disk()
+    if not real_keyring._keys:
+        real_keyring = None
 
     for a in anchors:
         # التفاصيل — لتمييز v1 (لا توقيع) من v2 (مع توقيع)
@@ -162,12 +156,13 @@ def test_all_anchors_valid():
             pass
 
 
-def test_anchored_coverage():
-    """التغطية بالمراسي — كل الأحداث القديمة يجب أن تكون مُغطاة."""
-    # R-619: قراءة السجل الحقيقي مباشرة
-    _real_ledger = _REPO_ROOT / "data" / "sovereign_core" / "ledger.jsonl"
-    if not _real_ledger.exists():
-        pytest.skip("real ledger not found")
+def test_anchored_coverage(synthetic_ledger):
+    """التغطية بالمراسي — كل الأحداث القديمة يجب أن تكون مُغطاة.
+
+    R-682 (Task 3.1): uses synthetic_ledger fixture.
+    """
+    _real_ledger = synthetic_ledger["ledger"]
+    _real_anchors = synthetic_ledger["anchors"]
 
     lines = []
     with open(_real_ledger, "r", encoding="utf-8") as f:
@@ -176,11 +171,8 @@ def test_anchored_coverage():
             if line.strip():
                 lines.append(line)
 
-    if not lines:
-        pytest.skip("real ledger is empty")
+    assert lines, "fixture: empty ledger"
 
-    # R-619: استخدام المسارات الحقيقية للمراسي
-    _real_anchors = _REPO_ROOT / "data" / "sovereign_core" / "ledger.anchors.jsonl"
     anchor = LedgerAnchor(ledger_path=_real_ledger, anchors_path=_real_anchors)
     anchors = anchor.list_anchors()
     anchored_events = set()
