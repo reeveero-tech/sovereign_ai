@@ -18,6 +18,7 @@
 import hmac
 import json
 import hashlib
+import os
 import secrets
 
 try:
@@ -168,7 +169,15 @@ class RansomwareDefense:
         # حتى لا يُعلن نجاح إنشاء بذرة أبدًا دون مفتاح قيامة مستقر على القرص.
         self._state_master_key_invalid = False
         self._state_master_key_enc_original = None
-        self._load_state()
+        # R-682 (security — fail-closed): فشل تحميل حالة موجودة يوقف التهيئة
+        # قبل الحفظ والخيوط وإنشاء أي بذرة — الملف الأصلي يُحفظ كاملًا بلا تعديل.
+        if not self._load_state():
+            raise RuntimeError(
+                "R-682 [SECURITY-FAIL]: phoenix state file exists but failed to "
+                "load (corrupt master_key_enc / invalid JSON / different "
+                "sovereign key). Initialization REFUSED before threads, save, "
+                "or seed creation. Original file preserved untouched."
+            )
         self._save_state()
 
         # خلفيات الفينيق (بعد استقرار المفتاح)
@@ -217,11 +226,17 @@ class RansomwareDefense:
         self.is_transforming = False
         self.last_resurrection = None
         
-        # إعادة تعيين مفاتيح القيامة (وتوثيق متين فوري للحالة الجديدة)
-        self.master_resurrection_key = self._generate_master_key()
+        # R-682 (security): عند الاحتفاظ بالبذور يجب الاحتفاظ بالمفتاح الرئيسي —
+        # توليد مفتاح جديد يجعل كل بذور محفوظة غير قابلة للفك نهائيًا.
+        if not preserve_seeds:
+            self.master_resurrection_key = self._generate_master_key()
         self._state_master_key_invalid = False
         self._state_master_key_enc_original = None
-        self._save_state()
+        if not self._save_state():
+            logger.error(
+                "R-682 [SECURITY]: reset failed to durably save state — "
+                "persisted seeds may not remain decryptable"
+            )
         
         # تسجيل حدث إعادة التهيئة
         self.core.append_event(
@@ -334,9 +349,16 @@ class RansomwareDefense:
             
             semantic_items = store.query("semantic", min_importance=0.7, limit=20)
             for item in semantic_items:
+                # R-682 (security): البذرة يجب أن تحمل البيانات القابلة للاستعادة
+                # فعليًا (التعريف/الأسماء البديلة) — لا إحصاءات فقط، وإلا فلا
+                # استعادة حقيقية ممكنة من المخزن لاحقًا.
                 critical.append({
                     "type": "semantic",
                     "concept": item.get("concept"),
+                    "definition": item.get("definition", ""),
+                    "aliases": item.get("aliases", []),
+                    "related_concepts": item.get("related_concepts", {}),
+                    "confidence": item.get("confidence", 0.5),
                     "importance": item.get("_importance", 0)
                 })
             
@@ -823,11 +845,12 @@ class RansomwareDefense:
         return max(seeds, key=lambda x: x.created_at)
     
     def _restore_from_seed(self, seed: PhoenixSeed) -> bool:
-        """إعادة بناء النواة من البذرة — النجاح يُثبت بالبيانات، لا بالسجل.
+        """إعادة بناء النواة من البذرة — الاستعادة تكتب في مخزن التطبيق الفعلي.
 
-        R-682 (security): بيانات البذرة المقصودة تُخزَّن فعليًا في
-        self.restored_seeds[seed.id] (مخزن الاستعادة). استعادة فارغة =
-        فشل صريح (لا يُعلن نجاح لعملية لم تحدث).
+        R-682 (security): البيانات المستعادة تُكتب مرة أخرى في المخزن الحقيقي
+        عبر واجهاته المعتادة (get_store().save_semantic) — فيعود ما يقرأه
+        التطبيق لاحقًا عبر واجهة القراءة المعتادة (store.query). لا يُعلن
+        نجاح لاستعادة لم تُكتب في المخزن. استعادة فارغة = فشل صريح.
         """
         try:
             # إعادة بناء الذاكرة الجوهرية — البيانات المقصودة نفسها
@@ -838,7 +861,26 @@ class RansomwareDefense:
                     "invalid — nothing to restore. Restoration REFUSED."
                 )
                 return False
-            # النسخة المستعادة تُخزَّن فعليًا (إثبات قابل للفحص)
+
+            # الكتابة في مخزن التطبيق الفعلي — العناصر الحرجة الدلالية
+            restored_items = 0
+            critical_items = essential.get("critical_memory") or []
+            if critical_items:
+                from ..store import get_store
+                store = get_store()
+                for item in critical_items:
+                    if item.get("type") != "semantic" or not item.get("concept"):
+                        continue
+                    store.save_semantic(
+                        concept=item["concept"],
+                        definition=item.get("definition", ""),
+                        aliases=item.get("aliases") or [],
+                        related_concepts=item.get("related_concepts") or {},
+                        confidence=item.get("confidence", 0.5),
+                    )
+                    restored_items += 1
+
+            # سجل تدقيق داخلي (إثبات قابل للفحص — لا بديلًا عن المخزن)
             self.restored_seeds[seed.id] = json.loads(json.dumps(essential))
             
             # تسجيل حدث البعث
@@ -847,7 +889,8 @@ class RansomwareDefense:
                 payload={
                     "seed_id": seed.id,
                     "core_fingerprint": seed.core_fingerprint,
-                    "essential_keys": list(essential.keys())
+                    "essential_keys": list(essential.keys()),
+                    "store_items_restored": restored_items,
                 }
             )
             
@@ -857,49 +900,35 @@ class RansomwareDefense:
             return False
     
     def _resurrect_from_ashes(self, resurrection_key: str) -> Dict[str, Any]:
-        """القيامة من الرماد - عندما لا توجد بذرة"""
+        """القيامة من الرماد - عندما لا توجد بذرة.
+
+        R-682 (security): استعادة الرماد الفعلية غير منفَّذة — لا يُعلن
+        نجاح لعملية لم تحدث، ولا يُعد الرماد مستعادًا، ولا يُمسح.
+        """
         ashes_count = len(self.ashes)
-        
-        if ashes_count == 0:
-            return {"success": False, "error": "لا رماد للقيامة منه"}
-        
-        logger.info(f"🔥 قيامة من الرماد: {ashes_count} قطعة رماد")
-        
-        # قيامة جزئية - إعادة بناء ما يمكن
-        restored_count = 0
-        for ash_id, ash in list(self.ashes.items()):
-            try:
-                # محاولة استعادة البيانات من الرماد
-                restored_count += 1
-            # TOLERATED: known-safe fallback — non-fatal diagnostic path (R-680)
-            except:
-                pass
-        
+        logger.error(
+            "R-682 [SECURITY-FAIL]: resurrection from ashes NOT PERFORMED — "
+            "no seed found and ash restoration is not implemented. No success "
+            "declared for a restoration that did not happen; ashes preserved."
+        )
         return {
-            "success": True,
-            "resurrected_from": "ashes",
-            "ashes_used": ashes_count,
-            "restored_items": restored_count,
-            "note": "بعثت من الرماد، لكن بعض الذاكرة فقدت إلى الأبد"
+            "success": False,
+            "error": "لا استعادة حقيقية منفذة: لا بذرة ولا فك رماد — النجاح غير معلن",
+            "ashes_available": ashes_count,
         }
     
     def _decrypt_all_memory(self) -> int:
-        """فك تشفير كل الذاكرة - العودة إلى الحياة"""
-        decrypted_count = 0
-        
-        try:
-            # فك تشفير blobs من الرماد
-            for ash_id, ash in list(self.ashes.items()):
-                # محاولة فك التشفير
-                decrypted_count += 1
-            
-            # تنظيف الرماد
-            self.ashes.clear()
-            
-        except Exception as e:
-            logger.error(f"خطأ في فك التشفير: {e}")
-        
-        return decrypted_count
+        """فك تشفير كل الذاكرة — لا يُعلن فك شيء دون فك فعلي.
+
+        R-682 (security): فك الرماد الفعلي غير منفَّذ — لا يُعد الرماد
+        مستعادًا ولا يُمسح. الاستعادة الحقيقية تحدث من البذرة فقط
+        (_restore_from_seed يكتب في مخزن التطبيق الفعلي).
+        """
+        logger.debug(
+            "R-682: ash decryption not implemented — ashes preserved, "
+            "none claimed restored"
+        )
+        return 0
     
     # ============================================================
     # المستوى 4: المراقبة والتحضير التلقائي
@@ -1012,6 +1041,7 @@ class RansomwareDefense:
         k = hashlib.sha256(SOVEREIGN_KEY.encode()).digest()  # 32 بايت لمفتاح AES-256
         nonce = get_random_bytes(12)
         cipher = AES.new(k, AES.MODE_GCM, nonce=nonce)
+        cipher.update(self._MASTER_WRAP_AAD)  # بيانات مرتبطة — توثق غرض التغليف
         ct, tag = cipher.encrypt_and_digest(self.master_resurrection_key.encode())
         envelope = {
             "n": base64.b64encode(nonce).decode(),
@@ -1033,6 +1063,7 @@ class RansomwareDefense:
                 k, AES.MODE_GCM,
                 nonce=base64.b64decode(envelope["n"], validate=True),
             )
+            cipher.update(self._MASTER_WRAP_AAD)  # بيانات مرتبطة — توثق غرض التغليف
             plain = cipher.decrypt_and_verify(
                 base64.b64decode(envelope["d"], validate=True),
                 base64.b64decode(envelope["t"], validate=True),
@@ -1057,19 +1088,30 @@ class RansomwareDefense:
                 "master_key_enc": self._wrap_master_key(),
                 "saved_at": time.time()
             }
-            # R-682 (security): إذا فشل فك تغليف المفتاح المخزن، نحافظ على الأصل
-            # حرفيًا (دليل/أصل للتحقيق الجنائي) — لا نستبدله صامتًا بمفتاح جديد
-            # قد يحوّل فقدان المفتاح إلى فقدان دائم غير مُعلن للبذور.
+            # R-682 (security): بعد فشل تحميل حالة موجودة، الكتابة مرفوضة —
+            # الملف الأصلي يُحفظ كاملًا حرفيًا (دليل للتحقيق). أي كتابة الآن
+            # قد تستبدل دليل الفساد بحالة سليمة-الشكل تخفي فقدان المفتاح.
             if getattr(self, "_state_master_key_invalid", False):
-                state["master_key_enc"] = self._state_master_key_enc_original
-                state["master_key_enc_corrupt"] = True
-                logger.warning(
-                    "R-682 [SECURITY]: master_key_enc الأصلي (غير الصالح) مُحفَظ كما هو "
-                    "ولم يُستبدل — يتطلب تدخلًا يدويًا"
+                logger.error(
+                    "R-682 [SECURITY]: state save REFUSED — existing state "
+                    "failed to load; original file preserved untouched "
+                    "(forensic evidence, no silent replacement)"
                 )
+                return False
 
-            with open(PHOENIX_STATE_FILE, 'w', encoding='utf-8') as f:
+            # كتابة ذرّية متينة: ملف مؤقت في نفس المجلد + fsync + استبدال
+            # ذري + fsync للمجلد — فشل في أي خطوة يترك الملف الأصلي كما هو.
+            tmp_path = PHOENIX_STATE_FILE.with_suffix(".json.tmp")
+            with open(tmp_path, 'w', encoding='utf-8') as f:
                 json.dump(state, f, ensure_ascii=False, indent=2)
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(tmp_path, PHOENIX_STATE_FILE)
+            dir_fd = os.open(str(PHOENIX_STATE_FILE.parent), os.O_RDONLY)
+            try:
+                os.fsync(dir_fd)
+            finally:
+                os.close(dir_fd)
             return True
         except Exception as e:
             logger.error(f"خطأ في حفظ الحالة: {e}")

@@ -401,15 +401,13 @@ class TestPhoenixResurrectionContinuity:
         assert b._state_master_key_invalid is True
         matches = [r for r in caplog.records if "SECURITY-FAIL" in r.getMessage()]
         assert matches, "فساد المفتاح يجب أن يُسجَّل كفشل أمني صريح (لا صمت)"
-        # الحفظ اللاحق يحافظ على القيمة الموجودة (المتلاعب بها) حرفيًا —
-        # لا استبدال صامت بمفتاح المثيل الجديد الذي قد يُتيه البذور نهائيًا
-        b._save_state()
-        after = _json.loads(state_file.read_text(encoding="utf-8"))
-        assert after["master_key_enc"] == tampered_enc, \
-            "القيمة الموجودة في الملف يجب أن تُحفظ كما هي — لا استبدال"
-        assert after["master_key_enc"] != b._wrap_master_key(), \
-            "يجب ألا يُستبدل صامتًا بمفتاح المثيل الجديد"
-        assert after.get("master_key_enc_corrupt") is True
+        # الحفظ اللاحق مرفوض بالكامل — الملف يُحفظ كاملًا حرفيًا بلا أي تعديل
+        # (دليل للتحقيق؛ أي كتابة قد تستبدل دليل الفساد بحالة تخفي فقدان المفتاح)
+        raw_before = state_file.read_bytes()
+        assert b._save_state() is False, \
+            "الكتابة بعد فشل التحميل يجب أن تُرفض — حفظ الملف الأصلي"
+        assert state_file.read_bytes() == raw_before, \
+            "الملف الأصلي يجب أن يبقى كاملًا حرفيًا — لا تعديل ولا استبدال"
         # الأصل الحقيقي (قبل التلاعب) كان قيمة GCM صالحة — للتوثيق
         assert tampered_enc != original_enc
 
@@ -474,6 +472,219 @@ class TestPhoenixResurrectionContinuity:
                    if "legacy v1 migration" in r.getMessage()
                    and "integrity NOT verifiable" in r.getMessage()]
         assert matches, "تحذير صريح: ترحيل إرثي — النزاهة غير قابلة للتحقق"
+
+
+# ============================================================
+# Part 1b: التهيئة الحقيقية — عقد كامل من طرف إلى طرف (R-682 security v3)
+# ============================================================
+
+class _IsolatedStore:
+    """مخزن معزول بواجهة التطبيق نفسها (get_store/save_semantic/query)."""
+
+    def __init__(self):
+        self.items = {}
+
+    def save_semantic(self, concept, definition, aliases=None,
+                      related_concepts=None, examples=None, confidence=0.5):
+        self.items[concept] = {
+            "concept": concept,
+            "definition": definition,
+            "aliases": aliases or [],
+            "related_concepts": related_concepts or {},
+            "confidence": confidence,
+            "_importance": max(confidence, 0.9),
+        }
+        return concept
+
+    def query(self, kind, tag=None, min_importance=0.0, limit=50,
+              search_text=None):
+        return [v for v in self.items.values()
+                if v["_importance"] >= min_importance][:limit]
+
+    def delete(self, concept):
+        self.items.pop(concept, None)
+
+
+class _NoThreads:
+    """خيط معطّل (مسموح في الاختبار) — منطق التهيئة نفسه لا يُتجاوز."""
+
+    def __init__(self, *a, **k):
+        pass
+
+    def start(self):
+        pass
+
+
+class TestRealInitSecurity:
+    """R-682 (security v3): عقد المفتاح العام عبر التهيئة الحقيقية (لا __new__
+    ولا تحميل/حفظ يدوي) + فشل الحالة يوقف التهيئة (fail-closed) + تلاعب
+    موضعي 5→6 مرفوض + reset(preserve_seeds=True) لا يُفقد المفاتيح."""
+
+    def _mock_core(self):
+        core = MagicMock()
+        core._last_hash = "a" * 64
+        core.get_statistics.return_value = {"index": {"total_events": 3}}
+        return core
+
+    def _patch_env(self, tmp_path, monkeypatch, store):
+        import backend.memory.defense.ransomware as rw
+        import backend.memory.store as store_mod
+        seeds_dir = tmp_path / "seeds"
+        seeds_dir.mkdir(exist_ok=True)
+        monkeypatch.setattr(rw, "PHOENIX_SEEDS_DIR", seeds_dir)
+        monkeypatch.setattr(rw, "PHOENIX_STATE_FILE", tmp_path / "phoenix_state.json")
+        monkeypatch.setattr(rw, "get_core", self._mock_core)
+        monkeypatch.setattr(rw, "get_encoder", lambda: MagicMock())
+        monkeypatch.setattr(rw, "get_watcher", lambda: MagicMock())
+        monkeypatch.setattr(store_mod, "get_store", lambda: store)
+        import threading as _th
+        monkeypatch.setattr(_th, "Thread", _NoThreads)
+        return rw
+
+    def test_public_contract_real_init_end_to_end(self, tmp_path, monkeypatch):
+        """العقد من طرف إلى طرف عبر التهيئة الحقيقية + إثبات الاستعادة عبر
+        واجهة القراءة المعتادة للمخزن (لا مخزن جانبي):
+
+        first = RansomwareDefense()  (تهيئة حقيقية، تخزين معزول)
+        seed = first.create_phoenix_seed(...)
+        key = first.get_resurrection_key()
+        restarted = RansomwareDefense()  (تهيئة حقيقية — بلا تحميل/حفظ يدوي)
+        result = restarted.resurrect(key)  → نجاح + البيانات عادت للمخزن فعليًا
+        """
+        store = _IsolatedStore()
+        rw = self._patch_env(tmp_path, monkeypatch, store)
+        # سجل مميز في المخزن (عبر واجهة الكتابة المعتادة)
+        concept = "sovereign_ai_r682_restore_proof"
+        store.save_semantic(
+            concept=concept,
+            definition="دليل استعادة عبر المخزن الحقيقي",
+            confidence=0.95,
+        )
+        # 1) المثيل الأول — تهيئة حقيقية + بذرة تحمل السجل المميز
+        first = rw.RansomwareDefense()
+        seed = first.create_phoenix_seed(reason="e2e-contract-test")
+        assert seed is not None
+        carried = [i for i in seed.essential_memory.get("critical_memory", [])
+                   if i.get("concept") == concept]
+        assert carried, "البذرة يجب أن تحمل السجل المميز قابلًا للاستعادة"
+        key = first.get_resurrection_key()
+        # 2) فقدان البيانات من المخزن بعد البذرة
+        store.delete(concept)
+        assert not store.query("semantic", min_importance=0.7), "السجل مفقود الآن"
+        # 3) إعادة تشغيل — تهيئة حقيقية (بلا أي استدعاء يدوي لتحميل/حفظ)
+        restarted = rw.RansomwareDefense()
+        assert restarted.master_resurrection_key == first.master_resurrection_key
+        # 4) القيامة عبر الواجهة العامة (resurrect يتطلب DEAD — أقصى ما يسمح به
+        #    تسلسل advisor المطلوب دون اختبار الموت نفسه)
+        restarted.phoenix_phase = rw.PhoenixPhase.DEAD
+        result = restarted.resurrect(key)
+        assert result.get("success") is True, f"القيامة يجب أن تنجح: {result}"
+        assert restarted.phoenix_phase == rw.PhoenixPhase.REBORN
+        # 5) الإثبات عبر واجهة القراءة المعتادة للمخزن — البيانات عادت فعليًا
+        restored = [i for i in store.query("semantic", min_importance=0.7)
+                    if i.get("concept") == concept]
+        assert restored, \
+            "السجل المميز يجب أن يعود إلى المخزن عبر واجهة القراءة المعتادة"
+        assert restored[0]["definition"] == "دليل استعادة عبر المخزن الحقيقي"
+
+    def test_truncated_state_fails_init_and_preserves_file(self, tmp_path, monkeypatch):
+        """JSON مبتور في الحالة → التهيئة تفشل (fail-closed) قبل الحفظ والخيوط،
+        والملف الأصلي يبقى كاملًا حرفيًا دون أي تعديل."""
+        import pytest as _pytest
+        store = _IsolatedStore()
+        rw = self._patch_env(tmp_path, monkeypatch, store)
+        state_file = tmp_path / "phoenix_state.json"
+        truncated = b'{"phoenix_phase": "dead", "master_key_e'  # مبتور
+        state_file.write_bytes(truncated)
+        with _pytest.raises(RuntimeError, match="R-682"):
+            rw.RansomwareDefense()
+        assert state_file.read_bytes() == truncated, \
+            "الملف الأصلي يجب أن يُحفظ كاملًا حرفيًا — لا تعديل ولا استبدال"
+
+    def test_corrupt_wrapped_key_fails_init(self, tmp_path, monkeypatch):
+        """مفتاح مغلّف فاسد في الحالة → التهيئة تفشل (fail-closed) والملف محفوظ."""
+        import json as _json
+        import pytest as _pytest
+        store = _IsolatedStore()
+        rw = self._patch_env(tmp_path, monkeypatch, store)
+        state_file = tmp_path / "phoenix_state.json"
+        state_file.write_text(_json.dumps({
+            "phoenix_phase": "dead",
+            "master_key_enc": _json.dumps({"n": "AAAA", "d": "AAAA", "t": "AAAA"}),
+        }), encoding="utf-8")
+        raw = state_file.read_bytes()
+        with _pytest.raises(RuntimeError, match="R-682"):
+            rw.RansomwareDefense()
+        assert state_file.read_bytes() == raw, "الملف محفوظ كاملًا دون تعديل"
+
+    def test_positional_tamper_5_to_6_rejected(self, tmp_path, monkeypatch, caplog):
+        """تلاعب موضعي مقصود: تغيير '5'→'6' في النص الصريح عبر بايت النص
+        المشفر المقابل (CTR يحفظ المواضع — لولاه لَصار JSON صالحًا بقيمة 6)،
+        مع إبقاء وسم GCM — الرفض فشل مصادقة صريح (المصادقة تمنع قبول النص
+        المعدّل؛ القول بأن التعديل نفسه مستحيل غير دقيق)."""
+        import base64 as _b64
+        import json as _json
+        rw = self._patch_env(tmp_path, monkeypatch, _IsolatedStore())
+        obj = rw.RansomwareDefense.__new__(rw.RansomwareDefense)
+        obj.seeds = {}
+        obj.master_resurrection_key = "b" * 128
+        from backend.memory.defense.ransomware import PhoenixSeed
+        seed = PhoenixSeed(
+            id="phoenix_seed_pos_001",
+            created_at=1000000.0,
+            core_fingerprint="deadbeef1234",
+            essential_memory={"core": {"integrity_count": 5}},
+            resurrection_key="beef" * 16,
+            expires_at=1000000.0 + 604800,
+            phase="living",
+        )
+        encrypted = obj._encrypt_seed(seed)
+        env = _json.loads(_b64.b64decode(encrypted).decode("utf-8"))
+        ct = _b64.b64decode(env["d"])
+        # النص الصريح المعروف — نفس بناء _encrypt_seed (CTR يحفظ المواضع)
+        plaintext = _json.dumps({
+            "id": seed.id, "created_at": seed.created_at,
+            "core_fingerprint": seed.core_fingerprint,
+            "essential_memory": seed.essential_memory,
+            "resurrection_key": seed.resurrection_key,
+            "expires_at": seed.expires_at,
+        }, ensure_ascii=False).encode()
+        target = b'"integrity_count": 5'
+        idx = plaintext.find(target)
+        assert idx >= 0, "القيمة المستهدفة موجودة في النص الصريح المعروف"
+        pos = idx + len(b'"integrity_count": ')  # موضع بايت '5'
+        assert len(ct) == len(plaintext), "CTR: طول النص المشفر = طول النص الصريح"
+        # قلب البايت المقابل: يغيّر '5'→'6' في النص المفكوك لو غاب الوسم
+        ct2 = bytearray(ct)
+        ct2[pos] ^= ord("5") ^ ord("6")
+        env["d"] = _b64.b64encode(bytes(ct2)).decode()
+        # الوسم يبقى كما هو — هذا هو التلاعب
+        tampered = _b64.b64encode(_json.dumps(env).encode())
+        caplog.clear()
+        with caplog.at_level(logging.ERROR, logger="backend.memory.defense.ransomware"):
+            result = obj._decrypt_seed(tampered, resurrection_key=seed.resurrection_key)
+        assert result is None, \
+            "تلاعب 5→6 الموضعي (JSON يبقى صالحًا) يجب أن يُرفض بفشل مصادقة GCM"
+        matches = [r for r in caplog.records if "GCM authentication FAILED" in r.getMessage()]
+        assert matches
+
+    def test_reset_preserve_seeds_keeps_master_key(self, tmp_path, monkeypatch):
+        """reset(preserve_seeds=True) يجب ألا يولّد مفتاحًا جديدًا — توليده
+        يجعل كل بذور محفوظة غير قابلة للفك نهائيًا."""
+        store = _IsolatedStore()
+        rw = self._patch_env(tmp_path, monkeypatch, store)
+        first = rw.RansomwareDefense()
+        seed = first.create_phoenix_seed(reason="reset-preserve-test")
+        assert seed is not None
+        old_master = first.master_resurrection_key
+        first.reset(preserve_seeds=True)
+        assert first.master_resurrection_key == old_master, \
+            "الاحتفاظ بالبذور يستلزم الاحتفاظ بالمفتاح الرئيسي"
+        # والبذرة ما زالت قابلة للفك بعد إعادة تشغيل (تهيئة حقيقية)
+        restarted = rw.RansomwareDefense()
+        found = restarted._find_latest_seed()
+        assert found is not None, "البذرة المحفوظة يجب أن تبقى قابلة للفك"
+        assert found.id == seed.id
 
 
 # ============================================================

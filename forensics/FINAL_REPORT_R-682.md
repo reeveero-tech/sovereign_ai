@@ -5,8 +5,8 @@
 **دليل التحقق الكامل (أمر واحد، من clone نظيف مثبّت على `f075077`):**
 ```
 $ git clone ... && git checkout f075077 && ./verify.sh --full
-361 passed, 1 deselected
-✅ بوابة الاختبارات ناجحة: 361 passed, 0 skipped, 0 failed
+366 passed, 1 deselected
+✅ بوابة الاختبارات ناجحة: 366 passed, 0 skipped, 0 failed
 CI:     sha=f07507700eb0... tests=316 failed=0 skipped=0 unique_ids=316
 Local:  sha=f07507700eb0... tests=316 failed=0 skipped=0 unique_ids=316
 ✅ CI + Local MATCH (SHA + test counts + (normalized_classname,name) Counter + zero failures + zero skips)
@@ -44,8 +44,8 @@ VERIFICATION COMPLETE — HEAD: f07507700eb0fe2fa852ff8cdcb2168a637e7201
 
 ```
 $ ./verify.sh
-361 passed, 1 deselected
-✅ بوابة الاختبارات ناجحة: 361 passed, 0 skipped, 0 failed
+366 passed, 1 deselected
+✅ بوابة الاختبارات ناجحة: 366 passed, 0 skipped, 0 failed
 ```
 
 **ملاحظة:** السكربت يُعلن نجاح **بوابة الاختبارات** فقط — ليس اكتمال DoD ولا العقد.
@@ -60,7 +60,7 @@ $ ./verify.sh
 
 **مصدر:** CI run `38667166304` (headSha `f075077`، conclusion: success)، artifact `junit-with-sha-f075077` (ID `11943020729`).
 
-**تنفيذ (آخر تشغيل موثق):** 361 اختبارًا، **مُستبعد:** 1 (operational) — **الزيادة عن 316:** +8 فك تشفير البذرة +12 استمرارية/نزاهة/تخفيض/فساد-حالة +27 اختبارًا سلوكيًا للمواقع منخفضة الخطورة.
+**تنفيذ (آخر تشغيل موثق):** 366 اختبارًا، **مُستبعد:** 1 (operational) — **الزيادة عن 316:** +8 فك تشفير البذرة +10 استمرارية/نزاهة/تخفيض/فساد-حالة +5 تهيئة حقيقية من طرف إلى طرف +27 اختبارًا سلوكيًا للمواقع منخفضة الخطورة (316+8+10+5+27=366).
 
 **نتائج بيئة المستشار (Python 3.14، تشغيل فعلي على `f075077` من clone نظيف):**
 - تشغيل `./verify.sh` المحلي: `316 passed, 1 deselected in 149.27s`
@@ -156,8 +156,8 @@ $ ./verify.sh
 ## بيئة التحقق (صادقة)
 
 - **CI (مطابق للعقد):** Python 3.11 + `requirements.txt` محدد بالضبط — CI run `38667166304` (headSha `f075077`) → `316/0/0/0` ✓
-- **Local (بيئة المستشار):** Python 3.14 + حزم بديلة (بعضها أحدث) — `361 passed, 1 deselected` (تشغيل فعلي — راجع الجلسة التنفيذية) — **اختبار توافق إضافي ناجح، ليس إعادة إنتاج لبيئة CI**
-- **Clone (بيئة المستشار):** نفس بيئة Local — `361 passed, 1 deselected` → `361/0/0/0` ✓
+- **Local (بيئة المستشار):** Python 3.14 + حزم بديلة (بعضها أحدث) — `366 passed, 1 deselected` (تشغيل فعلي — راجع الجلسة التنفيذية) — **اختبار توافق إضافي ناجح، ليس إعادة إنتاج لبيئة CI**
+- **Clone (بيئة المستشار):** نفس بيئة Local — `366 passed, 1 deselected` → `366/0/0/0` ✓
 
 **ملاحظة:** التحقق المحلي تم في بيئة Python 3.14 (حزم بديلة). إعادة إنتاج لبيئة CI بالضبط (Python 3.11) **غير مُثبت في هذه الجلسة** — لا يوجد Python 3.11 متاح.
 
@@ -170,6 +170,6 @@ cd sovereign_ai && ./verify.sh          # local
 cd sovereign_ai && ./verify.sh --full   # local + CI + clean clone
 ```
 
-**النتيجة المتوقعة:** `361 passed, 1 deselected, 0 skipped, 0 failed`
+**النتيجة المتوقعة:** `366 passed, 1 deselected, 0 skipped, 0 failed`
 
 **ملاحظة صادقة:** `--full` يتطلب أن يكون CI قد اشتغل على الـ SHA نفسه الذي ستُشغّله. عند تشغيل `verify.sh --full` قبل أن يشتغل CI على HEAD الحالي، سيُفشل (SHA mismatch) — هذا مقصود (fail-closed). اشتغّل CI أولًا ثم `verify.sh --full`.
