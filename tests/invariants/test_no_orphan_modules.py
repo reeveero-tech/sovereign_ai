@@ -138,12 +138,6 @@ def test_no_orphan_modules():
             continue  # سكربتات أدوات (نقاط دخول — تُشغّل يدويًا، مثل verify_new_key.py)
         if f.endswith("__init__.py"):
             continue  # ملفات حزمة Python (مطلوبة)
-        if Path(f).name == "conftest.py":
-            # R-682 (الجولة التشغيلية): conftest.py ليس يتيمًا أبدًا —
-            # pytest يحمّله تلقائيًا (نقطة دخول معيارية)، وأي ملف جذر
-            # conftest.py وُجد لاحقًا (تسجيل --run-operational) كشف أن
-            # نموذج الحارس لم يشمل هذه الآلية — تحديد دقيق لا تعطيل.
-            continue
         if f.startswith("archive/"):
             continue  # أرشيف (موثق في INVENTORY.py)
         orphans.append(f)
@@ -188,3 +182,51 @@ def test_inventory_documented():
         assert basename in inventory_src, (
             f"Archived file {af!r} must be documented in INVENTORY.py"
         )
+
+
+def test_guard_flags_stray_conftest_outside_root(tmp_path):
+    """R-682 (الجولة التشغيلية الثالثة — أمر المستشار): اختبار سلوكي للحارس.
+
+    ملف غير مستورد باسم conftest.py في مسار غير الجذر يجب ألا يفلت من
+    الحارس بمجرد تسميته — الحارس لا يعفي الاسم، بل نموذج نقاط الدخول
+    المعروف (وهذا سبب إلغاء استثناء الاسم العريض الذي أُدخل في 0c5143d).
+    الإثبات: تشغيل الحارس نفسه كسب-بروسس مع ملف تجريبي موجود ثم بعد إزالته.
+    """
+    import shutil
+    import subprocess
+
+    probe_dir = _REPO_ROOT / "_orphan_probe_tmp"
+    probe = probe_dir / "conftest.py"
+    probe_dir.mkdir(parents=True, exist_ok=True)
+    probe.write_text(
+        "# probe — stray conftest outside repo root; not loaded by pytest\n",
+        encoding="utf-8",
+    )
+    cmd = [
+        sys.executable, "-m", "pytest",
+        "tests/invariants/test_no_orphan_modules.py::test_no_orphan_modules",
+        "-q", "--no-header",
+    ]
+    try:
+        r = subprocess.run(
+            cmd, capture_output=True, text=True,
+            cwd=str(_REPO_ROOT), timeout=180,
+        )
+        # مع الملف اليتيم: الحارس يفشل ويذكره بالاسم والمسار
+        assert r.returncode != 0, (
+            "guard must FAIL while a stray conftest.py exists outside root"
+        )
+        assert "_orphan_probe_tmp/conftest.py" in r.stdout, (
+            f"stray probe must be named in the failure output: {r.stdout[-300:]}"
+        )
+    finally:
+        shutil.rmtree(probe_dir, ignore_errors=True)
+
+    # بعد الإزالة: الحارس يعود أخضر (لا أثر للملف التجريبي)
+    r2 = subprocess.run(
+        cmd, capture_output=True, text=True,
+        cwd=str(_REPO_ROOT), timeout=180,
+    )
+    assert r2.returncode == 0, (
+        f"guard must pass again after probe removal: {r2.stdout[-300:]}"
+    )

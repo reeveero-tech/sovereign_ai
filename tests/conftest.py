@@ -52,3 +52,21 @@ if _BACKEND not in sys.path:
 _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
+
+
+# R-682 (الجولة التشغيلية الثالثة — تصويب): تسجيل خيار --run-operational هنا.
+# كان مسجلًا في conftest.py بجذر المستودع (الالتزام 0c5143d) مع تعليل خاطئ
+# («الاستدعاء بلا مسارات لا يحمّل tests/conftest.py قبل تحليل الخيارات») —
+# اختُبر التجربة على pytest 9.1.1 (نفس إصدار CI) فظهر غير صحيح: التسجيل هنا
+# يعمل للاستدعاء بلا مسارات ولمسارات. نُقل التسجيل إلى هنا وأُلغي ملف الجذر
+# (راجع forensics/OPERATIONAL_TESTS.md — الجولة الثالثة).
+def pytest_addoption(parser):
+    parser.addoption(
+        "--run-operational",
+        action="store_true",
+        default=False,
+        help=(
+            "R-661/R-682: تشغيل اختبارات operational التشغيلية "
+            "(تقرأ أسرار المضيف وتكتب بيانات حقيقية — يدويًا فقط)"
+        ),
+    )
