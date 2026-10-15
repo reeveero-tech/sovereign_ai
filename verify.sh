@@ -203,7 +203,8 @@ if ci_tests != local_tests:
 if ci_ids != local_ids:
     only_ci = (ci_ids - local_ids).most_common(5)
     only_local = (local_ids - ci_ids).most_common(5)
-    errors.append(f"Testcase identity mismatch (normalized_classname,name): only_in_CI={only_ci} only_local={only_local}")if ci_failed != 0 or local_failed != 0:
+    errors.append(f"Testcase identity mismatch (normalized_classname,name): only_in_CI={only_ci} only_local={only_local}")
+if ci_failed != 0 or local_failed != 0:
     errors.append(f"Failures: CI={ci_failed} Local={local_failed} (must be 0)")
 if ci_skipped != 0 or local_skipped != 0:
     errors.append(f"Skipped: CI={ci_skipped} Local={local_skipped} (must be 0)")
