@@ -15,12 +15,27 @@ import subprocess
 import sys
 from pathlib import Path
 
+import secrets as _secrets
+
 _REPO_ROOT = Path(__file__).resolve().parent.parent
 for p in [str(_REPO_ROOT), str(_REPO_ROOT / "backend")]:
     if p not in sys.path:
         sys.path.insert(0, p)
 
 import pytest
+
+
+# R-682 (Task 3.2): synthetic key-secret fixture — replaces runtime data dependency.
+@pytest.fixture
+def synthetic_keys(tmp_path):
+    """Create a synthetic key.secret + old_rotated backup in tmp_path."""
+    data_dir = tmp_path / "data"
+    data_dir.mkdir(parents=True, exist_ok=True)
+    new_key = _secrets.token_urlsafe(32)
+    old_key = _secrets.token_urlsafe(32)  # different random key
+    (data_dir / "key.secret").write_text(new_key)
+    (data_dir / "key.secret.old_rotated_2026_10_14").write_text(old_key)
+    return {"new_key": new_key, "old_key": old_key, "data_dir": data_dir}
 
 
 class TestAPIKeyRotation:
@@ -43,38 +58,32 @@ class TestAPIKeyRotation:
         new_key = self._load_key_from_file(key_file)
         assert new_key == new_key  # trivially true
 
-    def test_old_key_rejected(self):
-        """المفتاح القديم يُرفض (لا يُطابق الجديد)."""
-        key_file = _REPO_ROOT / "data" / "key.secret"
-        if not key_file.exists():
-            pytest.skip("key.secret not found in clean clone (R-680c)")
-        new_key = self._load_key_from_file(key_file)
-        old_key_path = _REPO_ROOT / "data" / "key.secret.old_rotated_2026_10_14"
-        if not old_key_path.exists():
-            pytest.skip("old key backup not found (rotation not yet performed)")
-        old_key = self._load_key_from_file(old_key_path)
+    def test_old_key_rejected(self, synthetic_keys):
+        """المفتاح القديم يُرفض (لا يُطابق الجديد).
+
+        R-682 (Task 3.2): uses synthetic fixture — no longer requires real rotation history.
+        """
+        new_key = synthetic_keys["new_key"]
+        old_key = synthetic_keys["old_key"]
         assert old_key != new_key, "old key must differ from new key"
 
-    def test_wrong_keys_rejected(self):
-        """مفاتيح خاطئة تُرفض."""
-        key_file = _REPO_ROOT / "data" / "key.secret"
-        if not key_file.exists():
-            pytest.skip("key.secret not found in clean clone (R-680c)")
-        new_key = self._load_key_from_file(key_file)
+    def test_wrong_keys_rejected(self, synthetic_keys):
+        """مفاتيح خاطئة تُرفض.
+
+        R-682 (Task 3.2): uses synthetic fixture.
+        """
+        new_key = synthetic_keys["new_key"]
         wrong_keys = ["wrong_key_123", "", "x", new_key[:-1], new_key + "x"]
         for wk in wrong_keys:
             assert wk != new_key, f"wrong key must differ: {wk[:10]}..."
 
-    def test_fingerprints_different(self):
-        """بصمات المفتاحين مختلفة."""
-        key_file = _REPO_ROOT / "data" / "key.secret"
-        if not key_file.exists():
-            pytest.skip("key.secret not found in clean clone (R-680c)")
-        new_key = self._load_key_from_file(key_file)
-        old_key_path = _REPO_ROOT / "data" / "key.secret.old_rotated_2026_10_14"
-        if not old_key_path.exists():
-            pytest.skip("old key backup not found")
-        old_key = self._load_key_from_file(old_key_path)
+    def test_fingerprints_different(self, synthetic_keys):
+        """بصمات المفتاحين مختلفة.
+
+        R-682 (Task 3.2): uses synthetic fixture.
+        """
+        new_key = synthetic_keys["new_key"]
+        old_key = synthetic_keys["old_key"]
         old_fp = hashlib.sha256(old_key.encode()).hexdigest()[:16]
         new_fp = hashlib.sha256(new_key.encode()).hexdigest()[:16]
         assert old_fp != new_fp
