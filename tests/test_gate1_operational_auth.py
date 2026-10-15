@@ -73,10 +73,14 @@ def _build_verification_script(repo_root: Path) -> str:
         # المحقون (test_operational_no_leak_on_exception) التسريب قبل
         # التنقية (RED) واختفاءه بعدها (GREEN).
         "def _redact(msg):\n"
+        "    import urllib.parse\n"
         "    for _n in ('TEST_NEW_KEY', 'TEST_OLD_KEY'):\n"
         "        _v = os.environ.get(_n, '')\n"
         "        if _v:\n"
         "            msg = msg.replace(_v, '<REDACTED-KEY>')\n"
+        # الجولة الخامسة: رسائل الأخطاء قد تحمل URL الطلب، والمفتاح فيه
+        # يظهر بتمثيله المرمّز (percent-encoding) — التنقية تشمله أيضًا.
+        "            msg = msg.replace(urllib.parse.quote(_v, safe=''), '<REDACTED-KEY>')\n"
         "    return msg\n"
         "results = {}\n"
         "try:\n"

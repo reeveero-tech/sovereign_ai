@@ -25,8 +25,10 @@ from test_gate1_operational_auth import _build_verification_script
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent
 
-_DUMMY_NEW = "DUMMY_injected_new_9f3a"
-_DUMMY_OLD = "DUMMY_injected_old_7c1b"
+# مفاتيح وهمية بمحارف تتطلب ترميز URL (+ و /) — الجولة الخامسة: أثبتت
+# التجربة أن التنقية بالقيمة الخام وحدها تُغفل التمثيل المرمّز في URL.
+_DUMMY_NEW = "DUMMY+injected/new_9f3a"
+_DUMMY_OLD = "DUMMY+injected/old_7c1b"
 
 _FAKE_APP = '''"""تطبيق وهمي — مسار يرفع استثناءً يحمل قيمة master_key في نصّه (لا يستورد التطبيق الحقيقي).
 
@@ -36,16 +38,17 @@ OPERATIONAL_TESTS.md حيث أثبتت تجربة سابقة بمسار زائف
 اختبارًا أخضر زائفًا.
 """
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 
 _ap = FastAPI()
 
 
 @_ap.get("/api-key")
-def api_key(master_key: str = ""):
+def api_key(request: Request, master_key: str = ""):
+    # الاستثناء يحمل URL الطلب كاملًا — والمفتاح فيه يظهر بتمثيله
+    # المرمّز (percent-encoded)، وهو الحالة الواقعية لرسائل أخطاء HTTP.
     raise RuntimeError(
-        "connection failed while processing request query: master_key="
-        + master_key
+        "connection failed while processing request url: " + str(request.url)
     )
 
 
@@ -98,21 +101,26 @@ def test_auth_request_exception_path_does_not_leak_keys(tmp_path):
     # الاستثناء المحقون هو المُلتقط فعلًا (حارس ضد الأخضر الزائف: تجربة
     # سابقة التقطت خطأ توقيع دالة بدل الاستثناء المحقون)
     captured_errors = results.get("new_key_error", "") + results.get("old_key_error", "")
-    assert "connection failed while processing request query" in captured_errors, (
+    assert "connection failed while processing request url" in captured_errors, (
         f"the injected exception was not the one captured — test is not on "
         f"the intended path, got: {results}"
     )
+    # التنقية حدثت فعلًا (لا رسالة خام بلا معالجة)
+    assert "<REDACTED-KEY>" in captured_errors, (
+        f"redaction marker missing — exception text was stored raw: {results}"
+    )
 
-    # التحقق من التسريب: القيمتان الوهميتان غائبتان عن كل المخرجات
+    # التحقق من التسريب: القيمتان الوهميتان غائبتان عن كل المخرجات —
+    # بالصيغة الخام وبالصيغة المرمّزة كما تظهر في URL (الجولة الخامسة:
+    # أثبتت التجربة تسرب التمثيل المرمّز قبل شمول التنقية له)
+    from urllib.parse import quote
     combined = result.stdout + result.stderr
-    assert _DUMMY_NEW not in combined, (
-        f"LEAK: dummy NEW key value appeared in subprocess output: "
-        f"{combined[-300:]}"
-    )
-    assert _DUMMY_OLD not in combined, (
-        f"LEAK: dummy OLD key value appeared in subprocess output: "
-        f"{combined[-300:]}"
-    )
+    for label, value in (("NEW", _DUMMY_NEW), ("OLD", _DUMMY_OLD)):
+        for form_label, form in (("raw", value), ("url-encoded", quote(value, safe=""))):
+            assert form not in combined, (
+                f"LEAK: dummy {label} key value appeared in subprocess output "
+                f"in its {form_label} form: {combined[-300:]}"
+            )
 
 
 def os_environ():
