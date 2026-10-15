@@ -659,44 +659,73 @@ class RansomwareDefense:
             "protection_complete": False,
         }
         
-        # 3) تسجيل الموت — بالفصل الصريح بين الاسترداد والحماية
+        # 3) عقد النتيجة (جولة 10): الموت ينجح فقط إذا كانت نسخ الاسترداد
+        # جاهزة — فشل الجاهزية أو تعذر إثباتها = فشل العملية (False)،
+        # النظام يبقى حيًا (LIVING) وقابلًا لإعادة المحاولة، ولا تحول معلق.
+        self.is_transforming = False  # العملية انتهت (نجحت أو فشلت) — لا تحول جارٍ
+        
+        death_record = ResurrectionRecord(
+            id=f"death_{int(time.time())}",
+            before_hash=self.core._last_hash,
+            after_hash="DEAD" if recovery_ready else "LIVING",
+            reason=reason,
+            method="self_encryption",
+            timestamp=start_time,
+            duration=time.time() - start_time,
+            success=recovery_ready
+        )
+        self.last_death_record = death_record
+        
+        if recovery_ready:
+            self.core.append_event(
+                event_type="phoenix::death",
+                payload={
+                    "reason": reason,
+                    "resurrection_mode": resurrection_mode,
+                    "blobs_encrypted": protection["blobs_encrypted"],
+                    "blob_failures": protection["blob_failures"],
+                    "store_items_unprotected": protection["store_items_unprotected"],
+                    "recovery_ready": True,
+                    "assets_hidden": False,
+                    "protection_complete": False,
+                    "seed_id": final_seed.id if final_seed else None,
+                    "timestamp": time.time()
+                }
+            )
+            self.phoenix_phase = PhoenixPhase.DEAD
+            self.resurrection_level = RESURRECTION_LEVEL_DEATH
+            logger.warning(
+                f"⚰️ الموت تم: نسخ الاسترداد جاهزة ({protection['blobs_encrypted']} blob "
+                "مشفر إلى رماد موثق). الأصول تبقى مقروءة (الحماية بالإخفاء قرار "
+                "المالك) — الحماية ليست مكتملة."
+            )
+            return True
+
+        # فشل الموت: جاهزية الاسترداد ناقصة — لا يُعلن موتًا ناجحًا أبدًا.
+        # مواد الاسترداد (الرماد المُنشأ + البذور) محفوظة، والنظام حي قابل
+        # لإعادة المحاولة. الأسباب معلنة في الحدث والسجل.
         self.core.append_event(
-            event_type="phoenix::death",
+            event_type="phoenix::death_failed",
             payload={
                 "reason": reason,
                 "resurrection_mode": resurrection_mode,
                 "blobs_encrypted": protection["blobs_encrypted"],
                 "blob_failures": protection["blob_failures"],
+                "events_scan_failed": protection["events_scan_failed"],
+                "events_truncated": protection["events_truncated"],
                 "store_items_unprotected": protection["store_items_unprotected"],
-                "recovery_ready": recovery_ready,
+                "store_scan_failed": protection["store_scan_failed"],
+                "store_truncated": protection["store_truncated"],
+                "recovery_ready": False,
                 "assets_hidden": False,
                 "protection_complete": False,
                 "seed_id": final_seed.id if final_seed else None,
                 "timestamp": time.time()
             }
         )
-        
-        self.phoenix_phase = PhoenixPhase.DEAD
-        self.resurrection_level = RESURRECTION_LEVEL_DEATH
-        
-        death_record = ResurrectionRecord(
-            id=f"death_{int(time.time())}",
-            before_hash=self.core._last_hash,
-            after_hash="DEAD",
-            reason=reason,
-            method="self_encryption",
-            timestamp=start_time,
-            duration=time.time() - start_time,
-            success=True
-        )
-        
-        if recovery_ready:
-            logger.warning(
-                f"⚰️ نسخ الاسترداد جاهزة: {protection['blobs_encrypted']} blob مشفر "
-                "إلى رماد موثق. الأصول تبقى مقروءة (الحماية بالإخفاء قرار المالك) "
-                "— الحماية ليست مكتملة."
-            )
-        else:
+        self.phoenix_phase = PhoenixPhase.LIVING  # لم يمت — العملية فشلت
+        self.resurrection_level = RESURRECTION_LEVEL_NONE
+        if True:
             # صدق صريح: جاهزية الاسترداد ناقصة — والسبب معلن
             reasons = []
             if protection["blob_failures"]:
@@ -714,11 +743,11 @@ class RansomwareDefense:
                     f"{protection['store_items_unprotected']} عنصر مخزن غير محمي"
                 )
             logger.warning(
-                f"⚰️ نسخ الاسترداد غير جاهزة ({'; '.join(reasons)}) — "
+                f"⚰️ فشل الموت — نسخ الاسترداد غير جاهزة ({'; '.join(reasons)}) — "
                 f"{protection['blobs_encrypted']} blob مشفر إلى رماد موثق. "
-                "الأصول تبقى مقروءة — الحماية ليست مكتملة."
+                "لا موت معلنًا: النظام حي، والرماد/البذور محفوظة لإعادة المحاولة."
             )
-        return True
+        return False
     
     def _encrypt_all_memory(self) -> Dict[str, Any]:
         """إنشاء نسخ استرداد مشفرة — الموت الرقمي (عدّ صادق منفصل عن الحماية).

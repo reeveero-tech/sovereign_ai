@@ -1252,7 +1252,6 @@ class TestAshResurrection:
         """دورة كاملة قابلة للإثبات: بيانات → موت (رماد مشفر موثق) → فقدان
         الأصل → قيامة من الرماد → البيانات عادت بنفس البصمة والمحتوى
         (المخزن محتوى-عنواني: نفس البصمة = نفس البيانات)."""
-        rw = self._setup.__func__(self, tmp_path, monkeypatch) if False else None
         # (الإعداد أدناه يدويًا لأحدّث الأحداث بعد تخزين الأصل)
         store = _IsolatedStore()
         import backend.memory.defense.ransomware as rw
@@ -1266,8 +1265,6 @@ class TestAshResurrection:
         monkeypatch.setattr(rw, "get_encoder", lambda: MagicMock())
         monkeypatch.setattr(rw, "get_watcher", lambda: MagicMock())
         iso = _IsolatedStore()
-        iso.save_semantic(concept="ash_cycle_record", definition="سجل دورة الرماد",
-                          confidence=0.9)
         monkeypatch.setattr(store_mod, "get_store", lambda: iso)
         import threading as _th
         monkeypatch.setattr(_th, "Thread", _NoThreads)
@@ -1322,7 +1319,6 @@ class TestAshResurrection:
         monkeypatch.setattr(rw, "get_encoder", lambda: MagicMock())
         monkeypatch.setattr(rw, "get_watcher", lambda: MagicMock())
         iso = _IsolatedStore()
-        iso.save_semantic(concept="ash_tamper_record", definition="سجل", confidence=0.9)
         monkeypatch.setattr(store_mod, "get_store", lambda: iso)
         import threading as _th
         monkeypatch.setattr(_th, "Thread", _NoThreads)
@@ -1402,7 +1398,7 @@ class TestAshResurrectionStrict:
         monkeypatch.setattr(store_mod, "get_store", lambda: iso)
         import threading as _th
         monkeypatch.setattr(_th, "Thread", _NoThreads)
-        return rw, core
+        return rw, core, iso
 
     def _two_blobs(self, core):
         h1 = core.blob_store.put(b"valid_blob_payload_" * 6, compress=True)
@@ -1413,7 +1409,8 @@ class TestAshResurrectionStrict:
     def test_partial_ash_restoration_no_reborn(self, tmp_path, monkeypatch):
         """رماد صالح + رماد مُلاعب، بلا بذرة: المستعاد يُحصى لكن لا نجاح
         ولا REBORN — والفاشل يبقى محفوظًا."""
-        rw, core = self._env(tmp_path, monkeypatch)
+        rw, core, iso = self._env(tmp_path, monkeypatch)
+        iso.items.clear()  # مخزن فارغ — جاهزية الاسترداد ممكنة
         h1, h2 = self._two_blobs(core)
         obj = rw.RansomwareDefense()
         assert obj.initiate_death(reason="partial-test") is True
@@ -1442,11 +1439,23 @@ class TestAshResurrectionStrict:
     def test_seed_path_partial_ash_no_reborn(self, tmp_path, monkeypatch):
         """بذرة سليمة + رماد مختلط: البذرة تستعاد لكن فك الرماد ناقص —
         لا REBORN، والنتيجة تعكس الجزئية، والفاشل محفوظ."""
-        rw, core = self._env(tmp_path, monkeypatch)
+        rw, core, iso = self._env(tmp_path, monkeypatch)
         h1, h2 = self._two_blobs(core)
         obj = rw.RansomwareDefense()
+        # بذرة مسبقة بمحتوى (المخزن فيه سجل الآن)
+        pre_seed = obj.create_phoenix_seed(reason="pre-death")
+        assert pre_seed is not None
+        pre_created = pre_seed.created_at
+        iso.items.clear()  # مخزن فارغ — الموت ينجح والبذرة النهائية فارغة
         assert obj.initiate_death(reason="seed-partial-test") is True
         assert len(obj.ashes) == 2
+        # إزالة بذرة الموت الفارغة (الأحدث) — تبقى البذرة المسبقة بالمحتوى
+        for sid in list(obj.seeds):
+            if obj.seeds[sid].created_at > pre_created:
+                obj.seeds.pop(sid)
+                seed_file = (tmp_path / "seeds") / f"{sid}.enc"
+                if seed_file.exists():
+                    seed_file.unlink()
         for ash in obj.ashes.values():
             if ash.original_id == h2:
                 tampered = bytearray(ash.ash_data)
@@ -1467,7 +1476,8 @@ class TestAshResurrectionStrict:
         """ملف تالف قائم تحت البصمة الصحيحة: put يتجاوز الكتابة فيعيد
         البصمة المتوقعة — النجاح الشكلي مرفوض. الإثبات بالقراءة المستقلة:
         يُكشف التلف ويُصلح (حذف + إعادة تخزين + تحقق) والمحتوى يعود سليمًا."""
-        rw, core = self._env(tmp_path, monkeypatch)
+        rw, core, iso = self._env(tmp_path, monkeypatch)
+        iso.items.clear()
         original = b"corrupt_path_proof_payload_" * 7
         h = core.blob_store.put(original, compress=True)
         core.iterate_events = lambda limit=1000, **k: [{"blob": h}]
@@ -1492,7 +1502,8 @@ class TestAshResurrectionStrict:
     def test_tamper_rejected_without_storage(self, tmp_path, monkeypatch):
         """إثبات بوابة المصادقة: الحالة السليمة تستعاد (تخزين يُستدعى)،
         ثم التلاعب يُرفض قبل أي تخزين (لا استدعاء put للرماد المرفوض)."""
-        rw, core = self._env(tmp_path, monkeypatch)
+        rw, core, iso = self._env(tmp_path, monkeypatch)
+        iso.items.clear()
         h = core.blob_store.put(b"auth_gate_proof_" * 8, compress=True)
         core.iterate_events = lambda limit=1000, **k: [{"blob": h}]
         obj = rw.RansomwareDefense()
@@ -1570,20 +1581,20 @@ class TestAshResurrectionStrict:
         monkeypatch.setattr(rw, "get_encoder", lambda: MagicMock())
         monkeypatch.setattr(rw, "get_watcher", lambda: MagicMock())
         iso = _IsolatedStore()
-        iso.save_semantic(concept="real_core_record", definition="سجل", confidence=0.9)
         monkeypatch.setattr(store_mod, "get_store", lambda: iso)
         import threading as _th
         monkeypatch.setattr(_th, "Thread", _NoThreads)
 
         obj = rw.RansomwareDefense()
         assert obj.initiate_death(reason="real-core-test") is True
-        # صدق الحماية: جزئية (عنصر مخزن واحد غير محمي — المسار غير منفذ)
-        assert obj.last_death_protection["recovery_ready"] is False
+        # فصل الحماية عن الاسترداد: جاهزية نعم (نسخ كاملة بلا فشل) —
+        # لكن الحماية ليست مكتملة والأصل مقروء
+        assert obj.last_death_protection["recovery_ready"] is True
         assert obj.last_death_protection["assets_hidden"] is False
         assert obj.last_death_protection["protection_complete"] is False
         # 3 blobs: حدثا الاختبار + حدث بذرة الفينيق (يُنشأ قبل التشفير)
         assert obj.last_death_protection["blobs_encrypted"] == 3
-        assert obj.last_death_protection["store_items_unprotected"] == 1
+        assert obj.last_death_protection["blob_failures"] == 0
         assert len(obj.ashes) == 3, "الرماد نشأ من الأحداث الحقيقية فعلًا"
 
         # فقدان الأصول + إزالة البذور → مسار الرماد
@@ -1605,21 +1616,25 @@ class TestAshResurrectionStrict:
     def test_initiate_death_honest_protection_reporting(self, tmp_path, monkeypatch):
         """الحدث نفسه يحمل الأعداد الصادقة: لا ادعاء encrypted_items كامل،
         بل blobs_encrypted + store_items_unprotected + protection_complete."""
-        rw, core = self._env(tmp_path, monkeypatch)
+        rw, core, iso = self._env(tmp_path, monkeypatch)
         h = core.blob_store.put(b"honest_reporting_" * 5, compress=True)
         core.iterate_events = lambda limit=1000, **k: [{"blob": h}]
         obj = rw.RansomwareDefense()
-        assert obj.initiate_death(reason="honest-test") is True
-        death_calls = [c for c in core.append_event.call_args_list
-                       if c.kwargs.get("event_type") == "phoenix::death"
-                       or (c.args and c.args[0] == "phoenix::death")]
-        assert death_calls, "حدث الموت يجب أن يُسجل"
-        payload = death_calls[0].kwargs["payload"]
+        # عنصر مخزن غير محمي → الموت نفسه يفشل والحدث death_failed
+        assert obj.initiate_death(reason="honest-test") is False
+        assert obj.phoenix_phase == rw.PhoenixPhase.LIVING
+        failed_calls = [c for c in core.append_event.call_args_list
+                        if c.kwargs.get("event_type") == "phoenix::death_failed"]
+        assert failed_calls, "حدث فشل الموت يجب أن يُسجل"
+        payload = failed_calls[0].kwargs["payload"]
         assert payload["blobs_encrypted"] == 1
         assert payload["store_items_unprotected"] >= 1, \
             "عنصر المخزن غير المحمي يُعلن صراحة لا يُخفى"
+        assert payload["recovery_ready"] is False
         assert payload["protection_complete"] is False, \
             "لا ادعاء حماية كاملة والمسار ناقص"
+        # والسجل نفسه متسق مع الفشل
+        assert obj.last_death_record.success is False
 
 
 # ============================================================
@@ -1666,18 +1681,26 @@ class TestDeathProtectionHonesty:
         monkeypatch.setattr(store_mod, "get_store", lambda: iso)
         import threading as _th
         monkeypatch.setattr(_th, "Thread", _NoThreads)
-        return rw, core
+        return rw, core, iso
 
     def test_death_blob_failures_not_recovery_ready(self, tmp_path, monkeypatch):
         """فشل تشفير كل العناصر: النسخ لم تُنشأ — لا جاهزية استرداد ولا
         حماية مكتملة، والفشل معلن صراحة لا مصفوم."""
-        rw, core = self._env(tmp_path, monkeypatch)
+        rw, core, iso = self._env(tmp_path, monkeypatch)
+        iso.items.clear()
         h = core.blob_store.put(b"will_fail_blob_" * 4, compress=True)
         core.iterate_events = lambda limit=1000, **k: [{"blob": h}]
         # حقن فشل قراءة النواة → فشل إنشاء كل نسخ الاسترداد
         core.blob_store.get = MagicMock(side_effect=RuntimeError("inject: read failed"))
         obj = rw.RansomwareDefense()
-        assert obj.initiate_death(reason="blob-fail-test") is True  # العملية جرت
+        # العقد الكامل: فشل الجاهزية = فشل العملية ذاتها (لا "العملية جرت")
+        assert obj.initiate_death(reason="blob-fail-test") is False, \
+            "فشل إنشاء نسخ الاسترداد = فشل الموت، لا نجاح"
+        assert obj.phoenix_phase == rw.PhoenixPhase.LIVING, \
+            "النظام لم يمت — العملية فشلت"
+        assert obj.is_transforming is False, "لا تحول معلق بعد انتهاء العملية"
+        assert obj.last_death_record.success is False, \
+            "السجل نفسه يفشل — لا يكذب على النتيجة"
         prot = obj.last_death_protection
         assert prot["blob_failures"] == 1, "فشل الإنشاء يُعدّ صراحة"
         assert prot["blobs_encrypted"] == 0
@@ -1688,7 +1711,8 @@ class TestDeathProtectionHonesty:
     def test_death_store_query_failure_not_recovery_ready(self, tmp_path, monkeypatch):
         """فشل استعلام المخزن يُصرَّح به (store_scan_failed) — لا يُعلن
         اكتمال لأن العدّ بقي صفرًا صدفةً."""
-        rw, core = self._env(tmp_path, monkeypatch)
+        rw, core, iso = self._env(tmp_path, monkeypatch)
+        iso.items.clear()
         h = core.blob_store.put(b"store_fail_blob_" * 4, compress=True)
         core.iterate_events = lambda limit=1000, **k: [{"blob": h}]
         import backend.memory.store as store_mod
@@ -1696,7 +1720,11 @@ class TestDeathProtectionHonesty:
         broken.query.side_effect = RuntimeError("inject: store query failed")
         monkeypatch.setattr(store_mod, "get_store", lambda: broken)
         obj = rw.RansomwareDefense()
-        assert obj.initiate_death(reason="store-fail-test") is True
+        assert obj.initiate_death(reason="store-fail-test") is False, \
+            "تعذر فحص المخزن = فشل الموت (لا نجاح بصفر عدّاد)"
+        assert obj.phoenix_phase == rw.PhoenixPhase.LIVING
+        assert obj.is_transforming is False
+        assert obj.last_death_record.success is False
         prot = obj.last_death_protection
         assert prot["store_scan_failed"] is True, \
             "تعذر فحص المخزن يُعلن صراحة لا يُبتلع"
@@ -1706,7 +1734,8 @@ class TestDeathProtectionHonesty:
     def test_death_empty_store_copy_not_full_protection(self, tmp_path, monkeypatch):
         """مخزن فارغ + نسخة مشفرة أُنشئت: جاهزية الاسترداد نعم — لكن
         الحماية ليست مكتملة: الأصل يبقى مقروءًا (النسخة استرداد لا إخفاء)."""
-        rw, core = self._env(tmp_path, monkeypatch)
+        rw, core, iso = self._env(tmp_path, monkeypatch)
+        iso.items.clear()
         original = b"readable_original_" * 6
         h = core.blob_store.put(original, compress=True)
         core.iterate_events = lambda limit=1000, **k: [{"blob": h}]
@@ -1766,7 +1795,11 @@ class TestDeathProtectionHonesty:
         monkeypatch.setattr(store_mod, "get_store", lambda: real_store)
 
         obj = rw.RansomwareDefense()
-        assert obj.initiate_death(reason="real-store-test") is True
+        # العقد: عنصر حقيقي غير محمي = الموت نفسه يفشل (لا نجاح)
+        assert obj.initiate_death(reason="real-store-test") is False, \
+            "عنصر مخزن غير محمي = فشل الموت، لا نجاح معلن"
+        assert obj.phoenix_phase == rw.PhoenixPhase.LIVING
+        assert obj.last_death_record.success is False
         prot = obj.last_death_protection
         assert prot["store_items_unprotected"] >= 1, \
             "العنصر الحقيقي من الاستعلام الفعلي يُعد غير محمي"
@@ -1776,11 +1809,14 @@ class TestDeathProtectionHonesty:
     def test_death_events_truncated_flag(self, tmp_path, monkeypatch):
         """حد فحص الأحداث (1000): ما بعده غير مفحوص — اقتطاع معلن
         يمنع ادعاء جاهزية الاسترداد الكاملة."""
-        rw, core = self._env(tmp_path, monkeypatch)
+        rw, core, iso = self._env(tmp_path, monkeypatch)
+        iso.items.clear()
         h = core.blob_store.put(b"truncation_blob_" * 4, compress=True)
         core.iterate_events = lambda limit=1000, **k: [{"blob": h}] * 1000
         obj = rw.RansomwareDefense()
-        assert obj.initiate_death(reason="truncation-test") is True
+        assert obj.initiate_death(reason="truncation-test") is False, \
+            "اقتطاع الفحص = فشل الموت"
+        assert obj.phoenix_phase == rw.PhoenixPhase.LIVING
         prot = obj.last_death_protection
         assert prot["events_truncated"] is True, \
             "الوصول لحد الفحص يُعلن اقتطاعًا — لا افتراض اكتمال"
@@ -1788,14 +1824,16 @@ class TestDeathProtectionHonesty:
 
     def test_death_store_truncated_flag(self, tmp_path, monkeypatch):
         """حد استعلام المخزن (500): اقتطاع معلن يمنع جاهزية الاسترداد."""
-        rw, core = self._env(tmp_path, monkeypatch)
+        rw, core, iso = self._env(tmp_path, monkeypatch)
         h = core.blob_store.put(b"store_trunc_blob_" * 4, compress=True)
         core.iterate_events = lambda limit=1000, **k: [{"blob": h}]
         import backend.memory.store as store_mod
         big = _BigStore()
         monkeypatch.setattr(store_mod, "get_store", lambda: big)
         obj = rw.RansomwareDefense()
-        assert obj.initiate_death(reason="store-truncation-test") is True
+        assert obj.initiate_death(reason="store-truncation-test") is False, \
+            "اقتطاع استعلام المخزن = فشل الموت"
+        assert obj.phoenix_phase == rw.PhoenixPhase.LIVING
         prot = obj.last_death_protection
         assert prot["store_truncated"] is True, \
             "امتلاء حد الاستعلام يُعلن اقتطاعًا"

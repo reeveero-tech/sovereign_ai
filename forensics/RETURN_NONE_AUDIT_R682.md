@@ -231,3 +231,18 @@ PYEOF
 **الاختبارات (RED فعلًا — 6 failed قبل الكود):** فشل إنشاء كل الرماد (`test_death_blob_failures_not_recovery_ready`)، فشل استعلام المخزن (`test_death_store_query_failure_not_recovery_ready`)، مخزن فارغ + أصل مقروء = نسخة ليست حماية (`test_death_empty_store_copy_not_full_protection`)، عدّ عنصر المخزن الحقيقي من استعلام SolidMemoryStore الفعلي (`test_death_counts_real_store_items` — إثبات واجهة لا افتراض)، اقتطاع فحص الأحداث (`test_death_events_truncated_flag`)، اقتطاع استعلام المخزن (`test_death_store_truncated_flag`).
 
 **بوابة الجودة:** الحزمة الكاملة **396 passed, 0 skipped, 0 failed, 1 deselected** (316+8+10+20+27+3+6+6 — مطابق لـ `--collect-only`).
+
+## الجولة العاشرة — عقد نتيجة initiate_death نفسها (المانع المتبقي)
+
+**اعتراض advisor:** العدادات صادقة لكن الكود ما زال عند `recovery_ready=False` يضبط DEAD ويعيد True وينشئ سجلاً بـsuccess=True — والاختبارات كانت تشترط الإرجاع الناجح صراحةً («العملية جرت» تساوي «نجحت»). المُستدعي الذي يعتمد على النتيجة يرى نجاحًا و`last_death_protection` وحدها تكشف النقص.
+
+**الإصلاح:**
+1. **عقد النتيجة:** `initiate_death` تعيد `True` فقط عند `recovery_ready=True`. فشل الجاهزية أو تعذر إثباتها = `False` — لا يُساوَى «استُدعيت العملية» بـ«نجحت».
+2. **الحالة:** الفشل → `PhoenixPhase.LIVING` (لم يمت — النظام حي قابل لإعادة المحاولة) و`resurrection_level=NONE`؛ النجاح → DEAD. `is_transforming=False` في الحالتين عند انتهاء العملية — لا تحول معلق بلا تحول جارٍ (كان يبقى True أبدًا بعد الموت).
+3. **السجل:** `ResurrectionRecord.success = recovery_ready` (كان True ثابتًا) ويُخزن `last_death_record`، و`after_hash` تعكس النتيجة ("DEAD"/"LIVING").
+4. **الأحداث:** النجاح → `phoenix::death`؛ الفشل → `phoenix::death_failed` بالأسباب كاملة (blob_failures/events_scan_failed/events_truncated/store_items_unprotected/store_scan_failed/store_truncated).
+5. **مواد الاسترداد محفوظة عند الفشل:** الرماد المُنشأ جزئيًا والبذور تبقى — إعادة المحاولة ممكنة (الحارس `is_transforming` لا يحبس).
+
+**الاختبارات (محدّثة للعقد الكامل — الإرجاع + الحالة + السجل معًا لا الأعلام وحدها):** اختبارات الفشل (blobs/استعلام المخزن/اقتطاع الأحداث/اقتطاع المخزن/المخزن الحقيقي) صارت تفحص `initiate_death is False` + `LIVING` + `is_transforming is False` + `last_death_record.success is False`. اختبار المخزن الفارغ بقي: نجاح النسخ (`True`) مع `protection_complete=False` والأصل مقروء — نجاح النسخ لا يعني اكتمال الحماية.
+
+**بوابة الجودة:** الحزمة الكاملة **396 passed, 0 skipped, 0 failed, 1 deselected** (316+8+10+20+27+3+6+6 — مطابق لـ `--collect-only`).
