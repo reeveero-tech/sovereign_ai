@@ -39,7 +39,7 @@ echo "[1/2] Running test suite (tests/ + backend/tests/, excluding operational).
 python3 -m pytest tests/ backend/tests/ -q \
     -m "not operational" \
     --junitxml=forensics/pytest_results.xml \
-    --junit-prefix="R-682-sha-${SHORT_SHA}" \
+    --junit-prefix="R-682-sha-${SHA}" \
     || { echo "❌ pytest FAILED"; exit 1; }
 
 # --- 4) Embed SHA in JUnit XML root attributes ---
@@ -168,18 +168,20 @@ def stats(root):
     skipped = sum(int(ts.get("skipped", 0)) for ts in root.iter("testsuite"))
     return tests, failed, skipped
 
-def test_ids(root):
-    return sorted((tc.get("classname", "") + "::" + tc.get("name", "")) for tc in root.iter("testcase"))
+# Compare test NAME only — classname contains junit_prefix which differs by environment
+from collections import Counter
+def test_names(root):
+    return Counter(tc.get("name", "") for tc in root.iter("testcase"))
 
 ci_sha = ci_root.get("git_sha", "MISSING")
 ci_tests, ci_failed, ci_skipped = stats(ci_root)
-ci_ids = test_ids(ci_root)
+ci_names = test_names(ci_root)
 local_sha = local_root.get("git_sha", "MISSING")
 local_tests, local_failed, local_skipped = stats(local_root)
-local_ids = test_ids(local_root)
+local_names = test_names(local_root)
 
-print(f"CI:     sha={ci_sha[:12]}... tests={ci_tests} failed={ci_failed} skipped={ci_skipped} ids={len(ci_ids)}")
-print(f"Local:  sha={local_sha[:12]}... tests={local_tests} failed={local_failed} skipped={local_skipped} ids={len(local_ids)}")
+print(f"CI:     sha={ci_sha[:12]}... tests={ci_tests} failed={ci_failed} skipped={ci_skipped} unique_names={len(ci_names)}")
+print(f"Local:  sha={local_sha[:12]}... tests={local_tests} failed={local_failed} skipped={local_skipped} unique_names={len(local_names)}")
 
 errors = []
 if ci_sha != local_sha:
@@ -188,10 +190,10 @@ if ci_sha == "MISSING" or local_sha == "MISSING":
     errors.append("git_sha missing in JUnit")
 if ci_tests != local_tests:
     errors.append(f"Test count mismatch: CI={ci_tests} vs Local={local_tests}")
-if set(ci_ids) != set(local_ids):
-    only_ci = set(ci_ids) - set(local_ids)
-    only_local = set(local_ids) - set(ci_ids)
-    errors.append(f"Testcase identity mismatch: only_in_CI={sorted(only_ci)[:5]} only_local={sorted(only_local)[:5]}")
+if ci_names != local_names:
+    only_ci = (ci_names - local_names).most_common(5)
+    only_local = (local_names - ci_names).most_common(5)
+    errors.append(f"Testcase name mismatch: only_in_CI={only_ci} only_local={only_local}")
 if ci_failed != 0 or local_failed != 0:
     errors.append(f"Failures: CI={ci_failed} Local={local_failed} (must be 0)")
 if ci_skipped != 0 or local_skipped != 0:
@@ -201,7 +203,7 @@ if errors:
     for e in errors:
         print(f"❌ {e}")
     sys.exit(1)
-print("✅ CI + Local MATCH (SHA + test counts + testcase identity + zero failures + zero skips)")
+print("✅ CI + Local MATCH (SHA + test counts + test-name Counter + zero failures + zero skips)")
 PYEOF
     COMPARE_EXIT=$?
     rm -rf "$TMPDIR_VERIFY"
@@ -213,6 +215,7 @@ PYEOF
     # 6c) Clean clone verification (pinned via git checkout to EXACT SHA)
     echo ""
     echo "[4/4] Clean clone verification (git checkout pinned to SHA=$SHORT_SHA)..."
+    LOCAL_JUNIT_ABS="$PWD/forensics/pytest_results.xml"
     TMP_CLONE=$(mktemp -d)
     git clone -q https://github.com/reeveero-tech/sovereign_ai.git "$TMP_CLONE/clone"
     cd "$TMP_CLONE/clone"
@@ -223,16 +226,38 @@ PYEOF
         cd - > /dev/null; rm -rf "$TMP_CLONE"; exit 1
     fi
     CLONE_JUNIT=$(mktemp -d)/pytest_results.xml
+    # R-682 (advisor final): clone needs ephemeral key.secret — same as verify.sh step 2
+    if [ ! -f data/key.secret ]; then
+        mkdir -p data
+        python3 -c "import secrets; print(secrets.token_urlsafe(32))" > data/key.secret
+        chmod 600 data/key.secret
+        echo "[info] Generated ephemeral data/key.secret in clone (not committed)"
+    fi
     timeout 900 python3 -m pytest tests/ backend/tests/ -q -m "not operational" \
-        --junitxml="$CLONE_JUNIT" 2>&1 | tail -5
+        --junitxml="$CLONE_JUNIT" \
+        --junit-prefix="R-682-sha-${SHA}" 2>&1 | tail -5
     CLONE_EXIT=$?
     if [ $CLONE_EXIT -ne 0 ]; then
         echo "❌ Clean clone test run FAILED"
         cd - > /dev/null; rm -rf "$TMP_CLONE"; exit 1
     fi
-    # Compare clone JUnit vs local JUnit
-    python3 - "$CLONE_JUNIT" "forensics/pytest_results.xml" << 'PYEOF2'
+    # Embed SHA into clone JUnit
+    python3 -c "
+import xml.etree.ElementTree as ET
+import sys
+sha = '$SHA'
+tree = ET.parse('$CLONE_JUNIT')
+root = tree.getroot()
+root.set('git_sha', sha)
+root.set('junit_prefix', f'R-682-sha-{sha}')
+ET.indent(tree)
+tree.write('$CLONE_JUNIT', encoding='utf-8', xml_declaration=True)
+print('✅ SHA embedded in clone JUnit:', sha)
+"
+    # Compare clone JUnit vs local JUnit (use LOCAL_JUNIT_ABS — not path inside clone)
+    python3 - "$CLONE_JUNIT" "$LOCAL_JUNIT_ABS" << 'PYEOF2'
 import sys, xml.etree.ElementTree as ET
+from collections import Counter
 clone_tree = ET.parse(sys.argv[1])
 local_tree = ET.parse(sys.argv[2])
 clone_root = clone_tree.getroot()
@@ -242,16 +267,19 @@ def stats(root):
     failed = sum(int(ts.get("failures", 0)) + int(ts.get("errors", 0)) for ts in root.iter("testsuite"))
     skipped = sum(int(ts.get("skipped", 0)) for ts in root.iter("testsuite"))
     return tests, failed, skipped
-def test_ids(root):
-    return sorted((tc.get("classname", "") + "::" + tc.get("name", "")) for tc in root.iter("testcase"))
-c_t, c_f, c_s = stats(clone_root); c_ids = test_ids(clone_root)
-l_t, l_f, l_s = stats(local_root); l_ids = test_ids(local_root)
-print(f"Clone:  tests={c_t} failed={c_f} skipped={c_s} ids={len(c_ids)}")
-print(f"Local:  tests={l_t} failed={l_f} skipped={l_s} ids={len(l_ids)}")
-if c_t != l_t or c_f != l_f or c_s != l_s or set(c_ids) != set(l_ids):
-    print("❌ Clone vs Local JUnit mismatch")
+# Compare test NAME only (strip classname prefix which contains junit_prefix)
+def test_names(root):
+    return Counter(tc.get("name", "") for tc in root.iter("testcase"))
+c_t, c_f, c_s = stats(clone_root); c_names = test_names(clone_root)
+l_t, l_f, l_s = stats(local_root); l_names = test_names(local_root)
+print(f"Clone:  tests={c_t} failed={c_f} skipped={c_s} unique_names={len(c_names)}")
+print(f"Local:  tests={l_t} failed={l_f} skipped={l_s} unique_names={len(l_names)}")
+if c_t != l_t or c_f != l_f or c_s != l_s or c_names != l_names:
+    only_clone = (c_names - l_names).most_common(5)
+    only_local = (l_names - c_names).most_common(5)
+    print(f"❌ Clone vs Local JUnit mismatch. only_clone={only_clone} only_local={only_local}")
     sys.exit(1)
-print("✅ Clean clone JUnit MATCHES Local (count + identity + zero failures + zero skips)")
+print("✅ Clean clone JUnit MATCHES Local (count + test-name Counter + zero failures + zero skips)")
 PYEOF2
     CLONE_COMPARE=$?
     cd - > /dev/null
