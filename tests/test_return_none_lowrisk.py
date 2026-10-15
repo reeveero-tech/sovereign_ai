@@ -138,8 +138,12 @@ class TestPhoenixSeedDecryption:
         l1 = bytes(a ^ b for a, b in zip(payload, key1 * (len(payload) // 32 + 1)))
         l2 = bytes(a ^ b for a, b in zip(l1, key2 * (len(l1) // 32 + 1)))
         tampered_encrypted = _b64.b64encode(l2)
+        # عبر مسار الترحيل الإرثي الصريح — الهدف: اختبار الرفض عند غياب
+        # الحقل الإلزامي في التحقق (_validate_and_build_seed)، لا رفض الصيغة
         with caplog.at_level(logging.ERROR, logger="backend.memory.defense.ransomware"):
-            result = obj._decrypt_seed(tampered_encrypted, resurrection_key=seed.resurrection_key)
+            result = obj._decrypt_seed_legacy_v1(
+                tampered_encrypted, resurrection_key=seed.resurrection_key
+            )
         assert result is None, "JSON بلا حقل إلزامي يجب أن يُرفض"
         assert any("R-682" in r.getMessage() for r in caplog.records)
 
@@ -177,8 +181,8 @@ class TestPhoenixSeedDecryption:
 # ============================================================
 
 class TestPhoenixResurrectionContinuity:
-    """R-682 (security): الاستعادة عبر الواجهة العامة بعد إعادة التشغيل
-    + رفض التلاعب الذي يُبقي JSON صالحًا (MAC)."""
+    """R-682 (security v2): عقد المفتاح العام الموحد + منع التخفيض + إثبات الاستعادة
+    + سياسة فساد الحالة الفاشلة الصريحة. AES-256-GCM معياري (لا XOR)."""
 
     def _make_core(self):
         core = MagicMock()
@@ -192,11 +196,14 @@ class TestPhoenixResurrectionContinuity:
         obj.core = self._make_core()
         obj.seeds = {}
         obj.ashes = {}
+        obj.restored_seeds = {}
         obj.phoenix_phase = rw.PhoenixPhase.LIVING
         obj.resurrection_level = 0
         obj.is_transforming = False
         obj.last_resurrection = None
         obj.master_resurrection_key = obj._generate_master_key()
+        obj._state_master_key_invalid = False
+        obj._state_master_key_enc_original = None
         obj._extract_critical_items = lambda: []  # تبسيط حجم البيانات (ليس المسار الأمني)
         return obj
 
@@ -208,105 +215,236 @@ class TestPhoenixResurrectionContinuity:
         monkeypatch.setattr(rw, "PHOENIX_STATE_FILE", tmp_path / "phoenix_state.json")
         return rw
 
-    def test_resurrect_via_public_interface_after_restart(self, tmp_path, monkeypatch):
-        """RED: إنشاء بذرة → إعادة تشغيل (مثيل جديد) → resurrect() العام يجب أن ينجح.
+    def _make_seed(self, essential=None):
+        from backend.memory.defense.ransomware import PhoenixSeed
+        return PhoenixSeed(
+            id="phoenix_seed_ct_001",
+            created_at=1000000.0,
+            core_fingerprint="deadbeef1234",
+            essential_memory=essential or {"core": {"integrity_count": 5, "last_hash": "x"}},
+            resurrection_key="beef" * 16,
+            expires_at=1000000.0 + 604800,
+            phase="living",
+        )
 
-        عقد المفاتيح الحالي مكسور: master_resurrection_key يُولّد عشوائيًا لكل مثيل
-        ولا يُخزَّن — بعد إعادة التشغيل لا يمكن فك أي بذرة من القرص إطلاقًا.
+    # ── عقد المفتاح العام الموحد + إثبات الاستعادة بالبيانات ──
+
+    def test_public_key_contract_and_data_proof_after_restart(self, tmp_path, monkeypatch):
+        """العقد العام من طرف إلى طرف، بلا تفاصيل داخلية:
+
+        key = first.get_resurrection_key()  →  restarted.resurrect(key)
+        + إثبات الاستعادة بالبيانات: بيانات البذرة المقصودة موجودة فعليًا
+        في مخزن الاستعادة (لا مجرد حدث مسجل).
         """
-        import hashlib as _hl
         rw = self._setup_dirs(tmp_path, monkeypatch)
-        # 1) مثيل A: إنشاء بذرة حقيقية عبر المسار العام
         a = self._new_defense(monkeypatch)
         seed = a.create_phoenix_seed(reason="continuity-test")
         assert seed is not None
         seed_file = tmp_path / "seeds" / f"{seed.id}.enc"
         assert seed_file.exists(), "البذرة يجب أن تُكتب إلى القرص"
-        a._save_state()  # حفظ الحالة
-        # 2) مثيل B جديد (إعادة تشغيل) — يفقد الذاكرة، يسترجع المفتاح من الحالة
-        b = self._new_defense(monkeypatch)
-        b._load_state()
-        assert b.master_resurrection_key == a.master_resurrection_key, \
-            "المفتاح الرئيسي يجب أن يستمر عبر إعادة التشغيل (استمرارية عقد المفاتيح)"
-        # 3) الاستعادة عبر الواجهة العامة
-        from backend.config import SOVEREIGN_KEY
-        b.phoenix_phase = rw.PhoenixPhase.DEAD
-        verification_key = _hl.sha256(
-            f"{SOVEREIGN_KEY}:{b.master_resurrection_key}".encode()
-        ).hexdigest()
-        result = b.resurrect(verification_key)
-        assert result.get("success") is True, \
-            f"القيامة عبر الواجهة العامة يجب أن تنجح بعد إعادة التشغيل: {result}"
-        assert b.phoenix_phase == rw.PhoenixPhase.REBORN
+        assert (tmp_path / "phoenix_state.json").exists(), \
+            "المفتاح الرئيسي يجب أن يكون محفوظًا بشكل متين قبل إعلان إنشاء البذرة"
 
-    def test_tamper_valid_json_rejected(self, tmp_path, monkeypatch, caplog):
-        """RED: تلاعب يغيّر قيمة داخل essential_memory ويُبقي JSON صالحًا
-        يجب أن يُرفض (MAC) — التشفير XOR متكرر بلا مصادقة يسمح به اليوم.
-        """
+        # مثيل B جديد (إعادة تشغيل) — تحميل الحالة ثم المفتاح العام
+        b = self._new_defense(monkeypatch)
+        assert b._load_state() is True
+        assert b.master_resurrection_key == a.master_resurrection_key, \
+            "المفتاح الرئيسي يجب أن يستمر عبر إعادة التشغيل"
+        key = b.get_resurrection_key()  # المفتاح العام — لا اشتقاق يدوي
+        b.phoenix_phase = rw.PhoenixPhase.DEAD
+        result = b.resurrect(key)
+        assert result.get("success") is True, \
+            f"resurrect(get_resurrection_key()) يجب أن ينجح: {result}"
+        assert b.phoenix_phase == rw.PhoenixPhase.REBORN
+        # إثبات الاستعادة بالبيانات: نفس بيانات البذرة المقصودة
+        assert seed.id in b.restored_seeds, \
+            "البيانات المستعادة يجب أن تكون في مخزن الاستعادة — لا مجرد حدث"
+        assert b.restored_seeds[seed.id] == seed.essential_memory
+
+    def test_restore_failure_no_reborn_no_ash_clearing(self, tmp_path, monkeypatch):
+        """فشل الاستعادة (حقن) → فشل صريح: لا REBORN، لا مسح للرماد، البذرة محفوظة."""
+        rw = self._setup_dirs(tmp_path, monkeypatch)
+        a = self._new_defense(monkeypatch)
+        seed = a.create_phoenix_seed(reason="restore-failure-test")
+        assert seed is not None
+        a._save_state()
+        b = self._new_defense(monkeypatch)
+        assert b._load_state() is True
+        # رماد موجود مسبقًا — يجب ألا يُمسح عند فشل الاستعادة
+        ash = MagicMock()
+        b.ashes["ash_1"] = ash
+        key = b.get_resurrection_key()
+        b.phoenix_phase = rw.PhoenixPhase.DEAD
+        # حقن فشل الاستعادة في الاعتماد المقصود
+        monkeypatch.setattr(b, "_restore_from_seed", lambda s: False)
+        result = b.resurrect(key)
+        assert result.get("success") is False, \
+            "فشل الاستعادة يجب ألا يُعلن نجاحًا أبدًا"
+        assert result.get("error"), "رسالة فشل صريحة"
+        assert b.phoenix_phase == rw.PhoenixPhase.DEAD, \
+            "لا REBORN بعد استعادة لم تحدث"
+        assert "ash_1" in b.ashes, "الرماد (مواد الاسترداد) يجب ألا يُمسح عند الفشل"
+        seed_file = tmp_path / "seeds" / f"{seed.id}.enc"
+        assert seed_file.exists(), "البذرة يجب أن تبقى محفوظة عند الفشل"
+
+    # ── منع التخفيض (downgrade) — لا مسار إرثي تلقائي ──
+
+    def test_downgrade_stripped_envelope_rejected(self, tmp_path, monkeypatch, caplog):
+        """نزع المظروف (تقديم النص الداخلي المجرد) يجب ألا يمر عبر المسار الإرثي."""
         import base64 as _b64
-        import hashlib as _hl
         import json as _json
-        from backend.config import SOVEREIGN_KEY as _SK
         rw = self._setup_dirs(tmp_path, monkeypatch)
         obj = self._new_defense(monkeypatch)
-        seed = None
-        # بذرة بقيمة رقمية معروفة داخل essential_memory
-        from backend.memory.defense.ransomware import PhoenixSeed
-        seed = PhoenixSeed(
-            id="phoenix_seed_tamper_001",
-            created_at=1000000.0,
-            core_fingerprint="deadbeef1234",
-            essential_memory={"core": {"integrity_count": 5}},
-            resurrection_key="beef" * 16,
-            expires_at=1000000.0 + 604800,
-            phase="living",
-        )
+        seed = self._make_seed()
         encrypted = obj._encrypt_seed(seed)
-        # فك المظروف يدويًا — الصيغة الجديدة يجب أن تكون مظروفًا مُعايَرًا (v2) بـ MAC
         env = _json.loads(_b64.b64decode(encrypted).decode("utf-8"))
-        assert env.get("v") == 2, "الصيغة يجب أن تحمل مظروفًا بإصدار + MAC"
-        assert "m" in env, "المظروف يجب أن يحمل MAC"
-        inner = bytearray(_b64.b64decode(env["d"]))
-        # موضع القيمة '5' في النص الصريح
-        key2 = _hl.sha256(seed.resurrection_key.encode()).digest()
-        key1 = _hl.sha256(_SK.encode()).digest()
-        layer1 = bytes(x ^ y for x, y in zip(inner, key2 * (len(inner) // 32 + 1)))
-        plain = bytes(x ^ y for x, y in zip(layer1, key1 * (len(layer1) // 32 + 1)))
-        target = b'"integrity_count": 5'
-        idx = plain.find(target)
-        assert idx >= 0, "القيمة المستهدفة يجب أن تكون في النص الصريح"
-        pos = idx + len(b'"integrity_count": ')  # موضع '5'
-        # تغيير '5' → '6' في النص الصريح عبر تعديل النص المشفر (JSON يبقى صالحًا)
-        inner[pos] ^= ord("5") ^ ord("6")
-        env["d"] = _b64.b64encode(bytes(inner)).decode()
-        # لا يُعاد حساب MAC — هذا تلاعب
+        # المهاجم ينزع المظروف ويقدم النص المشفر الداخلي المجرد فقط
+        inner_only = _b64.b64encode(_b64.b64decode(env["d"]))
+        caplog.clear()
+        with caplog.at_level(logging.ERROR, logger="backend.memory.defense.ransomware"):
+            result = obj._decrypt_seed(inner_only, resurrection_key=seed.resurrection_key)
+        assert result is None, \
+            "النص الداخلي المجرد (نزع المظروف) يجب أن يُرفض — منع التخفيض"
+        matches = [r for r in caplog.records
+                   if "downgrade" in r.getMessage() or "v3 envelope" in r.getMessage()]
+        assert matches, "الرفض يجب أن يُسجَّل صراحة كمحاولة تخفيض"
+
+    def test_downgrade_missing_tag_rejected(self, tmp_path, monkeypatch):
+        """حذف حقل الوسم (t) من المظروف → رفض (لا انتقال لمسار إرثي)."""
+        import base64 as _b64
+        import json as _json
+        rw = self._setup_dirs(tmp_path, monkeypatch)
+        obj = self._new_defense(monkeypatch)
+        seed = self._make_seed()
+        encrypted = obj._encrypt_seed(seed)
+        env = _json.loads(_b64.b64decode(encrypted).decode("utf-8"))
+        del env["t"]
         tampered = _b64.b64encode(_json.dumps(env).encode())
+        result = obj._decrypt_seed(tampered, resurrection_key=seed.resurrection_key)
+        assert result is None, "مظروف بلا وسم مصادقة يجب أن يُرفض"
+
+    def test_downgrade_wrong_version_rejected(self, tmp_path, monkeypatch):
+        """تغيير الإصدار (v: 3 → 2) → رفض (لا انتقال لمسار إرثي)."""
+        import base64 as _b64
+        import json as _json
+        rw = self._setup_dirs(tmp_path, monkeypatch)
+        obj = self._new_defense(monkeypatch)
+        seed = self._make_seed()
+        encrypted = obj._encrypt_seed(seed)
+        env = _json.loads(_b64.b64decode(encrypted).decode("utf-8"))
+        env["v"] = 2
+        tampered = _b64.b64encode(_json.dumps(env).encode())
+        result = obj._decrypt_seed(tampered, resurrection_key=seed.resurrection_key)
+        assert result is None, "إصدار مظروف غير مدعوم يجب أن يُرفض"
+
+    def test_downgrade_corrupted_ciphertext_rejected(self, tmp_path, monkeypatch, caplog):
+        """إفساد النص المشفر (d) → فشل مصادقة GCM صريح — لا فك غير موثق."""
+        import base64 as _b64
+        import json as _json
+        rw = self._setup_dirs(tmp_path, monkeypatch)
+        obj = self._new_defense(monkeypatch)
+        seed = self._make_seed()
+        encrypted = obj._encrypt_seed(seed)
+        env = _json.loads(_b64.b64decode(encrypted).decode("utf-8"))
+        ct = bytearray(_b64.b64decode(env["d"]))
+        ct[0] ^= 0xFF  # إفساد بايت واحد
+        env["d"] = _b64.b64encode(bytes(ct)).decode()
+        tampered = _b64.b64encode(_json.dumps(env).encode())
+        caplog.clear()
         with caplog.at_level(logging.ERROR, logger="backend.memory.defense.ransomware"):
             result = obj._decrypt_seed(tampered, resurrection_key=seed.resurrection_key)
-        assert result is None, \
-            "البذرة المُلاعب بها (JSON صالح، قيمة مغيرة) يجب أن تُرفض — MAC"
-        assert any("MAC" in r.getMessage() for r in caplog.records), \
-            "رفض التلاعب يجب أن يُسجّل صراحة كفشل MAC"
+        assert result is None, "أي تعديل على النص المشفر يجب أن يُرفض (GCM)"
+        matches = [r for r in caplog.records if "GCM authentication FAILED" in r.getMessage()]
+        assert matches, "رفض التلاعب يجب أن يُسجَّل كفشل مصادقة GCM صريح"
 
-    def test_legacy_v1_seed_decrypts_with_warning(self, tmp_path, monkeypatch, caplog):
-        """سياسة البيانات الإرثية الموثقة: بذرة v1 (بلا MAC) تُفك مع تحذير صريح
-        أن النزاهة غير قابلة للتحقق."""
+    def test_tamper_any_ciphertext_change_rejected(self, tmp_path, monkeypatch, caplog):
+        """AES-GCM يجعل التلاعب الذي يُبقي JSON صالحًا مستحيلًا بالبناء:
+        أي تغيير في النص المشفر (ولو بايتًا واحدًا) = فشل وسم GCM = رفض.
+        (في XOR المتكرر السابق كان تغيير 5→6 مع JSON صالح ممكنًا — v3 يغلقه بنيويًا)."""
+        import base64 as _b64
+        import json as _json
+        rw = self._setup_dirs(tmp_path, monkeypatch)
+        obj = self._new_defense(monkeypatch)
+        seed = self._make_seed({"core": {"integrity_count": 5}})
+        encrypted = obj._encrypt_seed(seed)
+        env = _json.loads(_b64.b64decode(encrypted).decode("utf-8"))
+        assert env.get("v") == 3, "الصيغة الحالية يجب أن تكون مظروف v3 (AES-GCM)"
+        ct = bytearray(_b64.b64decode(env["d"]))
+        ct[len(ct) // 2] ^= 0x01  # قلب بت واحد — أي تعديل مهما صغر
+        env["d"] = _b64.b64encode(bytes(ct)).decode()
+        tampered = _b64.b64encode(_json.dumps(env).encode())
+        caplog.clear()
+        with caplog.at_level(logging.ERROR, logger="backend.memory.defense.ransomware"):
+            result = obj._decrypt_seed(tampered, resurrection_key=seed.resurrection_key)
+        assert result is None, "أي تعديل على النص المشفر يُرفض — مصادقة GCM"
+
+    # ── سياسة فساد الحالة: فشل صريح يحافظ على الأصل ──
+
+    def test_state_master_key_tamper_clear_failure_original_preserved(self, tmp_path, monkeypatch, caplog):
+        """تعديل المفتاح المغلّف في الحالة → فشل صريح + الأصل محفوظ حرفيًا (لا استبدال صامت)."""
+        import json as _json
+        rw = self._setup_dirs(tmp_path, monkeypatch)
+        a = self._new_defense(monkeypatch)
+        a._save_state()
+        state_file = tmp_path / "phoenix_state.json"
+        state = _json.loads(state_file.read_text(encoding="utf-8"))
+        original_enc = state["master_key_enc"]
+        # تلاعب: إفساد النص المغلف
+        state["master_key_enc"] = _json.dumps({"n": "AAAA", "d": "AAAA", "t": "AAAA"})
+        tampered_enc = state["master_key_enc"]
+        state_file.write_text(_json.dumps(state), encoding="utf-8")
+        b = self._new_defense(monkeypatch)
+        caplog.clear()
+        with caplog.at_level(logging.CRITICAL, logger="backend.memory.defense.ransomware"):
+            loaded = b._load_state()
+        assert loaded is False, "فساد المفتاح المغلف = فشل تحميل صريح"
+        assert b._state_master_key_invalid is True
+        matches = [r for r in caplog.records if "SECURITY-FAIL" in r.getMessage()]
+        assert matches, "فساد المفتاح يجب أن يُسجَّل كفشل أمني صريح (لا صمت)"
+        # الحفظ اللاحق يحافظ على القيمة الموجودة (المتلاعب بها) حرفيًا —
+        # لا استبدال صامت بمفتاح المثيل الجديد الذي قد يُتيه البذور نهائيًا
+        b._save_state()
+        after = _json.loads(state_file.read_text(encoding="utf-8"))
+        assert after["master_key_enc"] == tampered_enc, \
+            "القيمة الموجودة في الملف يجب أن تُحفظ كما هي — لا استبدال"
+        assert after["master_key_enc"] != b._wrap_master_key(), \
+            "يجب ألا يُستبدل صامتًا بمفتاح المثيل الجديد"
+        assert after.get("master_key_enc_corrupt") is True
+        # الأصل الحقيقي (قبل التلاعب) كان قيمة GCM صالحة — للتوثيق
+        assert tampered_enc != original_enc
+
+    def test_state_wrong_sovereign_key_clear_failure(self, tmp_path, monkeypatch, caplog):
+        """تغيير مفتاح السيادة → فشل مصادقة GCM واضح (لا متابعة صامتة)."""
+        import json as _json
+        rw = self._setup_dirs(tmp_path, monkeypatch)
+        a = self._new_defense(monkeypatch)
+        a._save_state()
+        state_file = tmp_path / "phoenix_state.json"
+        assert state_file.exists()
+        b = self._new_defense(monkeypatch)
+        # مفتاح سيادة مختلف (كسلسلة مختلفة تمامًا)
+        monkeypatch.setattr(rw, "SOVEREIGN_KEY", "a" * 128)
+        caplog.clear()
+        with caplog.at_level(logging.CRITICAL, logger="backend.memory.defense.ransomware"):
+            loaded = b._load_state()
+        assert loaded is False, "مفتاح سيادة مختلف = فشل صريح"
+        matches = [r for r in caplog.records
+                   if "SECURITY-FAIL" in r.getMessage()
+                   and ("مفتاح سيادة" in r.getMessage() or "sovereign" in r.getMessage())]
+        assert matches, "السبب (مفتاح سيادة مختلف/تلف) يجب أن يُوثَّق صراحة"
+
+    # ── المسار الإرثي: صريح فقط (لا اكتشاف تلقائي) ──
+
+    def test_legacy_v1_only_via_explicit_migration_with_warning(self, tmp_path, monkeypatch, caplog):
+        """بذور v1 الإرثية: تُفك فقط عبر مسار الترحيل الصريح `_decrypt_seed_legacy_v1`
+        مع تحذير صريح — والمسار الاعتيادي `_decrypt_seed` يرفضها (منع التخفيض)."""
         import base64 as _b64
         import hashlib as _hl
         import json as _json
         from backend.config import SOVEREIGN_KEY as _SK
         rw = self._setup_dirs(tmp_path, monkeypatch)
         obj = self._new_defense(monkeypatch)
-        from backend.memory.defense.ransomware import PhoenixSeed
-        seed = PhoenixSeed(
-            id="phoenix_seed_legacy_001",
-            created_at=1000000.0,
-            core_fingerprint="deadbeef1234",
-            essential_memory={"core": {"last_hash": "x"}},
-            resurrection_key="abcd" * 16,
-            expires_at=1000000.0 + 604800,
-            phase="living",
-        )
+        seed = self._make_seed({"core": {"last_hash": "x"}})
         # تشفير بالصيغة الإرثية v1 (خام — بلا مظروف)
         payload = _json.dumps({
             "id": seed.id, "created_at": seed.created_at,
@@ -320,12 +458,22 @@ class TestPhoenixResurrectionContinuity:
         l1 = bytes(x ^ y for x, y in zip(payload, key1 * (len(payload) // 32 + 1)))
         l2 = bytes(x ^ y for x, y in zip(l1, key2 * (len(l1) // 32 + 1)))
         legacy_encrypted = _b64.b64encode(l2)
+        # 1) المسار الاعتيادي يرفضها (منع التخفيض — لا اكتشاف تلقائي)
+        result = obj._decrypt_seed(legacy_encrypted, resurrection_key=seed.resurrection_key)
+        assert result is None, \
+            "المسار الاعتيادي يجب ألا يكتشف v1 ويكسرها تلقائيًا — منع التخفيض"
+        # 2) مسار الترحيل الصريح يفكها مع تحذير مسجَّل
+        caplog.clear()
         with caplog.at_level(logging.WARNING, logger="backend.memory.defense.ransomware"):
-            result = obj._decrypt_seed(legacy_encrypted, resurrection_key=seed.resurrection_key)
-        assert result is not None, "البذرة الإرثية v1 يجب أن تُفك (سياسة موثقة)"
-        assert result.id == seed.id
-        assert any("legacy" in r.getMessage().lower() for r in caplog.records), \
-            "تحذير صريح: بذرة إرثية بلا MAC — النزاهة غير قابلة للتحقق"
+            migrated = obj._decrypt_seed_legacy_v1(
+                legacy_encrypted, resurrection_key=seed.resurrection_key
+            )
+        assert migrated is not None, "الترحيل الصريح يجب أن يفك البذرة الإرثية"
+        assert migrated.id == seed.id
+        matches = [r for r in caplog.records
+                   if "legacy v1 migration" in r.getMessage()
+                   and "integrity NOT verifiable" in r.getMessage()]
+        assert matches, "تحذير صريح: ترحيل إرثي — النزاهة غير قابلة للتحقق"
 
 
 # ============================================================

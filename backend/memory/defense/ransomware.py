@@ -19,6 +19,13 @@ import hmac
 import json
 import hashlib
 import secrets
+
+try:
+    from Crypto.Cipher import AES
+    from Crypto.Random import get_random_bytes
+except ImportError:  # pragma: no cover
+    AES = None
+    get_random_bytes = None
 import time
 import threading
 import random
@@ -148,11 +155,23 @@ class RansomwareDefense:
         # البذور والرماد
         self.seeds: Dict[str, PhoenixSeed] = {}
         self.ashes: Dict[str, PhoenixAshes] = {}
+        # R-682 (security — إثبات الاستعادة): مخزن بيانات البذور المستعادة فعليًا.
+        # الاستعادة تُثبت بوجود البيانات المقصودة هنا — لا بتسجيل حدث فقط.
+        self.restored_seeds: Dict[str, Dict[str, Any]] = {}
         
         # مفاتيح القيامة
         self.master_resurrection_key = self._generate_master_key()
         
-        # خلفيات الفينيق
+        # R-682 (security — متانة المفتاح قبل أي شيء آخر):
+        # تحميل الحالة (استرجاع المفتاح الرئيسي) يجب أن يسبق بدء أي خيط خلفي،
+        # ثم يُحفظ المفتاح حفظًا متينًا فورًا — قبل إمكانية إنشاء أي بذرة،
+        # حتى لا يُعلن نجاح إنشاء بذرة أبدًا دون مفتاح قيامة مستقر على القرص.
+        self._state_master_key_invalid = False
+        self._state_master_key_enc_original = None
+        self._load_state()
+        self._save_state()
+
+        # خلفيات الفينيق (بعد استقرار المفتاح)
         self._active = True
         self._watcher_thread = threading.Thread(target=self._watch_for_threats, daemon=True)
         self._watcher_thread.start()
@@ -162,9 +181,6 @@ class RansomwareDefense:
         
         self._seed_preserver = threading.Thread(target=self._preserve_seeds_loop, daemon=True)
         self._seed_preserver.start()
-        
-        # تحميل الحالة
-        self._load_state()
         
         logger.info("🔥 نظام الفينيق السيادي جاهز - سأموت لأبعث أقوى")
     
@@ -201,8 +217,11 @@ class RansomwareDefense:
         self.is_transforming = False
         self.last_resurrection = None
         
-        # إعادة تعيين مفاتيح القيامة
+        # إعادة تعيين مفاتيح القيامة (وتوثيق متين فوري للحالة الجديدة)
         self.master_resurrection_key = self._generate_master_key()
+        self._state_master_key_invalid = False
+        self._state_master_key_enc_original = None
+        self._save_state()
         
         # تسجيل حدث إعادة التهيئة
         self.core.append_event(
@@ -251,6 +270,16 @@ class RansomwareDefense:
                 phase=PhoenixPhase.LIVING.value
             )
             
+            # R-682 (security — متانة قبل الإعلان): الحالة (ومنها المفتاح الرئيسي)
+            # تُحفظ بشكل متين قبل كتابة أي بذرة — فشل الحفظ = لا نجاح معلن،
+            # حتى لا تُعلن بذرة أبدًا دون مفتاح قيامة مستقر على القرص.
+            if not self._save_state():
+                logger.error(
+                    "R-682 [SECURITY]: seed creation REFUSED — state (master key) "
+                    "could not be durably saved. No seed announced."
+                )
+                return None
+
             # تشفير البذرة وتخزينها
             encrypted_seed = self._encrypt_seed(seed)
             seed_file = PHOENIX_SEEDS_DIR / f"{seed_id}.enc"
@@ -326,12 +355,17 @@ class RansomwareDefense:
         return critical
     
     def _encrypt_seed(self, seed: PhoenixSeed) -> bytes:
-        """تشفير بذرة الفينيق — مظروف مُعايَر v2 مع MAC (R-682 security).
+        """تشفير بذرة الفينيق — مظروف مُعايَر v3 بتشفير موثق معياري (AES-256-GCM).
 
-        XOR المتكرر وحده لا يمنع التلاعب الذي يُبقي JSON صالحًا (bit-flip
-        موضعي يغيّر قيمة ويُبقي البنية سليمة) — لذا يُرفق MAC (HMAC-SHA256)
-        على النص المشفر الداخلي، ويُرفض أي تلاعب بعده فشلًا صريحًا.
+        R-682 (security): XOR المتكرر ليس تشفيرًا موثقًا — يسمح بتلاعب موضعي
+        يُبقي JSON صالحًا. v3 يستخدم AES-GCM (مصادقة مدمجة عبر وسم GCM):
+        - مفتاح مستقل بحسب الغرض: sha256(resurrection_key) — لا إعادة استخدام مفتاح
+        - nonce جديد لكل عملية (12 بايت)
+        - بيانات مرتبطة (AAD) توثق الإصدار ومعرف البذرة — تغيير أيهما يُرفض
+        - أي تعديل على النص المشفر أو الوسم = فشل مصادقة صريح
         """
+        if AES is None:
+            raise RuntimeError("pycryptodome غير متوفر — لا يمكن تشفير البذرة")
         seed_data = json.dumps({
             "id": seed.id,
             "created_at": seed.created_at,
@@ -340,37 +374,48 @@ class RansomwareDefense:
             "resurrection_key": seed.resurrection_key,
             "expires_at": seed.expires_at
         }, ensure_ascii=False).encode()
-        
-        # تشفير متعدد الطبقات
-        key1 = hashlib.sha256(SOVEREIGN_KEY.encode()).digest()
-        key2 = hashlib.sha256(seed.resurrection_key.encode()).digest()
-        
-        # طبقة أولى
-        layer1 = bytes(a ^ b for a, b in zip(seed_data, key1 * (len(seed_data) // 32 + 1)))
-        # طبقة ثانية
-        layer2 = bytes(a ^ b for a, b in zip(layer1, key2 * (len(layer1) // 32 + 1)))
-        
-        # مظروف v2: MAC يمنع أي تلاعب لاحق على النص المشفر
-        mac = hmac.new(key2, layer2, hashlib.sha256).hexdigest()
+
+        key = hashlib.sha256(seed.resurrection_key.encode()).digest()
+        nonce = get_random_bytes(12)
+        cipher = AES.new(key, AES.MODE_GCM, nonce=nonce)
+        cipher.update(f"phoenix-seed-v3:{seed.id}".encode())  # AAD
+        ct, tag = cipher.encrypt_and_digest(seed_data)
+
         envelope = {
-            "v": 2,
+            "v": 3,
             "sid": seed.id,
-            "d": base64.b64encode(layer2).decode(),
-            "m": mac,
+            "n": base64.b64encode(nonce).decode(),
+            "d": base64.b64encode(ct).decode(),
+            "t": base64.b64encode(tag).decode(),
         }
         return base64.b64encode(json.dumps(envelope).encode())
-    
+
+    def _seed_candidates(self, resurrection_key: Optional[str],
+                         seed_id: Optional[str]) -> List[str]:
+        """المفاتيح المرشحة (بالترتيب): المفتاح الصريح، بذور الذاكرة، الاشتقاق الحتمي."""
+        candidates: List[str] = []
+        if resurrection_key:
+            candidates.append(resurrection_key)
+        known_seeds = getattr(self, "seeds", None) or {}
+        candidates.extend(s.resurrection_key for s in known_seeds.values())
+        master = getattr(self, "master_resurrection_key", None)
+        if master and seed_id:
+            candidates.append(
+                hashlib.sha256(f"{master}:{seed_id}".encode()).hexdigest()
+            )
+        return list(dict.fromkeys(candidates))
+
     def _decrypt_seed(self, encrypted: bytes,
                       resurrection_key: Optional[str] = None,
                       seed_id: Optional[str] = None) -> Optional[PhoenixSeed]:
         """
-        فك تشفير بذرة الفينيق (R-682: خوارزمية حقيقية + مظروف v2 مع MAC).
+        فك تشفير بذرة الفينيق (R-682: v3 فقط — AES-256-GCM موثق).
 
-        الصيغ:
-        - v2 (مظروف JSON): تحقق MAC أولًا (HMAC-SHA256 على النص الداخلي) —
-          أي تلاعب يُبقي JSON صالحًا يُرفض فشلًا صريحًا. فشل MAC = مفتاح خاطئ
-          أو تلاعب — لا رجوع لفك غير موثّق بعده.
-        - v1 (إرثي — خام): يُفك مع تحذير صريح أن النزاهة غير قابلة للتحقق.
+        **منع التخفيض (downgrade):** هذا المسار الاعتيادي يقبل المظروف v3
+        الموثق فقط. أي شيء آخر — نص داخلي مجرد (نزع المظروف لخداع المسار
+        الإرثي)، مظروف بحقول ناقصة، إصدار مختلف، نص مشفر مُفسد — يُرفض
+        فشلًا صريحًا. بذور v1 الإرثية لها مسار ترحيل منفصل وصريح:
+        `_decrypt_seed_legacy_v1` — لا اكتشاف تلقائي ولا بديل بعد تعذر المظروف.
 
         المفاتيح المرشحة (بالترتيب):
         1. المفتاح المُعطى صراحةً (resurrection_key)
@@ -390,34 +435,29 @@ class RansomwareDefense:
                 return None
 
             data = base64.b64decode(encrypted, validate=True)
-            key1 = hashlib.sha256(SOVEREIGN_KEY.encode()).digest()
 
-            # هل هذا مظروف v2؟
-            envelope = None
-            inner = None
+            # مظروف v3 إلزامي — أي صيغة أخرى = رفض قاطع (منع التخفيض)
             try:
-                maybe_env = json.loads(data.decode("utf-8"))
-                if (isinstance(maybe_env, dict)
-                        and maybe_env.get("v") == 2
-                        and "d" in maybe_env and "m" in maybe_env):
-                    envelope = maybe_env
-                    inner = base64.b64decode(envelope["d"], validate=True)
+                envelope = json.loads(data.decode("utf-8"))
             except (UnicodeDecodeError, json.JSONDecodeError, ValueError):
-                envelope = None  # صيغة إرثية v1 (خام — بلا مظروف)
-
-            # المفاتيح المرشحة
-            candidates: List[str] = []
-            if resurrection_key:
-                candidates.append(resurrection_key)
-            known_seeds = getattr(self, "seeds", None) or {}
-            candidates.extend(s.resurrection_key for s in known_seeds.values())
-            master = getattr(self, "master_resurrection_key", None)
-            if master and seed_id:
-                candidates.append(
-                    hashlib.sha256(f"{master}:{seed_id}".encode()).hexdigest()
+                logger.error(
+                    "R-682 [SECURITY]: Phoenix seed REJECTED — payload is not a "
+                    "versioned v3 envelope (stripped envelope / downgrade attempt / "
+                    "legacy v1). Use the explicit legacy migration path "
+                    "(_decrypt_seed_legacy_v1). Returning None (fail-closed)."
                 )
-            candidates = list(dict.fromkeys(candidates))
+                return None
+            if not (isinstance(envelope, dict) and envelope.get("v") == 3
+                    and "n" in envelope and "d" in envelope and "t" in envelope):
+                logger.error(
+                    "R-682 [SECURITY]: Phoenix seed REJECTED — unsupported or "
+                    "incomplete envelope (missing version/nonce/data/tag fields). "
+                    "No fallback to unauthenticated legacy format. "
+                    "Returning None (fail-closed)."
+                )
+                return None
 
+            candidates = self._seed_candidates(resurrection_key, seed_id)
             if not candidates:
                 logger.warning(
                     "R-682 [SECURITY]: Phoenix seed decryption requires the "
@@ -427,75 +467,38 @@ class RansomwareDefense:
                 )
                 return None
 
-            legacy_warned = False
-            for k2_source in candidates:
-                key2 = hashlib.sha256(k2_source.encode()).digest()
+            nonce = base64.b64decode(envelope["n"], validate=True)
+            ct = base64.b64decode(envelope["d"], validate=True)
+            tag = base64.b64decode(envelope["t"], validate=True)
 
-                if envelope is not None:
-                    # ── v2: تحقق MAC أولًا (قبل أي فك) ──
-                    expected_mac = hmac.new(key2, inner, hashlib.sha256).hexdigest()
-                    if not hmac.compare_digest(expected_mac, envelope["m"]):
-                        continue  # مفتاح خاطئ أو تلاعب — المرشح التالي
+            for k_source in candidates:
+                key = hashlib.sha256(k_source.encode()).digest()
+                try:
+                    cipher = AES.new(key, AES.MODE_GCM, nonce=nonce)
+                    cipher.update(f"phoenix-seed-v3:{envelope.get('sid', '')}".encode())
+                    seed_data = cipher.decrypt_and_verify(ct, tag)
+                except ValueError:  # R-682: wrong candidate key — try next; final error logged if all fail
+                    continue  # وسم GCM فاشل: مفتاح خاطئ أو تلاعب — المرشح التالي
 
-                    # MAC صالح => المفتاح صحيح. فك الطبقتين.
-                    try:
-                        layer1 = bytes(
-                            a ^ b for a, b in zip(inner, key2 * (len(inner) // 32 + 1))
-                        )
-                        seed_data = bytes(
-                            a ^ b for a, b in zip(layer1, key1 * (len(layer1) // 32 + 1))
-                        )
-                        parsed = json.loads(seed_data.decode("utf-8"))
-                        seed = self._validate_and_build_seed(parsed)
-                    except (UnicodeDecodeError, json.JSONDecodeError, ValueError) as e:
-                        # MAC صالح لكن JSON تالف — تلاعب غريب: رفض صريح لا صمت
-                        logger.error(
-                            "R-682 [SECURITY]: MAC valid but payload unparseable "
-                            "— REJECTED (tampered?).",
-                            exc_info=e,
-                        )
-                        return None
-                    logger.info(f"🌱 بذرة الفينيق فُكّت بنجاح: {seed.id[:24]}... (v2)")
-                    return seed
+                # المصادقة نجحت — فك JSON وبناء البذرة مع تحقق الحقول
+                try:
+                    parsed = json.loads(seed_data.decode("utf-8"))
+                    seed = self._validate_and_build_seed(parsed)
+                except (UnicodeDecodeError, json.JSONDecodeError, ValueError) as e:
+                    logger.error(
+                        "R-682 [SECURITY]: authenticated payload unparseable "
+                        "— REJECTED (corrupt seed file?).",
+                        exc_info=e,
+                    )
+                    return None
+                logger.info(f"🌱 بذرة الفينيق فُكّت بنجاح: {seed.id[:24]}... (v3 AES-GCM)")
+                return seed
 
-                else:
-                    # ── v1 إرثي: بلا MAC — تحذير صريح مرة واحدة ──
-                    if not legacy_warned:
-                        logger.warning(
-                            "R-682 [SECURITY]: legacy v1 seed (no MAC) — "
-                            "integrity NOT verifiable. Documented policy: "
-                            "decrypt only with explicit/known key; treat "
-                            "content as unauthenticated."
-                        )
-                        legacy_warned = True
-                    try:
-                        layer1 = bytes(
-                            a ^ b for a, b in zip(data, key2 * (len(data) // 32 + 1))
-                        )
-                        seed_data = bytes(
-                            a ^ b for a, b in zip(layer1, key1 * (len(layer1) // 32 + 1))
-                        )
-                        parsed = json.loads(seed_data.decode("utf-8"))
-                        seed = self._validate_and_build_seed(parsed)
-                    except (UnicodeDecodeError, json.JSONDecodeError, ValueError) as e:
-                        last_error = e
-                        continue  # مفتاح خاطئ — المرشح التالي
-                    logger.info(f"🌱 بذرة الفينيق فُكّت بنجاح: {seed.id[:24]}... (v1 إرثي)")
-                    return seed
-
-            if envelope is not None:
-                logger.error(
-                    f"R-682 [SECURITY]: Phoenix seed v2 MAC verification FAILED "
-                    f"for all {len(candidates)} candidate key(s) — tampered "
-                    f"payload or wrong key. Returning None (fail-closed)."
-                )
-            else:
-                logger.error(
-                    f"R-682 [SECURITY]: Phoenix seed decryption failed — wrong key "
-                    f"or tampered payload. All {len(candidates)} candidate key(s) "
-                    f"rejected. exc={last_error}",
-                    exc_info=last_error,
-                )
+            logger.error(
+                f"R-682 [SECURITY]: Phoenix seed v3 GCM authentication FAILED "
+                f"for all {len(candidates)} candidate key(s) — tampered payload "
+                f"or wrong key. Returning None (fail-closed)."
+            )
             return None
         except Exception as e:
             logger.exception(
@@ -503,6 +506,50 @@ class RansomwareDefense:
                 f"swallowing may hide tampered seed or missing resurrection "
                 f"key. exc={e}"
             )
+            return None
+
+    def _decrypt_seed_legacy_v1(self, encrypted: bytes,
+                                resurrection_key: Optional[str] = None,
+                                seed_id: Optional[str] = None) -> Optional[PhoenixSeed]:
+        """مسار ترحيل صريح (وفقط) لبذور v1 الإرثية الخام (XOR بلا مصادقة).
+
+        R-682 (security — سياسة إرثية موثقة): هذا المسار لا يُستدعى تلقائيًا
+        أبدًا — الترحيل قرار صريح، لأن النزاهة غير قابلة للتحقق في v1.
+        تحذير صريح مسجَّل مع كل عملية.
+        """
+        logger.warning(
+            "R-682 [SECURITY]: EXPLICIT legacy v1 migration path — integrity "
+            "NOT verifiable (no MAC). Treat content as unauthenticated."
+        )
+        try:
+            data = base64.b64decode(encrypted, validate=True)
+            key1 = hashlib.sha256(SOVEREIGN_KEY.encode()).digest()
+            candidates = self._seed_candidates(resurrection_key, seed_id)
+            if not candidates:
+                logger.warning(
+                    "R-682 [SECURITY]: legacy v1 migration needs a candidate "
+                    "key — none available. Returning None."
+                )
+                return None
+            for k2_source in candidates:
+                key2 = hashlib.sha256(k2_source.encode()).digest()
+                try:
+                    layer1 = bytes(a ^ b for a, b in zip(data, key2 * (len(data) // 32 + 1)))
+                    seed_data = bytes(a ^ b for a, b in zip(layer1, key1 * (len(layer1) // 32 + 1)))
+                    parsed = json.loads(seed_data.decode("utf-8"))
+                    seed = self._validate_and_build_seed(parsed)
+                # R-682: wrong legacy candidate key — try next; final error logged if all fail.
+                except (UnicodeDecodeError, json.JSONDecodeError, ValueError):
+                    continue
+                logger.info(f"🌱 بذرة إرثية v1 فُكّت (ترحيل صريح): {seed.id[:24]}...")
+                return seed
+            logger.error(
+                "R-682 [SECURITY]: legacy v1 migration failed — no candidate key "
+                "fits. Returning None."
+            )
+            return None
+        except Exception as e:
+            logger.exception(f"R-682 [SECURITY]: legacy v1 migration failed. exc={e}")
             return None
 
     def _validate_and_build_seed(self, parsed: Dict[str, Any]) -> PhoenixSeed:
@@ -674,10 +721,29 @@ class RansomwareDefense:
                 # قيامة من الرماد
                 return self._resurrect_from_ashes(resurrection_key)
             
-            # 2) إعادة بناء النواة
+            # 2) إعادة بناء النواة — النجاح يُثبت بالبيانات المستعادة فعليًا
             restored = self._restore_from_seed(seed)
-            
-            # 3) فك تشفير باقي الذاكرة
+            if not restored:
+                # R-682 (security — fail-closed): لا قيامة معلنة بلا استعادة حقيقية.
+                # نبقى موتى، مواد الاسترداد (البذرة/الرماد) مُحفَظة ولا تُمسح.
+                self.phoenix_phase = PhoenixPhase.DEAD
+                self.resurrection_level = RESURRECTION_LEVEL_NONE
+                logger.error(
+                    "R-682 [SECURITY-FAIL]: resurrection FAILED at restore step — "
+                    "REBORN NOT declared, ashes NOT cleared, seed preserved. "
+                    "No success for a restoration that did not happen."
+                )
+                self.core.append_event(
+                    event_type="phoenix::failed_restore",
+                    payload={"seed_id": seed.id, "timestamp": time.time()}
+                )
+                return {
+                    "success": False,
+                    "error": "فشل استعادة البذرة — لم تُعلن القيامة وحُفظت مواد الاسترداد",
+                    "phase": self.phoenix_phase.value,
+                }
+
+            # 3) فك تشفير باقي الذاكرة — فقط بعد استعادة مُثبتة
             decrypted_count = self._decrypt_all_memory()
             
             # 4) تسجيل القيامة
@@ -757,10 +823,23 @@ class RansomwareDefense:
         return max(seeds, key=lambda x: x.created_at)
     
     def _restore_from_seed(self, seed: PhoenixSeed) -> bool:
-        """إعادة بناء النواة من البذرة"""
+        """إعادة بناء النواة من البذرة — النجاح يُثبت بالبيانات، لا بالسجل.
+
+        R-682 (security): بيانات البذرة المقصودة تُخزَّن فعليًا في
+        self.restored_seeds[seed.id] (مخزن الاستعادة). استعادة فارغة =
+        فشل صريح (لا يُعلن نجاح لعملية لم تحدث).
+        """
         try:
-            # إعادة بناء الذاكرة الجوهرية
+            # إعادة بناء الذاكرة الجوهرية — البيانات المقصودة نفسها
             essential = seed.essential_memory
+            if not essential or not isinstance(essential, dict):
+                logger.error(
+                    "R-682 [SECURITY-FAIL]: seed essential_memory is empty or "
+                    "invalid — nothing to restore. Restoration REFUSED."
+                )
+                return False
+            # النسخة المستعادة تُخزَّن فعليًا (إثبات قابل للفحص)
+            self.restored_seeds[seed.id] = json.loads(json.dumps(essential))
             
             # تسجيل حدث البعث
             self.core.append_event(
@@ -906,26 +985,58 @@ class RansomwareDefense:
         ).hexdigest()
     
     def get_resurrection_key(self) -> str:
-        """الحصول على مفتاح القيامة (للسيد فقط)"""
-        return self.master_resurrection_key
+        """مفتاح القيامة العام (للسيد فقط).
+
+        R-682 (security — عقد موحد): يعيد بصمة التحقق
+        sha256(SOVEREIGN_KEY:master) — وهي القيمة الوحيدة التي تقبلها
+        resurrect() عبر _verify_resurrection_key. المفتاح الرئيسي نفسه
+        لا يُكشف عبر الواجهات العامة أبدًا.
+        """
+        return hashlib.sha256(
+            f"{SOVEREIGN_KEY}:{self.master_resurrection_key}".encode()
+        ).hexdigest()
     
     # ============================================================
     # إدارة الحالة
     # ============================================================
     
+    # R-682 (security): تغليف AES-GCM موثق — لا XOR متكرر (قابل للتلاعب الموضعي
+    # مع بقاء الشكل مقبولًا). المصادقة مدمجة (وسم GCM) + nonce جديد لكل عملية +
+    # بيانات مرتبطة (AAD) تربط التغليف بمفتاح السيادة ذاته.
+    _MASTER_WRAP_AAD = b"sovereign-ai:phoenix:master-key-wrap:v1"
+
     def _wrap_master_key(self) -> str:
-        """تغليف المفتاح الرئيسي تحت مفتاح السيادة — لا يُخزَّن مكشوفًا أبدًا."""
-        raw = self.master_resurrection_key.encode()
-        k = hashlib.sha256(SOVEREIGN_KEY.encode()).digest()
-        wrapped = bytes(a ^ b for a, b in zip(raw, k * (len(raw) // 32 + 1)))
-        return base64.b64encode(wrapped).decode()
+        """تغليف المفتاح الرئيسي بـ AES-GCM تحت مفتاح السيادة — لا يُخزَّن مكشوفًا أبدًا."""
+        if AES is None:
+            raise RuntimeError("pycryptodome غير متوفر — لا يمكن تأمين مفتاح القيامة")
+        k = hashlib.sha256(SOVEREIGN_KEY.encode()).digest()  # 32 بايت لمفتاح AES-256
+        nonce = get_random_bytes(12)
+        cipher = AES.new(k, AES.MODE_GCM, nonce=nonce)
+        ct, tag = cipher.encrypt_and_digest(self.master_resurrection_key.encode())
+        envelope = {
+            "n": base64.b64encode(nonce).decode(),
+            "d": base64.b64encode(ct).decode(),
+            "t": base64.b64encode(tag).decode(),
+        }
+        return json.dumps(envelope)
 
     def _unwrap_master_key(self, wrapped: str) -> Optional[str]:
-        """فك تغليف المفتاح الرئيسي — يُرفض أي نص لا يطابق بصمة sha3_512 hex (128)."""
+        """فك تغليف المفتاح الرئيسي — فشل مصادقة GCM = رفض قاطع (None).
+
+        الفشل يعني: تلاعب، أو تلف، أو مفتاح سيادة مختلف — ولا يُكمل النظام
+        بمفتاح عشوائي جديد إلا مع الحفاظ على الأصل (انظر _load_state/_save_state).
+        """
         try:
-            raw = base64.b64decode(wrapped, validate=True)
+            envelope = json.loads(wrapped)
             k = hashlib.sha256(SOVEREIGN_KEY.encode()).digest()
-            plain = bytes(a ^ b for a, b in zip(raw, k * (len(raw) // 32 + 1)))
+            cipher = AES.new(
+                k, AES.MODE_GCM,
+                nonce=base64.b64decode(envelope["n"], validate=True),
+            )
+            plain = cipher.decrypt_and_verify(
+                base64.b64decode(envelope["d"], validate=True),
+                base64.b64decode(envelope["t"], validate=True),
+            )
             value = plain.decode("utf-8")
             if len(value) == 128 and all(c in "0123456789abcdef" for c in value):
                 return value
@@ -933,8 +1044,8 @@ class RansomwareDefense:
         except Exception:
             return None
 
-    def _save_state(self):
-        """حفظ حالة نظام الفينيق"""
+    def _save_state(self) -> bool:
+        """حفظ حالة نظام الفينيق — يُرجع نجاح الحفظ (متانة قبل إعلان أي نجاح لاحق)."""
         try:
             state = {
                 "phoenix_phase": self.phoenix_phase.value,
@@ -946,14 +1057,31 @@ class RansomwareDefense:
                 "master_key_enc": self._wrap_master_key(),
                 "saved_at": time.time()
             }
-            
+            # R-682 (security): إذا فشل فك تغليف المفتاح المخزن، نحافظ على الأصل
+            # حرفيًا (دليل/أصل للتحقيق الجنائي) — لا نستبدله صامتًا بمفتاح جديد
+            # قد يحوّل فقدان المفتاح إلى فقدان دائم غير مُعلن للبذور.
+            if getattr(self, "_state_master_key_invalid", False):
+                state["master_key_enc"] = self._state_master_key_enc_original
+                state["master_key_enc_corrupt"] = True
+                logger.warning(
+                    "R-682 [SECURITY]: master_key_enc الأصلي (غير الصالح) مُحفَظ كما هو "
+                    "ولم يُستبدل — يتطلب تدخلًا يدويًا"
+                )
+
             with open(PHOENIX_STATE_FILE, 'w', encoding='utf-8') as f:
                 json.dump(state, f, ensure_ascii=False, indent=2)
+            return True
         except Exception as e:
             logger.error(f"خطأ في حفظ الحالة: {e}")
-    
-    def _load_state(self):
-        """تحميل حالة نظام الفينيق"""
+            return False
+
+    def _load_state(self) -> bool:
+        """تحميل حالة نظام الفينيق — يُرجع النجاح.
+
+        سياسة الفساد (fail-closed موثقة): عند تلف master_key_enc أو اختلاف
+        مفتاح السيادة → فشل واضح (CRITICAL) مع الحفاظ على الأصل؛ لا يُستبدل
+        الأصل صامتًا أبدًا.
+        """
         try:
             if PHOENIX_STATE_FILE.exists():
                 with open(PHOENIX_STATE_FILE, 'r', encoding='utf-8') as f:
@@ -966,21 +1094,29 @@ class RansomwareDefense:
                     master_enc = state.get("master_key_enc")
                     if master_enc:
                         restored = self._unwrap_master_key(master_enc)
-                        if restored and restored != self.master_resurrection_key:
-                            self.master_resurrection_key = restored
-                            logger.info(
-                                "🔑 مفتاح القيامة الرئيسي استُرجع من الحالة "
-                                "(استمرارية البذور عبر إعادة التشغيل)"
+                        if restored:
+                            if restored != self.master_resurrection_key:
+                                self.master_resurrection_key = restored
+                                logger.info(
+                                    "🔑 مفتاح القيامة الرئيسي استُرجع من الحالة "
+                                    "(استمرارية البذور عبر إعادة التشغيل)"
+                                )
+                        else:
+                            # فشل مصادقة GCM — لا استمرار صامت بمفتاح بديل
+                            self._state_master_key_invalid = True
+                            self._state_master_key_enc_original = master_enc
+                            logger.critical(
+                                "R-682 [SECURITY-FAIL]: master_key_enc فشل في المصادقة "
+                                "(تالف/مُتلاعَب به أو مفتاح سيادة مختلف) — فشل صريح. "
+                                "الأصل مُحفَظ ولن يُستبدل؛ بذور الحالة السابقة قد تكون "
+                                "غير قابلة للاستعادة حتى التدخل اليدوي"
                             )
-                        elif restored is None:
-                            logger.error(
-                                "R-682 [SECURITY]: master_key_enc في الحالة غير صالح "
-                                "(تالف أو مفتاح سيادة مختلف) — بقاء المفتاح الجديد؛ "
-                                "بذور الحالة السابقة قد تصبح غير قابلة للفك"
-                            )
+                            return False
                 logger.info("📂 تم تحميل حالة نظام الفينيق")
+            return True
         except Exception as e:
             logger.error(f"خطأ في تحميل الحالة: {e}")
+            return False
     
     # ============================================================
     # التقارير والاستعلامات

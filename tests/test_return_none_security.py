@@ -343,18 +343,24 @@ class TestRansomwareSeedCreationSecurity:
         rd_obj.core = _MockCore()
         rd_obj.encoder = None
         rd_obj.watcher = None
-        rd_obj.phoenix_phase = None
+        # R-682 (v2): قيمة واقعية — مسار الإنشاء يتحقق من الحالة الآن (متانة المفتاح)
+        from backend.memory.defense.ransomware import PhoenixPhase
+        rd_obj.phoenix_phase = PhoenixPhase.LIVING
         rd_obj.resurrection_level = 0
         rd_obj.is_transforming = False
         rd_obj.last_resurrection = None
         rd_obj.seeds = {}
         rd_obj.ashes = {}
-        rd_obj.master_resurrection_key = "test_key"
+        rd_obj.master_resurrection_key = "a" * 128  # بصمة sha3_512-hex صالحة الشكل
+        rd_obj._state_master_key_invalid = False
+        rd_obj._state_master_key_enc_original = None
         rd_obj._active = False  # no background threads
 
         seeds_dir = tmp_path / "seeds"
         seeds_dir.mkdir(exist_ok=True)
         monkeypatch.setattr(rd, "PHOENIX_SEEDS_DIR", seeds_dir)
+        # عزل ملف الحالة إلى tmp — لا كتابة في ملف المستودع الحقيقي أبدًا
+        monkeypatch.setattr(rd, "PHOENIX_STATE_FILE", tmp_path / "phoenix_state.json")
         return rd_obj
 
     def test_failure_returns_none_and_logs_exception(self, tmp_path, caplog, monkeypatch):
