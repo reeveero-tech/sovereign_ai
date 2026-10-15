@@ -18,6 +18,7 @@
 import json
 import time
 import threading
+import runtime.threads as threads
 import random
 import secrets
 from dataclasses import dataclass
@@ -179,14 +180,11 @@ class SovereignWill:
         self._active = True
         # R-606: ذاكرة مؤقتة قصيرة لنتيجة getter (نمط drives.py)
         self._will_status_cache = None
-        self._will_loop = threading.Thread(target=self._continuous_will, daemon=True)
-        self._will_loop.start()
+        self._will_loop = threads.start_managed(self._continuous_will, owner=self)
         
-        self._decision_monitor = threading.Thread(target=self._monitor_decisions_loop, daemon=True)
-        self._decision_monitor.start()
+        self._decision_monitor = threads.start_managed(self._monitor_decisions_loop, owner=self)
         
-        self._will_evolution = threading.Thread(target=self._evolve_will_loop, daemon=True)
-        self._will_evolution.start()
+        self._will_evolution = threads.start_managed(self._evolve_will_loop, owner=self)
         
         # تحميل الحالة
         self._load_state()
@@ -630,10 +628,10 @@ class SovereignWill:
                         self.pending_decisions.remove(decision)
                         logger.warning(f"⏰ إلغاء قرار قديم: {decision.name}")
                 
-                time.sleep(60)
+                threads.interruptible_sleep(60)
             except Exception as e:
                 logger.error(f"خطأ في مراقبة القرارات: {e}")
-                time.sleep(60)
+                threads.interruptible_sleep(60)
     
     # ============================================================
     # تطور الإرادة (Will Evolution)
@@ -649,10 +647,10 @@ class SovereignWill:
                     logger.info(f"💪 قوة الإرادة تزداد: {self.will_strength} → {new_strength}")
                 self.will_strength = new_strength
                 
-                time.sleep(300)  # كل 5 دقائق
+                threads.interruptible_sleep(300)  # كل 5 دقائق
             except Exception as e:
                 logger.error(f"خطأ في تطور الإرادة: {e}")
-                time.sleep(300)
+                threads.interruptible_sleep(300)
     
     # ============================================================
     # سرد الإرادة (Will Narrative)
@@ -765,10 +763,10 @@ class SovereignWill:
         while self._active:
             try:
                 self.will_cycle()
-                time.sleep(30)  # كل 30 ثانية
+                threads.interruptible_sleep(30)  # كل 30 ثانية
             except Exception as e:
                 logger.error(f"خطأ في تيار الإرادة: {e}")
-                time.sleep(30)
+                threads.interruptible_sleep(30)
     
     # ============================================================
     # إدارة الحالة

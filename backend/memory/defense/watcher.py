@@ -18,6 +18,7 @@
 import time
 import math
 import threading
+import runtime.threads as threads
 import hashlib
 from dataclasses import dataclass, field
 from typing import Dict, Any, List, Optional, Tuple, Set, Callable
@@ -297,12 +298,10 @@ class MemoryWatcher:
         
         # خلفية المراقبة المستمرة
         self._monitoring = True
-        self._monitor_thread = threading.Thread(target=self._continuous_monitoring, daemon=True)
-        self._monitor_thread.start()
+        self._monitor_thread = threads.start_managed(self._continuous_monitoring, owner=self)
         
         # خلفية التعلم التكيفي
-        self._learning_thread = threading.Thread(target=self._adaptive_learning, daemon=True)
-        self._learning_thread.start()
+        self._learning_thread = threads.start_managed(self._adaptive_learning, owner=self)
         
         logger.info("🛡️ المراقب الذاتي السيادي جاهز - عين الذاكرة التي لا تغفو")
     
@@ -758,10 +757,10 @@ class MemoryWatcher:
         while self._monitoring:
             try:
                 self.generate_report()
-                time.sleep(self._check_interval)
+                threads.interruptible_sleep(self._check_interval)
             except Exception as e:
                 logger.error(f"خطأ في المراقبة المستمرة: {e}")
-                time.sleep(10)
+                threads.interruptible_sleep(10)
     
     def _adaptive_learning(self):
         """تعلم تكيفي في الخلفية"""
@@ -773,10 +772,10 @@ class MemoryWatcher:
                 # محاولة الشفاء الذاتي
                 self._self_heal()
                 
-                time.sleep(self._check_interval * 5)
+                threads.interruptible_sleep(self._check_interval * 5)
             except Exception as e:
                 logger.error(f"خطأ في التعلم التكيفي: {e}")
-                time.sleep(60)
+                threads.interruptible_sleep(60)
     
     # ============================================================
     # التقارير

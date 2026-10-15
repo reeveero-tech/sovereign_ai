@@ -20,6 +20,7 @@ import hashlib
 import secrets
 import time
 import threading
+import runtime.threads as threads
 import random
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -187,14 +188,11 @@ class ImmuneMemory:
         
         # خلفيات المناعة
         self._active = True
-        self._memory_cell_maintainer = threading.Thread(target=self._maintain_memory_cells, daemon=True)
-        self._memory_cell_maintainer.start()
+        self._memory_cell_maintainer = threads.start_managed(self._maintain_memory_cells, owner=self)
         
-        self._auto_vaccinator = threading.Thread(target=self._auto_vaccination_loop, daemon=True)
-        self._auto_vaccinator.start()
+        self._auto_vaccinator = threads.start_managed(self._auto_vaccination_loop, owner=self)
         
-        self._antibody_evolver = threading.Thread(target=self._evolve_antibodies_loop, daemon=True)
-        self._antibody_evolver.start()
+        self._antibody_evolver = threads.start_managed(self._evolve_antibodies_loop, owner=self)
         
         # تحميل الحالة
         self._load_state()
@@ -668,10 +666,10 @@ class ImmuneMemory:
                     if not any(v.startswith(f"vaccine_{threat_type}") for v in self.antigens.keys()):
                         self.vaccinate(threat_type, vaccine_strength=0.6)
                 
-                time.sleep(3600)  # كل ساعة
+                threads.interruptible_sleep(3600)  # كل ساعة
             except Exception as e:
                 logger.error(f"خطأ في التطعيم التلقائي: {e}")
-                time.sleep(3600)
+                threads.interruptible_sleep(3600)
     
     # ============================================================
     # المستوى 5: تطور الأجسام المضادة (Antibody Evolution)
@@ -689,10 +687,10 @@ class ImmuneMemory:
                         antibody.action = new_action
                         logger.debug(f"🧬 تطوير جسم مضاد: {antibody.id[:16]}")
                 
-                time.sleep(7200)  # كل ساعتين
+                threads.interruptible_sleep(7200)  # كل ساعتين
             except Exception as e:
                 logger.error(f"خطأ في تطوير الأجسام المضادة: {e}")
-                time.sleep(7200)
+                threads.interruptible_sleep(7200)
     
     def _improve_antibody_action(self, antibody: Antibody) -> Dict[str, Any]:
         """تحسين إجراء الجسم المضاد"""
@@ -835,10 +833,10 @@ class ImmuneMemory:
                         # تمديد عمر الخلايا المهمة
                         cell.ttl = max(cell.ttl, 86400 * 90)  # 90 يوماً
                 
-                time.sleep(3600)  # كل ساعة
+                threads.interruptible_sleep(3600)  # كل ساعة
             except Exception as e:
                 logger.error(f"خطأ في صيانة خلايا الذاكرة: {e}")
-                time.sleep(3600)
+                threads.interruptible_sleep(3600)
     
     def _save_memory_cells(self):
         """حفظ خلايا الذاكرة"""

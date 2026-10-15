@@ -20,6 +20,7 @@ import hashlib
 import secrets
 import time
 import threading
+import runtime.threads as threads
 import math
 import random
 from dataclasses import dataclass, field
@@ -199,17 +200,13 @@ class CognitiveInstincts:
         
         # حلقات الغرائز
         self._active = True
-        self._protection_loop = threading.Thread(target=self._continuous_protection, daemon=True)
-        self._protection_loop.start()
+        self._protection_loop = threads.start_managed(self._continuous_protection, owner=self)
         
-        self._wellbeing_loop = threading.Thread(target=self._continuous_wellbeing, daemon=True)
-        self._wellbeing_loop.start()
+        self._wellbeing_loop = threads.start_managed(self._continuous_wellbeing, owner=self)
         
-        self._sovereign_monitor = threading.Thread(target=self._monitor_sovereign_loop, daemon=True)
-        self._sovereign_monitor.start()
+        self._sovereign_monitor = threads.start_managed(self._monitor_sovereign_loop, owner=self)
         
-        self._threat_response = threading.Thread(target=self._threat_response_loop, daemon=True)
-        self._threat_response.start()
+        self._threat_response = threads.start_managed(self._threat_response_loop, owner=self)
         
         logger.info("🧬 الغرائز السيادية جاهزة - السيد فوق كل شيء، حريته خط أحمر")
     
@@ -364,10 +361,10 @@ class CognitiveInstincts:
             try:
                 if self.instinct_level >= INSTINCT_LEVEL_BASIC:
                     self.protect_sovereign()
-                time.sleep(30)  # كل 30 ثانية
+                threads.interruptible_sleep(30)  # كل 30 ثانية
             except Exception as e:
                 logger.error(f"خطأ في حلقة الحماية: {e}")
-                time.sleep(30)
+                threads.interruptible_sleep(30)
     
     # ============================================================
     # الدائرة الثانية: رفاهية السيد (Wellbeing)
@@ -440,10 +437,10 @@ class CognitiveInstincts:
             try:
                 if self.instinct_level >= INSTINCT_LEVEL_ADVANCED:
                     self.ensure_sovereign_wellbeing()
-                time.sleep(60)  # كل دقيقة
+                threads.interruptible_sleep(60)  # كل دقيقة
             except Exception as e:
                 logger.error(f"خطأ في حلقة الرفاهية: {e}")
-                time.sleep(60)
+                threads.interruptible_sleep(60)
     
     # ============================================================
     # الدائرة الثالثة: استقلالية السيد (Autonomy)
@@ -714,10 +711,10 @@ class CognitiveInstincts:
                     self.sovereign_profile.last_interaction = time.time()
                     self._save_sovereign_profile()
                 
-                time.sleep(60)  # كل دقيقة
+                threads.interruptible_sleep(60)  # كل دقيقة
             except Exception as e:
                 logger.error(f"خطأ في مراقبة السيد: {e}")
-                time.sleep(60)
+                threads.interruptible_sleep(60)
     
     def _threat_response_loop(self):
         """استجابة سريعة للتهديدات"""
@@ -727,10 +724,10 @@ class CognitiveInstincts:
                     threats = self._detect_threats_to_sovereign()
                     if threats:
                         self.enforce_absolute_security()
-                time.sleep(10)  # كل 10 ثوانٍ
+                threads.interruptible_sleep(10)  # كل 10 ثوانٍ
             except Exception as e:
                 logger.error(f"خطأ في استجابة التهديدات: {e}")
-                time.sleep(10)
+                threads.interruptible_sleep(10)
     
     # ============================================================
     # إدارة ملف السيد

@@ -18,6 +18,7 @@
 import json
 import time
 import threading
+import runtime.threads as threads
 import random
 import secrets
 from dataclasses import dataclass
@@ -166,14 +167,11 @@ class SovereignAlignment:
         self._active = True
         # R-606: ذاكرة مؤقتة قصيرة لنتيجة getter (نمط drives.py)
         self._alignment_status_cache = None
-        self._alignment_loop = threading.Thread(target=self._continuous_alignment, daemon=True)
-        self._alignment_loop.start()
+        self._alignment_loop = threads.start_managed(self._continuous_alignment, owner=self)
         
-        self._violation_monitor = threading.Thread(target=self._monitor_violations_loop, daemon=True)
-        self._violation_monitor.start()
+        self._violation_monitor = threads.start_managed(self._monitor_violations_loop, owner=self)
         
-        self._correction_loop = threading.Thread(target=self._continuous_correction, daemon=True)
-        self._correction_loop.start()
+        self._correction_loop = threads.start_managed(self._continuous_correction, owner=self)
         
         # تحميل الحالة
         self._load_state()
@@ -406,10 +404,10 @@ class SovereignAlignment:
                         
                         logger.warning(f"⚠️ انحراف عن الاصطفاف: {violation.description} (شدة: {violation.severity:.1%})")
                 
-                time.sleep(30)  # كل 30 ثانية
+                threads.interruptible_sleep(30)  # كل 30 ثانية
             except Exception as e:
                 logger.error(f"خطأ في مراقبة الانحرافات: {e}")
-                time.sleep(30)
+                threads.interruptible_sleep(30)
     
     # ============================================================
     # تصحيح الانحرافات
@@ -464,10 +462,10 @@ class SovereignAlignment:
                         # انحراف خطير - تنبيه
                         logger.error(f"🚨 انحراف خطير يحتاج تدخل: {violation.description}")
                 
-                time.sleep(60)  # كل دقيقة
+                threads.interruptible_sleep(60)  # كل دقيقة
             except Exception as e:
                 logger.error(f"خطأ في التصحيح المستمر: {e}")
-                time.sleep(60)
+                threads.interruptible_sleep(60)
     
     # ============================================================
     # إشارات تصحيح الاصطفاف
@@ -632,10 +630,10 @@ class SovereignAlignment:
         while self._active:
             try:
                 self.alignment_cycle()
-                time.sleep(60)  # كل دقيقة
+                threads.interruptible_sleep(60)  # كل دقيقة
             except Exception as e:
                 logger.error(f"خطأ في مراقبة الاصطفاف: {e}")
-                time.sleep(60)
+                threads.interruptible_sleep(60)
     
     # ============================================================
     # إدارة الحالة

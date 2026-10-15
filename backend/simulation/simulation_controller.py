@@ -18,6 +18,7 @@
 import json
 import time
 import threading
+import runtime.threads as threads
 import random
 import secrets
 from dataclasses import dataclass
@@ -156,14 +157,11 @@ class SimulationController:
         
         # خلفيات التحكم
         self._active = True
-        self._control_loop = threading.Thread(target=self._continuous_control, daemon=True)
-        self._control_loop.start()
+        self._control_loop = threads.start_managed(self._continuous_control, owner=self)
         
-        self._decision_executor = threading.Thread(target=self._execute_decisions_loop, daemon=True)
-        self._decision_executor.start()
+        self._decision_executor = threads.start_managed(self._execute_decisions_loop, owner=self)
         
-        self._health_monitor = threading.Thread(target=self._monitor_health_loop, daemon=True)
-        self._health_monitor.start()
+        self._health_monitor = threads.start_managed(self._monitor_health_loop, owner=self)
         
         # تحميل الحالة
         self._load_state()
@@ -579,10 +577,10 @@ class SimulationController:
                 for decision in pending:
                     self.execute_decision(decision)
                 
-                time.sleep(5)  # كل 5 ثوانٍ
+                threads.interruptible_sleep(5)  # كل 5 ثوانٍ
             except Exception as e:
                 logger.error(f"خطأ في تنفيذ القرارات: {e}")
-                time.sleep(5)
+                threads.interruptible_sleep(5)
     
     # ============================================================
     # دورة التحكم المستمرة
@@ -598,10 +596,10 @@ class SimulationController:
                 # تسجيل
                 logger.info(f"🎛 قرار تحكم: {decision.command} - {decision.reason}")
                 
-                time.sleep(60)  # كل دقيقة
+                threads.interruptible_sleep(60)  # كل دقيقة
             except Exception as e:
                 logger.error(f"خطأ في حلقة التحكم: {e}")
-                time.sleep(60)
+                threads.interruptible_sleep(60)
     
     def _monitor_health_loop(self):
         """مراقبة صحة النظام"""
@@ -612,10 +610,10 @@ class SimulationController:
                 if health < 0.4:
                     logger.warning(f"⚠️ صحة النظام منخفضة: {health:.1%}")
                 
-                time.sleep(30)  # كل 30 ثانية
+                threads.interruptible_sleep(30)  # كل 30 ثانية
             except Exception as e:
                 logger.error(f"خطأ في مراقبة الصحة: {e}")
-                time.sleep(30)
+                threads.interruptible_sleep(30)
     
     # ============================================================
     # دورة التحكم الكاملة

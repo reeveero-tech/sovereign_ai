@@ -21,6 +21,7 @@ import secrets
 import time
 import math
 import threading
+import runtime.threads as threads
 import random
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -159,14 +160,11 @@ class IntentionalForgetting:
         
         # خلفيات النسيان
         self._active = True
-        self._natural_forgetting_thread = threading.Thread(target=self._natural_forgetting_loop, daemon=True)
-        self._natural_forgetting_thread.start()
+        self._natural_forgetting_thread = threads.start_managed(self._natural_forgetting_loop, owner=self)
         
-        self._strategic_forgetting_thread = threading.Thread(target=self._strategic_forgetting_loop, daemon=True)
-        self._strategic_forgetting_thread.start()
+        self._strategic_forgetting_thread = threads.start_managed(self._strategic_forgetting_loop, owner=self)
         
-        self._memory_consolidation_thread = threading.Thread(target=self._memory_consolidation_loop, daemon=True)
-        self._memory_consolidation_thread.start()
+        self._memory_consolidation_thread = threads.start_managed(self._memory_consolidation_loop, owner=self)
         
         # تحميل الحالة
         self._load_state()
@@ -788,10 +786,10 @@ class IntentionalForgetting:
             try:
                 if self.forget_level >= FORGET_LEVEL_LIGHT:
                     self.natural_forgetting_cycle()
-                time.sleep(300)  # كل 5 دقائق
+                threads.interruptible_sleep(300)  # كل 5 دقائق
             except Exception as e:
                 logger.error(f"خطأ في النسيان الطبيعي: {e}")
-                time.sleep(300)
+                threads.interruptible_sleep(300)
     
     def _strategic_forgetting_loop(self):
         """حلقة النسيان الاستراتيجي"""
@@ -799,10 +797,10 @@ class IntentionalForgetting:
             try:
                 if self.forget_level >= FORGET_LEVEL_STRATEGIC:
                     self.strategic_forgetting("store", count=5, strategy=ForgettingStrategy.SMART)
-                time.sleep(3600)  # كل ساعة
+                threads.interruptible_sleep(3600)  # كل ساعة
             except Exception as e:
                 logger.error(f"خطأ في النسيان الاستراتيجي: {e}")
-                time.sleep(3600)
+                threads.interruptible_sleep(3600)
     
     def _memory_consolidation_loop(self):
         """حلقة توحيد الذاكرة"""
@@ -810,10 +808,10 @@ class IntentionalForgetting:
             try:
                 if self.forget_level >= FORGET_LEVEL_MODERATE:
                     self.consolidate_memory()
-                time.sleep(7200)  # كل ساعتين
+                threads.interruptible_sleep(7200)  # كل ساعتين
             except Exception as e:
                 logger.error(f"خطأ في توحيد الذاكرة: {e}")
-                time.sleep(7200)
+                threads.interruptible_sleep(7200)
     
     # ============================================================
     # إدارة الحالة

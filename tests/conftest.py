@@ -1,6 +1,17 @@
-"""إعدادات الاختبارات — يضيف backend إلى مسار الاستيراد"""
+"""إعدادات الاختبارات — يضبط البيئة قبل أي استيراد للنظام، ويغلق خيوط الخلفية بنهاية الجلسة"""
 import os
 import sys
+
+import pytest
+
+# R-682 (بند ٦): تعطيل خيوط الخلفية في بيئة الاختبار — يجب أن يُضبط قبل
+# أي استيراد لوحدات النظام (تُفحص العلامة عند Thread.start()).
+# السبب: خيط خلفي خارج عمر بيئته يوقّع بمفاتيح لم تعد في KeyRing
+# (رفض R-626 — 244 سطر رفض في جلسة 2026-10-16) ويكتب بعد إغلاق
+# ملفات السجل («--- Logging error ---»). دورة الحياة الحقيقية للخيوط
+# تُختبر في tests/test_background_threads_shutdown.py عبر جلسة فرعية
+# مع الخيوط مفعّلة.
+os.environ["SOVEREIGN_DISABLE_BACKGROUND_THREADS"] = "1"
 
 # مفتاح سيد ثابت للاختبارات — يجب تعريفه قبل استيراد config/app.
 # (دون هذا، يولّد config.py مفتاحاً عشوائياً مؤقتاً عند أول استيراد،
@@ -70,3 +81,21 @@ def pytest_addoption(parser):
             "(تقرأ أسرار المضيف وتكتب بيانات حقيقية — يدويًا فقط)"
         ),
     )
+
+
+# R-682 (بند ٥): إنهاء منظم لخيوط الخلفية في نهاية جلسة pytest —
+# إيقاف الأعلام ثم انضمام بانتظار محدود، قبل أن يغلق pytest ملفات
+# الالتقاط، فلا يكتب خيط في ملف مغلق («--- Logging error ---").
+# (الدفاع الأخير atexit داخل runtime/threads.py لا يكفي وحده لأنه
+# قد يأتي بعد إغلاق الالتقاط — راجع forensics/OPERATIONAL_TESTS.md.)
+@pytest.fixture(scope="session", autouse=True)
+def _shutdown_background_threads():
+    from runtime import threads as _threads
+
+    yield
+    remaining = _threads.stop_all_and_join(timeout=8.0)
+    if remaining:
+        raise RuntimeError(
+            f"R-682: {remaining} خيط خلفي لم يتوقف بعد stop_all_and_join — "
+            "خطر كتابة بعد إغلاق ملفات السجل"
+        )

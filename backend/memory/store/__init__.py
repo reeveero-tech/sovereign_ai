@@ -29,6 +29,7 @@ except ImportError:  # pragma: no cover
     get_random_bytes = None
 import base64
 import threading
+import runtime.threads as threads
 import math
 from dataclasses import dataclass, field, asdict
 from datetime import datetime
@@ -393,12 +394,15 @@ class SolidMemoryStore:
             self._load_kind(kind.value)
         
         # خلفية للنسخ الاحتياطي التلقائي
-        self._backup_thread = threading.Thread(target=self._auto_backup_loop, daemon=True)
-        self._backup_thread.start()
+        self._bg_stop = threading.Event()
+        self._backup_thread = threads.start_managed(
+            self._auto_backup_loop, owner=self, stop_event=self._bg_stop
+        )
         
         # خلفية لإعادة بناء الفهرس
-        self._rebuild_thread = threading.Thread(target=self._auto_rebuild_loop, daemon=True)
-        self._rebuild_thread.start()
+        self._rebuild_thread = threads.start_managed(
+            self._auto_rebuild_loop, owner=self, stop_event=self._bg_stop
+        )
         
         logger.info(f"📀 الطبقات الصلبة جاهزة")
         self._log_statistics()
@@ -577,14 +581,16 @@ class SolidMemoryStore:
     
     def _auto_backup_loop(self):
         """نسخ احتياطي تلقائي دوري"""
-        while True:
-            time.sleep(AUTO_BACKUP_INTERVAL)
+        while not self._bg_stop.is_set():
+            if self._bg_stop.wait(AUTO_BACKUP_INTERVAL):
+                break
             self.create_backup()
     
     def _auto_rebuild_loop(self):
         """إعادة بناء الفهرس التلقائي"""
-        while True:
-            time.sleep(INDEX_REBUILD_INTERVAL)
+        while not self._bg_stop.is_set():
+            if self._bg_stop.wait(INDEX_REBUILD_INTERVAL):
+                break
             self.rebuild_index()
     
     # ============================================================

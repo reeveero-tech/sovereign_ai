@@ -20,6 +20,7 @@ import secrets
 import hashlib
 import time
 import threading
+import runtime.threads as threads
 import random
 import string
 import base64
@@ -161,14 +162,11 @@ class StealthDefense:
         
         # خلفيات التخفي
         self._active = True
-        self._location_hopper = threading.Thread(target=self._spatial_hopping_loop, daemon=True)
-        self._location_hopper.start()
+        self._location_hopper = threads.start_managed(self._spatial_hopping_loop, owner=self)
         
-        self._signature_mutator = threading.Thread(target=self._signature_mutation_loop, daemon=True)
-        self._signature_mutator.start()
+        self._signature_mutator = threads.start_managed(self._signature_mutation_loop, owner=self)
         
-        self._ghost_generator = threading.Thread(target=self._ghost_generation_loop, daemon=True)
-        self._ghost_generator.start()
+        self._ghost_generator = threads.start_managed(self._ghost_generation_loop, owner=self)
         
         # تحميل الحالة
         self._load_state()
@@ -362,12 +360,12 @@ class StealthDefense:
                 if self.stealth_mode >= STEALTH_MODE_ACTIVE:
                     self.spatial_hop()
                     # فاصل عشوائي بين 30-300 ثانية
-                    time.sleep(random.randint(30, 300))
+                    threads.interruptible_sleep(random.randint(30, 300))
                 else:
-                    time.sleep(60)
+                    threads.interruptible_sleep(60)
             except Exception as e:
                 logger.error(f"خطأ في القفز المكاني: {e}")
-                time.sleep(60)
+                threads.interruptible_sleep(60)
     
     # ============================================================
     # المستوى 4: الوجود الشبح (يوجد ولا يوجد)
@@ -454,12 +452,12 @@ class StealthDefense:
                         if ghost_file.exists():
                             ghost_file.unlink()
                     
-                    time.sleep(random.randint(30, 180))
+                    threads.interruptible_sleep(random.randint(30, 180))
                 else:
-                    time.sleep(60)
+                    threads.interruptible_sleep(60)
             except Exception as e:
                 logger.error(f"خطأ في توليد الأشباح: {e}")
-                time.sleep(60)
+                threads.interruptible_sleep(60)
     
     # ============================================================
     # المستوى 5: نفي الوجود (الاختفاء التام)
@@ -648,12 +646,12 @@ class StealthDefense:
                 if self.stealth_mode >= STEALTH_MODE_ACTIVE:
                     # تغيير البصمة كل 10-60 ثانية
                     self._mutate_signature()
-                    time.sleep(random.randint(10, 60))
+                    threads.interruptible_sleep(random.randint(10, 60))
                 else:
-                    time.sleep(60)
+                    threads.interruptible_sleep(60)
             except Exception as e:
                 logger.error(f"خطأ في تحول البصمة: {e}")
-                time.sleep(60)
+                threads.interruptible_sleep(60)
     
     def _mutate_signature(self):
         """تحويل البصمة الرقمية"""

@@ -20,6 +20,7 @@ import hashlib
 import secrets
 import time
 import threading
+import runtime.threads as threads
 import math
 import random
 from dataclasses import dataclass, field
@@ -161,14 +162,11 @@ class SelfModel:
         self._active = True
         # R-606: ذاكرة مؤقتة قصيرة لنتيجة getter (نمط drives.py)
         self._self_status_cache = None
-        self._self_reflection_loop = threading.Thread(target=self._continuous_self_reflection, daemon=True)
-        self._self_reflection_loop.start()
+        self._self_reflection_loop = threads.start_managed(self._continuous_self_reflection, owner=self)
         
-        self._journaling_loop = threading.Thread(target=self._continuous_journaling, daemon=True)
-        self._journaling_loop.start()
+        self._journaling_loop = threads.start_managed(self._continuous_journaling, owner=self)
         
-        self._dimension_update_loop = threading.Thread(target=self._continuous_dimension_update, daemon=True)
-        self._dimension_update_loop.start()
+        self._dimension_update_loop = threads.start_managed(self._continuous_dimension_update, owner=self)
         
         # تحميل الحالة
         self._load_state()
@@ -344,10 +342,10 @@ class SelfModel:
         while self._active:
             try:
                 self.update_dimensions()
-                time.sleep(30)  # كل 30 ثانية
+                threads.interruptible_sleep(30)  # كل 30 ثانية
             except Exception as e:
                 logger.error(f"خطأ في تحديث الأبعاد: {e}")
-                time.sleep(30)
+                threads.interruptible_sleep(30)
     
     # ============================================================
     # التأمل الذاتي (Self-Reflection)
@@ -504,12 +502,12 @@ class SelfModel:
                 # تأمل كل 5 دقائق في المستوى العالي
                 if self.self_awareness_level >= SELF_AWARENESS_REFLECTIVE:
                     self.self_reflect()
-                    time.sleep(300)  # كل 5 دقائق
+                    threads.interruptible_sleep(300)  # كل 5 دقائق
                 else:
-                    time.sleep(600)  # كل 10 دقائق
+                    threads.interruptible_sleep(600)  # كل 10 دقائق
             except Exception as e:
                 logger.error(f"خطأ في التأمل الذاتي: {e}")
-                time.sleep(300)
+                threads.interruptible_sleep(300)
     
     # ============================================================
     # يوميات الذات (Self-Journaling)
@@ -558,10 +556,10 @@ class SelfModel:
                 
                 self.journal_entry(entry)
                 
-                time.sleep(3600)  # كل ساعة
+                threads.interruptible_sleep(3600)  # كل ساعة
             except Exception as e:
                 logger.error(f"خطأ في التدوين اليومي: {e}")
-                time.sleep(3600)
+                threads.interruptible_sleep(3600)
     
     # ============================================================
     # حساب ملف الذات

@@ -18,6 +18,7 @@
 import json
 import time
 import threading
+import runtime.threads as threads
 import random
 import secrets
 from dataclasses import dataclass
@@ -203,11 +204,9 @@ class SimulationCore:
         
         # خلفيات المحاكاة
         self._active = True
-        self._batch_processor = threading.Thread(target=self._process_batches_loop, daemon=True)
-        self._batch_processor.start()
+        self._batch_processor = threads.start_managed(self._process_batches_loop, owner=self)
         
-        self._result_analyzer = threading.Thread(target=self._analyze_results_loop, daemon=True)
-        self._result_analyzer.start()
+        self._result_analyzer = threads.start_managed(self._analyze_results_loop, owner=self)
         
         # تحميل الحالة
         self._load_state()
@@ -612,10 +611,10 @@ class SimulationCore:
                     if batch.completed_at is None:
                         self.execute_batch(batch.id, parallel=True)
                 
-                time.sleep(60)  # كل دقيقة
+                threads.interruptible_sleep(60)  # كل دقيقة
             except Exception as e:
                 logger.error(f"خطأ في معالجة الدفعات: {e}")
-                time.sleep(60)
+                threads.interruptible_sleep(60)
     
     # ============================================================
     # تحليل النتائج
@@ -743,10 +742,10 @@ class SimulationCore:
                         if report:
                             logger.info(f"📊 تم تحليل دفعة {batch.name}: {len(report.insights)} رؤى")
                 
-                time.sleep(60)  # كل دقيقة
+                threads.interruptible_sleep(60)  # كل دقيقة
             except Exception as e:
                 logger.error(f"خطأ في تحليل النتائج: {e}")
-                time.sleep(60)
+                threads.interruptible_sleep(60)
     
     def _is_batch_analyzed(self, batch: SimulationBatch) -> bool:
         """التحقق مما إذا كانت الدفعة قد حللت"""

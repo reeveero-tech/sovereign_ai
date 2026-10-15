@@ -18,6 +18,7 @@
 import json
 import time
 import threading
+import runtime.threads as threads
 import random
 import secrets
 from dataclasses import dataclass
@@ -186,14 +187,11 @@ class PredictiveRiskManager:
         self._active = True
         # R-606: ذاكرة مؤقتة قصيرة لنتيجة getter (نمط drives.py)
         self._risk_status_cache = None
-        self._risk_detection_loop = threading.Thread(target=self._continuous_risk_detection, daemon=True)
-        self._risk_detection_loop.start()
+        self._risk_detection_loop = threads.start_managed(self._continuous_risk_detection, owner=self)
         
-        self._prioritization_loop = threading.Thread(target=self._continuous_prioritization, daemon=True)
-        self._prioritization_loop.start()
+        self._prioritization_loop = threads.start_managed(self._continuous_prioritization, owner=self)
         
-        self._mitigation_loop = threading.Thread(target=self._continuous_mitigation, daemon=True)
-        self._mitigation_loop.start()
+        self._mitigation_loop = threads.start_managed(self._continuous_mitigation, owner=self)
         
         # تحميل الحالة
         self._load_state()
@@ -468,10 +466,10 @@ class PredictiveRiskManager:
             try:
                 new_risks = self.detect_risks()
                 self.update_risk_registry(new_risks)
-                time.sleep(60)  # كل دقيقة
+                threads.interruptible_sleep(60)  # كل دقيقة
             except Exception as e:
                 logger.error(f"خطأ في كشف المخاطر: {e}")
-                time.sleep(60)
+                threads.interruptible_sleep(60)
     
     # ============================================================
     # تحديد أولويات المخاطر
@@ -507,10 +505,10 @@ class PredictiveRiskManager:
         while self._active:
             try:
                 self.prioritize_risks()
-                time.sleep(30)  # كل 30 ثانية
+                threads.interruptible_sleep(30)  # كل 30 ثانية
             except Exception as e:
                 logger.error(f"خطأ في تحديد الأولويات: {e}")
-                time.sleep(30)
+                threads.interruptible_sleep(30)
     
     # ============================================================
     # خطط التخفيف
@@ -600,10 +598,10 @@ class PredictiveRiskManager:
                         self.create_mitigation_plan(risk)
                         logger.warning(f"🛡️ تم إنشاء خطة تخفيف للمخطر: {risk.name}")
                 
-                time.sleep(300)  # كل 5 دقائق
+                threads.interruptible_sleep(300)  # كل 5 دقائق
             except Exception as e:
                 logger.error(f"خطأ في التخفيف المستمر: {e}")
-                time.sleep(300)
+                threads.interruptible_sleep(300)
     
     # ============================================================
     # تتبع المخاطر

@@ -332,3 +332,195 @@ Expected: `TOTAL = 20`
 
 **العدد:** 8 أسطر محذوفة (6 من `ci.yml` + 2 من `tests/test_gate1_operational_auth.py`).
 **الحالة:** المخالفة قائمة — التبرير كان في رسالة الالتزام فقط، لا في هذا السجل داخل الالتزام نفسه (شرط القاعدة 1-أ المعدلة). هذا المدخل لا يعتمد شيئًا؛ اعتماد الاستثناء أو رفضه قرار المالك في `CONTRACT_EXCEPTION_1.md`.
+
+## R-682 — الجولة الشاملة (2026-10-16): تحويل خيوط الخلفية إلى الإدارة الموحدة
+
+الالتزام: يُثبّت رقمه في سجل الإغلاق (FINAL_CLOSURE_R-682.md).
+طبيعة التعديل: استبدال أنماط آلي — لا حذف وظائف. كل سطر محذوف استُبدل بسطر
+مكافئ أو أفضل (التفصيل أدناه). المجموع: 511 سطرًا محذوفًا من ملفات الكود.
+
+### التصنيف (كل سطر محذوف ينتمي لواحد من هذه الأنماط)
+
+- 255 × سطر `time.sleep(...)` — استُبدل بـ threads.interruptible_sleep(...) القابل للمقاطعة
+- 125 × سطر `.start()` — استُبدل بنداء start_managed الذي يشغّل الخيط داخل نفس السطر
+- 5 × سطر `while True:` — استُبدل بحارس حدث قابل للإيقاف (views/encoding/store)
+- 2 × أخرى: self._cleanup_thread = threading.Thread(target=self._auto_cl
+- 2 × أخرى: self._controller_loop = threading.Thread(target=self._contin
+- 2 × أخرى: self._decision_monitor = threading.Thread(target=self._monit
+- 2 × أخرى: self._decision_executor = threading.Thread(target=self._exec
+- 2 × أخرى: self._health_monitor = threading.Thread(target=self._monitor
+- 1 × أخرى: monitor_thread = threading.Thread(target=monitor, daemon=Tru
+- 1 × أخرى: self._allocation_loop = threading.Thread(target=self._contin
+- 1 × أخرى: self._sustained_tracker = threading.Thread(target=self._trac
+- 1 × أخرى: self._resource_monitor = threading.Thread(target=self._monit
+- 1 × أخرى: self._awareness_stream = threading.Thread(target=self._conti
+- 1 × أخرى: self._attention_decay_loop = threading.Thread(target=self._a
+- 1 × أخرى: self._subliminal_processor = threading.Thread(target=self._p
+- 1 × أخرى: self._consciousness_stream = threading.Thread(target=self._c
+- 1 × أخرى: self._feeling_loop = threading.Thread(target=self._feeling_s
+- 1 × أخرى: self._presence_monitor = threading.Thread(target=self._prese
+- 1 × أخرى: self._identity_maintenance = threading.Thread(target=self._c
+- 1 × أخرى: self._backup_creator = threading.Thread(target=self._periodi
+- 1 × أخرى: self._integrity_checker = threading.Thread(target=self._cont
+- 1 × أخرى: self._introspection_loop = threading.Thread(target=self._con
+- 1 × أخرى: self._command_monitor = threading.Thread(target=self._monito
+- 1 × أخرى: self._quality_monitor = threading.Thread(target=self._monito
+- 1 × أخرى: self._wish_tracker = threading.Thread(target=self._track_sov
+- 1 × أخرى: self._self_reflection_loop = threading.Thread(target=self._c
+- 1 × أخرى: self._journaling_loop = threading.Thread(target=self._contin
+- 1 × أخرى: self._dimension_update_loop = threading.Thread(target=self._
+- 1 × أخرى: self._archetype_loop = threading.Thread(target=self._continu
+- 1 × أخرى: self._transition_detector = threading.Thread(target=self._de
+- 1 × أخرى: self._drive_update_loop = threading.Thread(target=self._cont
+- 1 × أخرى: self._satisfaction_loop = threading.Thread(target=self._sati
+- 1 × أخرى: self._balance_loop = threading.Thread(target=self._drive_bal
+- 1 × أخرى: self._evolution_loop = threading.Thread(target=self._continu
+- 1 × أخرى: self._mutation_generator = threading.Thread(target=self._ran
+- 1 × أخرى: self._natural_forgetting_thread = threading.Thread(target=se
+- 1 × أخرى: self._strategic_forgetting_thread = threading.Thread(target=
+- 1 × أخرى: self._memory_consolidation_thread = threading.Thread(target=
+- 1 × أخرى: self._monitoring_loop = threading.Thread(target=self._contin
+- 1 × أخرى: self._regulation_loop = threading.Thread(target=self._contin
+- 1 × أخرى: self._adaptation_loop = threading.Thread(target=self._adapti
+- 1 × أخرى: self._memory_cell_maintainer = threading.Thread(target=self.
+- 1 × أخرى: self._auto_vaccinator = threading.Thread(target=self._auto_v
+- 1 × أخرى: self._antibody_evolver = threading.Thread(target=self._evolv
+- 1 × أخرى: self._protection_loop = threading.Thread(target=self._contin
+- 1 × أخرى: self._wellbeing_loop = threading.Thread(target=self._continu
+- 1 × أخرى: self._sovereign_monitor = threading.Thread(target=self._moni
+- 1 × أخرى: self._threat_response = threading.Thread(target=self._threat
+- 1 × أخرى: self._experience_processor = threading.Thread(target=self._p
+- 1 × أخرى: self._pattern_discovery = threading.Thread(target=self._disc
+- 1 × أخرى: self._schema_builder = threading.Thread(target=self._build_s
+- 1 × أخرى: self._reinforcement_learner = threading.Thread(target=self._
+- 1 × أخرى: self._metabolic_loop = threading.Thread(target=self._continu
+- 1 × أخرى: self._energy_monitor = threading.Thread(target=self._energy_
+- 1 × أخرى: self._ltp_loop = threading.Thread(target=self._continuous_lt
+- 1 × أخرى: self._pruning_loop = threading.Thread(target=self._continuou
+- 1 × أخرى: self._rewiring_loop = threading.Thread(target=self._continuo
+- 1 × أخرى: self._neurogenesis_loop = threading.Thread(target=self._cont
+- 1 × أخرى: self._stem_cell_generator = threading.Thread(target=self._ge
+- 1 × أخرى: self._auto_regenerator = threading.Thread(target=self._auto_
+- 1 × أخرى: self._shadow_thread = threading.Thread(target=self._shadow_g
+- 1 × أخرى: self._phasing_thread = threading.Thread(target=self._quantum
+- 1 × أخرى: self._mutation_loop = threading.Thread(target=self._continuo
+- 1 × أخرى: self._phantom_refresher = threading.Thread(target=self._refr
+- 1 × أخرى: self._trap_setter = threading.Thread(target=self._auto_set_t
+- 1 × أخرى: self._watcher_thread = threading.Thread(target=self._watch_f
+- 1 × أخرى: self._resurrection_thread = threading.Thread(target=self._re
+- 1 × أخرى: self._seed_preserver = threading.Thread(target=self._preserv
+- 1 × أخرى: self._location_hopper = threading.Thread(target=self._spatia
+- 1 × أخرى: self._signature_mutator = threading.Thread(target=self._sign
+- 1 × أخرى: self._ghost_generator = threading.Thread(target=self._ghost_
+- 1 × أخرى: self._monitor_thread = threading.Thread(target=self._continu
+- 1 × أخرى: self._learning_thread = threading.Thread(target=self._adapti
+- 1 × أخرى: self._processor_thread = threading.Thread(target=self._backg
+- 1 × أخرى: self._attention_thread = threading.Thread(target=self._atten
+- 1 × أخرى: self._dreamer_thread = threading.Thread(target=self._dreamer
+- 1 × أخرى: self._cleanup_thread = threading.Thread(target=self._cleanup
+- 1 × أخرى: self._backup_thread = threading.Thread(target=self._auto_bac
+- 1 × أخرى: self._rebuild_thread = threading.Thread(target=self._auto_re
+- 1 × أخرى: self._background_thread = threading.Thread(target=self._back
+- 1 × أخرى: self._background_processor = threading.Thread(target=self._b
+- 1 × أخرى: self._continuous_cycle = threading.Thread(target=self._conti
+- 1 × أخرى: self._prediction_loop = threading.Thread(target=self._contin
+- 1 × أخرى: self._forecast_validator = threading.Thread(target=self._val
+- 1 × أخرى: self._trend_analyzer = threading.Thread(target=self._analyze
+- 1 × أخرى: self._risk_detection_loop = threading.Thread(target=self._co
+- 1 × أخرى: self._prioritization_loop = threading.Thread(target=self._co
+- 1 × أخرى: self._mitigation_loop = threading.Thread(target=self._contin
+- 1 × أخرى: self._scenario_loop = threading.Thread(target=self._continuo
+- 1 × أخرى: self._warning_monitor = threading.Thread(target=self._monito
+- 1 × أخرى: self._trigger_detector = threading.Thread(target=self._detec
+- 1 × أخرى: self._simulation_loop = threading.Thread(target=self._contin
+- 1 × أخرى: self._results_analyzer = threading.Thread(target=self._analy
+- 1 × أخرى: self._signal_processor = threading.Thread(target=self._proce
+- 1 × أخرى: self._propagation_loop = threading.Thread(target=self._conti
+- 1 × أخرى: self._field_update_loop = threading.Thread(target=self._cont
+- 1 × أخرى: self._interference_calculator = threading.Thread(target=self
+- 1 × أخرى: self._time_evolution_loop = threading.Thread(target=self._co
+- 1 × أخرى: self._decoherence_loop = threading.Thread(target=self._decoh
+- 1 × أخرى: self._coherence_maintenance = threading.Thread(target=self._
+- 1 × أخرى: self._interference_loop = threading.Thread(target=self._cont
+- 1 × أخرى: self._nesting_optimizer = threading.Thread(target=self._opti
+- 1 × أخرى: self._continuous_transitions = threading.Thread(target=self.
+- 1 × أخرى: self._matrix_evolution = threading.Thread(target=self._matri
+- 1 × أخرى: self._continuous_analysis = threading.Thread(target=self._co
+- 1 × أخرى: self._pattern_detection = threading.Thread(target=self._patt
+- 1 × أخرى: self._insight_generator = threading.Thread(target=self._insi
+- 1 × أخرى: self._control_loop = threading.Thread(target=self._continuou
+- 1 × أخرى: self._batch_processor = threading.Thread(target=self._proces
+- 1 × أخرى: self._result_analyzer = threading.Thread(target=self._analyz
+- 1 × أخرى: self._validation_loop = threading.Thread(target=self._contin
+- 1 × أخرى: self._backup_loop = threading.Thread(target=self._periodic_b
+- 1 × أخرى: self._scheduler_thread = threading.Thread(target=self._sched
+- 1 × أخرى: self._worker_monitor = threading.Thread(target=self._monitor
+- 1 × أخرى: self._persistence_thread = threading.Thread(target=self._per
+- 1 × أخرى: self._alignment_loop = threading.Thread(target=self._continu
+- 1 × أخرى: self._violation_monitor = threading.Thread(target=self._moni
+- 1 × أخرى: self._correction_loop = threading.Thread(target=self._contin
+- 1 × أخرى: self._directives_loop = threading.Thread(target=self._contin
+- 1 × أخرى: self._enforcement_loop = threading.Thread(target=self._enfor
+- 1 × أخرى: self._expiration_monitor = threading.Thread(target=self._mon
+- 1 × أخرى: self._will_loop = threading.Thread(target=self._continuous_w
+- 1 × أخرى: self._will_evolution = threading.Thread(target=self._evolve_
+- 1 × سطر توثيق conftest القديم — استُبدل بتوثيق أشمل
+
+### التوزيع لكل ملف (numstat: +إضافات / -حذوفات)
+
+| الملف | + | - |
+|---|---|---|
+| backend/Mr.py | 3 | 3 |
+| backend/consciousness/attention_engine.py | 10 | 12 |
+| backend/consciousness/awareness.py | 10 | 12 |
+| backend/consciousness/field.py | 10 | 12 |
+| backend/consciousness/identity_core.py | 10 | 12 |
+| backend/consciousness/introspection.py | 13 | 16 |
+| backend/consciousness/self_model.py | 11 | 13 |
+| backend/memory/biological/archetypes.py | 7 | 8 |
+| backend/memory/biological/drives.py | 10 | 12 |
+| backend/memory/biological/evolution.py | 9 | 10 |
+| backend/memory/biological/forgetting.py | 10 | 12 |
+| backend/memory/biological/homeostasis.py | 11 | 13 |
+| backend/memory/biological/immune.py | 10 | 12 |
+| backend/memory/biological/instincts.py | 13 | 16 |
+| backend/memory/biological/learning.py | 13 | 16 |
+| backend/memory/biological/metabolism.py | 8 | 9 |
+| backend/memory/biological/plasticity.py | 13 | 16 |
+| backend/memory/biological/regeneration.py | 7 | 8 |
+| backend/memory/defense/fileless.py | 10 | 12 |
+| backend/memory/defense/polymorphic.py | 13 | 15 |
+| backend/memory/defense/ransomware.py | 10 | 12 |
+| backend/memory/defense/stealth.py | 13 | 15 |
+| backend/memory/defense/watcher.py | 7 | 8 |
+| backend/memory/dynamic/__init__.py | 9 | 11 |
+| backend/memory/encoding.py | 8 | 4 |
+| backend/memory/store/__init__.py | 14 | 8 |
+| backend/memory/views.py | 18 | 9 |
+| backend/orchestrator.py | 4 | 4 |
+| backend/predictive/predictive_controller.py | 4 | 4 |
+| backend/predictive/predictive_engine.py | 10 | 12 |
+| backend/predictive/predictive_risk_manager.py | 10 | 12 |
+| backend/predictive/predictive_scenarios.py | 10 | 12 |
+| backend/predictive/predictive_simulation.py | 7 | 8 |
+| backend/quantum/quantum_controller.py | 10 | 12 |
+| backend/quantum/quantum_field.py | 10 | 12 |
+| backend/quantum/quantum_state.py | 7 | 8 |
+| backend/quantum/quantum_superposition.py | 10 | 12 |
+| backend/quantum/quantum_transition.py | 7 | 8 |
+| backend/simulation/simulation_analyzer.py | 10 | 12 |
+| backend/simulation/simulation_controller.py | 10 | 12 |
+| backend/simulation/simulation_core.py | 7 | 8 |
+| backend/simulation/simulation_environment.py | 7 | 8 |
+| backend/simulation/simulation_scheduler.py | 10 | 12 |
+| backend/sovereign/alignment.py | 10 | 12 |
+| backend/sovereign/controller.py | 10 | 12 |
+| backend/sovereign/directives.py | 10 | 12 |
+| backend/sovereign/will.py | 10 | 12 |
+| tests/conftest.py | 30 | 1 |
+
+### ملاحظة النزاهة
+
+لا يوجد أي حذف خارج هذه الأنماط. الملفات الجديدة (backend/runtime/) و
+forensics/ الجديدة إضافات لا حذوفات فيها. الحذوفات في ملفات .md هي تعديلات
+توثيقية مدرجة في التزامات التوثيق.

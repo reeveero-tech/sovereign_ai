@@ -1,0 +1,34 @@
+{
+  "run": {
+    "date": "2026-10-16",
+    "purpose": "بند ٤ من جولة R-682 — عدّ أسطر الرفض في memory.core بسبب KeyRing (R-626)، مفصولة بمعرّف المفتاح",
+    "command": "cd repo && python -m pytest tests/ backend/tests/ -v -m 'not operational' --log-file=<log> --log-file-level=INFO",
+    "result_before_fix": "410 passed, 1 deselected, 0 failed (قبل إصلاح R-682)",
+    "method": "عدّ سجلات الرفض الفعلية (ERROR من memory.core) من ملف السجل الكامل --log-file — لا نسخ traceback المكررة داخل سجلات «--- Logging error ---»"
+  },
+  "before_fix_r682": {
+    "total_rejected_lines": 244,
+    "by_key_id_desc": [
+      {
+        "key_id": "6530a476917b36a5",
+        "rejected_lines": 244,
+        "share": "100%"
+      }
+    ],
+    "notes": [
+      "كل الأسطر الـ244 بمفتاح واحد — بصمة مفتاح اختباري أنشأته جلسة pytest نفسها (R-634 في tests/conftest.py)، وليست مفتاح تشغيل",
+      "السبب الجذري (محدد بالتتبع): خيوط خلفية daemon خارج عمر بيئتها — أبرزها خيط المراقبة في Mr.py وسلسلة predictive_controller/simulation — تحتفظ بمرجع MemoryCore بمفتاح نشط قديم، وبعد أن تستبدل الجلسة بيئة المفاتيح يُرفض التوقيع (فشل مغلق صحيح السلوك، لكن مصدره خيط لا يجب أن يعمل أصلًا في بيئة الاختبار)",
+      "الأثر الجانبي نفسه: الخيوط الباقية بعد نهاية الجلسة تكتب في ملفات سجل مغلقة فتظهر رسائل «--- Logging error ---» (3 مرات في جلسة فرعية من 5 اختبارات، ومرة في الجلسة الكاملة)"
+    ]
+  },
+  "after_fix_r682": {
+    "total_rejected_lines": 0,
+    "by_key_id_desc": [],
+    "evidence": [
+      "الجلسة الكاملة بعد الإصلاح: 412 passed, 1 deselected, 0 failed، وصفر سطر R-626 في السجل الكامل، وصفر «--- Logging error ---» بعد الملخص",
+      "اختبار سلوكي ملتزم: tests/test_background_threads_shutdown.py::test_clean_session_no_logging_error_and_no_keyring_rejection (جلسة فرعية نظيفة: لا Logging error وصفر R-626)",
+      "الآلية: SOVEREIGN_DISABLE_BACKGROUND_THREADS=1 في tests/conftest.py قبل أي استيراد + تسجيل الخيوط وانضمامها عبر backend/runtime/threads.py"
+    ]
+  },
+  "total_line": "الإجمالي قبل الإصلاح: 244 سطر رفض توقيع (R-626) في memory.core — كلها بمفتاح واحد 6530a476917b36a5؛ بعد الإصلاح: 0"
+}

@@ -24,6 +24,7 @@ import time
 import ctypes
 import platform
 import threading
+import runtime.threads as threads
 import base64
 import zlib
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
@@ -548,10 +549,9 @@ class LoyaltyCore:
                     )
                     break
                 
-                time.sleep(0.001)  # مراقبة كل ميلي ثانية
+                threads.interruptible_sleep(0.001)  # مراقبة كل ميلي ثانية
         
-        monitor_thread = threading.Thread(target=monitor, daemon=True)
-        monitor_thread.start()
+        monitor_thread = threads.start_managed(monitor, owner=self)
     
     # ============================================================
     # حالة النواة

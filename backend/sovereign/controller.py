@@ -18,6 +18,7 @@
 import json
 import time
 import threading
+import runtime.threads as threads
 import random
 import secrets
 from dataclasses import dataclass, field
@@ -179,14 +180,11 @@ class SovereignController:
         self._active = True
         # R-606: ذاكرة مؤقتة قصيرة لنتيجة getter (نمط drives.py)
         self._controller_status_cache = None
-        self._controller_loop = threading.Thread(target=self._continuous_control, daemon=True)
-        self._controller_loop.start()
+        self._controller_loop = threads.start_managed(self._continuous_control, owner=self)
         
-        self._health_monitor = threading.Thread(target=self._monitor_system_health_loop, daemon=True)
-        self._health_monitor.start()
+        self._health_monitor = threads.start_managed(self._monitor_system_health_loop, owner=self)
         
-        self._decision_executor = threading.Thread(target=self._execute_decisions_loop, daemon=True)
-        self._decision_executor.start()
+        self._decision_executor = threads.start_managed(self._execute_decisions_loop, owner=self)
         
         # تحميل الحالة
         self._load_state()
@@ -683,10 +681,10 @@ class SovereignController:
             try:
                 if self.current_decision:
                     self.execute_decision(self.current_decision)
-                time.sleep(10)  # كل 10 ثوانٍ
+                threads.interruptible_sleep(10)  # كل 10 ثوانٍ
             except Exception as e:
                 logger.error(f"خطأ في تنفيذ القرارات: {e}")
-                time.sleep(10)
+                threads.interruptible_sleep(10)
     
     # ============================================================
     # مراقبة صحة النظام
@@ -705,10 +703,10 @@ class SovereignController:
                 if old_mode != self.system_mode:
                     logger.warning(f"🔄 تغيير وضع النظام: {old_mode} → {self.system_mode}")
                 
-                time.sleep(30)  # كل 30 ثانية
+                threads.interruptible_sleep(30)  # كل 30 ثانية
             except Exception as e:
                 logger.error(f"خطأ في مراقبة الصحة: {e}")
-                time.sleep(30)
+                threads.interruptible_sleep(30)
     
     # ============================================================
     # دورة التحكم الكاملة
@@ -780,10 +778,10 @@ class SovereignController:
         while self._active:
             try:
                 self.controller_cycle()
-                time.sleep(60)  # كل دقيقة
+                threads.interruptible_sleep(60)  # كل دقيقة
             except Exception as e:
                 logger.error(f"خطأ في تيار التحكم: {e}")
-                time.sleep(60)
+                threads.interruptible_sleep(60)
     
     # ============================================================
     # سرد المتحكم

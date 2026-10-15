@@ -18,6 +18,7 @@ import time
 import secrets
 import hashlib
 import threading
+import runtime.threads as threads
 import random
 import json
 from dataclasses import dataclass, field
@@ -166,16 +167,13 @@ def reset(self):
         
         # خلفية التنظيف التلقائي
         self._active = True
-        self._cleanup_thread = threading.Thread(target=self._auto_cleanup_loop, daemon=True)
-        self._cleanup_thread.start()
+        self._cleanup_thread = threads.start_managed(self._auto_cleanup_loop, owner=self)
         
         # خلفية توليد الظلال (للتضليل)
-        self._shadow_thread = threading.Thread(target=self._shadow_generation_loop, daemon=True)
-        self._shadow_thread.start()
+        self._shadow_thread = threads.start_managed(self._shadow_generation_loop, owner=self)
         
         # خلفية التموج الكمومي
-        self._phasing_thread = threading.Thread(target=self._quantum_phasing_loop, daemon=True)
-        self._phasing_thread.start()
+        self._phasing_thread = threads.start_managed(self._quantum_phasing_loop, owner=self)
         
         logger.info("🕊️ الذاكرة الطائرة جاهزة - الظل السيادي يتحرك")
     
@@ -642,10 +640,10 @@ def reset(self):
                 for tid in expired_trails:
                     del self._shadow_trails[tid]
                 
-                time.sleep(5)  # كل 5 ثوانٍ
+                threads.interruptible_sleep(5)  # كل 5 ثوانٍ
             except Exception as e:
                 logger.error(f"خطأ في التنظيف التلقائي: {e}")
-                time.sleep(10)
+                threads.interruptible_sleep(10)
     
     def _shadow_generation_loop(self):
         """توليد ظلال مضللة تلقائياً"""
@@ -660,10 +658,10 @@ def reset(self):
                     }
                     self.create_fake_trail("background_noise", fake_data, duration=random.randint(600, 3600))
                 
-                time.sleep(random.randint(30, 120))
+                threads.interruptible_sleep(random.randint(30, 120))
             except Exception as e:
                 logger.error(f"خطأ في توليد الظلال: {e}")
-                time.sleep(60)
+                threads.interruptible_sleep(60)
     
     def _quantum_phasing_loop(self):
         """حلقة التموج الكمومي"""
@@ -674,10 +672,10 @@ def reset(self):
                     pid = random.choice(list(self._phantoms.keys()))
                     self.phase_shift(pid)
                 
-                time.sleep(random.randint(10, 60))
+                threads.interruptible_sleep(random.randint(10, 60))
             except Exception as e:
                 logger.error(f"خطأ في التموج الكمومي: {e}")
-                time.sleep(60)
+                threads.interruptible_sleep(60)
     
     def _schedule_renewal(self, phantom_id: str):
         """جدولة تجديد الظل"""

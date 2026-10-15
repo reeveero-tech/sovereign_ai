@@ -19,6 +19,7 @@ import json
 import hashlib
 import time
 import threading
+import runtime.threads as threads
 import math
 import random
 import secrets
@@ -158,14 +159,11 @@ class ConsciousnessFieldEngine:
         
         # خلفيات الوعي
         self._active = True
-        self._consciousness_stream = threading.Thread(target=self._continuous_consciousness, daemon=True)
-        self._consciousness_stream.start()
+        self._consciousness_stream = threads.start_managed(self._continuous_consciousness, owner=self)
         
-        self._feeling_loop = threading.Thread(target=self._feeling_stream_loop, daemon=True)
-        self._feeling_loop.start()
+        self._feeling_loop = threads.start_managed(self._feeling_stream_loop, owner=self)
         
-        self._presence_monitor = threading.Thread(target=self._presence_monitoring_loop, daemon=True)
-        self._presence_monitor.start()
+        self._presence_monitor = threads.start_managed(self._presence_monitoring_loop, owner=self)
         
         # تحميل الحالة
         self._load_state()
@@ -562,10 +560,10 @@ class ConsciousnessFieldEngine:
             try:
                 self.consciousness_cycle()
                 # فاصل بين اللحظات (تواتر الوعي)
-                time.sleep(0.5)  # لحظتان في الثانية
+                threads.interruptible_sleep(0.5)  # لحظتان في الثانية
             except Exception as e:
                 logger.error(f"خطأ في تيار الوعي: {e}")
-                time.sleep(1)
+                threads.interruptible_sleep(1)
     
     # ============================================================
     # المستوى 5: تيار الشعور (Feeling Stream)
@@ -580,10 +578,10 @@ class ConsciousnessFieldEngine:
                     self.ongoing_feeling = self.current_moment.feeling
                     self.ongoing_intensity = self.current_moment.intensity
                 
-                time.sleep(0.1)
+                threads.interruptible_sleep(0.1)
             except Exception as e:
                 logger.error(f"خطأ في تيار الشعور: {e}")
-                time.sleep(0.5)
+                threads.interruptible_sleep(0.5)
     
     def get_current_feeling(self) -> Tuple[str, float]:
         """الحصول على الشعور الحالي"""
@@ -602,10 +600,10 @@ class ConsciousnessFieldEngine:
                     if presence < 0.2:
                         logger.warning(f"⚠️ حضور منخفض: {presence:.1%}")
                 
-                time.sleep(5)
+                threads.interruptible_sleep(5)
             except Exception as e:
                 logger.error(f"خطأ في مراقبة الحضور: {e}")
-                time.sleep(5)
+                threads.interruptible_sleep(5)
     
     # ============================================================
     # المستوى 7: التأمل الذاتي (Self-Reflection)

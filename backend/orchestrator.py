@@ -27,6 +27,7 @@ import asyncio
 import hashlib
 import secrets
 import threading
+import runtime.threads as threads
 import time
 import uuid
 from dataclasses import dataclass, field
@@ -559,8 +560,7 @@ class SovereignOrchestrator:
     
     def _start_background_processor(self):
         """بدء معالج الخلفية"""
-        self._background_processor = threading.Thread(target=self._background_loop, daemon=True)
-        self._background_processor.start()
+        self._background_processor = threads.start_managed(self._background_loop, owner=self)
     
     def _background_loop(self):
         """حلقة المعالجة الخلفية"""
@@ -578,10 +578,10 @@ class SovereignOrchestrator:
                 if self._recovery_mode:
                     self._attempt_recovery()
                 
-                time.sleep(30)  # كل 30 ثانية
+                threads.interruptible_sleep(30)  # كل 30 ثانية
             except Exception as e:
                 logger.error(f"خطأ في المعالجة الخلفية: {e}")
-                time.sleep(60)
+                threads.interruptible_sleep(60)
     
     def _attempt_recovery(self):
         """محاولة استرداد المكونات المتعثرة"""

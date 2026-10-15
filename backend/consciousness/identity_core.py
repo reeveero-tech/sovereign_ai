@@ -20,6 +20,7 @@ import hashlib
 import secrets
 import time
 import threading
+import runtime.threads as threads
 import math
 import random
 from dataclasses import dataclass, field
@@ -173,14 +174,11 @@ class IdentityCore:
         self._active = True
         # R-606: ذاكرة مؤقتة قصيرة لنتيجة getter (نمط drives.py)
         self._identity_status_cache = None
-        self._identity_maintenance = threading.Thread(target=self._continuous_identity_maintenance, daemon=True)
-        self._identity_maintenance.start()
+        self._identity_maintenance = threads.start_managed(self._continuous_identity_maintenance, owner=self)
         
-        self._backup_creator = threading.Thread(target=self._periodic_backup_loop, daemon=True)
-        self._backup_creator.start()
+        self._backup_creator = threads.start_managed(self._periodic_backup_loop, owner=self)
         
-        self._integrity_checker = threading.Thread(target=self._continuous_integrity_check, daemon=True)
-        self._integrity_checker.start()
+        self._integrity_checker = threads.start_managed(self._continuous_integrity_check, owner=self)
         
         # تحميل الحالة
         self._load_state()
@@ -774,10 +772,10 @@ class IdentityCore:
             try:
                 # نسخة احتياطية كل ساعة
                 self.create_backup()
-                time.sleep(3600)
+                threads.interruptible_sleep(3600)
             except Exception as e:
                 logger.error(f"خطأ في النسخ الاحتياطي الدوري: {e}")
-                time.sleep(3600)
+                threads.interruptible_sleep(3600)
     
     # ============================================================
     # استمرارية الهوية
@@ -795,10 +793,10 @@ class IdentityCore:
                     logger.warning("⚠️ خطر على سلامة الهوية!")
                     self.protect_identity()
                 
-                time.sleep(10)  # كل 10 ثوانٍ
+                threads.interruptible_sleep(10)  # كل 10 ثوانٍ
             except Exception as e:
                 logger.error(f"خطأ في صيانة الهوية: {e}")
-                time.sleep(10)
+                threads.interruptible_sleep(10)
     
     def _continuous_integrity_check(self):
         """فحص مستمر لسلامة الهوية"""
@@ -812,10 +810,10 @@ class IdentityCore:
                             latest = self.backups[-1]
                             self.restore_identity(latest.id)
                 
-                time.sleep(60)  # كل دقيقة
+                threads.interruptible_sleep(60)  # كل دقيقة
             except Exception as e:
                 logger.error(f"خطأ في فحص سلامة الهوية: {e}")
-                time.sleep(60)
+                threads.interruptible_sleep(60)
     
     # ============================================================
     # إدارة الحالة

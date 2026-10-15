@@ -25,6 +25,7 @@ import json
 import time
 import secrets
 import threading
+import runtime.threads as threads
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Dict, Any, List, Optional
@@ -142,8 +143,7 @@ class PredictiveController:
         
         # خلفيات التشغيل
         self._active = True
-        self._continuous_cycle = threading.Thread(target=self._continuous_cycle_loop, daemon=True)
-        self._continuous_cycle.start()
+        self._continuous_cycle = threads.start_managed(self._continuous_cycle_loop, owner=self)
         
         # تحميل الحالة السابقة
         self._load_state()
@@ -530,10 +530,10 @@ class PredictiveController:
         while self._active:
             try:
                 self.predictive_controller_cycle()
-                time.sleep(30)  # كل 30 ثانية
+                threads.interruptible_sleep(30)  # كل 30 ثانية
             except Exception as e:
                 logger.error(f"خطأ في حلقة التحكم المستمرة: {e}")
-                time.sleep(30)
+                threads.interruptible_sleep(30)
     
     # ============================================================
     # إدارة الحالة

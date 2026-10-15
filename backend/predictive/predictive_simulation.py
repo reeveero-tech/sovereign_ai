@@ -18,6 +18,7 @@
 import json
 import time
 import threading
+import runtime.threads as threads
 import random
 import secrets
 import math
@@ -181,11 +182,9 @@ class PredictiveSimulation:
         self._active = True
         # R-606: ذاكرة مؤقتة قصيرة لنتيجة getter (نمط drives.py)
         self._simulation_status_cache = None
-        self._simulation_loop = threading.Thread(target=self._continuous_simulation, daemon=True)
-        self._simulation_loop.start()
+        self._simulation_loop = threads.start_managed(self._continuous_simulation, owner=self)
         
-        self._results_analyzer = threading.Thread(target=self._analyze_results_loop, daemon=True)
-        self._results_analyzer.start()
+        self._results_analyzer = threads.start_managed(self._analyze_results_loop, owner=self)
         
         # تحميل الحالة
         self._load_state()
@@ -773,10 +772,10 @@ class PredictiveSimulation:
         while self._active:
             try:
                 self.simulation_cycle(runs=500, steps=12)
-                time.sleep(1800)  # كل 30 دقيقة
+                threads.interruptible_sleep(1800)  # كل 30 دقيقة
             except Exception as e:
                 logger.error(f"خطأ في تيار المحاكاة: {e}")
-                time.sleep(1800)
+                threads.interruptible_sleep(1800)
     
     def _analyze_results_loop(self):
         """تحليل مستمر لنتائج المحاكاة"""
@@ -785,10 +784,10 @@ class PredictiveSimulation:
                 if self.current_batch:
                     # تحليل النتائج الأحدث
                     pass
-                time.sleep(300)  # كل 5 دقائق
+                threads.interruptible_sleep(300)  # كل 5 دقائق
             except Exception as e:
                 logger.error(f"خطأ في تحليل النتائج: {e}")
-                time.sleep(300)
+                threads.interruptible_sleep(300)
     
     # ============================================================
     # سرد المحاكاة

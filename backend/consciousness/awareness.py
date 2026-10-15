@@ -18,6 +18,7 @@
 import json
 import time
 import threading
+import runtime.threads as threads
 import random
 from dataclasses import dataclass
 from typing import Dict, Any, List, Optional, Tuple
@@ -171,14 +172,11 @@ class AwarenessEngine:
         
         # خلفيات الوعي
         self._active = True
-        self._awareness_stream = threading.Thread(target=self._continuous_awareness, daemon=True)
-        self._awareness_stream.start()
+        self._awareness_stream = threads.start_managed(self._continuous_awareness, owner=self)
         
-        self._attention_decay_loop = threading.Thread(target=self._attention_decay_loop, daemon=True)
-        self._attention_decay_loop.start()
+        self._attention_decay_loop = threads.start_managed(self._attention_decay_loop, owner=self)
         
-        self._subliminal_processor = threading.Thread(target=self._process_subliminal_loop, daemon=True)
-        self._subliminal_processor.start()
+        self._subliminal_processor = threads.start_managed(self._process_subliminal_loop, owner=self)
         
         # تحميل الحالة
         self._load_state()
@@ -525,10 +523,10 @@ class AwarenessEngine:
         while self._active:
             try:
                 self.update_awareness()
-                time.sleep(0.5)
+                threads.interruptible_sleep(0.5)
             except Exception as e:
                 logger.error(f"خطأ في تيار الوعي: {e}")
-                time.sleep(1)
+                threads.interruptible_sleep(1)
     
     # ============================================================
     # تلاشي الانتباه
@@ -545,10 +543,10 @@ class AwarenessEngine:
                     if item.priority < 0.01:
                         del self.active_items[item_id]
                 
-                time.sleep(1)
+                threads.interruptible_sleep(1)
             except Exception as e:
                 logger.error(f"خطأ في تلاشي الانتباه: {e}")
-                time.sleep(1)
+                threads.interruptible_sleep(1)
     
     # ============================================================
     # معالجة تحت الوعي
@@ -570,12 +568,12 @@ class AwarenessEngine:
                 # R-682 [GitHub issue #7]: real subliminal processing NOT implemented.
                 # Requires owner's decision. See forensics/AWARENESS_561_DECISION.md.
                 # Safe removal of placeholder `pass` — no functional change.
-                time.sleep(0.1)
+                threads.interruptible_sleep(0.1)
             except Exception as e:
                 logger.exception(
                     f"R-682: خطأ في معالجة تحت الوعي — silently swallowing. exc={e}"
                 )
-                time.sleep(0.5)
+                threads.interruptible_sleep(0.5)
     
     # ============================================================
     # إدارة الحالة

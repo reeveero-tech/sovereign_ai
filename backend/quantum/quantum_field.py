@@ -21,6 +21,7 @@ import cmath
 import random
 import secrets
 import threading
+import runtime.threads as threads
 import time
 from dataclasses import dataclass
 from typing import Dict, Any, List, Optional, Tuple
@@ -199,14 +200,11 @@ class QuantumFieldEngine:
         
         # خلفيات الحقل
         self._active = True
-        self._propagation_loop = threading.Thread(target=self._continuous_propagation, daemon=True)
-        self._propagation_loop.start()
+        self._propagation_loop = threads.start_managed(self._continuous_propagation, owner=self)
         
-        self._field_update_loop = threading.Thread(target=self._continuous_field_update, daemon=True)
-        self._field_update_loop.start()
+        self._field_update_loop = threads.start_managed(self._continuous_field_update, owner=self)
         
-        self._interference_calculator = threading.Thread(target=self._calculate_interference_loop, daemon=True)
-        self._interference_calculator.start()
+        self._interference_calculator = threads.start_managed(self._calculate_interference_loop, owner=self)
         
         # تحميل الحالة
         self._load_state()
@@ -496,10 +494,10 @@ class QuantumFieldEngine:
                     mode = random.choice(modes)
                     self.propagate_field(mode=mode, steps=1)
                 
-                time.sleep(2)  # كل ثانيتين
+                threads.interruptible_sleep(2)  # كل ثانيتين
             except Exception as e:
                 logger.error(f"خطأ في نشر الحقل: {e}")
-                time.sleep(2)
+                threads.interruptible_sleep(2)
     
     # ============================================================
     # تحديث الحقل المستمر
@@ -547,10 +545,10 @@ class QuantumFieldEngine:
                     source = random.choice(sources)
                     self.update_field(source_state=source)
                 
-                time.sleep(5)  # كل 5 ثوانٍ
+                threads.interruptible_sleep(5)  # كل 5 ثوانٍ
             except Exception as e:
                 logger.error(f"خطأ في تحديث الحقل: {e}")
-                time.sleep(5)
+                threads.interruptible_sleep(5)
     
     # ============================================================
     # تداخلات متعددة النطاقات
@@ -625,10 +623,10 @@ class QuantumFieldEngine:
                 if self.active_field:
                     self.multi_scale_interference()
                 
-                time.sleep(30)  # كل 30 ثانية
+                threads.interruptible_sleep(30)  # كل 30 ثانية
             except Exception as e:
                 logger.error(f"خطأ في حساب التداخل: {e}")
-                time.sleep(30)
+                threads.interruptible_sleep(30)
     
     # ============================================================
     # تأثير الحقل على الانتقالات

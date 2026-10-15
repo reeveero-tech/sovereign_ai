@@ -20,6 +20,7 @@ import hashlib
 import secrets
 import time
 import threading
+import runtime.threads as threads
 import math
 import random
 from dataclasses import dataclass, field
@@ -152,11 +153,9 @@ class CognitiveMetabolism:
         
         # خلفيات الأيض
         self._active = True
-        self._metabolic_loop = threading.Thread(target=self._continuous_metabolism, daemon=True)
-        self._metabolic_loop.start()
+        self._metabolic_loop = threads.start_managed(self._continuous_metabolism, owner=self)
         
-        self._energy_monitor = threading.Thread(target=self._energy_monitoring_loop, daemon=True)
-        self._energy_monitor.start()
+        self._energy_monitor = threads.start_managed(self._energy_monitoring_loop, owner=self)
         
         # تحميل الحالة
         self._load_state()
@@ -729,12 +728,12 @@ class CognitiveMetabolism:
                     # دورة كل ساعة في المستوى العادي، كل 10 دقائق في المستوى المكثف
                     interval = 600 if self.metabolism_level >= METABOLISM_LEVEL_INTENSE else 3600
                     self.metabolic_cycle(self.metabolism_level)
-                    time.sleep(interval)
+                    threads.interruptible_sleep(interval)
                 else:
-                    time.sleep(3600)
+                    threads.interruptible_sleep(3600)
             except Exception as e:
                 logger.error(f"خطأ في الدورة الأيضية: {e}")
-                time.sleep(3600)
+                threads.interruptible_sleep(3600)
     
     def _energy_monitoring_loop(self):
         """مراقبة مستويات الطاقة"""
@@ -750,10 +749,10 @@ class CognitiveMetabolism:
                 self.energy.coherence *= (1 - decay_rate)
                 self.energy.order *= (1 - decay_rate)
                 
-                time.sleep(3600)  # كل ساعة
+                threads.interruptible_sleep(3600)  # كل ساعة
             except Exception as e:
                 logger.error(f"خطأ في مراقبة الطاقة: {e}")
-                time.sleep(3600)
+                threads.interruptible_sleep(3600)
     
     # ============================================================
     # إدارة الحالة

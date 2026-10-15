@@ -22,6 +22,7 @@ import base64
 import math
 import time
 import threading
+import runtime.threads as threads
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple, Union, Set
 from collections import defaultdict
@@ -320,14 +321,17 @@ class QuantumLikeEncryption:
     def __init__(self, master_key: str = SOVEREIGN_KEY):
         self.master_key = hashlib.sha3_512(master_key.encode()).digest()
         self.quantum_states: Dict[str, Dict] = {}
-        self._cleanup_thread = threading.Thread(target=self._cleanup_loop, daemon=True)
-        self._cleanup_thread.start()
+        self._bg_stop = threading.Event()
+        self._cleanup_thread = threads.start_managed(
+            self._cleanup_loop, owner=self, stop_event=self._bg_stop
+        )
         logger.info("⚛️ التشفير الكمي الوهمي جاهز")
     
     def _cleanup_loop(self):
         """تنظيف الحالات الكمية منتهية الصلاحية"""
-        while True:
-            time.sleep(QUANTUM_DECOHERENCE_TIME)
+        while not self._bg_stop.is_set():
+            if self._bg_stop.wait(QUANTUM_DECOHERENCE_TIME):
+                break
             current_time = time.time()
             to_remove = []
             for state_id, state in self.quantum_states.items():

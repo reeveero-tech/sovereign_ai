@@ -19,6 +19,7 @@ import json
 import hashlib
 import time
 import threading
+import runtime.threads as threads
 import math
 import secrets
 import random
@@ -183,11 +184,9 @@ class SimulationEnvironmentManager:
         
         # خلفيات الإدارة
         self._active = True
-        self._validation_loop = threading.Thread(target=self._continuous_validation, daemon=True)
-        self._validation_loop.start()
+        self._validation_loop = threads.start_managed(self._continuous_validation, owner=self)
         
-        self._backup_loop = threading.Thread(target=self._periodic_backup, daemon=True)
-        self._backup_loop.start()
+        self._backup_loop = threads.start_managed(self._periodic_backup, owner=self)
         
         # تحميل الحالة
         self._load_state()
@@ -590,10 +589,10 @@ class SimulationEnvironmentManager:
                     if not validation.valid:
                         logger.warning(f"⚠️ مجموعة معلمات غير صالحة: {param_id[:16]} - {validation.issues}")
                 
-                time.sleep(300)  # كل 5 دقائق
+                threads.interruptible_sleep(300)  # كل 5 دقائق
             except Exception as e:
                 logger.error(f"خطأ في التحقق المستمر: {e}")
-                time.sleep(300)
+                threads.interruptible_sleep(300)
     
     # ============================================================
     # بناء مثيلات البيئة
@@ -795,10 +794,10 @@ class SimulationEnvironmentManager:
         while self._active:
             try:
                 self._save_state()
-                time.sleep(3600)  # كل ساعة
+                threads.interruptible_sleep(3600)  # كل ساعة
             except Exception as e:
                 logger.error(f"خطأ في النسخ الاحتياطي: {e}")
-                time.sleep(3600)
+                threads.interruptible_sleep(3600)
     
     # ============================================================
     # دورة مدير البيئات

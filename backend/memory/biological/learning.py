@@ -20,6 +20,7 @@ import hashlib
 import secrets
 import time
 import threading
+import runtime.threads as threads
 import math
 import random
 from dataclasses import dataclass, field
@@ -167,17 +168,13 @@ class AdaptiveLearning:
         
         # خلفيات التعلم
         self._active = True
-        self._experience_processor = threading.Thread(target=self._process_experiences_loop, daemon=True)
-        self._experience_processor.start()
+        self._experience_processor = threads.start_managed(self._process_experiences_loop, owner=self)
         
-        self._pattern_discovery = threading.Thread(target=self._discover_patterns_loop, daemon=True)
-        self._pattern_discovery.start()
+        self._pattern_discovery = threads.start_managed(self._discover_patterns_loop, owner=self)
         
-        self._schema_builder = threading.Thread(target=self._build_schemas_loop, daemon=True)
-        self._schema_builder.start()
+        self._schema_builder = threads.start_managed(self._build_schemas_loop, owner=self)
         
-        self._reinforcement_learner = threading.Thread(target=self._reinforcement_learning_loop, daemon=True)
-        self._reinforcement_learner.start()
+        self._reinforcement_learner = threads.start_managed(self._reinforcement_learning_loop, owner=self)
         
         # تحميل الحالة
         self._load_state()
@@ -294,10 +291,10 @@ class AdaptiveLearning:
                     
                     self._process_batch(batch)
                 
-                time.sleep(5)  # كل 5 ثوانٍ
+                threads.interruptible_sleep(5)  # كل 5 ثوانٍ
             except Exception as e:
                 logger.error(f"خطأ في معالجة التجارب: {e}")
-                time.sleep(10)
+                threads.interruptible_sleep(10)
     
     def _process_batch(self, experiences: List[LearningExperience]):
         """معالجة دفعة من التجارب"""
@@ -416,10 +413,10 @@ class AdaptiveLearning:
             try:
                 if self.learning_level >= LEARNING_LEVEL_DEEP:
                     self._discover_patterns()
-                time.sleep(300)  # كل 5 دقائق
+                threads.interruptible_sleep(300)  # كل 5 دقائق
             except Exception as e:
                 logger.error(f"خطأ في اكتشاف الأنماط: {e}")
-                time.sleep(300)
+                threads.interruptible_sleep(300)
     
     def _discover_patterns(self):
         """اكتشاف أنماط جديدة من التجارب المتراكمة"""
@@ -495,10 +492,10 @@ class AdaptiveLearning:
             try:
                 if self.learning_level >= LEARNING_LEVEL_DEEP:
                     self._consolidate_schemas()
-                time.sleep(600)  # كل 10 دقائق
+                threads.interruptible_sleep(600)  # كل 10 دقائق
             except Exception as e:
                 logger.error(f"خطأ في بناء المخططات: {e}")
-                time.sleep(600)
+                threads.interruptible_sleep(600)
     
     def _consolidate_schemas(self):
         """دمج المخططات المتشابهة"""
@@ -586,10 +583,10 @@ class AdaptiveLearning:
                     for exp in self.experiences[-100:]:
                         if exp.feedback is not None:
                             self._apply_reinforcement(exp)
-                time.sleep(3600)  # كل ساعة
+                threads.interruptible_sleep(3600)  # كل ساعة
             except Exception as e:
                 logger.error(f"خطأ في التعلم المعزز: {e}")
-                time.sleep(3600)
+                threads.interruptible_sleep(3600)
     
     # ============================================================
     # المستوى 6: التعلم التوليدي (Generative Learning)

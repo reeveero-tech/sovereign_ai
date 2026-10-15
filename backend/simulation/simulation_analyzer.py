@@ -18,6 +18,7 @@
 import json
 import time
 import threading
+import runtime.threads as threads
 import random
 import secrets
 from dataclasses import dataclass
@@ -191,14 +192,11 @@ class SimulationAnalyzer:
         
         # خلفيات التحليل
         self._active = True
-        self._continuous_analysis = threading.Thread(target=self._continuous_analysis_loop, daemon=True)
-        self._continuous_analysis.start()
+        self._continuous_analysis = threads.start_managed(self._continuous_analysis_loop, owner=self)
         
-        self._pattern_detection = threading.Thread(target=self._pattern_detection_loop, daemon=True)
-        self._pattern_detection.start()
+        self._pattern_detection = threads.start_managed(self._pattern_detection_loop, owner=self)
         
-        self._insight_generator = threading.Thread(target=self._insight_generation_loop, daemon=True)
-        self._insight_generator.start()
+        self._insight_generator = threads.start_managed(self._insight_generation_loop, owner=self)
         
         # تحميل الحالة
         self._load_state()
@@ -795,10 +793,10 @@ class SimulationAnalyzer:
                             }
                         )
                 
-                time.sleep(60)  # كل دقيقة
+                threads.interruptible_sleep(60)  # كل دقيقة
             except Exception as e:
                 logger.error(f"خطأ في التحليل المستمر: {e}")
-                time.sleep(60)
+                threads.interruptible_sleep(60)
     
     def _pattern_detection_loop(self):
         """اكتشاف الأنماط في البيانات التاريخية"""
@@ -809,10 +807,10 @@ class SimulationAnalyzer:
                     for trend in report.trends:
                         self.historical_data[trend.metric].append(trend.slope)
                 
-                time.sleep(300)  # كل 5 دقائق
+                threads.interruptible_sleep(300)  # كل 5 دقائق
             except Exception as e:
                 logger.error(f"خطأ في اكتشاف الأنماط: {e}")
-                time.sleep(300)
+                threads.interruptible_sleep(300)
     
     def _insight_generation_loop(self):
         """توليد رؤى تلقائية"""
@@ -823,10 +821,10 @@ class SimulationAnalyzer:
                     if latest.insights:
                         logger.info(f"💡 رؤى جديدة: {len(latest.insights)}")
                 
-                time.sleep(600)  # كل 10 دقائق
+                threads.interruptible_sleep(600)  # كل 10 دقائق
             except Exception as e:
                 logger.error(f"خطأ في توليد الرؤى: {e}")
-                time.sleep(600)
+                threads.interruptible_sleep(600)
     
     # ============================================================
     # إدارة الحالة

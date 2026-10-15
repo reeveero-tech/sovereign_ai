@@ -18,6 +18,7 @@
 import json
 import time
 import threading
+import runtime.threads as threads
 import random
 import secrets
 from dataclasses import dataclass
@@ -171,14 +172,11 @@ class SovereignDirectives:
         self._active = True
         # R-606: ذاكرة مؤقتة قصيرة لنتيجة getter (نمط drives.py)
         self._directives_status_cache = None
-        self._directives_loop = threading.Thread(target=self._continuous_directives, daemon=True)
-        self._directives_loop.start()
+        self._directives_loop = threads.start_managed(self._continuous_directives, owner=self)
         
-        self._enforcement_loop = threading.Thread(target=self._enforcement_loop, daemon=True)
-        self._enforcement_loop.start()
+        self._enforcement_loop = threads.start_managed(self._enforcement_loop, owner=self)
         
-        self._expiration_monitor = threading.Thread(target=self._monitor_expirations_loop, daemon=True)
-        self._expiration_monitor.start()
+        self._expiration_monitor = threads.start_managed(self._monitor_expirations_loop, owner=self)
         
         # تحميل الحالة
         self._load_state()
@@ -599,10 +597,10 @@ class SovereignDirectives:
         while self._active:
             try:
                 self.enforce_directives()
-                time.sleep(30)  # كل 30 ثانية
+                threads.interruptible_sleep(30)  # كل 30 ثانية
             except Exception as e:
                 logger.error(f"خطأ في تطبيق التوجيهات: {e}")
-                time.sleep(30)
+                threads.interruptible_sleep(30)
     
     def _monitor_expirations_loop(self):
         """مراقبة انتهاء صلاحية التوجيهات المؤقتة"""
@@ -616,10 +614,10 @@ class SovereignDirectives:
                         self.directives_history.append(directive)
                         logger.info(f"⏰ انتهاء صلاحية التوجيه: {directive.name}")
                 
-                time.sleep(60)  # كل دقيقة
+                threads.interruptible_sleep(60)  # كل دقيقة
             except Exception as e:
                 logger.error(f"خطأ في مراقبة الصلاحية: {e}")
-                time.sleep(60)
+                threads.interruptible_sleep(60)
     
     # ============================================================
     # دورة التوجيهات الكاملة
@@ -692,10 +690,10 @@ class SovereignDirectives:
         while self._active:
             try:
                 self.directives_cycle()
-                time.sleep(60)  # كل دقيقة
+                threads.interruptible_sleep(60)  # كل دقيقة
             except Exception as e:
                 logger.error(f"خطأ في تيار التوجيهات: {e}")
-                time.sleep(60)
+                threads.interruptible_sleep(60)
     
     # ============================================================
     # سرد التوجيهات

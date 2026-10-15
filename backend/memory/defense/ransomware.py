@@ -30,6 +30,7 @@ except ImportError:  # pragma: no cover
     get_random_bytes = None
 import time
 import threading
+import runtime.threads as threads
 import random
 import base64
 from dataclasses import dataclass, field
@@ -207,14 +208,11 @@ class RansomwareDefense:
 
         # خلفيات الفينيق (بعد استقرار المفتاح)
         self._active = True
-        self._watcher_thread = threading.Thread(target=self._watch_for_threats, daemon=True)
-        self._watcher_thread.start()
+        self._watcher_thread = threads.start_managed(self._watch_for_threats, owner=self)
         
-        self._resurrection_thread = threading.Thread(target=self._resurrection_loop, daemon=True)
-        self._resurrection_thread.start()
+        self._resurrection_thread = threads.start_managed(self._resurrection_loop, owner=self)
         
-        self._seed_preserver = threading.Thread(target=self._preserve_seeds_loop, daemon=True)
-        self._seed_preserver.start()
+        self._seed_preserver = threads.start_managed(self._preserve_seeds_loop, owner=self)
         
         logger.info("🔥 نظام الفينيق السيادي جاهز - سأموت لأبعث أقوى")
     
@@ -1505,11 +1503,11 @@ class RansomwareDefense:
                     self.resurrection_level = RESURRECTION_LEVEL_TRANSFORM
                     logger.warning("⚡ تهديد حرج - الاستعداد للموت والقيامة")
                 
-                time.sleep(30)
+                threads.interruptible_sleep(30)
                 
             except Exception as e:
                 logger.error(f"خطأ في مراقبة التهديدات: {e}")
-                time.sleep(60)
+                threads.interruptible_sleep(60)
     
     def _resurrection_loop(self):
         """حلقة القيامة - محاولة البعث التلقائي"""
@@ -1520,9 +1518,9 @@ class RansomwareDefense:
                     # فقط إذا كان هناك تفويض مسبق من السيد
                     pass
                 
-                time.sleep(10)
+                threads.interruptible_sleep(10)
             except:
-                time.sleep(60)
+                threads.interruptible_sleep(60)
     
     def _preserve_seeds_loop(self):
         """حفظ البذور وتجديدها"""
@@ -1538,9 +1536,9 @@ class RansomwareDefense:
                         del self.seeds[seed_id]
                         logger.debug(f"🌱 تجديد بذرة: {seed_id[:16]}...")
                 
-                time.sleep(3600)  # كل ساعة
+                threads.interruptible_sleep(3600)  # كل ساعة
             except:
-                time.sleep(3600)
+                threads.interruptible_sleep(3600)
     
     # ============================================================
     # الأدوات المساعدة

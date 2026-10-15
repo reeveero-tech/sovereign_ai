@@ -20,6 +20,7 @@ import hashlib
 import secrets
 import time
 import threading
+import runtime.threads as threads
 import random
 import string
 import uuid
@@ -166,14 +167,11 @@ class PolymorphicDefense:
         
         # خلفيات التحول المستمر
         self._active = True
-        self._mutation_loop = threading.Thread(target=self._continuous_mutation, daemon=True)
-        self._mutation_loop.start()
+        self._mutation_loop = threads.start_managed(self._continuous_mutation, owner=self)
         
-        self._phantom_refresher = threading.Thread(target=self._refresh_phantoms_loop, daemon=True)
-        self._phantom_refresher.start()
+        self._phantom_refresher = threads.start_managed(self._refresh_phantoms_loop, owner=self)
         
-        self._trap_setter = threading.Thread(target=self._auto_set_traps_loop, daemon=True)
-        self._trap_setter.start()
+        self._trap_setter = threads.start_managed(self._auto_set_traps_loop, owner=self)
         
         # تحميل الحالة
         self._load_state()
@@ -526,31 +524,31 @@ class PolymorphicDefense:
                 # التحول حسب التردد المحدد
                 if self.mutation_frequency == MUTATION_FREQUENCY_SUICIDE:
                     self.mutate(MUTATION_LEVEL_DNA)
-                    time.sleep(0.001)
+                    threads.interruptible_sleep(0.001)
                 elif self.mutation_frequency == MUTATION_FREQUENCY_RAPID:
                     self.mutate(MUTATION_LEVEL_PROTEIN)
-                    time.sleep(0.01)
+                    threads.interruptible_sleep(0.01)
                 elif self.mutation_frequency == MUTATION_FREQUENCY_NORMAL:
                     if random.random() < 0.3:
                         self.mutate(MUTATION_LEVEL_BEHAVIOR)
-                    time.sleep(0.1)
+                    threads.interruptible_sleep(0.1)
                 else:
                     self.mutate(MUTATION_LEVEL_LOCATION)
-                    time.sleep(1)
+                    threads.interruptible_sleep(1)
                     
             except Exception as e:
                 logger.error(f"خطأ في حلقة التحول: {e}")
-                time.sleep(1)
+                threads.interruptible_sleep(1)
     
     def _refresh_phantoms_loop(self):
         """تحديث الأقنعة باستمرار"""
         while self._active:
             try:
                 self.refresh_phantoms()
-                time.sleep(5)  # كل 5 ثوانٍ
+                threads.interruptible_sleep(5)  # كل 5 ثوانٍ
             except Exception as e:
                 logger.error(f"خطأ في تحديث الأقنعة: {e}")
-                time.sleep(5)
+                threads.interruptible_sleep(5)
     
     def _auto_set_traps_loop(self):
         """نصب فخاخ تلقائية"""
@@ -566,10 +564,10 @@ class PolymorphicDefense:
                     }
                     self.set_trap(trap_type, fake_data)
                 
-                time.sleep(30)
+                threads.interruptible_sleep(30)
             except Exception as e:
                 logger.error(f"خطأ في نصب الفخاخ: {e}")
-                time.sleep(30)
+                threads.interruptible_sleep(30)
     
     # ============================================================
     # إدارة الحالة

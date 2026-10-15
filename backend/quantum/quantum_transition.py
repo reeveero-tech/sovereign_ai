@@ -21,6 +21,7 @@ import cmath
 import random
 import secrets
 import threading
+import runtime.threads as threads
 import time
 from dataclasses import dataclass, field
 from typing import Dict, Any, List, Optional, Tuple
@@ -141,11 +142,9 @@ class QuantumTransitionEngine:
         
         # خلفيات الانتقالات
         self._active = True
-        self._continuous_transitions = threading.Thread(target=self._continuous_transition_loop, daemon=True)
-        self._continuous_transitions.start()
+        self._continuous_transitions = threads.start_managed(self._continuous_transition_loop, owner=self)
         
-        self._matrix_evolution = threading.Thread(target=self._matrix_evolution_loop, daemon=True)
-        self._matrix_evolution.start()
+        self._matrix_evolution = threads.start_managed(self._matrix_evolution_loop, owner=self)
         
         # تحميل الحالة
         self._load_state()
@@ -668,10 +667,10 @@ class QuantumTransitionEngine:
                     state_id = random.choice(list(self.qstate.states.keys()))
                     self.transition_cycle(state_id)
                 
-                time.sleep(5)  # كل 5 ثوانٍ
+                threads.interruptible_sleep(5)  # كل 5 ثوانٍ
             except Exception as e:
                 logger.error(f"خطأ في حلقة الانتقالات المستمرة: {e}")
-                time.sleep(5)
+                threads.interruptible_sleep(5)
     
     def _matrix_evolution_loop(self):
         """تطور مصفوفة الانتقال مع الزمن"""
@@ -682,10 +681,10 @@ class QuantumTransitionEngine:
                     drift = random.uniform(-0.01, 0.01)
                     self.energy_levels[state] = max(0.1, min(2.0, self.energy_levels[state] + drift))
                 
-                time.sleep(30)  # كل 30 ثانية
+                threads.interruptible_sleep(30)  # كل 30 ثانية
             except Exception as e:
                 logger.error(f"خطأ في تطور المصفوفة: {e}")
-                time.sleep(30)
+                threads.interruptible_sleep(30)
     
     # ============================================================
     # إدارة الحالة

@@ -29,6 +29,7 @@ from typing import List, Dict, Any, Optional, Tuple, Set, Iterator
 from enum import Enum
 from pathlib import Path
 import threading
+import runtime.threads as threads
 import time
 import hashlib
 
@@ -195,8 +196,10 @@ class SensoryMemory:
         self._items: List[SensoryItem] = []
         self._ttl = ttl_seconds
         self._lock = threading.Lock()
-        self._cleanup_thread = threading.Thread(target=self._auto_cleanup, daemon=True)
-        self._cleanup_thread.start()
+        self._bg_stop = threading.Event()
+        self._cleanup_thread = threads.start_managed(
+            self._auto_cleanup, owner=self, stop_event=self._bg_stop
+        )
         logger.info(f"🔄 الذاكرة الحسية جاهزة (TTL: {ttl_seconds} ثانية)")
     
     def add(self, event_hash: str, event_type: str, payload: Dict[str, Any], 
@@ -230,8 +233,9 @@ class SensoryMemory:
     
     def _auto_cleanup(self):
         """تنظيف تلقائي دوري"""
-        while True:
-            time.sleep(self._ttl)
+        while not self._bg_stop.is_set():
+            if self._bg_stop.wait(self._ttl):
+                break
             self._cleanup()
     
     def clear(self):
@@ -810,6 +814,7 @@ class MemoryViews:
     
     def __init__(self):
         self.core = get_core()
+        self._bg_stop = threading.Event()
         
         # تهيئة جميع أنواع الذاكرة
         self.sensory = SensoryMemory()
@@ -824,8 +829,9 @@ class MemoryViews:
         self._load_from_core()
         
         # بدء خيط الخلفية للتكامل المستمر
-        self._background_thread = threading.Thread(target=self._background_integration, daemon=True)
-        self._background_thread.start()
+        self._background_thread = threads.start_managed(
+            self._background_integration, owner=self, stop_event=self._bg_stop
+        )
         
         logger.info("✅ واجهة الذاكرة الموحدة جاهزة - جميع أنواع الذاكرة تعمل")
     
@@ -896,7 +902,7 @@ class MemoryViews:
         """
         last_hash = self.core._last_hash
         
-        while True:
+        while not self._bg_stop.is_set():
             try:
                 # التحقق من الأحداث الجديدة
                 # R-606: حد أقصى 1000 حدث حديث — يكفي لفاصل ثانية واحدة ويتجنب
@@ -935,11 +941,14 @@ class MemoryViews:
                     
                     last_hash = event.get("hash")
                 
-                time.sleep(1)  # ننتظر ثانية قبل التحقق مرة أخرى
+                # ننتظر ثانية قبل التحقق مرة أخرى — قابل للمقاطعة عند الإيقاف
+                if self._bg_stop.wait(1):
+                    break
                 
             except Exception as e:
                 logger.error(f"خطأ في خلفية التكامل: {e}")
-                time.sleep(5)
+                if self._bg_stop.wait(5):
+                    break
     
     # ============================================================
     # واجهات الوصول العامة

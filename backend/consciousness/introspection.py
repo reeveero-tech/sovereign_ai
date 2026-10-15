@@ -20,6 +20,7 @@ import hashlib
 import secrets
 import time
 import threading
+import runtime.threads as threads
 import math
 import random
 from dataclasses import dataclass, field
@@ -174,17 +175,13 @@ class IntrospectionEngine:
         self._active = True
         # R-606: ذاكرة مؤقتة قصيرة لنتيجة getter (نمط drives.py)
         self._introspection_status_cache = None
-        self._introspection_loop = threading.Thread(target=self._continuous_introspection, daemon=True)
-        self._introspection_loop.start()
+        self._introspection_loop = threads.start_managed(self._continuous_introspection, owner=self)
         
-        self._command_monitor = threading.Thread(target=self._monitor_commands_loop, daemon=True)
-        self._command_monitor.start()
+        self._command_monitor = threads.start_managed(self._monitor_commands_loop, owner=self)
         
-        self._quality_monitor = threading.Thread(target=self._monitor_service_quality_loop, daemon=True)
-        self._quality_monitor.start()
+        self._quality_monitor = threads.start_managed(self._monitor_service_quality_loop, owner=self)
         
-        self._wish_tracker = threading.Thread(target=self._track_sovereign_wishes_loop, daemon=True)
-        self._wish_tracker.start()
+        self._wish_tracker = threads.start_managed(self._track_sovereign_wishes_loop, owner=self)
         
         # تحميل الحالة
         self._load_state()
@@ -383,10 +380,10 @@ class IntrospectionEngine:
                             "sovereign_command_priority"
                         )
                 
-                time.sleep(10)  # كل 10 ثوانٍ
+                threads.interruptible_sleep(10)  # كل 10 ثوانٍ
             except Exception as e:
                 logger.error(f"خطأ في مراقبة الأوامر: {e}")
-                time.sleep(10)
+                threads.interruptible_sleep(10)
     
     # ============================================================
     # رغبات السيد وتطلعاته
@@ -447,10 +444,10 @@ class IntrospectionEngine:
                             wish["fulfilled_at"] = time.time()
                             logger.info(f"✨ تم تحقيق رغبة للسيد: {wish['content'][:50]}...")
                 
-                time.sleep(60)  # كل دقيقة
+                threads.interruptible_sleep(60)  # كل دقيقة
             except Exception as e:
                 logger.error(f"خطأ في تتبع الرغبات: {e}")
-                time.sleep(60)
+                threads.interruptible_sleep(60)
     
     # ============================================================
     # جودة خدمة السيد
@@ -531,10 +528,10 @@ class IntrospectionEngine:
                     for rec in report.recommendations:
                         logger.info(f"🔧 توصية للتحسين: {rec}")
                 
-                time.sleep(60)  # كل دقيقة
+                threads.interruptible_sleep(60)  # كل دقيقة
             except Exception as e:
                 logger.error(f"خطأ في مراقبة الجودة: {e}")
-                time.sleep(60)
+                threads.interruptible_sleep(60)
     
     # ============================================================
     # الصحة المعرفية
@@ -777,10 +774,10 @@ class IntrospectionEngine:
         while self._active:
             try:
                 self.introspection_cycle()
-                time.sleep(30)  # كل 30 ثانية
+                threads.interruptible_sleep(30)  # كل 30 ثانية
             except Exception as e:
                 logger.error(f"خطأ في الاستبطان المستمر: {e}")
-                time.sleep(30)
+                threads.interruptible_sleep(30)
     
     # ============================================================
     # إدارة الحالة

@@ -19,6 +19,7 @@ import json
 import hashlib
 import time
 import threading
+import runtime.threads as threads
 import math
 import secrets
 import random
@@ -229,14 +230,11 @@ class PredictiveEngine:
         self._active = True
         # R-606: ذاكرة مؤقتة قصيرة لنتيجة getter (نمط drives.py)
         self._prediction_status_cache = None
-        self._prediction_loop = threading.Thread(target=self._continuous_prediction, daemon=True)
-        self._prediction_loop.start()
+        self._prediction_loop = threads.start_managed(self._continuous_prediction, owner=self)
         
-        self._forecast_validator = threading.Thread(target=self._validate_forecasts_loop, daemon=True)
-        self._forecast_validator.start()
+        self._forecast_validator = threads.start_managed(self._validate_forecasts_loop, owner=self)
         
-        self._trend_analyzer = threading.Thread(target=self._analyze_trends_loop, daemon=True)
-        self._trend_analyzer.start()
+        self._trend_analyzer = threads.start_managed(self._analyze_trends_loop, owner=self)
         
         # تحميل الحالة
         self._load_state()
@@ -462,10 +460,10 @@ class PredictiveEngine:
             try:
                 data = self.gather_predictive_data()
                 self.analyze_trends(data)
-                time.sleep(300)  # كل 5 دقائق
+                threads.interruptible_sleep(300)  # كل 5 دقائق
             except Exception as e:
                 logger.error(f"خطأ في تحليل الاتجاهات: {e}")
-                time.sleep(300)
+                threads.interruptible_sleep(300)
     
     # ============================================================
     # التنبؤات المختلفة
@@ -932,10 +930,10 @@ class PredictiveEngine:
         while self._active:
             try:
                 self.predictive_cycle()
-                time.sleep(300)  # كل 5 دقائق
+                threads.interruptible_sleep(300)  # كل 5 دقائق
             except Exception as e:
                 logger.error(f"خطأ في تيار التنبؤ: {e}")
-                time.sleep(300)
+                threads.interruptible_sleep(300)
     
     def _validate_forecasts_loop(self):
         """التحقق من صحة التنبؤات"""
@@ -950,10 +948,10 @@ class PredictiveEngine:
                 if expired:
                     self.prediction_history.extend(expired)
                 
-                time.sleep(60)  # كل دقيقة
+                threads.interruptible_sleep(60)  # كل دقيقة
             except Exception as e:
                 logger.error(f"خطأ في التحقق من التنبؤات: {e}")
-                time.sleep(60)
+                threads.interruptible_sleep(60)
     
     # ============================================================
     # سرد التنبؤات

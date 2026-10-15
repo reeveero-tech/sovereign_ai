@@ -20,6 +20,7 @@ import hashlib
 import secrets
 import time
 import threading
+import runtime.threads as threads
 import math
 import random
 from dataclasses import dataclass, field
@@ -170,14 +171,11 @@ class SovereignDrives:
         
         # خلفيات الدوافع
         self._active = True
-        self._drive_update_loop = threading.Thread(target=self._continuous_drive_update, daemon=True)
-        self._drive_update_loop.start()
+        self._drive_update_loop = threads.start_managed(self._continuous_drive_update, owner=self)
         
-        self._satisfaction_loop = threading.Thread(target=self._satisfaction_monitoring_loop, daemon=True)
-        self._satisfaction_loop.start()
+        self._satisfaction_loop = threads.start_managed(self._satisfaction_monitoring_loop, owner=self)
         
-        self._balance_loop = threading.Thread(target=self._drive_balance_loop, daemon=True)
-        self._balance_loop.start()
+        self._balance_loop = threads.start_managed(self._drive_balance_loop, owner=self)
         
         # تحميل الحالة
         self._load_state()
@@ -599,10 +597,10 @@ class SovereignDrives:
                         decay = drive.decay_rate * drive.intensity
                         drive.intensity = max(0.0, drive.intensity - decay)
                 
-                time.sleep(30)  # كل 30 ثانية
+                threads.interruptible_sleep(30)  # كل 30 ثانية
             except Exception as e:
                 logger.error(f"خطأ في تحديث الدوافع: {e}")
-                time.sleep(30)
+                threads.interruptible_sleep(30)
     
     # ============================================================
     # إشباع الدوافع (Satisfaction)
@@ -648,10 +646,10 @@ class SovereignDrives:
                 # (هذا يعتمد على أداء النظام الفعلي)
                 pass
                 
-                time.sleep(60)  # كل دقيقة
+                threads.interruptible_sleep(60)  # كل دقيقة
             except Exception as e:
                 logger.error(f"خطأ في مراقبة الإشباع: {e}")
-                time.sleep(60)
+                threads.interruptible_sleep(60)
     
     # ============================================================
     # توازن الدوافع
@@ -717,10 +715,10 @@ class SovereignDrives:
                             if drive:
                                 drive.intensity = min(0.4, drive.intensity + 0.05)
                 
-                time.sleep(120)  # كل دقيقتين
+                threads.interruptible_sleep(120)  # كل دقيقتين
             except Exception as e:
                 logger.error(f"خطأ في توازن الدوافع: {e}")
-                time.sleep(120)
+                threads.interruptible_sleep(120)
     
     # ============================================================
     # دورة الدوافع الكاملة

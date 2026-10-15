@@ -20,6 +20,7 @@ import hashlib
 import secrets
 import time
 import threading
+import runtime.threads as threads
 import random
 import math
 from dataclasses import dataclass, field
@@ -165,11 +166,9 @@ class MemoryEvolution:
         
         # خلفيات التطور
         self._active = True
-        self._evolution_loop = threading.Thread(target=self._continuous_evolution, daemon=True)
-        self._evolution_loop.start()
+        self._evolution_loop = threads.start_managed(self._continuous_evolution, owner=self)
         
-        self._mutation_generator = threading.Thread(target=self._random_mutation_loop, daemon=True)
-        self._mutation_generator.start()
+        self._mutation_generator = threads.start_managed(self._random_mutation_loop, owner=self)
         
         # تحميل الحالة
         self._load_state()
@@ -654,12 +653,12 @@ class MemoryEvolution:
                 if self.evolution_level >= EVOLUTION_LEVEL_ACTIVE:
                     # جيل جديد كل ساعة
                     self.evolve_generation()
-                    time.sleep(3600)
+                    threads.interruptible_sleep(3600)
                 else:
-                    time.sleep(3600)
+                    threads.interruptible_sleep(3600)
             except Exception as e:
                 logger.error(f"خطأ في حلقة التطور: {e}")
-                time.sleep(3600)
+                threads.interruptible_sleep(3600)
     
     def _random_mutation_loop(self):
         """توليد طفرات عشوائية"""
@@ -671,12 +670,12 @@ class MemoryEvolution:
                         concept = random.choice(list(self.genome.values()))
                         if random.random() < 0.3:
                             self.mutate_concept(concept.name)
-                    time.sleep(600)  # كل 10 دقائق
+                    threads.interruptible_sleep(600)  # كل 10 دقائق
                 else:
-                    time.sleep(600)
+                    threads.interruptible_sleep(600)
             except Exception as e:
                 logger.error(f"خطأ في توليد الطفرات: {e}")
-                time.sleep(600)
+                threads.interruptible_sleep(600)
     
     # ============================================================
     # الأدوات المساعدة

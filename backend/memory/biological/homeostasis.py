@@ -18,6 +18,7 @@
 import json
 import time
 import threading
+import runtime.threads as threads
 import math
 import random
 from dataclasses import dataclass, field
@@ -175,14 +176,11 @@ class CognitiveHomeostasis:
         
         # خلفيات الاتزان
         self._active = True
-        self._monitoring_loop = threading.Thread(target=self._continuous_monitoring, daemon=True)
-        self._monitoring_loop.start()
+        self._monitoring_loop = threads.start_managed(self._continuous_monitoring, owner=self)
         
-        self._regulation_loop = threading.Thread(target=self._continuous_regulation, daemon=True)
-        self._regulation_loop.start()
+        self._regulation_loop = threads.start_managed(self._continuous_regulation, owner=self)
         
-        self._adaptation_loop = threading.Thread(target=self._adaptive_thresholds_loop, daemon=True)
-        self._adaptation_loop.start()
+        self._adaptation_loop = threads.start_managed(self._adaptive_thresholds_loop, owner=self)
         
         # تحميل الحالة
         self._load_state()
@@ -638,10 +636,10 @@ class CognitiveHomeostasis:
         while self._active:
             try:
                 self.monitor_vital_signs()
-                time.sleep(10)  # كل 10 ثوانٍ
+                threads.interruptible_sleep(10)  # كل 10 ثوانٍ
             except Exception as e:
                 logger.error(f"خطأ في المراقبة المستمرة: {e}")
-                time.sleep(30)
+                threads.interruptible_sleep(30)
     
     def _continuous_regulation(self):
         """تنظيم مستمر للحفاظ على التوازن"""
@@ -650,24 +648,24 @@ class CognitiveHomeostasis:
                 if self.balance_level <= BALANCE_LEVEL_VOLATILE:
                     # مراقبة مكثفة
                     self.maintain_homeostasis()
-                    time.sleep(30)
+                    threads.interruptible_sleep(30)
                 else:
                     # مراقبة عادية
                     self.maintain_homeostasis()
-                    time.sleep(300)  # كل 5 دقائق
+                    threads.interruptible_sleep(300)  # كل 5 دقائق
             except Exception as e:
                 logger.error(f"خطأ في التنظيم المستمر: {e}")
-                time.sleep(60)
+                threads.interruptible_sleep(60)
     
     def _adaptive_thresholds_loop(self):
         """تكيف العتبات"""
         while self._active:
             try:
                 self.adapt_thresholds()
-                time.sleep(3600)  # كل ساعة
+                threads.interruptible_sleep(3600)  # كل ساعة
             except Exception as e:
                 logger.error(f"خطأ في تكيف العتبات: {e}")
-                time.sleep(3600)
+                threads.interruptible_sleep(3600)
     
     # ============================================================
     # إدارة الحالة

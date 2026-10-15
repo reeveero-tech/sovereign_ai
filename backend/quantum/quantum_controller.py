@@ -18,6 +18,7 @@
 import json
 import time
 import threading
+import runtime.threads as threads
 import random
 import secrets
 from dataclasses import dataclass
@@ -187,14 +188,11 @@ class QuantumController:
         
         # خلفيات المتحكم
         self._active = True
-        self._controller_loop = threading.Thread(target=self._continuous_control, daemon=True)
-        self._controller_loop.start()
+        self._controller_loop = threads.start_managed(self._continuous_control, owner=self)
         
-        self._signal_processor = threading.Thread(target=self._process_signals_loop, daemon=True)
-        self._signal_processor.start()
+        self._signal_processor = threads.start_managed(self._process_signals_loop, owner=self)
         
-        self._decision_monitor = threading.Thread(target=self._monitor_decisions_loop, daemon=True)
-        self._decision_monitor.start()
+        self._decision_monitor = threads.start_managed(self._monitor_decisions_loop, owner=self)
         
         # تحميل الحالة
         self._load_state()
@@ -439,10 +437,10 @@ class QuantumController:
                     if signal.actionable and self.mode in [QUANTUM_MODE_INTEGRATED, QUANTUM_MODE_AUTONOMOUS]:
                         self._execute_signal(signal)
                 
-                time.sleep(5)  # كل 5 ثوانٍ
+                threads.interruptible_sleep(5)  # كل 5 ثوانٍ
             except Exception as e:
                 logger.error(f"خطأ في معالجة الإشارات: {e}")
-                time.sleep(5)
+                threads.interruptible_sleep(5)
     
     def _execute_signal(self, signal: QuantumSignal):
         """تنفيذ إشارة كمومية"""
@@ -552,10 +550,10 @@ class QuantumController:
                 for decision in pending:
                     self.execute_decision(decision)
                 
-                time.sleep(10)  # كل 10 ثوانٍ
+                threads.interruptible_sleep(10)  # كل 10 ثوانٍ
             except Exception as e:
                 logger.error(f"خطأ في مراقبة القرارات: {e}")
-                time.sleep(10)
+                threads.interruptible_sleep(10)
     
     # ============================================================
     # التكامل مع الطبقات العليا
@@ -713,10 +711,10 @@ class QuantumController:
         while self._active:
             try:
                 self.quantum_controller_cycle()
-                time.sleep(10)  # كل 10 ثوانٍ
+                threads.interruptible_sleep(10)  # كل 10 ثوانٍ
             except Exception as e:
                 logger.error(f"خطأ في حلقة التحكم: {e}")
-                time.sleep(10)
+                threads.interruptible_sleep(10)
     
     # ============================================================
     # إدارة الحالة

@@ -20,6 +20,7 @@ import math
 import random
 import secrets
 import threading
+import runtime.threads as threads
 import time
 from dataclasses import dataclass
 from typing import Dict, Any, List, Optional
@@ -174,11 +175,9 @@ class QuantumStateEngine:
         
         # خلفيات كمومية
         self._active = True
-        self._time_evolution_loop = threading.Thread(target=self._continuous_time_evolution, daemon=True)
-        self._time_evolution_loop.start()
+        self._time_evolution_loop = threads.start_managed(self._continuous_time_evolution, owner=self)
         
-        self._decoherence_loop = threading.Thread(target=self._decoherence_loop, daemon=True)
-        self._decoherence_loop.start()
+        self._decoherence_loop = threads.start_managed(self._decoherence_loop, owner=self)
         
         # تحميل الحالة
         self._load_state()
@@ -700,10 +699,10 @@ class QuantumStateEngine:
                     if random.random() < 0.1:  # 10% فرصة
                         self.evolve_state(state_id, time_step=self.policies.get("evolution_time_step", 0.05))
                 
-                time.sleep(1)  # كل ثانية
+                threads.interruptible_sleep(1)  # كل ثانية
             except Exception as e:
                 logger.error(f"خطأ في التطور الزمني: {e}")
-                time.sleep(1)
+                threads.interruptible_sleep(1)
     
     # ============================================================
     # فك الترابط (Decoherence)
@@ -746,10 +745,10 @@ class QuantumStateEngine:
                     if random.random() < 0.05:  # 5% فرصة
                         self.apply_decoherence(state_id, rate=self.policies.get("decoherence_rate", 0.02))
                 
-                time.sleep(5)  # كل 5 ثوانٍ
+                threads.interruptible_sleep(5)  # كل 5 ثوانٍ
             except Exception as e:
                 logger.error(f"خطأ في فك الترابط: {e}")
-                time.sleep(5)
+                threads.interruptible_sleep(5)
     
     # ============================================================
     # حساب المقاييس الكمومية

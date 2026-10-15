@@ -20,6 +20,7 @@ import hashlib
 import secrets
 import time
 import threading
+import runtime.threads as threads
 import random
 import base64
 from dataclasses import dataclass, field
@@ -169,11 +170,9 @@ class MemoryRegeneration:
         
         # خلفيات التجديد
         self._active = True
-        self._stem_cell_generator = threading.Thread(target=self._generate_stem_cells_loop, daemon=True)
-        self._stem_cell_generator.start()
+        self._stem_cell_generator = threads.start_managed(self._generate_stem_cells_loop, owner=self)
         
-        self._auto_regenerator = threading.Thread(target=self._auto_regeneration_loop, daemon=True)
-        self._auto_regenerator.start()
+        self._auto_regenerator = threads.start_managed(self._auto_regeneration_loop, owner=self)
         
         # تحميل الحالة
         self._load_state()
@@ -326,10 +325,10 @@ class MemoryRegeneration:
                             importance=item.get("_importance", 0.7)
                         )
                 
-                time.sleep(3600)  # كل ساعة
+                threads.interruptible_sleep(3600)  # كل ساعة
             except Exception as e:
                 logger.error(f"خطأ في توليد الخلايا الجذعية: {e}")
-                time.sleep(3600)
+                threads.interruptible_sleep(3600)
     
     # ============================================================
     # المستوى 2: تجديد المستخدم (User Regeneration)
@@ -751,10 +750,10 @@ class MemoryRegeneration:
                     # تجديد تلقائي للمستخدمين غير النشطين
                     # (تنفيذ مبسط)
                     pass
-                time.sleep(86400)  # كل يوم
+                threads.interruptible_sleep(86400)  # كل يوم
             except Exception as e:
                 logger.error(f"خطأ في التجديد التلقائي: {e}")
-                time.sleep(86400)
+                threads.interruptible_sleep(86400)
     
     def _save_state(self):
         """حفظ حالة نظام التجديد"""

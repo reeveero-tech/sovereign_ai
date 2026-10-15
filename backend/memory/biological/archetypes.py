@@ -20,6 +20,7 @@ import hashlib
 import secrets
 import time
 import threading
+import runtime.threads as threads
 import math
 import random
 from dataclasses import dataclass, field
@@ -179,11 +180,9 @@ class CognitiveArchetypes:
         self._active = True
         # R-606: ذاكرة مؤقتة قصيرة لنتيجة getter (نمط drives.py)
         self._archetype_status_cache = None
-        self._archetype_loop = threading.Thread(target=self._continuous_archetype_update, daemon=True)
-        self._archetype_loop.start()
+        self._archetype_loop = threads.start_managed(self._continuous_archetype_update, owner=self)
         
-        self._transition_detector = threading.Thread(target=self._detect_transitions_loop, daemon=True)
-        self._transition_detector.start()
+        self._transition_detector = threads.start_managed(self._detect_transitions_loop, owner=self)
         
         # تحميل الحالة
         self._load_state()
@@ -601,10 +600,10 @@ class CognitiveArchetypes:
         while self._active:
             try:
                 self.update_archetypes()
-                time.sleep(60)  # كل دقيقة
+                threads.interruptible_sleep(60)  # كل دقيقة
             except Exception as e:
                 logger.error(f"خطأ في تحديث الأنماط: {e}")
-                time.sleep(60)
+                threads.interruptible_sleep(60)
     
     # ============================================================
     # اكتشاف التحولات
@@ -687,10 +686,10 @@ class CognitiveArchetypes:
         while self._active:
             try:
                 self.detect_transitions()
-                time.sleep(30)  # كل 30 ثانية
+                threads.interruptible_sleep(30)  # كل 30 ثانية
             except Exception as e:
                 logger.error(f"خطأ في اكتشاف التحولات: {e}")
-                time.sleep(30)
+                threads.interruptible_sleep(30)
     
     # ============================================================
     # حساب التماسك والتعقيد

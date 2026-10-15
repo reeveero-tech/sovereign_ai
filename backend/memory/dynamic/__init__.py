@@ -20,6 +20,7 @@ import time
 import math
 import heapq
 import threading
+import runtime.threads as threads
 from collections import deque, defaultdict
 from dataclasses import dataclass, field, asdict
 from typing import Any, Deque, Dict, List, Optional, Tuple, Set, Callable
@@ -886,16 +887,13 @@ class DynamicMemory:
         
         # المعالجة الخلفية
         self._processing = True
-        self._processor_thread = threading.Thread(target=self._background_processor, daemon=True)
-        self._processor_thread.start()
+        self._processor_thread = threads.start_managed(self._background_processor, owner=self)
         
         # معالج الانتباه
-        self._attention_thread = threading.Thread(target=self._attention_cleaner, daemon=True)
-        self._attention_thread.start()
+        self._attention_thread = threads.start_managed(self._attention_cleaner, owner=self)
         
         # الحالم
-        self._dreamer_thread = threading.Thread(target=self._dreamer_loop, daemon=True)
-        self._dreamer_thread.start()
+        self._dreamer_thread = threads.start_managed(self._dreamer_loop, owner=self)
         
         logger.info("🌊 الذاكرة الحية المتكاملة جاهزة")
     
@@ -1098,16 +1096,16 @@ class DynamicMemory:
                 for user_id in list(self.working._by_user.keys()):
                     self.preload_context(user_id)
                 
-                time.sleep(BACKGROUND_PROCESSING_INTERVAL)
+                threads.interruptible_sleep(BACKGROUND_PROCESSING_INTERVAL)
             except Exception as e:
                 logger.error(f"خطأ في المعالجة الخلفية: {e}")
-                time.sleep(1)
+                threads.interruptible_sleep(1)
     
     def _attention_cleaner(self):
         """تنظيف الانتباه بشكل دوري"""
         while self._processing:
             try:
-                time.sleep(ATTENTION_CLEANUP_INTERVAL)
+                threads.interruptible_sleep(ATTENTION_CLEANUP_INTERVAL)
                 
                 # تنظيف المستخدمين غير النشطين
                 active_threshold = 300  # 5 دقائق
@@ -1129,10 +1127,10 @@ class DynamicMemory:
             try:
                 if self.dreaming.should_dream():
                     self.dreaming.dream()
-                time.sleep(30)  # فحص كل 30 ثانية
+                threads.interruptible_sleep(30)  # فحص كل 30 ثانية
             except Exception as e:
                 logger.error(f"خطأ في الحلم: {e}")
-                time.sleep(60)
+                threads.interruptible_sleep(60)
     
     # ============================================================
     # الإحصائيات

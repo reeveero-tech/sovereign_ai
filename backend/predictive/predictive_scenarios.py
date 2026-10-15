@@ -18,6 +18,7 @@
 import json
 import time
 import threading
+import runtime.threads as threads
 import random
 import secrets
 from dataclasses import dataclass
@@ -164,14 +165,11 @@ class PredictiveScenarioEngine:
         self._active = True
         # R-606: ذاكرة مؤقتة قصيرة لنتيجة getter (نمط drives.py)
         self._scenario_status_cache = None
-        self._scenario_loop = threading.Thread(target=self._continuous_scenario_analysis, daemon=True)
-        self._scenario_loop.start()
+        self._scenario_loop = threads.start_managed(self._continuous_scenario_analysis, owner=self)
         
-        self._warning_monitor = threading.Thread(target=self._monitor_early_warnings_loop, daemon=True)
-        self._warning_monitor.start()
+        self._warning_monitor = threads.start_managed(self._monitor_early_warnings_loop, owner=self)
         
-        self._trigger_detector = threading.Thread(target=self._detect_triggers_loop, daemon=True)
-        self._trigger_detector.start()
+        self._trigger_detector = threads.start_managed(self._detect_triggers_loop, owner=self)
         
         # تحميل الحالة
         self._load_state()
@@ -664,10 +662,10 @@ class PredictiveScenarioEngine:
                             payload=warning
                         )
                 
-                time.sleep(30)  # كل 30 ثانية
+                threads.interruptible_sleep(30)  # كل 30 ثانية
             except Exception as e:
                 logger.error(f"خطأ في مراقبة الإنذارات: {e}")
-                time.sleep(30)
+                threads.interruptible_sleep(30)
     
     # ============================================================
     # اكتشاف المحفزات
@@ -726,10 +724,10 @@ class PredictiveScenarioEngine:
                     if trigger["strength"] > 0.6:
                         logger.info(f"⚡ محفز مكتشف: {trigger['scenario']} - {trigger['trigger']}")
                 
-                time.sleep(60)  # كل دقيقة
+                threads.interruptible_sleep(60)  # كل دقيقة
             except Exception as e:
                 logger.error(f"خطأ في كشف المحفزات: {e}")
-                time.sleep(60)
+                threads.interruptible_sleep(60)
     
     # ============================================================
     # توليد التوصيات
@@ -840,10 +838,10 @@ class PredictiveScenarioEngine:
         while self._active:
             try:
                 self.scenario_cycle()
-                time.sleep(300)  # كل 5 دقائق
+                threads.interruptible_sleep(300)  # كل 5 دقائق
             except Exception as e:
                 logger.error(f"خطأ في تحليل السيناريوهات: {e}")
-                time.sleep(300)
+                threads.interruptible_sleep(300)
     
     # ============================================================
     # سرد السيناريوهات

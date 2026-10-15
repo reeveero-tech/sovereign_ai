@@ -18,6 +18,7 @@
 import json
 import time
 import threading
+import runtime.threads as threads
 import random
 import secrets
 from dataclasses import dataclass
@@ -182,14 +183,11 @@ class SimulationScheduler:
         
         # خلفيات المجدول
         self._active = True
-        self._scheduler_thread = threading.Thread(target=self._scheduler_loop, daemon=True)
-        self._scheduler_thread.start()
+        self._scheduler_thread = threads.start_managed(self._scheduler_loop, owner=self)
         
-        self._worker_monitor = threading.Thread(target=self._monitor_workers_loop, daemon=True)
-        self._worker_monitor.start()
+        self._worker_monitor = threads.start_managed(self._monitor_workers_loop, owner=self)
         
-        self._persistence_thread = threading.Thread(target=self._persistence_loop, daemon=True)
-        self._persistence_thread.start()
+        self._persistence_thread = threads.start_managed(self._persistence_loop, owner=self)
         
         # تحميل الحالة
         self._load_state()
@@ -439,10 +437,10 @@ class SimulationScheduler:
         while self._active:
             try:
                 self._process_queue()
-                time.sleep(0.5)  # فحص كل نصف ثانية
+                threads.interruptible_sleep(0.5)  # فحص كل نصف ثانية
             except Exception as e:
                 logger.error(f"خطأ في حلقة الجدولة: {e}")
-                time.sleep(1)
+                threads.interruptible_sleep(1)
     
     def _process_queue(self):
         """معالجة قائمة الانتظار وتشغيل الوظائف المستحقة"""
@@ -593,10 +591,10 @@ class SimulationScheduler:
                     if exec_id in self.active_futures:
                         del self.active_futures[exec_id]
                 
-                time.sleep(1)
+                threads.interruptible_sleep(1)
             except Exception as e:
                 logger.error(f"خطأ في مراقبة العمال: {e}")
-                time.sleep(1)
+                threads.interruptible_sleep(1)
     
     # ============================================================
     # استمرارية البيانات
@@ -673,10 +671,10 @@ class SimulationScheduler:
         while self._active:
             try:
                 self._save_state()
-                time.sleep(300)  # كل 5 دقائق
+                threads.interruptible_sleep(300)  # كل 5 دقائق
             except Exception as e:
                 logger.error(f"خطأ في حفظ الحالة الدوري: {e}")
-                time.sleep(300)
+                threads.interruptible_sleep(300)
     
     # ============================================================
     # دورة المجدول

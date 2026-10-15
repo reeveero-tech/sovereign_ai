@@ -19,6 +19,7 @@ import json
 import secrets
 import time
 import threading
+import runtime.threads as threads
 import random
 from dataclasses import dataclass
 from typing import Dict, Any, List, Optional, Tuple
@@ -170,14 +171,11 @@ class AttentionEngine:
         
         # خلفيات الانتباه
         self._active = True
-        self._allocation_loop = threading.Thread(target=self._continuous_allocation, daemon=True)
-        self._allocation_loop.start()
+        self._allocation_loop = threads.start_managed(self._continuous_allocation, owner=self)
         
-        self._sustained_tracker = threading.Thread(target=self._track_sustained_attention, daemon=True)
-        self._sustained_tracker.start()
+        self._sustained_tracker = threads.start_managed(self._track_sustained_attention, owner=self)
         
-        self._resource_monitor = threading.Thread(target=self._monitor_resources, daemon=True)
-        self._resource_monitor.start()
+        self._resource_monitor = threads.start_managed(self._monitor_resources, owner=self)
         
         # تحميل الحالة
         self._load_state()
@@ -628,10 +626,10 @@ class AttentionEngine:
         while self._active:
             try:
                 self.update_attention()
-                time.sleep(0.5)
+                threads.interruptible_sleep(0.5)
             except Exception as e:
                 logger.error(f"خطأ في توزيع الانتباه: {e}")
-                time.sleep(1)
+                threads.interruptible_sleep(1)
     
     def _track_sustained_attention(self):
         """تتبع الانتباه المستدام"""
@@ -643,10 +641,10 @@ class AttentionEngine:
                     if self.sustained_attention_items[item_id] == 0:
                         del self.sustained_attention_items[item_id]
                 
-                time.sleep(1)
+                threads.interruptible_sleep(1)
             except Exception as e:
                 logger.error(f"خطأ في تتبع الانتباه المستدام: {e}")
-                time.sleep(1)
+                threads.interruptible_sleep(1)
     
     def _monitor_resources(self):
         """مراقبة استخدام موارد الانتباه"""
@@ -655,10 +653,10 @@ class AttentionEngine:
                 if self.used_resources > self.total_attention_resources * 0.9:
                     logger.warning(f"⚠️ استخدام مرتفع للانتباه: {self.used_resources:.1f}/{self.total_attention_resources:.1f}")
                 
-                time.sleep(5)
+                threads.interruptible_sleep(5)
             except Exception as e:
                 logger.error(f"خطأ في مراقبة الموارد: {e}")
-                time.sleep(5)
+                threads.interruptible_sleep(5)
     
     # ============================================================
     # إدارة الحالة

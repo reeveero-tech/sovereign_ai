@@ -20,6 +20,7 @@ import math
 import random
 import secrets
 import threading
+import runtime.threads as threads
 import time
 from dataclasses import dataclass
 from typing import Dict, Any, List, Optional
@@ -152,14 +153,11 @@ class QuantumSuperpositionEngine:
         
         # خلفيات التراكب
         self._active = True
-        self._coherence_maintenance = threading.Thread(target=self._maintain_coherence_loop, daemon=True)
-        self._coherence_maintenance.start()
+        self._coherence_maintenance = threads.start_managed(self._maintain_coherence_loop, owner=self)
         
-        self._interference_loop = threading.Thread(target=self._continuous_interference_loop, daemon=True)
-        self._interference_loop.start()
+        self._interference_loop = threads.start_managed(self._continuous_interference_loop, owner=self)
         
-        self._nesting_optimizer = threading.Thread(target=self._optimize_nesting_loop, daemon=True)
-        self._nesting_optimizer.start()
+        self._nesting_optimizer = threads.start_managed(self._optimize_nesting_loop, owner=self)
         
         # تحميل الحالة
         self._load_state()
@@ -548,10 +546,10 @@ class QuantumSuperpositionEngine:
                     if random.random() < 0.3:
                         self.apply_group_interference(group.id)
                 
-                time.sleep(10)  # كل 10 ثوانٍ
+                threads.interruptible_sleep(10)  # كل 10 ثوانٍ
             except Exception as e:
                 logger.error(f"خطأ في حلقة التداخل الجماعي: {e}")
-                time.sleep(10)
+                threads.interruptible_sleep(10)
     
     # ============================================================
     # قياسات جزئية
@@ -679,10 +677,10 @@ class QuantumSuperpositionEngine:
                         sp = self._normalize_amplitudes(sp)
                         self.superpositions[super_id] = sp
                 
-                time.sleep(5)  # كل 5 ثوانٍ
+                threads.interruptible_sleep(5)  # كل 5 ثوانٍ
             except Exception as e:
                 logger.error(f"خطأ في صيانة التماسك: {e}")
-                time.sleep(5)
+                threads.interruptible_sleep(5)
     
     def _optimize_nesting_loop(self):
         """تحسين هيكل التراكبات المتداخلة"""
@@ -704,10 +702,10 @@ class QuantumSuperpositionEngine:
                         
                         nested.entanglement_degree = min(1.0, entanglement / len(nested.children))
                 
-                time.sleep(60)  # كل دقيقة
+                threads.interruptible_sleep(60)  # كل دقيقة
             except Exception as e:
                 logger.error(f"خطأ في تحسين التداخل: {e}")
-                time.sleep(60)
+                threads.interruptible_sleep(60)
     
     # ============================================================
     # دورة تراكب كاملة

@@ -20,6 +20,7 @@ import hashlib
 import secrets
 import time
 import threading
+import runtime.threads as threads
 import math
 import random
 from dataclasses import dataclass, field
@@ -153,17 +154,13 @@ class NeuralPlasticity:
         
         # خلفيات اللدونة
         self._active = True
-        self._ltp_loop = threading.Thread(target=self._continuous_ltp, daemon=True)
-        self._ltp_loop.start()
+        self._ltp_loop = threads.start_managed(self._continuous_ltp, owner=self)
         
-        self._pruning_loop = threading.Thread(target=self._continuous_pruning, daemon=True)
-        self._pruning_loop.start()
+        self._pruning_loop = threads.start_managed(self._continuous_pruning, owner=self)
         
-        self._rewiring_loop = threading.Thread(target=self._continuous_rewiring, daemon=True)
-        self._rewiring_loop.start()
+        self._rewiring_loop = threads.start_managed(self._continuous_rewiring, owner=self)
         
-        self._neurogenesis_loop = threading.Thread(target=self._continuous_neurogenesis, daemon=True)
-        self._neurogenesis_loop.start()
+        self._neurogenesis_loop = threads.start_managed(self._continuous_neurogenesis, owner=self)
         
         # تحميل الحالة
         self._load_state()
@@ -290,10 +287,10 @@ class NeuralPlasticity:
                             intensity = min(0.5, count / 20)
                             self.long_term_potentiation(source, target, intensity)
                 
-                time.sleep(300)  # كل 5 دقائق
+                threads.interruptible_sleep(300)  # كل 5 دقائق
             except Exception as e:
                 logger.error(f"خطأ في LTP المستمر: {e}")
-                time.sleep(300)
+                threads.interruptible_sleep(300)
     
     def _analyze_usage_patterns(self) -> Dict[Tuple[str, str], int]:
         """تحليل أنماط الاستخدام من السجل"""
@@ -478,10 +475,10 @@ class NeuralPlasticity:
                     for sid, _ in to_prune:
                         self.synaptic_pruning(sid)
                 
-                time.sleep(600)  # كل 10 دقائق
+                threads.interruptible_sleep(600)  # كل 10 دقائق
             except Exception as e:
                 logger.error(f"خطأ في التقليم المستمر: {e}")
-                time.sleep(600)
+                threads.interruptible_sleep(600)
     
     # ============================================================
     # المستوى 5: إعادة التوصيل (Rewiring)
@@ -537,10 +534,10 @@ class NeuralPlasticity:
                                 new_target = random.choice(related)
                                 self.rewiring(synapse.source, synapse.target, new_target)
                 
-                time.sleep(1800)  # كل 30 دقيقة
+                threads.interruptible_sleep(1800)  # كل 30 دقيقة
             except Exception as e:
                 logger.error(f"خطأ في إعادة التوصيل: {e}")
-                time.sleep(1800)
+                threads.interruptible_sleep(1800)
     
     def _find_related_concepts(self, concept: str) -> List[str]:
         """العثور على مفاهيم مرتبطة بمفهوم"""
@@ -604,10 +601,10 @@ class NeuralPlasticity:
                     for concept in candidate_concepts[:3]:
                         self.neurogenesis(concept, f"مفهوم مستخلص تلقائياً: {concept}")
                 
-                time.sleep(3600)  # كل ساعة
+                threads.interruptible_sleep(3600)  # كل ساعة
             except Exception as e:
                 logger.error(f"خطأ في تكوين الخلايا: {e}")
-                time.sleep(3600)
+                threads.interruptible_sleep(3600)
     
     def _extract_candidate_concepts(self) -> List[str]:
         """استخراج مفاهيم مرشحة من الأحداث الأخيرة"""
