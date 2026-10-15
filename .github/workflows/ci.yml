@@ -51,10 +51,30 @@ jobs:
         run: |
           set -euo pipefail
           SHA=$(git rev-parse HEAD)
+          # R-682 (Task 3.3): -m "not operational" — operational tests deselected (not skipped).
           python -m pytest tests/ backend/tests/ -v \
+            -m "not operational" \
             --junitxml=forensics/pytest_results.xml \
-            --junit-prefix="R-681-ci-sha-${SHA}" \
+            --junit-prefix="R-682-ci-sha-${SHA}" \
             || { echo "❌ pytest FAILED — see forensics/pytest_results.xml"; exit 1; }
+
+      - name: 'R-682: Verify zero skips (DoD hard requirement)'
+        run: |
+          python - << 'EOF'
+          import xml.etree.ElementTree as ET
+          tree = ET.parse("forensics/pytest_results.xml")
+          root = tree.getroot()
+          skipped = sum(int(ts.get("skipped", 0)) for ts in root.iter("testsuite"))
+          if skipped != 0:
+              print(f"❌ DoD violated: {skipped} skipped tests found — must be 0")
+              # List skipped test names
+              for tc in root.iter("testcase"):
+                  if tc.find("skipped") is not None:
+                      s = tc.find("skipped")
+                      print(f"   SKIPPED: {tc.get('classname')}.{tc.get('name')}: {s.get('message')}")
+              raise SystemExit(1)
+          print(f"✅ Zero skips confirmed — {skipped} skipped")
+          EOF
 
       - name: Upload JUnit XML artifact
         uses: actions/upload-artifact@v4
