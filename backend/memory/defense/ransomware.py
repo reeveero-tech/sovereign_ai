@@ -157,6 +157,10 @@ class RansomwareDefense:
         self.phoenix_phase = PhoenixPhase.LIVING
         self.resurrection_level = RESURRECTION_LEVEL_NONE
         self.is_transforming = False
+        # R-682 (جولة 13): علامة إنهاء معلقة — عملية موت لم يُؤكد اكتمالها
+        # (الحدث لم يُلحق أو رفع العلامة لم يُحفظ). عند التحميل تُعامل كعملية
+        # فاشلة لا كموت مكتمل (فاشل-مغلق: غير المحسوم ≠ مكتمل).
+        self._pending_outcome = None
         self.last_resurrection: Optional[ResurrectionRecord] = None
         
         # البذور والرماد
@@ -670,6 +674,10 @@ class RansomwareDefense:
             self.phoenix_phase = PhoenixPhase.LIVING
             self.resurrection_level = RESURRECTION_LEVEL_NONE
             self.is_transforming = False
+            # العملية حُسمت فشلًا — العلامة المعلقة تُرفع قبل تراجع الحفظ
+            # (نجاح التراجع = قرص نظيف؛ فشله = القرص يحمل DEAD+علامة فتُسوّى
+            # عند التحميل كعملية فاشلة — لا كموت مكتمل)
+            self._pending_outcome = None
             self.last_death_record = ResurrectionRecord(
                 id=f"death_{int(time.time())}",
                 before_hash=self.core._last_hash,
@@ -728,6 +736,14 @@ class RansomwareDefense:
         else:
             self.phoenix_phase = PhoenixPhase.LIVING
             self.resurrection_level = RESURRECTION_LEVEL_NONE
+        # R-682 (جولة 13): علامة إنهاء معلقة — تُحفظ مع الحالة قبل حدث الإكمال،
+        # وترفع فقط بعد إلحاق الحدث وحفظ الرفع (التزام ذري عبر علامة قابلة
+        # للتمييز). عملية غير محسومة تُحمَّل كفاشلة — لا كموت مكتمل.
+        self._pending_outcome = {
+            "op": "death",
+            "id": death_record.id,
+            "intended": "DEAD" if recovery_ready else "LIVING",
+        }
         event_payload = {
             "reason": reason,
             "resurrection_mode": resurrection_mode,
@@ -764,6 +780,15 @@ class RansomwareDefense:
                     f"تراجع كامل: {e}"
                 )
                 return _failed_outcome("death event recording failed")
+            # الحدث أُلحق — رفع العلامة (commit). فشل حفظ الرفع = العملية
+            # غير محسومة: القرص DEAD+علامة → تُحمَّل كعملية فاشلة (فاشل-مغلق)
+            self._pending_outcome = None
+            if not self._save_state():
+                logger.error(
+                    "R-682 [SECURITY-FAIL]: فشل حفظ رفع علامة الإنهاء — العملية "
+                    "غير محسومة ولا يُعلن موت (تُسوّى عند التحميل كعملية فاشلة)"
+                )
+                return _failed_outcome("pending-outcome commit save failed")
             logger.warning(
                 f"⚰️ الموت تم: نسخ الاسترداد جاهزة ({protection['blobs_encrypted']} blob "
                 "مشفر إلى رماد موثق) والحالة محفوظة. الأصول تبقى مقروءة (الحماية "
@@ -784,6 +809,14 @@ class RansomwareDefense:
                 "النتيجة False والنظام حي والرماد/البذور محفوظة"
             )
             return _failed_outcome("death-failed event recording failed")
+        # الفشل حُسم وأُعلن — رفع العلامة (أفضل جهد: النتيجة False أصلًا،
+        # وبقاء العلامة على القرص يُسوّى عند التحميل كعملية فاشلة)
+        self._pending_outcome = None
+        if not self._save_state():
+            logger.error(
+                "R-682: فشل حفظ رفع علامة الإنهاء في مسار الفشل — تُسوّى عند "
+                "التحميل كعملية فاشلة (النتيجة False أصلًا)"
+            )
         reasons = []
         if protection["blob_failures"]:
             reasons.append(f"{protection['blob_failures']} فشل إنشاء رماد")
@@ -1528,6 +1561,8 @@ class RansomwareDefense:
                 "phoenix_phase": self.phoenix_phase.value,
                 "resurrection_level": self.resurrection_level,
                 "is_transforming": self.is_transforming,
+                # getattr: كائنات تُبنى بـ__new__ (اختبارات) قد لا تمر بـ__init__
+                "pending_outcome": getattr(self, "_pending_outcome", None),
                 "seeds_count": len(self.seeds),
                 "ashes_count": len(self.ashes),
                 "last_resurrection": self.last_resurrection.__dict__ if self.last_resurrection else None,
@@ -1619,6 +1654,21 @@ class RansomwareDefense:
                     self.phoenix_phase = PhoenixPhase(state.get("phoenix_phase", "living"))
                     self.resurrection_level = state.get("resurrection_level", 0)
                     self.is_transforming = state.get("is_transforming", False)
+                    # R-682 (جولة 13): علامة إنهاء معلقة = عملية موت لم يُؤكد
+                    # اكتمالها (الحدث لم يُلحق أو رفع العلامة لم يُحفظ).
+                    # غير المحسوم ≠ مكتمل: تُعامل كعملية فاشلة — لا يُحمَّل
+                    # DEAD كموت مكتمل أبدًا.
+                    _pending = state.get("pending_outcome")
+                    if _pending:
+                        logger.warning(
+                            f"R-682: علامة إنهاء معلقة في الحالة المحفوظة "
+                            f"({_pending}) — عملية لم يُؤكد اكتمالها: تُعامل كعملية "
+                            "فاشلة (LIVING) لا كموت مكتمل، ومواد الاسترداد محفوظة"
+                        )
+                        self._pending_outcome = None
+                        self.phoenix_phase = PhoenixPhase.LIVING
+                        self.resurrection_level = RESURRECTION_LEVEL_NONE
+                        self.is_transforming = False
                     # R-682 (جولة 12): تسوية الحالة الانتقالية المعلقة — علم تحول
                     # محفوظ لا يمكن أن يكون جاريًا في عملية جديدة (لا عملية تعبر
                     # العمليات): يُعامل كعملية منقطعة لا كتحول يمنع المحاولة.

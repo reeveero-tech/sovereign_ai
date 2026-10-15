@@ -2048,6 +2048,103 @@ class TestDeathDoubleSaveFailure:
 
 
 # ============================================================
+# Part 1h: جولة 13 — الموت غير المحسوم قابل للتمييز بعد التحميل
+# ============================================================
+
+class TestUndecidedDeathOutcome:
+    """R-682 (جولة 13 — اعتراض advisor الثامن): مسار الفشل المقابل لتبديل
+    الترتيب — الحفظ النهائي ينجح (DEAD على القرص، لا علم تحول)، يفشل حدث
+    الإكمال، ويفشل تراجع الحفظ أيضًا: القرص يبقى DEAD والذاكرة LIVING،
+    والتسوية القديمة (شرطها is_transforming) لا تعمل. الحل: علامة إنهاء
+    معلقة (pending_outcome) — العملية غير المحسومة تُحمَّل كعملية فاشلة لا
+    كموت مكتمل، ومواد الاسترداد محفوظة وإعادة المحاولة ممكنة."""
+
+    def _env(self, tmp_path, monkeypatch):
+        import backend.memory.defense.ransomware as rw
+        import backend.memory.store as store_mod
+        from backend.memory.core import BlobStore
+        blob_dir = tmp_path / "blobs"
+        blob_dir.mkdir(exist_ok=True)
+        core = MagicMock()
+        core._last_hash = "a" * 64
+        core.get_statistics.return_value = {"index": {"total_events": 1}}
+        core.blob_store = BlobStore(blob_dir)
+        seeds_dir = tmp_path / "seeds"
+        seeds_dir.mkdir(exist_ok=True)
+        monkeypatch.setattr(rw, "PHOENIX_SEEDS_DIR", seeds_dir)
+        monkeypatch.setattr(rw, "PHOENIX_STATE_FILE", tmp_path / "phoenix_state.json")
+        monkeypatch.setattr(rw, "get_core", lambda: core)
+        monkeypatch.setattr(rw, "get_encoder", lambda: MagicMock())
+        monkeypatch.setattr(rw, "get_watcher", lambda: MagicMock())
+        empty = _IsolatedStore()
+        monkeypatch.setattr(store_mod, "get_store", lambda: empty)
+        import threading as _th
+        monkeypatch.setattr(_th, "Thread", _NoThreads)
+        return rw, core
+
+    def test_undecided_death_not_loaded_as_complete(self, tmp_path, monkeypatch):
+        """الحفظ الانتقالي والنهائي ينجحان (DEAD على القرص بلا علم تحول)؛
+        يفشل حدث الإكمال تحديدًا ثم يفشل تراجع الحفظ: النتيجة False والقرص
+        DEAD — لكن بعد إعادة التهيئة لا يُحمَّل كموت مكتمل (تسوية العلامة
+        المعلقة) والمحاولة تنجح."""
+        import json as _json
+        rw, core = self._env(tmp_path, monkeypatch)
+        state_file = tmp_path / "phoenix_state.json"
+        h = core.blob_store.put(b"undecided_death_blob_" * 4, compress=True)
+        core.iterate_events = lambda limit=1000, **k: [{"blob": h}]
+
+        obj = rw.RansomwareDefense()
+        # الحفظ الانتقالي (1) والنهائي (2) ينجحان؛ كل حفظ لاحق (التراجع) يفشل
+        orig_save = obj._save_state
+        calls = {"n": 0}
+        def flaky_save():
+            calls["n"] += 1
+            if calls["n"] >= 3:
+                return False
+            return orig_save()
+        obj._save_state = flaky_save
+        # فشل حدث الإكمال تحديدًا
+        real_append = core.append_event
+        def failing_append(*args, **kwargs):
+            et = kwargs.get("event_type") or (args[0] if args else None)
+            if et == "phoenix::death":
+                raise RuntimeError("inject: completion event failed")
+            return real_append(*args, **kwargs)
+        core.append_event = failing_append
+
+        result = obj.initiate_death(reason="undecided-death-test")
+        assert result is False
+        assert obj.phoenix_phase == rw.PhoenixPhase.LIVING  # الذاكرة مصححة
+        assert obj.is_transforming is False
+        assert obj.last_death_record.success is False
+        assert calls["n"] >= 3, "التراجع حاول الحفظ فعلًا"
+        # القرص: DEAD بلا علم تحول — هذه هي المشكلة التي يجب تمييزها
+        disk_state = _json.loads(state_file.read_text())
+        assert disk_state["phoenix_phase"] == "dead", \
+            "القرص فعلاً يحمل DEAD (سيناريو الفشل المزدوج)"
+        assert disk_state.get("is_transforming") is False
+        # لكن مع علامة إنهاء معلقة تميز العملية غير المحسومة
+        assert disk_state.get("pending_outcome"), \
+            "علامة الإنهاء المعلقة يجب أن تُحفظ مع الحالة"
+
+        # إعادة التهيئة من نفس الملفات: لا يُحمَّل كموت مكتمل
+        obj2 = rw.RansomwareDefense()
+        assert obj2.phoenix_phase == rw.PhoenixPhase.LIVING, \
+            "العملية غير المحسومة تُحمَّل كفاشلة — لا كموت مكتمل"
+        assert obj2.is_transforming is False
+        # مواد الاسترداد (البذور) محفوظة على القرص وقابلة للاكتشاف الفعلي
+        # (الاكتشاف كسول — عبر _find_latest_seed لا عند التهيئة)
+        seed_files = list((tmp_path / "seeds").glob("*.enc"))
+        assert seed_files, "البذور محفوظة على القرص"
+        found = obj2._find_latest_seed(obj2.get_resurrection_key())
+        assert found is not None, "البذور قابلة للاكتشاف والفك فعليًا"
+        # وإعادة المحاولة ممكنة وتنجح فعلًا (بعد رفع حقن فشل الحدث)
+        core.append_event = real_append
+        assert obj2.initiate_death(reason="retry-after-undecided") is True
+        assert obj2.phoenix_phase == rw.PhoenixPhase.DEAD
+
+
+# ============================================================
 # Part 2: المواقع منخفضة الخطورة — اختبارات سلوكية
 # ============================================================
 
