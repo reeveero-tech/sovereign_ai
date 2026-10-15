@@ -20,7 +20,7 @@ VERIFICATION COMPLETE — HEAD: f07507700eb0fe2fa852ff8cdcb2168a637e7201
 **المرجع:** أمر التسليم R-682 — الإغلاق الحقيقي قبل الإنتاج
 **الحالة النهائية:** REVIEW-READY (تسليم جزئي — ليس production-ready)
 
-**ملاحظة صادقة:** DoD checklist يحتوي **7 صناديق `[ ]`** — أي أن R-682 **ليس مكتملًا**. راجع قسم "الادعاءات غير المتحققة" و"DoD Checklist" أدناه.
+**ملاحظة صادقة:** DoD checklist يحتوي **5 صناديق `[ ]`** — أي أن R-682 **ليس مكتملًا**. راجع قسم "الادعاءات غير المتحققة" و"DoD Checklist" أدناه.
 
 ---
 
@@ -29,13 +29,14 @@ VERIFICATION COMPLETE — HEAD: f07507700eb0fe2fa852ff8cdcb2168a637e7201
 | # | البند | التصنيف | الدليل |
 |---|---|---|---|
 | 1+6 | CI + backend/tests/ + JUnit | **CLOSED** | CI workflow — job `test` + job `operational` (manual) |
-| 2 | return None (23 موقعًا) | **CLOSED جزئيًا** — 8 من 9 مواقع عالية الخطورة مُغلقة فعليًا (logging + اختبار سلوكي)؛ الموقع 9 (`_decrypt_seed`) BLOCKED؛ الـ 14 موقعًا منخفضة الخطورة **logging تحذيري فقط بدون اختبار سلوكي** | `forensics/RETURN_NONE_AUDIT_R682.md` + `tests/test_return_none_security.py` (17 test) + `SECURITY_FIXES_R682.md` |
+| 2أ | return None — 8 مواقع عالية الخطورة | **CLOSED** | logging.exception + سبب عدم الرفع + اختبار سلوكي — `tests/test_return_none_security.py` (17 test) |
+| 2ب | return None — الموقع 9 (`_decrypt_seed`) | **BLOCKED** | الخوارزمية غير مُنفّذة — يحتاج قرار المالك ("مفتاح القيامة") — راجع `SECURITY_FIXES_R682.md` الموقع 9 |
+| 2ج | return None — 14 موقعًا منخفضة الخطورة | **DEFERRED** | logging تحذيري فقط — **لا يوجد اختبار سلوكي لكل موقع** — عمل متبقٍ على الوكيل (ليس عائقًا خارجيًا) — راجع `RETURN_NONE_AUDIT_R682.md` |
 | 3 | awareness.py:561 | **CLOSED** | أُزيل الكود الصامت + [Issue #7](https://github.com/reeveero-tech/sovereign_ai/issues/7) |
 | 4 | الماسح الصامت | **CLOSED** | warnings.warn() (R-681) |
 | 5 | SHA في JUnit | **CLOSED** | embedded in XML root |
 | 7 | RED | **CLOSED** | `forensics/RED_R-681.md` (R-681) |
-| 8 | حذف بلا تبرير | **BLOCKED** | `forensics/CONTRACT_EXCEPTION_1.md` — انتهاك قائم بانتظار قرار المالك بأثر رجعي |
-| — | `_decrypt_seed` (ransomware.py:364) | **BLOCKED** | الخوارزمية غير مُنفّذة — يحتاج قرار المالك ("مفتاح القيامة") — راجع `SECURITY_FIXES_R682.md` الموقع 9 |
+| 8 | حذف بلا تبرير | **BLOCKED** | `forensics/CONTRACT_EXCEPTION_1.md` — انتهاك قائم؛ الإغلاق يتطلب استرجاع المحذوف أو تعديل العقد صراحةً من المالك (موافقة لاحقة وحدها لا تُغلق البند) |
 
 ---
 
@@ -43,23 +44,28 @@ VERIFICATION COMPLETE — HEAD: f07507700eb0fe2fa852ff8cdcb2168a637e7201
 
 ```
 $ ./verify.sh
-316 passed, 1 deselected in 147.29s
-✅ DoD PASS: 316 passed, 0 skipped, 0 failed
+316 passed, 1 deselected in 149.27s
+✅ بوابة الاختبارات ناجحة: 316 passed, 0 skipped, 0 failed
 ```
 
-### JUnit XML مقتطف حرفي (من artifact CI run 38662055044)
+**ملاحظة:** السكربت يُعلن نجاح **بوابة الاختبارات** فقط — ليس اكتمال DoD ولا العقد.
+
+### JUnit XML مقتطف حرفي (من artifact CI run `38667166304` — headSha `f075077`)
 
 ```xml
 <?xml version='1.0' encoding='utf-8'?>
-<testsuites name="pytest tests" git_sha="240058444bc004c891905894658469d562cf387d" junit_prefix="R-682-ci-sha-240058444bc004c891905894658469d562cf387d">
-  <testsuite name="pytest" errors="0" failures="0" skipped="0" tests="316" time="117.420" timestamp="2026-10-15T00:48:09.391751+00:00" hostname="runnervmmprz5">
+<testsuites name="pytest tests" git_sha="f07507700eb0fe2fa852ff8cdcb2168a637e7201" junit_prefix="R-682-ci-sha-f07507700eb0fe2fa852ff8cdcb2168a637e7201">
+  <testsuite name="pytest" errors="0" failures="0" skipped="0" tests="316" time="141.815" timestamp="2026-10-15T01:43:33.451793+00:00" hostname="runnervmmprz5">
 ```
 
-**مصدر:** CI run `38662055044` (headSha `2400584`), artifact `junit-with-sha-2400584` (ID `11939845737`).
+**مصدر:** CI run `38667166304` (headSha `f075077`، conclusion: success)، artifact `junit-with-sha-f075077` (ID `11943020729`).
 
 **تنفيذ:** 316 اختبارًا، **مُستبعد:** 1 (operational)، **مُضاف:** 17 اختبار أمان + 7 اختبار fixture.
 
-**نتيجة المحلية (بيئة المستشار، Python 3.14، تشغيل مستقل):** `316 passed, 1 deselected in 149.20s` — مطابق لـ CI (316/0/0/0).
+**نتائج بيئة المستشار (Python 3.14، تشغيل فعلي على `f075077` من clone نظيف):**
+- تشغيل `./verify.sh` المحلي: `316 passed, 1 deselected in 149.27s`
+- تشغيل التحقق من clone (داخل `--full`): `316 passed, 1 deselected in 147.33s`
+- كلاهما مطابق لـ CI (316/0/0/0)
 
 ---
 
@@ -96,8 +102,10 @@ $ ./verify.sh
 
 | الفجوة | السبب | التصنيف |
 |---|---|---|
-| البند 8 ("لا حذف") | يتطلب قرار المالك | **BLOCKED** |
+| البند 8 ("لا حذف") | الإغلاق يتطلب استرجاع المحذوف أو تعديل العقد صراحةً من المالك | **BLOCKED** (خارجي) |
+| الموقع 9 `_decrypt_seed` | الخوارزمية غير منفذة — قرار تصميمي من المالك | **BLOCKED** (خارجي) |
 | تشغيل job operational اليدوي | يتطلب `KEY_SECRET` secret من المالك | **BLOCKED** (خارجي) |
+| اختبارات سلوكية للـ 14 موقعًا منخفضة الخطورة | **عمل متبقٍ على الوكيل** — ليس عائقًا خارجيًا | **DEFERRED** |
 
 ---
 
@@ -110,22 +118,24 @@ $ ./verify.sh
 2. الموقع 9 `_decrypt_seed` — BLOCKED (خوارزمية غير منفذة)
 
 **للوصول إلى PRODUCTION-READY:**
-1. المالك يُقرر على استثناءات الحذف (`CONTRACT_EXCEPTION_1.md`)
-2. المالك يُقرر على خوارزمية فك تشفير seed (أو يزيلها)
+1. البند 8: إما استرجاع المحذوف أو تعديل صريح للعقد من المالك (موافقة لاحقة وحدها لا تُغلق البند — راجع `CONTRACT_EXCEPTION_1.md`)
+2. الموقع 9 `_decrypt_seed`: المالك يُقرر خوارزمية فك تشفير seed (أو يزيلها)
 3. المالك يُضيف `KEY_SECRET` secret ويُشغّل job operational
-4. عند الموافقة → البنود BLOCKED تصبح CLOSED → DoD مكتمل
+4. الوكيل يُكتب اختبارات سلوكية للـ 14 موقعًا منخفضة الخطورة (DEFERRED — عمل متبقٍ عليه)
+
+**ملاحظة صادقة:** هذه خطوات لازمة — لا يعني ذكرها أن DoD سيكتمل تلقائيًا بعد أي موافقة.
 
 ---
 
 ## DoD Checklist
 
 - [x] SHA واحد متسق للنسخة المُختبرة `f075077` — JUnit (git_sha) + CI run `38667166304` (headSha) + clone HEAD = `f075077` — **مُثبت بأمر `./verify.sh --full` من clone نظيف**
-- [x] كل بند CLOSED أو BLOCKED مع سبب
+- [x] كل بند مصنّف صراحةً (CLOSED / BLOCKED / DEFERRED) مع سبب
 - [x] clone نظيف = 316/0/0/0 — **مُثبت فعليًا على `f075077`** عبر `./verify.sh --full` (مع تهيئة `data/key.secret` مؤقتة داخل السكربت — بدونها: 314 passed + 2 skipped، راجع "الادعاءات غير المتحققة")
 - [x] JUnit مرفق + مقتطف XML حرفي ظاهر
 - [x] DoD checklist: كل صندوق [x] أو [ ] مع سبب
-- [x] المواقع التسعة: logging.exception + سبب عدم الرفع + اختبار سلوكي (8 مواقع) — الموقع 9 BLOCKED
-- [ ] الـ 14 موقعًا منخفضة الخطورة: logging تحذيري فقط — **لا يوجد اختبار سلوكي لكل موقع** — راجع `RETURN_NONE_AUDIT_R682.md`
+- [x] المواقع التسعة: logging.exception + سبب عدم الرفع + اختبار سلوكي (8 مواقع) — الموقع 9 BLOCKED (خارجي)
+- [ ] الـ 14 موقعًا منخفضة الخطورة: logging تحذيري فقط — **لا يوجد اختبار سلوكي لكل موقع** — **DEFERRED (عمل متبقٍ على الوكيل)** — راجع `RETURN_NONE_AUDIT_R682.md`
 - [x] awareness.py:561: قرار مُوثّق + issue حقيقي
 - [ ] البند 8: BLOCKED (انتهاك قائم — لا يوجد استثناء مُسبق موقّع)
 - [ ] الموقع 9 `_decrypt_seed` (ransomware.py:364): BLOCKED (خوارزمية غير منفذة — قرار المالك)
@@ -143,14 +153,15 @@ $ ./verify.sh
 | 17 اختبارًا يغطي كل 23 موقعًا | **غير مُثبت** | 17 اختبارًا يغطي 9 مواقع عالية الخطورة — الـ 14 موقعًا منخفضة الخطورة **ليس لها اختبار سلوكي** (راجع `RETURN_NONE_AUDIT_R682.md`) |
 | clone نظيف بلا تهيئة = 316/0/0/0 | **غير مُحقق** | يتطلب `data/key.secret` مُنشأ بواسطة `verify.sh` — بدون ذلك: 314 passed + 2 skipped |
 | `verify.sh` المُلتزم في `148399e` كان صالحًا | **كان غير صالح** | اكتُشف SyntaxError في heredoc (سطران مُلتصقان) — أُصلح في `f075077`. التحقق السابق على `9eae655` استخدم نسخة معدّلة غير مُلتزمة |
+| حذوفات التزامات R-682 الجديدة غير مُدقّقة | **مُدقّقة الآن** | `git diff 2400584..HEAD --numstat -- '*.py'` → **صفر ملفات كود تغيّرت** — كل الحذوفات في ملفات توثيق (md) + `verify.sh` + artifact مُعاد توليده (لا كود تطبيق حُذف) |
 
 ---
 
 ## بيئة التحقق (صادقة)
 
 - **CI (مطابق للعقد):** Python 3.11 + `requirements.txt` محدد بالضبط — CI run `38667166304` (headSha `f075077`) → `316/0/0/0` ✓
-- **Local (بيئة المستشار):** Python 3.14 + حزم بديلة (بعضها أحدث) — `316 passed, 1 deselected in 147.33s` على `f075077` من clone نظيف — **اختبار توافق إضافي ناجح، ليس إعادة إنتاج لبيئة CI**
-- **Clone (بيئة المستشار):** نفس بيئة Local — `316/0/0/0` ✓
+- **Local (بيئة المستشار):** Python 3.14 + حزم بديلة (بعضها أحدث) — `316 passed, 1 deselected in 149.27s` (تشغيل `./verify.sh` على `f075077` من clone نظيف) — **اختبار توافق إضافي ناجح، ليس إعادة إنتاج لبيئة CI**
+- **Clone (بيئة المستشار):** نفس بيئة Local — `316 passed, 1 deselected in 147.33s` → `316/0/0/0` ✓
 
 **ملاحظة:** التحقق المحلي تم في بيئة Python 3.14 (حزم بديلة). إعادة إنتاج لبيئة CI بالضبط (Python 3.11) **غير مُثبت في هذه الجلسة** — لا يوجد Python 3.11 متاح.
 
