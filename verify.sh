@@ -168,20 +168,30 @@ def stats(root):
     skipped = sum(int(ts.get("skipped", 0)) for ts in root.iter("testsuite"))
     return tests, failed, skipped
 
-# Compare test NAME only — classname contains junit_prefix which differs by environment
+# Compare (normalized_classname, name) — classname contains junit_prefix which differs by environment.
+# Strip ONLY the junit_prefix from the head of classname — keep module + class intact.
 from collections import Counter
-def test_names(root):
-    return Counter(tc.get("name", "") for tc in root.iter("testcase"))
+import re
+def test_ids(root):
+    ids = Counter()
+    prefix = root.get("junit_prefix", "")
+    for tc in root.iter("testcase"):
+        cls = tc.get("classname", "")
+        name = tc.get("name", "")
+        if prefix and cls.startswith(prefix + "."):
+            cls = cls[len(prefix) + 1:]
+        ids[(cls, name)] += 1
+    return ids
 
 ci_sha = ci_root.get("git_sha", "MISSING")
 ci_tests, ci_failed, ci_skipped = stats(ci_root)
-ci_names = test_names(ci_root)
+ci_ids = test_ids(ci_root)
 local_sha = local_root.get("git_sha", "MISSING")
 local_tests, local_failed, local_skipped = stats(local_root)
-local_names = test_names(local_root)
+local_ids = test_ids(local_root)
 
-print(f"CI:     sha={ci_sha[:12]}... tests={ci_tests} failed={ci_failed} skipped={ci_skipped} unique_names={len(ci_names)}")
-print(f"Local:  sha={local_sha[:12]}... tests={local_tests} failed={local_failed} skipped={local_skipped} unique_names={len(local_names)}")
+print(f"CI:     sha={ci_sha[:12]}... tests={ci_tests} failed={ci_failed} skipped={ci_skipped} unique_ids={len(ci_ids)}")
+print(f"Local:  sha={local_sha[:12]}... tests={local_tests} failed={local_failed} skipped={local_skipped} unique_ids={len(local_ids)}")
 
 errors = []
 if ci_sha != local_sha:
@@ -190,11 +200,10 @@ if ci_sha == "MISSING" or local_sha == "MISSING":
     errors.append("git_sha missing in JUnit")
 if ci_tests != local_tests:
     errors.append(f"Test count mismatch: CI={ci_tests} vs Local={local_tests}")
-if ci_names != local_names:
-    only_ci = (ci_names - local_names).most_common(5)
-    only_local = (local_names - ci_names).most_common(5)
-    errors.append(f"Testcase name mismatch: only_in_CI={only_ci} only_local={only_local}")
-if ci_failed != 0 or local_failed != 0:
+if ci_ids != local_ids:
+    only_ci = (ci_ids - local_ids).most_common(5)
+    only_local = (local_ids - ci_ids).most_common(5)
+    errors.append(f"Testcase identity mismatch (normalized_classname,name): only_in_CI={only_ci} only_local={only_local}")if ci_failed != 0 or local_failed != 0:
     errors.append(f"Failures: CI={ci_failed} Local={local_failed} (must be 0)")
 if ci_skipped != 0 or local_skipped != 0:
     errors.append(f"Skipped: CI={ci_skipped} Local={local_skipped} (must be 0)")
@@ -203,7 +212,7 @@ if errors:
     for e in errors:
         print(f"❌ {e}")
     sys.exit(1)
-print("✅ CI + Local MATCH (SHA + test counts + test-name Counter + zero failures + zero skips)")
+print("✅ CI + Local MATCH (SHA + test counts + (normalized_classname,name) Counter + zero failures + zero skips)")
 PYEOF
     COMPARE_EXIT=$?
     rm -rf "$TMPDIR_VERIFY"
@@ -267,19 +276,26 @@ def stats(root):
     failed = sum(int(ts.get("failures", 0)) + int(ts.get("errors", 0)) for ts in root.iter("testsuite"))
     skipped = sum(int(ts.get("skipped", 0)) for ts in root.iter("testsuite"))
     return tests, failed, skipped
-# Compare test NAME only (strip classname prefix which contains junit_prefix)
-def test_names(root):
-    return Counter(tc.get("name", "") for tc in root.iter("testcase"))
-c_t, c_f, c_s = stats(clone_root); c_names = test_names(clone_root)
-l_t, l_f, l_s = stats(local_root); l_names = test_names(local_root)
-print(f"Clone:  tests={c_t} failed={c_f} skipped={c_s} unique_names={len(c_names)}")
-print(f"Local:  tests={l_t} failed={l_f} skipped={l_s} unique_names={len(l_names)}")
-if c_t != l_t or c_f != l_f or c_s != l_s or c_names != l_names:
-    only_clone = (c_names - l_names).most_common(5)
-    only_local = (l_names - c_names).most_common(5)
+def test_ids(root):
+    ids = Counter()
+    prefix = root.get("junit_prefix", "")
+    for tc in root.iter("testcase"):
+        cls = tc.get("classname", "")
+        name = tc.get("name", "")
+        if prefix and cls.startswith(prefix + "."):
+            cls = cls[len(prefix) + 1:]
+        ids[(cls, name)] += 1
+    return ids
+c_t, c_f, c_s = stats(clone_root); c_ids = test_ids(clone_root)
+l_t, l_f, l_s = stats(local_root); l_ids = test_ids(local_root)
+print(f"Clone:  tests={c_t} failed={c_f} skipped={c_s} unique_ids={len(c_ids)}")
+print(f"Local:  tests={l_t} failed={l_f} skipped={l_s} unique_ids={len(l_ids)}")
+if c_t != l_t or c_f != l_f or c_s != l_s or c_ids != l_ids:
+    only_clone = (c_ids - l_ids).most_common(5)
+    only_local = (l_ids - c_ids).most_common(5)
     print(f"❌ Clone vs Local JUnit mismatch. only_clone={only_clone} only_local={only_local}")
     sys.exit(1)
-print("✅ Clean clone JUnit MATCHES Local (count + test-name Counter + zero failures + zero skips)")
+print("✅ Clean clone JUnit MATCHES Local (count + (normalized_classname,name) Counter + zero failures + zero skips)")
 PYEOF2
     CLONE_COMPARE=$?
     cd - > /dev/null
