@@ -78,7 +78,7 @@ Local:  tests=316 failed=0 skipped=0 unique_ids=316
 | 4 | الماسح الصامت | **CLOSED** | warnings.warn() (R-681) |
 | 5 | SHA في JUnit | **CLOSED** | embedded in XML root |
 | 7 | RED | **CLOSED** | `forensics/RED_R-681.md` (R-681) |
-| 8 | حذف بلا تبرير | **BLOCKED** | `forensics/CONTRACT_EXCEPTION_1.md` — انتهاك قائم؛ الإغلاق يتطلب استرجاع المحذوف أو تعديل العقد صراحةً من المالك (موافقة لاحقة وحدها لا تُغلق البند) |
+| 8 | حذف بلا تبرير | **قرار التعديل معتمد — التحقق النهائي جارٍ** | `forensics/CONTRACT_EXCEPTION_1.md` — انتهاك قائم؛ الإغلاق يتطلب استرجاع المحذوف أو تعديل العقد صراحةً من المالك (موافقة لاحقة وحدها لا تُغلق البند) |
 
 ---
 
