@@ -1,8 +1,32 @@
-# RETURN_NONE_AUDIT_R682.md — R-682 (corrected scope)
+# RETURN_NONE_AUDIT_R682.md — R-682 (corrected scope — re-verified by advisor R-682 final)
 
-**التاريخ:** 2026-10-15
+**التاريخ:** 2026-10-15 (re-verified)
 **المرجع:** أمر التسليم R-682 — Task 2.1 + advisor correction
 **التصحيح:** العدد الصحيح **23 موقعًا فريدًا** (وليس 25 — كان هناك عدّ مكرر في directives.py بسبب `ast.walk()` يعبر الدوال المتداخلة).
+
+**إعادة التحقق (R-682 final):** أُعيد تشغيل الماسح فعليًا في هذه الجلسة → `TOTAL = 23`. القائمة الكاملة 23 موقعًا كما في الكود أعلاه.
+
+**9 مواقع عالية الخطورة** من الـ 23 مُغطاة بـ `tests/test_return_none_security.py` (17 اختبارًا):
+1. `backend/sovereign/ledger/anchor.py:262`
+2. `backend/sovereign/keys/rotation.py:81`
+3. `guardian/integrity_checker.py:118`
+4. `nexus/encryption/encryption_engine.py:77`
+5. `nexus/encryption/secure_communication.py:83`
+6. `nexus/user_management/auth_engine.py:76`
+7. `backend/consciousness/identity_core.py:722`
+8. `backend/memory/defense/ransomware.py:274`
+9. `backend/memory/defense/ransomware.py:364`
+
+**14 موقعًا المتبقية** منخفضة الخطورة (لا تعالج تشفير/مصادقة/نزاهة/مرساة/تدوير مفتاح/دفاع):
+- `backend/compat/nexus_lifecycle.py:85,112`
+- `backend/compat/nexus_recommendations.py:43`
+- `backend/memory/biological/evolution.py:411`
+- `backend/memory/core.py:720`
+- `backend/memory/encoding.py:455`
+- `backend/orchestrator.py:288,301,314,431,450`
+- `nexus/data_pipeline/processor.py:55`
+- `nexus/performance/code_analyzer.py:51`
+- `nexus/storage/long_term_store.py:51`
 
 ---
 

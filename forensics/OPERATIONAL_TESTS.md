@@ -55,7 +55,11 @@ python -m pytest tests/ backend/tests/ -v -m "not operational" ...
 
 لا يُنشأ تلقائيًا — يتطلب تفعيل يدوي. عند التفعيل:
 1. يُحمّل `data/key.secret` من secret `KEY_SECRET` (متاح للمالك)
-2. يُنشئ `data/key.secret.old_rotated_*` اصطناعيًا
-3. يُشغّل: `pytest -m operational --run-operational`
+2. يُشغّل: `pytest -m operational --run-operational`
+3. يُنتج JUnit في `forensics/pytest_operational.xml`
+
+**تصحيح (advisor R-682 final):** الإصدار السابق كان يقول إن الـ job "يُنشئ `data/key.secret.old_rotated_*` اصطناعيًا" — هذا **غير صحيح**. `ci.yml` لا يُنشئ ملفات `old_rotated` — يُحمّل `key.secret` فقط من secret `KEY_SECRET`. الاختبارات التشغيلية نفسها تقرأ أي ملفات `old_rotated` موجودة في المضيف (إن وُجدت).
+
+**خطوة `sha` (تصحيح R-682 final):** كان الـ workflow يشير إلى `steps.sha.outputs.short` في job `operational` بدون وجود step `sha` — أُضيف step `sha` لتفادي فشل تسمية artifact.
 
 **الحالة:** مُنفَّذ (isolation) — الاختبار لم يُحذف، فقط عُزل.
