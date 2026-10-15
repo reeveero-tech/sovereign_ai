@@ -22,13 +22,21 @@
     ]
   },
   "after_fix_r682": {
-    "total_rejected_lines": 0,
-    "by_key_id_desc": [],
+    "total_rejected_lines": 10,
+    "by_key_id_desc": [
+      {
+        "key_id": "7bfb5770cf4efbcc",
+        "rejected_lines": 10,
+        "share": "100%",
+        "path": "ليست من الخيوط — مسار التحقق من سلامة السجل (memory/core.py:1072→1153، verify_content_integrity)"
+      }
+    ],
     "evidence": [
-      "الجلسة الكاملة بعد الإصلاح: 412 passed, 1 deselected, 0 failed، وصفر سطر R-626 في السجل الكامل، وصفر «--- Logging error ---» بعد الملخص",
-      "اختبار سلوكي ملتزم: tests/test_background_threads_shutdown.py::test_clean_session_no_logging_error_and_no_keyring_rejection (جلسة فرعية نظيفة: لا Logging error وصفر R-626)",
-      "الآلية: SOVEREIGN_DISABLE_BACKGROUND_THREADS=1 في tests/conftest.py قبل أي استيراد + تسجيل الخيوط وانضمامها عبر backend/runtime/threads.py"
+      "الجلسة الكاملة بعد الإصلاح: 412 passed, 1 deselected, 0 failed، وصفر «--- Logging error ---» بعد الملخص",
+      "صفر رفض من مصدر الخيوط الخلفية (كان 244 — انتهى بتعطيل الخيوط في بيئة الاختبار وإدارتها الموحدة)",
+      "المتبقي 10 سجلات: مسار مختلف — التحقق من سلامة السجل يفحص أحداثًا تاريخية (السطر 59 من سجل الجلسة) وقّعها مفتاحٌ أزاله اختبار تدوير لاحقًا في الجلسة؛ المُحقق يرفض صحيحًا التحقق بمفتاح مختلف (فشل مغلق). موثق كبقية تنتظر قرار المالك — ليست من نطاق بند ٦ (الخيوط)",
+      "اختبار الجلسة النظيفة الملتزم (health+loyalty): صفر R-626 وصفر Logging error — مثبت في tests/test_background_threads_shutdown.py"
     ]
   },
-  "total_line": "الإجمالي قبل الإصلاح: 244 سطر رفض توقيع (R-626) في memory.core — كلها بمفتاح واحد 6530a476917b36a5؛ بعد الإصلاح: 0"
+  "total_line": "الإجمالي: قبل الإصلاح 244 سطر رفض (كلها من خيوط خلفية، مفتاح واحد 6530a476917b36a5)؛ بعد الإصلاح: صفر من الخيوط + 10 متبقية من مسار تحقق السجل (مفتاح 7bfb5770cf4efbcc، أحداث تاريخية لمفتاح مُدوَّر)"
 }
