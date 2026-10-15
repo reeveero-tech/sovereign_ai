@@ -61,21 +61,53 @@ class TestAPIKeyRotation:
     def test_old_key_rejected(self, synthetic_keys):
         """المفتاح القديم يُرفض (لا يُطابق الجديد).
 
-        R-682 (Task 3.2): uses synthetic fixture — no longer requires real rotation history.
+        R-682 (Task 3.2 + advisor): uses REAL auth code path (AuthEngine.verify_token)
+        to prove old-key rejection — not just string comparison.
         """
-        new_key = synthetic_keys["new_key"]
-        old_key = synthetic_keys["old_key"]
-        assert old_key != new_key, "old key must differ from new key"
+        # Build AuthEngine with the NEW key, then verify a token signed with OLD key
+        try:
+            from nexus.user_management.auth_engine import AuthEngine
+        except ImportError:
+            pytest.skip("nexus.user_management not importable")
+
+        new_engine = AuthEngine(secret=synthetic_keys["new_key"])
+        old_engine = AuthEngine(secret=synthetic_keys["old_key"])
+
+        # Create a token with the OLD engine (simulates old-key session)
+        old_token = old_engine.create_token(user_id="u1", username="test", role="admin")
+        # Verify with the NEW engine → must FAIL (old key rejected)
+        result = new_engine.verify_token(old_token)
+        assert result is None, "token signed with OLD key must be REJECTED by NEW engine"
+
+        # Control: token from NEW engine verifies with NEW engine
+        new_token = new_engine.create_token(user_id="u1", username="test", role="admin")
+        assert new_engine.verify_token(new_token) is not None, "new key must be accepted"
 
     def test_wrong_keys_rejected(self, synthetic_keys):
-        """مفاتيح خاطئة تُرفض.
+        """مفاتيح خاطئة تُرفض — عبر مسار المصادقة الفعلي.
 
-        R-682 (Task 3.2): uses synthetic fixture.
+        R-682 (Task 3.2 + advisor): uses AuthEngine with wrong secrets.
         """
+        try:
+            from nexus.user_management.auth_engine import AuthEngine
+        except ImportError:
+            pytest.skip("nexus.user_management not importable")
+
         new_key = synthetic_keys["new_key"]
+        correct_engine = AuthEngine(secret=new_key)
+        correct_token = correct_engine.create_token(user_id="u", username="t", role="admin")
+
+        # Tokens verified by engines with WRONG secrets must be rejected
         wrong_keys = ["wrong_key_123", "", "x", new_key[:-1], new_key + "x"]
         for wk in wrong_keys:
-            assert wk != new_key, f"wrong key must differ: {wk[:10]}..."
+            if not wk:  # empty secret → os.urandom fallback, still different
+                continue
+            wrong_engine = AuthEngine(secret=wk)
+            result = wrong_engine.verify_token(correct_token)
+            assert result is None, f"token must be rejected by wrong secret: {wk[:10]}..."
+
+        # Control: correct secret accepts
+        assert correct_engine.verify_token(correct_token) is not None
 
     def test_fingerprints_different(self, synthetic_keys):
         """بصمات المفتاحين مختلفة.
