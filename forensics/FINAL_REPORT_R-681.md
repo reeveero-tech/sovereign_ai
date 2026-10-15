@@ -1,7 +1,9 @@
 # FINAL REPORT — R-681 (Takeover Complete)
 
+**⚠️ R-682 CORRECTION:** This report's HEAD claim `39d02ca` was a merge commit (temporary HEAD). See `forensics/SHA_RECONCILIATION.md` for full explanation. The FINAL HEAD after R-681 completion was `da0ae02` (added final report commit). This report is superseded by `FINAL_REPORT_R-682.md`.
+
 **التاريخ:** 2026-10-15
-**HEAD:** `39d02ca16762a6dfae381250a9f6f3aeba6c1e8c`
+**HEAD (merge commit):** `39d02ca16762a6dfae381250a9f6f3aeba6c1e8c` — see note above
 **الفرع:** `main` (merged from `R-681`)
 **CI Run:** [38655894142](https://github.com/reeveero-tech/sovereign_ai/actions/runs/38655894142) — SUCCESS (2m24s)
 

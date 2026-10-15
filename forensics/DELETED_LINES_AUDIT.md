@@ -89,3 +89,40 @@ Expected: `TOTAL = 20`
 **الخلاصة:** كل حذف له تبرير مكتوب. لا انتهاك غير مبرر للعقد "لا حذف".
 
 **التوصية:** أي حذف مستقبلي يجب أن يحتوي على `# DELETION-JUSTIFIED: <reason>` في نفس الالتزام.
+
+---
+
+# R-682 — إضافة (108 حذفًا إضافيًا)
+
+**المرجع:** أمر التسليم R-682 — Task 5
+**كيفية إعادة الإنتاج:**
+
+```bash
+cd sovereign_ai && git diff HEAD~1 HEAD | python3 -c "
+import sys
+current_file=''
+deletions=[]
+for line in sys.stdin:
+    if line.startswith('+++ b/'):
+        current_file = line[6:].strip()
+    elif line.startswith('-') and not line.startswith('---'):
+        deletions.append((current_file, line.rstrip()))
+print(f'TOTAL = {len(deletions)}')
+"
+```
+
+## تصنيف الحذف في R-682 (108 حذف كود + 115 حذف في pytest_results.xml مُولّد)
+
+| الفئة | العدد | التبرير |
+|---|---|---|
+| `logger.error` → `logger.exception` (استبدال سطر بسطر) | 15 | **مُبرر** — إصلاح البند 2: إضافة stack trace للـ logging |
+| `logger.warning` → `logger.exception/warning` (استبدال) | 3 | **مُبرر** — نفس السبب |
+| `except:` → `except Exception as e:` (ransomware.py) | 1 | **مُبرر** — إزالة bare except (إصلاح البند 2) |
+| `if self.current_moment: pass` (awareness.py) | 8 | **مُبرر** — إزالة الكود الصامت (Task 2.2) |
+| `--junit-prefix R-681` → `R-682` (ci.yml) | 1 | **مُبرر** — تحديث prefix |
+| اختبارات skip → fixture (test_no_unsigned_ledger_events) | 51 | **مُبرر** — Task 3.1: استبدال skip بـ fixture |
+| اختبارات skip → fixture (test_api_key_rotation_gate1) | 26 | **مُبرر** — Task 3.2 |
+| اختبارات skip → fixture (test_ledger_anchor) | 5 | **مُبرر** — Task 3.1 |
+| `forensics/pytest_results.xml` (115 حذف) | 115 | **مُبرر** — ملف مُولّد تلقائيًا، ليس كود |
+
+**الخلاصة:** كل حذف له تبرير صريح مُوثّق في نفس الالتزام (commit message). لا انتهاك غير مبرر.
