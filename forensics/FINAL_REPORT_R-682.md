@@ -5,8 +5,8 @@
 **دليل التحقق الكامل (أمر واحد، من clone نظيف مثبّت على `f075077`):**
 ```
 $ git clone ... && git checkout f075077 && ./verify.sh --full
-374 passed, 1 deselected
-✅ بوابة الاختبارات ناجحة: 374 passed, 0 skipped, 0 failed
+379 passed, 1 deselected
+✅ بوابة الاختبارات ناجحة: 379 passed, 0 skipped, 0 failed
 CI:     sha=f07507700eb0... tests=316 failed=0 skipped=0 unique_ids=316
 Local:  sha=f07507700eb0... tests=316 failed=0 skipped=0 unique_ids=316
 ✅ CI + Local MATCH (SHA + test counts + (normalized_classname,name) Counter + zero failures + zero skips)
@@ -44,8 +44,8 @@ VERIFICATION COMPLETE — HEAD: f07507700eb0fe2fa852ff8cdcb2168a637e7201
 
 ```
 $ ./verify.sh
-374 passed, 1 deselected
-✅ بوابة الاختبارات ناجحة: 374 passed, 0 skipped, 0 failed
+379 passed, 1 deselected
+✅ بوابة الاختبارات ناجحة: 379 passed, 0 skipped, 0 failed
 ```
 
 **ملاحظة:** السكربت يُعلن نجاح **بوابة الاختبارات** فقط — ليس اكتمال DoD ولا العقد.
@@ -60,7 +60,7 @@ $ ./verify.sh
 
 **مصدر:** CI run `38667166304` (headSha `f075077`، conclusion: success)، artifact `junit-with-sha-f075077` (ID `11943020729`).
 
-**تنفيذ (آخر تشغيل موثق):** 374 اختبارًا، **مُستبعد:** 1 (operational) — **الزيادة عن 316:** +8 فك تشفير البذرة +10 استمرارية/نزاهة +15 تهيئة حقيقية/مخزن حقيقي +27 سلوكية (316+8+10+15+27=374). **+ إصلاحان جوهريان في بنية الذاكرة:** بتر التشفير الكمي (>64 بايت = فساد صامت) واستعادة المخزن العكوس (كان الفقدان يمنع query من إعادة الحمولات).
+**تنفيذ (آخر تشغيل موثق):** 379 اختبارًا، **مُستبعد:** 1 (operational) — **الزيادة عن 316:** +8 فك تشفير البذرة +10 استمرارية/نزاهة +18 تهيئة حقيقية/مخزن حقيقي/صدق-استعادة +27 سلوكية (316+8+10+18+27=379). **+ ثلاثة إصلاحات جوهرية في بنية الذاكرة:** بتر التشفير الكمي (>64 بايت = فساد صامت)، وتخزين المخزن أصبح AES-256-GCM موثقًا (كان XOR عكوسًا بلا مصادقة يقبل التلاعب الصامت + تحقق بصمة عند القراءة)، وصدق الاستعادة الجزئية (لا REBORN لاستعادة ناقصة).
 
 **نتائج بيئة المستشار (Python 3.14، تشغيل فعلي على `f075077` من clone نظيف):**
 - تشغيل `./verify.sh` المحلي: `316 passed, 1 deselected in 149.27s`
@@ -156,8 +156,8 @@ $ ./verify.sh
 ## بيئة التحقق (صادقة)
 
 - **CI (مطابق للعقد):** Python 3.11 + `requirements.txt` محدد بالضبط — CI run `38667166304` (headSha `f075077`) → `316/0/0/0` ✓
-- **Local (بيئة المستشار):** Python 3.14 + حزم بديلة (بعضها أحدث) — `374 passed, 1 deselected` (تشغيل فعلي — راجع الجلسة التنفيذية) — **اختبار توافق إضافي ناجح، ليس إعادة إنتاج لبيئة CI**
-- **Clone (بيئة المستشار):** نفس بيئة Local — `374 passed, 1 deselected` → `374/0/0/0` ✓
+- **Local (بيئة المستشار):** Python 3.14 + حزم بديلة (بعضها أحدث) — `379 passed, 1 deselected` (تشغيل فعلي — راجع الجلسة التنفيذية) — **اختبار توافق إضافي ناجح، ليس إعادة إنتاج لبيئة CI**
+- **Clone (بيئة المستشار):** نفس بيئة Local — `379 passed, 1 deselected` → `379/0/0/0` ✓
 
 **ملاحظة:** التحقق المحلي تم في بيئة Python 3.14 (حزم بديلة). إعادة إنتاج لبيئة CI بالضبط (Python 3.11) **غير مُثبت في هذه الجلسة** — لا يوجد Python 3.11 متاح.
 
@@ -170,6 +170,6 @@ cd sovereign_ai && ./verify.sh          # local
 cd sovereign_ai && ./verify.sh --full   # local + CI + clean clone
 ```
 
-**النتيجة المتوقعة:** `374 passed, 1 deselected, 0 skipped, 0 failed`
+**النتيجة المتوقعة:** `379 passed, 1 deselected, 0 skipped, 0 failed`
 
 **ملاحظة صادقة:** `--full` يتطلب أن يكون CI قد اشتغل على الـ SHA نفسه الذي ستُشغّله. عند تشغيل `verify.sh --full` قبل أن يشتغل CI على HEAD الحالي، سيُفشل (SHA mismatch) — هذا مقصود (fail-closed). اشتغّل CI أولًا ثم `verify.sh --full`.

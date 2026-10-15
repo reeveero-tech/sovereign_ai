@@ -20,6 +20,14 @@ import json
 import uuid
 import time
 import hashlib
+
+try:
+    from Crypto.Cipher import AES
+    from Crypto.Random import get_random_bytes
+except ImportError:  # pragma: no cover
+    AES = None
+    get_random_bytes = None
+import base64
 import threading
 import math
 from dataclasses import dataclass, field, asdict
@@ -33,11 +41,11 @@ import heapq
 try:
     from ..core import get_core, EventType
     from ..encoding import get_encoder
-    from ...config import DATA_DIR
+    from ...config import DATA_DIR, SOVEREIGN_KEY
 except ImportError:
     from memory.core import get_core, EventType
     from memory.encoding import get_encoder
-    from config import DATA_DIR
+    from config import DATA_DIR, SOVEREIGN_KEY
 
 import logging
 logger = logging.getLogger(__name__)
@@ -490,36 +498,63 @@ class SolidMemoryStore:
                 json.dump(items_data, f, ensure_ascii=False, indent=2)
             tmp_path.replace(path)
     
-    def _encrypt_payload(self, payload: Dict, kind: str) -> str:
-        """تشفير الـ payload للتخزين — قابل للعكس بالكامل.
+    def _store_payload_key(self) -> bytes:
+        """مفتاح تشفير حمولات المخزن — حتمي من مفتاح السيادة (استمرارية
+        عبر مثيلات المشفر والمخزن: أي مشفّر/مخزن جديد يفك بيانات القديم)."""
+        return hashlib.sha3_512(SOVEREIGN_KEY.encode()).digest()[:32]
 
-        R-682 (security/data-integrity): عقد المخزن الموثق هو تخزين "دائم،
-        مشفر، ومتكامل". المسار السابق استخدم encoder.encode (الذي هو فقداني
-        بالتصميم — يعيد الجوهر التقريبي) ففقدت الحمولات بنيتها، وأيضًا بتر
-        التشفير الكمي الحمولات الأطول من 64 بايت. الآن: التشفير السيادي
-        (crypto) القابل للعكس — البيانات تعود كما كُتبت عبر واجهة القراءة.
+    def _encrypt_payload(self, payload: Dict, kind: str) -> str:
+        """تشفير الـ payload للتخزين — AES-256-GCM موثق معياري.
+
+        R-682 (security): عقد المخزن "دائم، مشفر، ومتكامل" + المصادقة:
+        - مفتاح مستقل حتمي من مفتاح السيادة (استمرارية عبر المثيلات)
+        - nonce جديد لكل عملية + AAD يربط الحمولة بنوع الذاكرة والإصدار
+        - مصادقة مدمجة (وسم GCM): أي تلاعب يُبقي JSON صالحًا يُرفض
+        (XOR الطبقي السابق كان يقبل القيم المعدلة صامتة — لا مصادقة).
         """
-        return self.encoder.crypto.encrypt(
-            json.dumps(payload, ensure_ascii=False).encode("utf-8"),
-            level="high",
+        if AES is None:
+            raise RuntimeError("pycryptodome غير متوفر — لا يمكن تأمين المخزن")
+        nonce = get_random_bytes(12)
+        cipher = AES.new(self._store_payload_key(), AES.MODE_GCM, nonce=nonce)
+        cipher.update(f"sovereign-store-v1:{kind}".encode())  # AAD
+        ct, tag = cipher.encrypt_and_digest(
+            json.dumps(payload, ensure_ascii=False).encode("utf-8")
         )
+        return json.dumps({
+            "v": 1,
+            "n": base64.b64encode(nonce).decode(),
+            "d": base64.b64encode(ct).decode(),
+            "t": base64.b64encode(tag).decode(),
+        })
     
     def _decrypt_payload(self, encrypted: str, kind: str) -> Dict:
-        """فك تشفير الـ payload — إرجاع الحمولة الأصلية كما كُتبت."""
-        decrypted = self.encoder.crypto.decrypt(encrypted)
-        if decrypted is None:
-            logger.error(f"R-682: فشل فك تشفير حمولة {kind}")
-            return {"_error": "فشل فك التشفير"}
+        """فك تشفير الـ payload — فشل مصادقة GCM = رفض صريح (تلاعب/تلف)."""
         try:
-            payload = json.loads(decrypted.decode("utf-8"))
+            envelope = json.loads(encrypted)
+            if not (isinstance(envelope, dict) and envelope.get("v") == 1
+                    and "n" in envelope and "d" in envelope and "t" in envelope):
+                return {"_error": "صيغة إرثية غير مدعومة"}
+            cipher = AES.new(
+                self._store_payload_key(), AES.MODE_GCM,
+                nonce=base64.b64decode(envelope["n"], validate=True),
+            )
+            cipher.update(f"sovereign-store-v1:{kind}".encode())
+            plain = cipher.decrypt_and_verify(
+                base64.b64decode(envelope["d"], validate=True),
+                base64.b64decode(envelope["t"], validate=True),
+            )
+            payload = json.loads(plain.decode("utf-8"))
             if isinstance(payload, dict):
                 return payload
             return {"_error": "حمولة غير قابلة للتفسير"}
-        except (UnicodeDecodeError, json.JSONDecodeError) as e:
-            # عناصر إرثية بالصيغة الفقدانية القديمة — لا انهيار
-            logger.warning(
-                f"R-682: حمولة {kind} بصيغة إرثية غير قابلة للفك الدقيق: {e}"
+        except ValueError:
+            logger.error(
+                f"R-682 [SECURITY]: {kind} payload GCM authentication FAILED — "
+                "tampered or corrupted record REJECTED"
             )
+            return {"_error": "فشل مصادقة — تلاعب أو تلف"}
+        except (UnicodeDecodeError, json.JSONDecodeError, KeyError, TypeError) as e:
+            logger.warning(f"R-682: حمولة {kind} إرثية/غير قابلة للفك: {e}")
             return {"_error": "صيغة إرثية"}
     
     def _extract_text_content(self, payload: Dict, kind: str) -> str:
@@ -696,12 +731,27 @@ class SolidMemoryStore:
                     tag_items = self.index.tag_index.get(tag, set())
                     item_ids = [id for id in item_ids if id in tag_items]
             
-            # جمع النتائج
+            # جمع النتائج — مع تحقق بصمة الحمولة (سلامة ما فُك)
             results = []
             for item_id in item_ids[:limit]:
                 item = self._data.get(kind, {}).get(item_id)
                 if item and item.importance >= min_importance:
                     payload = self._decrypt_payload(item.encrypted_payload, kind)
+                    if payload.get("_error"):
+                        # سجل مرفوض (تلاعب/تلف/إرثي) — لا يُعاد كبيانات
+                        continue
+                    # R-682 (security): البصمة المحفوظة عند الكتابة يجب أن
+                    # تطابق بصمة الحمولة المفكوكة — وإلا فالتلاعب مكشوف
+                    try:
+                        current_fp = self.encoder.fingerprint(payload)
+                    except Exception:
+                        current_fp = None
+                    if current_fp and item.fingerprint and current_fp != item.fingerprint:
+                        logger.error(
+                            f"R-682 [SECURITY]: {kind} payload FINGERPRINT "
+                            f"MISMATCH for {item_id} — tampered record REJECTED"
+                        )
+                        continue
                     payload["_id"] = item.id
                     payload["_importance"] = item.importance
                     payload["_tags"] = item.tags

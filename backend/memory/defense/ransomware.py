@@ -878,13 +878,17 @@ class RansomwareDefense:
                 return False
 
             # الكتابة في مخزن التطبيق الفعلي — العناصر الحرجة (دلالية + إجرائية)
+            # R-682 (security — صدق النتيجة): تحقق من الحقول المطلوبة لكل نوع؛
+            # أي عنصر لا يستوفيها = فشل جزئي — لا يُعلن نجاح كامل/REBORN.
             restored_items = 0
+            failed_items: List[str] = []
             critical_items = essential.get("critical_memory") or []
             if critical_items:
                 from ..store import get_store
                 store = get_store()
                 for item in critical_items:
-                    if item.get("type") == "semantic" and item.get("concept"):
+                    item_type = item.get("type")
+                    if item_type == "semantic" and item.get("concept") and item.get("definition"):
                         store.save_semantic(
                             concept=item["concept"],
                             definition=item.get("definition", ""),
@@ -893,7 +897,10 @@ class RansomwareDefense:
                             confidence=item.get("confidence", 0.5),
                         )
                         restored_items += 1
-                    elif item.get("type") == "procedural" and item.get("name"):
+                    elif (item_type == "procedural" and item.get("name")
+                          and item.get("description") and item.get("action_sequence")):
+                        # المهارة المقصودة: اسم + وصف + تسلسل إجراءات —
+                        # إنشاء سجل فارغ ليس استعادة لها
                         store.save_procedural(
                             name=item["name"],
                             description=item.get("description", ""),
@@ -903,16 +910,28 @@ class RansomwareDefense:
                             importance=item.get("importance", 0.8),
                         )
                         restored_items += 1
+                    else:
+                        failed_items.append(
+                            f"{item_type}:{item.get('concept') or item.get('name') or '?'}"
+                        )
 
-            # R-682 (security — صدق النتيجة): لا نجاح عام دون أي بيانات مستعادة
-            # فعليًا — بذرة بلا بيانات قابلة للاستعادة = فشل صريح، لا استعادة
-            # "مكتملة" تدّعي ما لم يحدث.
+            # R-682 (security — صدق النتيجة): لا نجاح كامل دون استعادة كل
+            # العناصر المقصودة فعلًا — استعادة جزئية أو معدومة = فشل صريح
+            # (لا REBORN معلن لعملية ناقصة).
             if restored_items == 0:
                 logger.error(
                     "R-682 [SECURITY-FAIL]: restoration restored ZERO items — "
                     "no restorable data in seed (empty critical_memory or "
                     "unsupported item types). Restoration REFUSED (no success "
                     "declared for an unperformed restoration)."
+                )
+                return False
+            if failed_items:
+                logger.error(
+                    f"R-682 [SECURITY-FAIL]: PARTIAL restoration — "
+                    f"{restored_items} restored but {len(failed_items)} item(s) "
+                    f"NOT restorable: {failed_items}. Full success NOT "
+                    "declared (no REBORN for an incomplete restoration)."
                 )
                 return False
 
@@ -1135,26 +1154,65 @@ class RansomwareDefense:
                 )
                 return False
 
-            # كتابة ذرّية متينة: ملف مؤقت في نفس المجلد + fsync + استبدال
-            # ذري + fsync للمجلد — فشل في أي خطوة يترك الملف الأصلي كما هو.
-            # ملف مؤقت فريد لكل عملية (لا اسم مشترك بين عمليات الحفظ المتزامنة)
+            # كتابة ذرّية متينة مع تمييز صريح بين مرحلتين:
+            # (1) ما قبل الاستبدال: أي فشل يترك الملف الأصلي كما هو (يُنظف المؤقت)
+            # (2) ما بعد الاستبدال: الملف الجديد مكتوب فعلًا — فشل مزامنة المجلد
+            #     = متانة غير مؤكدة (لا يُدّعى أن الملف السابق بقي دون تغيير)
             tmp_path = PHOENIX_STATE_FILE.with_name(
                 f"{PHOENIX_STATE_FILE.name}.{os.getpid()}.{time.time_ns()}.tmp"
             )
-            with open(tmp_path, 'w', encoding='utf-8') as f:
-                json.dump(state, f, ensure_ascii=False, indent=2)
-                f.flush()
-                os.fsync(f.fileno())
-            os.replace(tmp_path, PHOENIX_STATE_FILE)
-            dir_fd = os.open(str(PHOENIX_STATE_FILE.parent), os.O_RDONLY)
+
+            # (1) كتابة الملف المؤقت — فشل هنا لا يمس الملف الأصلي إطلاقًا
             try:
-                os.fsync(dir_fd)
-            finally:
-                os.close(dir_fd)
+                with open(tmp_path, 'w', encoding='utf-8') as f:
+                    json.dump(state, f, ensure_ascii=False, indent=2)
+                    f.flush()
+                    os.fsync(f.fileno())
+            except OSError as e:
+                logger.error(
+                    f"R-682: state save FAILED before replace — original file "
+                    f"untouched. exc={e}"
+                )
+                self._cleanup_tmp(tmp_path)
+                return False
+
+            # (2) الاستبدال الذري — فشله يترك الملف الأصلي كما هو
+            try:
+                os.replace(tmp_path, PHOENIX_STATE_FILE)
+            except OSError as e:
+                logger.error(
+                    f"R-682: state replace FAILED — original file untouched. exc={e}"
+                )
+                self._cleanup_tmp(tmp_path)
+                return False
+
+            # (3) الاستبدال وقع فعلًا — تأكيد المتانة بمزامنة المجلد.
+            # فشلها لا يعني تراجعًا (الملف الجديد مكتوب) بل متانة غير مؤكدة.
+            try:
+                dir_fd = os.open(str(PHOENIX_STATE_FILE.parent), os.O_RDONLY)
+                try:
+                    os.fsync(dir_fd)
+                finally:
+                    os.close(dir_fd)
+            except OSError as e:
+                logger.error(
+                    "R-682: state file REPLACED but durability NOT CONFIRMED "
+                    f"(dir fsync failed — file is the NEW one, do not claim "
+                    f"the old file remained). exc={e}"
+                )
+                return False
             return True
         except Exception as e:
             logger.error(f"خطأ في حفظ الحالة: {e}")
             return False
+
+    def _cleanup_tmp(self, tmp_path) -> None:
+        """تنظيف الملف المؤقت بعد فشل ما قبل الاستبدال (أفضل جهد)."""
+        try:
+            if tmp_path.exists():
+                tmp_path.unlink()
+        except OSError:  # R-682: best-effort cleanup only — the original file was never touched
+            pass  # تنظيف أفضل-جهد فقط — الملف الأصلي لم يُمس
 
     def _load_state(self) -> bool:
         """تحميل حالة نظام الفينيق — يُرجع النجاح.

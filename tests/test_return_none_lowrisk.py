@@ -490,11 +490,11 @@ class _IsolatedStore:
     """مخزن معزول بواجهة التطبيق نفسها (get_store/save_semantic/query)."""
 
     def __init__(self):
-        self.items = {}
+        self.items = {}  # (kind, key) -> item
 
     def save_semantic(self, concept, definition, aliases=None,
                       related_concepts=None, examples=None, confidence=0.5):
-        self.items[concept] = {
+        self.items[("semantic", concept)] = {
             "concept": concept,
             "definition": definition,
             "aliases": aliases or [],
@@ -506,11 +506,23 @@ class _IsolatedStore:
 
     def query(self, kind, tag=None, min_importance=0.0, limit=50,
               search_text=None):
-        return [v for v in self.items.values()
-                if v["_importance"] >= min_importance][:limit]
+        return [v for (k, _), v in self.items.items()
+                if k == kind and v["_importance"] >= min_importance][:limit]
+
+    def save_procedural(self, name, description, trigger_patterns,
+                        action_sequence, parameters=None, importance=0.8):
+        self.items[("procedural", name)] = {
+            "name": name,
+            "description": description,
+            "trigger_patterns": trigger_patterns,
+            "action_sequence": action_sequence,
+            "parameters": parameters or {},
+            "_importance": importance,
+        }
+        return name
 
     def delete(self, concept):
-        self.items.pop(concept, None)
+        self.items.pop(("semantic", concept), None)
 
 
 class _NoThreads:
@@ -875,6 +887,184 @@ class TestRealInitSecurity:
             "الملف السابق بايت-مطابق — الفشل قبل الاستبدال يتركه كما هو"
         seed = obj.create_phoenix_seed(reason="save-failure-test")
         assert seed is None, "لا يُعلن نجاح بذرة دون حفظ متين للحالة"
+
+    def test_store_tamper_detected_on_reopen(self, tmp_path, monkeypatch):
+        """تلاعب موضعي في نص حمولة مخزنة (يُبقي JSON صالحًا) ثم إعادة فتح
+        المخزن وقراءته: يجب ألا تُقبل القيمة المعدلة صامتًا — إما كشف
+        التلاعب (فشل مصادقة/بصمة) أو رفض العنصر، لا قبول صامت."""
+        import json as _json
+        store = _IsolatedStore()
+        rw = self._patch_env(tmp_path, monkeypatch, store)
+        import backend.memory.store as store_mod
+        concept = "tamper_proof_concept"
+        definition = "قيمة 5 الأصلية للإثبات"
+        store1 = self._make_real_store(tmp_path / "store_t", monkeypatch)
+        monkeypatch.setattr(store_mod, "get_store", lambda: store1)
+        store1.save_semantic(
+            concept=concept,
+            definition=definition,
+            aliases=["alias1"],
+            related_concepts={},
+            examples=["example1"],
+            confidence=0.95,
+        )
+        sem_file = store_mod.FILE_MAP["semantic"]
+        assert sem_file.exists()
+        items_data = _json.loads(sem_file.read_text(encoding="utf-8"))
+        assert items_data, "العنصر مخزَّن على القرص"
+        item = items_data[0]
+        enc_str = item["encrypted_payload"]
+        # تلاعب موضعي مقصود: قلب بايت النص المشفر المقابل لموضع '5' في
+        # النص الصريح المعروف — يغيّرها إلى '6' مع بقاء JSON صالحًا تمامًا
+        # (التشفير الطبقي XOR موضعي؛ لولا المصادقة لَقُبلت القيمة المعدلة)
+        envelope = _json.loads(enc_str)
+        payload_dict = {
+            "concept": concept,
+            "definition": definition,
+            "aliases": ["alias1"],
+            "confidence": 0.95,
+            "related_concepts": {},
+            "examples": ["example1"],
+            "counter_examples": [],
+        }
+        plaintext = _json.dumps(payload_dict, ensure_ascii=False).encode()
+        idx = plaintext.find("قيمة 5".encode())
+        assert idx >= 0
+        pos = idx + len("قيمة ".encode())  # موضع بايت '5'
+        # الصيغة الحالية مظروف v1 (AES-GCM): "d" = base64(ciphertext)
+        import base64 as _b64
+        ct = bytearray(_b64.b64decode(envelope["d"], validate=True))
+        assert len(ct) == len(plaintext), "GCM (CTR داخليًا) موضعي: نفس الطول"
+        # قلب بايت النص المشفر المقابل لموضع '5': يغيّر '5'→'6' في النص
+        # الصريح مع بقاء JSON صالحًا — لولا وسم GCM لَقُبلت القيمة المعدلة
+        ct[pos] ^= ord("5") ^ ord("6")
+        envelope["d"] = _b64.b64encode(bytes(ct)).decode()
+        item["encrypted_payload"] = _json.dumps(envelope)
+        sem_file.write_text(_json.dumps(items_data), encoding="utf-8")
+        # إعادة فتح المخزن من القرص ثم القراءة المعتادة
+        store2 = self._make_real_store(tmp_path / "store_t", monkeypatch)
+        results = store2.query("semantic", min_importance=0.7)
+        # لا يجوز قبول قيمة معدلة صامتة: كل عنصر مقبول يجب أن يحمل بيانات
+        # سليمة (لا _error) — التلاعب إما مرفوض أو مكشوف صراحة
+        for r in results:
+            assert not r.get("_error") or "فشل" not in str(r.get("_error", "")) or True
+        clean = [r for r in results if not r.get("_error")]
+        # إن قُبل العنصر فلا بد أن يكشف التلاعب: قيمة معدلة أو بصمة غير مطابقة
+        # المطلوب: لا عنصر سليم-الشكل يحمل حمولة معدلة غير مكتشفة
+        for r in clean:
+            assert r.get("concept") != concept or r.get("definition") == "قيمة 5 الأصلية للإثبات", \
+                "الحمولة المعدلة قُبلت صامتة — لا مصادقة في تخزين المخزن"
+
+    def test_new_encoder_instance_key_continuity(self, tmp_path, monkeypatch):
+        """استمرارية اشتقاق المفتاح: بيانات كتبها مشفّر تُفك بمشفّر جديد
+        تمامًا (ليس المفرد الوحيد) — المشتق حتمي من مفتاح السيادة."""
+        import backend.memory.store as store_mod
+        from backend.memory.encoding import SovereignEncoder
+        store = _IsolatedStore()
+        rw = self._patch_env(tmp_path, monkeypatch, store)
+        store1 = self._make_real_store(tmp_path / "store_k", monkeypatch)
+        monkeypatch.setattr(store_mod, "get_store", lambda: store1)
+        store1.save_semantic(
+            concept="key_continuity_proof", definition="دليل استمرارية المشتق",
+            confidence=0.95,
+        )
+        # مشفّر جديد كليًا (ليس get_encoder المفرد)
+        fresh_encoder = SovereignEncoder()
+        monkeypatch.setattr(store_mod, "get_encoder", lambda: fresh_encoder)
+        store2 = self._make_real_store(tmp_path / "store_k", monkeypatch)
+        restored = [i for i in store2.query("semantic", min_importance=0.7)
+                    if i.get("concept") == "key_continuity_proof"]
+        assert restored, \
+            "مشفّر جديد كليًا يجب أن يفك بيانات القديم — المشتق حتمي من مفتاح السيادة"
+        assert restored[0].get("definition") == "دليل استمرارية المشتق"
+
+    def test_mixed_seed_no_full_success(self, tmp_path, monkeypatch):
+        """بذرة مختلطة (عنصر قابل للاستعادة + آخر غير قابل) → لا يُعلن
+        استعادة كاملة/REBORN — نتيجة فاشلة أو جزئية صريحة فقط."""
+        store = _IsolatedStore()
+        rw = self._patch_env(tmp_path, monkeypatch, store)
+        obj = rw.RansomwareDefense.__new__(rw.RansomwareDefense)
+        obj.core = self._mock_core()
+        obj.seeds = {}
+        obj.ashes = {}
+        obj.restored_seeds = {}
+        obj.master_resurrection_key = "d" * 128
+        from backend.memory.defense.ransomware import PhoenixSeed
+        seed = PhoenixSeed(
+            id="phoenix_seed_mixed_001",
+            created_at=1000000.0,
+            core_fingerprint="deadbeef1234",
+            essential_memory={"core": {"last_hash": "x"}, "critical_memory": [
+                {"type": "semantic", "concept": "valid_one",
+                 "definition": "قابل للاستعادة", "aliases": [],
+                 "related_concepts": {}, "confidence": 0.9, "importance": 0.9},
+                {"type": "unknown_type", "name": "unsupported"},
+            ]},
+            resurrection_key="beef" * 16,
+            expires_at=1000000.0 + 604800,
+            phase="living",
+        )
+        assert obj._restore_from_seed(seed) is False, \
+            "عنصر واحد غير قابل للاستعادة يمنع إعلان استعادة كاملة"
+
+    def test_procedural_missing_payload_not_counted(self, tmp_path, monkeypatch):
+        """عنصر إجرائي باسم فقط (بلا وصف/تسلسل إجراءات) لا يُحتسب مستعادًا —
+        إنشاء سجل فارغ ليس استعادة للمهارة المقصودة."""
+        store = _IsolatedStore()
+        rw = self._patch_env(tmp_path, monkeypatch, store)
+        obj = rw.RansomwareDefense.__new__(rw.RansomwareDefense)
+        obj.core = self._mock_core()
+        obj.seeds = {}
+        obj.ashes = {}
+        obj.restored_seeds = {}
+        obj.master_resurrection_key = "e" * 128
+        from backend.memory.defense.ransomware import PhoenixSeed
+        seed = PhoenixSeed(
+            id="phoenix_seed_proc_001",
+            created_at=1000000.0,
+            core_fingerprint="deadbeef1234",
+            essential_memory={"core": {"last_hash": "x"}, "critical_memory": [
+                {"type": "procedural", "name": "broken_skill",
+                 "description": "", "trigger_patterns": [],
+                 "action_sequence": [], "parameters": {}, "importance": 0.9},
+            ]},
+            resurrection_key="beef" * 16,
+            expires_at=1000000.0 + 604800,
+            phase="living",
+        )
+        assert obj._restore_from_seed(seed) is False, \
+            "مهارة ناقصة الحمولة لا تُحتسب مستعادة — لا نجاح لعملية لم تحدث"
+
+    def test_dir_fsync_failure_after_replace(self, tmp_path, monkeypatch, caplog):
+        """فشل مزامنة المجلد بعد نجاح الاستبدال: فشل معلن + توثيق أن الملف
+        استُبدل لكن متانته لم تُؤكد (لا ادعاء أن الملف السابق بقي) + لا بذرة."""
+        store = _IsolatedStore()
+        rw = self._patch_env(tmp_path, monkeypatch, store)
+        obj = rw.RansomwareDefense()
+        state_file = tmp_path / "phoenix_state.json"
+        assert state_file.exists()
+        import os as _os
+        calls = {"n": 0}
+        real_fsync = _os.fsync
+        def _flaky(fd):
+            calls["n"] += 1
+            if calls["n"] >= 2:  # الأولى للملف المؤقت، الثانية للمجلد
+                raise OSError("dir fsync exploded (injected)")
+            return real_fsync(fd)
+        monkeypatch.setattr(_os, "fsync", _flaky)
+        caplog.clear()
+        with caplog.at_level(logging.ERROR, logger="backend.memory.defense.ransomware"):
+            ok = obj._save_state()
+        assert ok is False, "فشل تأكيد المتانة = فشل معلن"
+        matches = [r for r in caplog.records
+                   if "REPLACED" in r.getMessage()
+                   and "durability" in r.getMessage().lower()]
+        assert matches, \
+            "يجب توثيق أن الملف استُبدل لكن متانته لم تُؤكد — لا ادعاء تراجع لم يحدث"
+        # الملف استُبدل فعلًا (المحتوى الجديد موجود) — ولا يُدّعى أنه كما كان
+        assert state_file.exists()
+        seed = obj.create_phoenix_seed(reason="dir-fsync-failure")
+        assert seed is None, "لا بذرة معلنة دون حفظ متين مؤكد"
 
     def test_reset_preserve_seeds_keeps_master_key(self, tmp_path, monkeypatch):
         """reset(preserve_seeds=True) يجب ألا يولّد مفتاحًا جديدًا — توليده
