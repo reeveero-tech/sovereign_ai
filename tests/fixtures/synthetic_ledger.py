@@ -100,6 +100,19 @@ def build_synthetic_ledger(base_dir: Path, event_count: int = 10) -> Dict[str, P
     from backend.sovereign.ledger.anchor import compute_merkle_root
     raw_lines = [json.dumps(ev, ensure_ascii=False) for ev in events]
     merkle_root = compute_merkle_root(raw_lines)
+
+    # R-682 (advisor): anchor must be v2 (sig_format + sig_data_v2 + signature)
+    # so test_all_anchors_valid exercises the v2 signature branch.
+    sig_data_v2 = (
+        f"anchor_sig_v2|0|{event_count - 1}|{event_count}|"
+        f"{merkle_root}|{key_id}"
+    )
+    anchor_signature = hmac.new(
+        private_key.encode("utf-8"),
+        sig_data_v2.encode("utf-8"),
+        hashlib.sha256
+    ).hexdigest()
+
     anchor_record = {
         "anchor_id": hashlib.sha256(merkle_root.encode()).hexdigest()[:16],
         "batch_start": 0,
@@ -109,6 +122,10 @@ def build_synthetic_ledger(base_dir: Path, event_count: int = 10) -> Dict[str, P
         "reason": "SYNTHETIC_FIXTURE_R682",
         "key_id": key_id,
         "anchored_at": "2026-10-15T00:00:00Z",
+        # R-682: v2 fields (matches anchor.py:246-248)
+        "sig_format": "v2",
+        "sig_data_v2": sig_data_v2,
+        "signature": anchor_signature,
     }
     anchors_path = ledger_dir / "ledger.anchors.jsonl"
     with open(anchors_path, "w", encoding="utf-8") as f:
@@ -167,33 +184,5 @@ def verify_fixture(ledger_path: Path, anchors_path: Path, keys_dir: Path) -> Dic
     }
 
 
-# ============================
-# Test-the-test (must run in CI)
-# ============================
-
-def test_synthetic_fixture_builds_and_verifies(tmp_path):
-    """RED-GREEN: fixture builds + verifies. If this fails → fixture is broken."""
-    fx = build_synthetic_ledger(tmp_path)
-    assert fx["ledger"].exists()
-    assert fx["anchors"].exists()
-    result = verify_fixture(fx["ledger"], fx["anchors"], fx["keys_dir"])
-    assert result["all_valid"], f"Fixture produced invalid events: {result['invalid_events']}"
-    assert result["root_verified"], "Fixture anchor root verification failed"
-
-
-def test_synthetic_fixture_detects_tampering(tmp_path):
-    """Test-the-test: tampering with one event MUST be detected (fail)."""
-    fx = build_synthetic_ledger(tmp_path)
-    # Tamper: flip the blob of the first event (sig will mismatch)
-    with open(fx["ledger"], "r", encoding="utf-8") as f:
-        lines = f.readlines()
-    ev = json.loads(lines[0])
-    ev["blob"] = hashlib.sha256(b"tampered").hexdigest()
-    lines[0] = json.dumps(ev, ensure_ascii=False) + "\n"
-    with open(fx["ledger"], "w", encoding="utf-8") as f:
-        f.writelines(lines)
-    result = verify_fixture(fx["ledger"], fx["anchors"], fx["keys_dir"])
-    # The tampered event MUST be flagged
-    assert result["invalid_events"], (
-        "Tampering NOT detected — fixture broken."
-    )
+# NOTE: Test-the-test functions were moved to tests/test_synthetic_fixture.py
+# (R-682 advisor fix: fixtures/ is not collected by pytest by default).
