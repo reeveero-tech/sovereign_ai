@@ -312,3 +312,23 @@ Expected: `TOTAL = 20`
 
 **شرط البوابة:** الحزمة خضراء بعدها — 410 passed, 1 deselected, 0 failed
 محليًا + CI على SHA الالتزام.
+
+---
+
+## مدخل بأثر رجعي: حذوفات الالتزام `182949f` (R-682 operational)
+
+**سطر افتتاحي صريح:** مدخل بأثر رجعي — أُضيف في الالتزام الحامل لهذا الملف (يُثبَّت SHA الفعلي في سجل الخاتمة ومدخل لاحق)؛ **المخالفة الأصلية تبقى مسجلة في `CONTRACT_EXCEPTION_1.md`**. هذا المدخل توثيق بأثر رجعي، لا يغيّر المخالفة ولا يجمّلها ولا يعتمدها.
+
+| # | الملف | السطر المحذوف (حرفيًا) | التبرير الوظيفي |
+|---|---|---|---|
+| 1 | `.github/workflows/ci.yml` | `-      - name: Load KEY_SECRET from repository secret` | استُبدلت خطوة تحميل السر الوحيدة القديمة (KEY_SECRET فقط) بخطة تحميل السرّين (KEY_SECRET + KEY_OLD_SECRET) عبر `env` بلا استيفاء مباشر داخل `run` — الوظيفة نفسها (تحميل `data/key.secret`) محفوظة وموسعة للمفتاح القديم |
+| 2 | `.github/workflows/ci.yml` | `-          if [ -z "${{ secrets.KEY_SECRET }}" ]; then` | الشرط انتقل إلى الفحص المزدوج للسرّين برسالة فشل صريحة أوسع |
+| 3 | `.github/workflows/ci.yml` | `-            echo "❌ KEY_SECRET secret not configured — cannot run operational tests"` | استُبدلت برسالة فشل تغطي السرّين معًا |
+| 4 | `.github/workflows/ci.yml` | `-          printf '%s' "${{ secrets.KEY_SECRET }}" > data/key.secret` | استُبدلت بكتابة الملفين عبر `printf '%s' "$VAR"` مع `umask 077` — نفس الوظيفة بطريقة لا تعرض السر في أمر الطباعة |
+| 5 | `.github/workflows/ci.yml` | `-          chmod 600 data/key.secret` | الصلاحية مضمونة الآن عبر `umask 077` قبل الإنشاء |
+| 6 | `.github/workflows/ci.yml` | `-          echo "key.secret loaded from secret"` | استُبدلت برسالة تؤكد عدم طباعة القيم أبدًا |
+| 7 | `tests/test_gate1_operational_auth.py` | `-            f"    r = client.get('/api-key', params={{'master_key': {new_key!r}}})\n"` | تضمين قيمة المفتاح حرفيًا داخل مصدر السكربت استُبدل بالتمرير عبر متغير بيئة `TEST_NEW_KEY` — نفس الطلب، بلا ظهور المفتاح في أي traceback أو رسالة إخفاق |
+| 8 | `tests/test_gate1_operational_auth.py` | `-            f"    r = client.get('/api-key', params={{'master_key': {old_key!r}}})\n"` | نفس التبرير للمفتاح القديم (`TEST_OLD_KEY`) |
+
+**العدد:** 8 أسطر محذوفة (6 من `ci.yml` + 2 من `tests/test_gate1_operational_auth.py`).
+**الحالة:** المخالفة قائمة — التبرير كان في رسالة الالتزام فقط، لا في هذا السجل داخل الالتزام نفسه (شرط القاعدة 1-أ المعدلة). هذا المدخل لا يعتمد شيئًا؛ اعتماد الاستثناء أو رفضه قرار المالك في `CONTRACT_EXCEPTION_1.md`.
