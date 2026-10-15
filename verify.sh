@@ -111,15 +111,6 @@ if [ "$FULL_MODE" = "--full" ]; then
     fi
     echo "CI Run: $CI_RUN_ID (completed/success — اختيار صريح + فحص هوية workflow)"
 
-    if [ "$CI_STATUS" != "completed" ]; then
-        echo "❌ CI run $CI_RUN_ID is NOT completed (status: $CI_STATUS)"
-        exit 1
-    fi
-    if [ "$CI_CONCLUSION" != "success" ]; then
-        echo "❌ CI run $CI_RUN_ID conclusion: $CI_CONCLUSION (must be success)"
-        exit 1
-    fi
-
     # 6b) Download JUnit artifact and COMPARE with local
     ARTIFACT_ID=$(gh api repos/reeveero-tech/sovereign_ai/actions/runs/$CI_RUN_ID/artifacts --jq '.artifacts[] | select(.name | startswith("junit-with-sha")) | .id' | head -1)
     if [ -z "$ARTIFACT_ID" ]; then
