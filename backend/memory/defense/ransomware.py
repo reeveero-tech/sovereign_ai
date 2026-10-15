@@ -638,22 +638,39 @@ class RansomwareDefense:
         # 1) إنشاء بذرة أخيرة
         final_seed = self.create_phoenix_seed(reason="final_before_death")
         
-        # 2) تشفير كل شيء — عدّ صادق (blobs فقط؛ عناصر المخزن غير منفذة)
+        # 2) إنشاء نسخ استرداد مشفرة — عدّ صادق (blobs فقط؛ عناصر المخزن غير منفذة)
         protection = self._encrypt_all_memory()
+        # جاهزية الاسترداد: كل ما فُحص أُنشئت له نسخة، بلا فشل ولا اقتطاع ولا عنصر
+        # مخزن غير محمي. (لا يُستنتج اكتمال من صفر عدّاد — الفشل معلن.)
+        recovery_ready = (
+            protection["blob_failures"] == 0
+            and not protection["events_scan_failed"]
+            and not protection["events_truncated"]
+            and not protection["store_scan_failed"]
+            and not protection["store_truncated"]
+            and protection["store_items_unprotected"] == 0
+        )
+        # الحماية بالإخفاء لا تحدث — الأصل يبقى مقروءًا (النسخة استرداد،
+        # وحجب الأصول قرار المالك). لذا اكتمال الحماية = False صراحةً دائمًا.
         self.last_death_protection = {
             **protection,
-            "complete": protection["store_items_unprotected"] == 0,
+            "recovery_ready": recovery_ready,
+            "assets_hidden": False,
+            "protection_complete": False,
         }
         
-        # 3) تسجيل الموت — بأعداد صادقة لا ادعاء "تشفير كامل"
+        # 3) تسجيل الموت — بالفصل الصريح بين الاسترداد والحماية
         self.core.append_event(
             event_type="phoenix::death",
             payload={
                 "reason": reason,
                 "resurrection_mode": resurrection_mode,
                 "blobs_encrypted": protection["blobs_encrypted"],
+                "blob_failures": protection["blob_failures"],
                 "store_items_unprotected": protection["store_items_unprotected"],
-                "protection_complete": self.last_death_protection["complete"],
+                "recovery_ready": recovery_ready,
+                "assets_hidden": False,
+                "protection_complete": False,
                 "seed_id": final_seed.id if final_seed else None,
                 "timestamp": time.time()
             }
@@ -673,55 +690,96 @@ class RansomwareDefense:
             success=True
         )
         
-        if self.last_death_protection["complete"]:
+        if recovery_ready:
             logger.warning(
-                f"⚰️ الموت اكتمل: {protection['blobs_encrypted']} blob مشفر إلى رماد موثق. "
-                "انتظر القيامة."
+                f"⚰️ نسخ الاسترداد جاهزة: {protection['blobs_encrypted']} blob مشفر "
+                "إلى رماد موثق. الأصول تبقى مقروءة (الحماية بالإخفاء قرار المالك) "
+                "— الحماية ليست مكتملة."
             )
         else:
-            # صدق صريح: الحماية جزئية — لا ادعاء "تشفير الذاكرة بالكامل"
+            # صدق صريح: جاهزية الاسترداد ناقصة — والسبب معلن
+            reasons = []
+            if protection["blob_failures"]:
+                reasons.append(f"{protection['blob_failures']} فشل إنشاء رماد")
+            if protection["events_scan_failed"]:
+                reasons.append("تعذر فحص أحداث النواة")
+            if protection["events_truncated"]:
+                reasons.append("اقتطاع فحص الأحداث (حد 1000)")
+            if protection["store_scan_failed"]:
+                reasons.append("تعذر فحص المخزن")
+            if protection["store_truncated"]:
+                reasons.append("اقتطاع استعلام المخزن (حد 500)")
+            if protection["store_items_unprotected"]:
+                reasons.append(
+                    f"{protection['store_items_unprotected']} عنصر مخزن غير محمي"
+                )
             logger.warning(
-                f"⚰️ الموت جزئي الحماية: {protection['blobs_encrypted']} blob مشفر إلى "
-                f"رماد موثق، لكن {protection['store_items_unprotected']} عنصر مخزن "
-                "غير محمي (مسار عناصر المخزن غير منفذ). الأصل لا يُحجب تلقائيًا."
+                f"⚰️ نسخ الاسترداد غير جاهزة ({'; '.join(reasons)}) — "
+                f"{protection['blobs_encrypted']} blob مشفر إلى رماد موثق. "
+                "الأصول تبقى مقروءة — الحماية ليست مكتملة."
             )
         return True
     
-    def _encrypt_all_memory(self) -> Dict[str, int]:
-        """تشفير الذاكرة - الموت الرقمي (عدّ صادق).
+    def _encrypt_all_memory(self) -> Dict[str, Any]:
+        """إنشاء نسخ استرداد مشفرة — الموت الرقمي (عدّ صادق منفصل عن الحماية).
 
-        R-682 (جولة 8): النتيجة منظّمة — blobs_encrypted فقط لما شُفّر
-        فعلًا، وstore_items_unprotected لما لم يُشفر (مسار عناصر المخزن
-        غير منفذ). لا يُعلن "تشفير الذاكرة بالكامل" والمسار ناقص.
+        R-682 (جولة 9): النتيجة تفصل صراحةً بين نجاح إنشاء نسخ الاسترداد
+        وبين حماية الأصول (التي لا تحدث — الأصل يبقى مقروءًا). الفشل
+        وتعذر الفحص والاقتطاع (حدود 1000/500) كلها معلنة — لا يُستنتج
+        اكتمال من صفر عدّاد.
         """
         encrypted_count = 0
-        store_items_found = 0
+        blob_failures = 0
+        events_seen = 0
+        events_scan_failed = False
         
         try:
-            # تشفير جميع blobs في core
             for event in self.core.iterate_events(limit=1000):
+                events_seen += 1
                 blob = event.get("blob")
                 if blob:
                     if self._encrypt_single_blob(blob):
                         encrypted_count += 1
-            
-            # عناصر التخزين الصلب — مسار التشفير غير منفذ: تُعدّ لا تُزعَم
+                    else:
+                        blob_failures += 1
+        except Exception as e:
+            logger.error(f"R-682: فشل فحص أحداث النواة أثناء الموت: {e}")
+            events_scan_failed = True
+        # حد الفحص: ما بعد 1000 غير مفحوص — اقتطاع معلن
+        events_truncated = events_seen >= 1000
+        
+        store_items_unprotected = 0
+        store_scan_failed = False
+        store_truncated = False
+        
+        try:
+            # عناصر التخزين الصلب — مسار التشفير غير منفذ: تُعدّ كلها
+            # غير محمية (بمعرّف أو بدونه — غياب المعرّف لا يعني غياب الحماية
+            # عن العنصر)، ولا يُعلن تشفير لم يحدث.
             from ..store import get_store
             store = get_store()
             
             for kind in ["procedural", "semantic", "episodic", "associative"]:
                 items = store.query(kind, limit=500)
                 for item in items:
+                    store_items_unprotected += 1
                     item_id = item.get("_id")
                     if item_id:
-                        store_items_found += 1
                         self._encrypt_store_item(kind, item_id)  # يسجل صراحةً: غير منفذ
+                if len(items) >= 500:
+                    store_truncated = True
         except Exception as e:
-            logger.error(f"خطأ في تشفير الذاكرة: {e}")
+            logger.error(f"R-682: تعذر فحص مخزن التطبيق أثناء الموت: {e}")
+            store_scan_failed = True
         
         return {
             "blobs_encrypted": encrypted_count,
-            "store_items_unprotected": store_items_found,
+            "blob_failures": blob_failures,
+            "events_scan_failed": events_scan_failed,
+            "events_truncated": events_truncated,
+            "store_items_unprotected": store_items_unprotected,
+            "store_scan_failed": store_scan_failed,
+            "store_truncated": store_truncated,
         }
     
     def _encrypt_single_blob(self, blob_hash: str) -> bool:
