@@ -2215,10 +2215,15 @@ class TestCommitDurabilityWindows:
 
         result = obj.initiate_death(reason="commit-durability-test")
         assert calls["n"] >= 3, "الحقن وصل مرحلة رفع العلامة فعلًا"
-        # النتيجة متسقة مع القرص: الاستبدال وقع — الموت مكتمل (متانة غير مؤكدة)
-        assert result is True, \
-            "الاستبدال وقع والحدث مُلحق — القرص يحمل الحالة النهائية؛ " \
-            "فشل تأكيد المتانة ليس فشل العملية"
+        # الفصل الصريح (أمر advisor): الالتزام المادي وقع (ليس فشلًا متراجعًا
+        # عنه) لكن المتانة غير مؤكدة — فالنتيجة False (عقد المتانة غير مستوفى)
+        # والسجل success=True (ملتزم ماديًا) مع علامة متانة ظاهرة
+        assert result is False, \
+            "عقد initiate_death يشترط الحفظ المتين — عدم تأكيد المتانة ليس نجاح العقد"
+        assert obj.last_death_record.success is True, \
+            "الالتزام المادي وقع (الاستبدال + الحدث) — ليس فشلًا متراجعًا عنه"
+        assert getattr(obj, "last_death_durability", None) == "unconfirmed", \
+            "حالة عدم تأكيد المتانة ظاهرة في النتيجة والسجل"
         # القرص فعليًا: DEAD بلا علامة (الاستبدال كتب الحالة الجديدة)
         disk_state = _json.loads(state_file.read_text())
         assert disk_state["phoenix_phase"] == "dead"
@@ -2272,9 +2277,14 @@ class TestCommitDurabilityWindows:
         assert disk_state["phoenix_phase"] == "dead"
         assert disk_state.get("pending_outcome"), "العلامة المعلقة على القرص"
         # والسجل يحمل حدث الإكمال فعلًا (بلا تصحيح)
-        death_events = [e for e in core.iterate_events(limit=100)
+        death_events = [e for e in core.iterate_events(limit=1000)
                         if e.get("type") == "phoenix::death"]
         assert death_events, "حدث الإكمال مُلحق فعلًا في السجل"
+
+        # R-682 (جولة 15): >100 حدث غير متعلق بعد الحدث وقبل إعادة التهيئة —
+        # البحث المحدود (ذيل 100) ليس توفيقًا حاسمًا: الدليل موجود مهما ابتعد
+        for i in range(120):
+            core.append_event("awareness::noise", {"n": i}, user="test")
 
         # التحميل يوفّق مع الدليل الدائم: العملية اكتملت — لا فشلًا آليًا
         obj2 = rw.RansomwareDefense()
@@ -2282,6 +2292,113 @@ class TestCommitDurabilityWindows:
             "التوفيق مع سجل الأحداث: حدث الإكمال موجود — العملية اكتملت"
         assert obj2._pending_outcome is None, "العلامة رُفعت بعد التوفيق"
         assert obj2.is_transforming is False
+
+
+# ============================================================
+# Part 1j: جولة 15 — تفرد معرف العملية + التوفيق الحاسم (كامل السجل)
+# ============================================================
+
+class TestOperationIdUniqueness:
+    """R-682 (جولة 15 — اعتراض advisor العاشر): معرف العملية كان قابلًا
+    للتصادم (ثانية واحدة = نفس المعرف) فيمكن للتوفيق اعتماد حدث محاولة
+    سابقة بوصفه نتيجة المحاولة المعلقة الجديدة. والبحث المحدود (100) ليس
+    توفيقًا حاسمًا. الحل: معرف فريد لكل محاولة + استنفاد السجل فعليًا."""
+
+    def _real_env(self, tmp_path, monkeypatch):
+        import backend.memory.defense.ransomware as rw
+        import backend.memory.store as store_mod
+        from backend.memory.core import SovereignCore
+        core_dir = tmp_path / "core"
+        core_dir.mkdir()
+        (core_dir / "blobs").mkdir()
+        core = SovereignCore(
+            log_file=core_dir / "ledger.jsonl",
+            blobs_dir=core_dir / "blobs",
+            index_file=core_dir / "index.json",
+            meta_file=core_dir / "meta.json",
+            integrity_file=core_dir / "integrity.json",
+        )
+        core.append_event("phoenix::id_test", {"data": "seed"}, user="test")
+        seeds_dir = tmp_path / "seeds"
+        seeds_dir.mkdir(exist_ok=True)
+        monkeypatch.setattr(rw, "PHOENIX_SEEDS_DIR", seeds_dir)
+        monkeypatch.setattr(rw, "PHOENIX_STATE_FILE", tmp_path / "phoenix_state.json")
+        monkeypatch.setattr(rw, "get_core", lambda: core)
+        monkeypatch.setattr(rw, "get_encoder", lambda: MagicMock())
+        monkeypatch.setattr(rw, "get_watcher", lambda: MagicMock())
+        empty = _IsolatedStore()
+        monkeypatch.setattr(store_mod, "get_store", lambda: empty)
+        import threading as _th
+        monkeypatch.setattr(_th, "Thread", _NoThreads)
+        return rw, core
+
+    def test_unique_op_ids_no_cross_attempt_resolution(self, tmp_path, monkeypatch):
+        """تثبيت الوقت: محاولتان في "الثانية نفسها" يجب أن تحملا معرفين
+        مختلفين، ومحاولة معلقة لا تُحسم بحدث محاولة سابقة."""
+        import json as _json
+        import os as _os
+        import backend.memory.defense.ransomware as rw
+        rw, core = self._real_env(tmp_path, monkeypatch)
+        state_file = tmp_path / "phoenix_state.json"
+        import time as _time
+        monkeypatch.setattr(_time, "time", lambda: 1792042000.0)  # وقت ثابت
+
+        obj = rw.RansomwareDefense()
+        # المحاولة 1: موت ناجح (حدث إكمال بمعرف op1)
+        assert obj.initiate_death(reason="attempt-1") is True
+        death_events = [e for e in core.iterate_events(limit=1000)
+                        if e.get("type") == "phoenix::death"]
+        assert len(death_events) == 1
+        import backend.memory.core as core_mod
+        payload1 = _json.loads(core.blob_store.get(death_events[0]["blob"],
+                                                   decompress=True))
+        op1 = payload1.get("op_id")
+
+        # المحاولة 2 (نفس "الثانية"): فشل حدث الإكمال + فشل رفع العلامة
+        # والتراجع — تبقى العلامة معلقة بمعرف op2
+        real_replace = _os.replace
+        calls = {"n": 0}
+        def failing_replace(a, b):
+            raise OSError("inject: replace failed")
+        orig_save = obj._save_state
+        def counting_save():
+            calls["n"] += 1
+            if calls["n"] >= 3:
+                _os.replace = failing_replace
+            try:
+                return orig_save()
+            finally:
+                _os.replace = real_replace
+        obj._save_state = counting_save
+        real_append = core.append_event
+        def failing_death_append(*args, **kwargs):
+            et = kwargs.get("event_type") or (args[0] if args else None)
+            if et == "phoenix::death":
+                raise RuntimeError("inject: attempt-2 event failed")
+            return real_append(*args, **kwargs)
+        core.append_event = failing_death_append
+
+        result2 = obj.initiate_death(reason="attempt-2")
+        assert result2 is False
+        # المعرّفان مختلفان رغم تثبيت الوقت (تفرد لكل محاولة)
+        payload_failed = None
+        failed_events = [e for e in core.iterate_events(limit=1000)
+                         if e.get("type") == "phoenix::death_failed"]
+        assert failed_events, "حدث فشل المحاولة 2 مُلحق"
+        payload2 = _json.loads(core.blob_store.get(failed_events[-1]["blob"],
+                                                    decompress=True))
+        op2 = payload2.get("op_id")
+        assert op1 != op2, "معرفا المحاولتين مختلفان رغم تثبيت الوقت"
+
+        # والقرص يحمل علامة معلقة بالمعرف op2 (DEAD+علامة)
+        disk_state = _json.loads(state_file.read_text())
+        assert disk_state.get("pending_outcome", {}).get("id") == op2
+
+        # التحميل: التوفيق يبحث عن op2 تحديدًا — حدث المحاولة 1 (op1) لا يحسمه
+        obj2 = rw.RansomwareDefense()
+        # op2 له حدث فشل (death_failed مُلحق من _failed_outcome) → فاشلة: LIVING
+        assert obj2.phoenix_phase == rw.PhoenixPhase.LIVING, \
+            "التوفيق مع حدث المحاولة نفسها (op2: death_failed) — لا حدث المحاولة السابقة"
 
 
 # ============================================================

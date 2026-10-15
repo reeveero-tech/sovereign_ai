@@ -669,6 +669,12 @@ class RansomwareDefense:
         # ولا تحول معلق، ومواد الاسترداد محفوظة.
         self.is_transforming = False  # العملية انتهت (نجحت أو فشلت) — لا تحول جارٍ
         
+        # R-682 (جولة 15): معرف فريد لكل محاولة — يولد مرة واحدة ويُعاد
+        # استخدامه في السجل والعلامة وجميع أحداث النتيجة (راجع event_payload
+        # و_pending_outcome). ثانية واحدة لا تكفي (تصادم محاولتين يجعل التوفيق
+        # يحسم محاولة بحدث محاولة سابقة).
+        death_op_id = f"death_{int(time.time())}_{secrets.token_hex(6)}"
+
         def _failed_outcome(fail_reason: str) -> bool:
             """اتساق كامل عند أي فشل: LIVING + لا تحول + سجل فاشل + حالة محفوظة."""
             self.phoenix_phase = PhoenixPhase.LIVING
@@ -679,7 +685,7 @@ class RansomwareDefense:
             # عند التحميل كعملية فاشلة — لا كموت مكتمل)
             self._pending_outcome = None
             self.last_death_record = ResurrectionRecord(
-                id=f"death_{int(time.time())}",
+                id=death_op_id,  # نفس معرف المحاولة — لا معرف جديد عند الفشل
                 before_hash=self.core._last_hash,
                 after_hash="LIVING",
                 reason=f"{reason} [{fail_reason}]",
@@ -716,7 +722,7 @@ class RansomwareDefense:
             return False
         
         death_record = ResurrectionRecord(
-            id=f"death_{int(time.time())}",
+            id=death_op_id,
             before_hash=self.core._last_hash,
             after_hash="DEAD" if recovery_ready else "LIVING",
             reason=reason,
@@ -741,7 +747,7 @@ class RansomwareDefense:
         # للتمييز). عملية غير محسومة تُحمَّل كفاشلة — لا كموت مكتمل.
         self._pending_outcome = {
             "op": "death",
-            "id": death_record.id,
+            "id": death_op_id,
             "intended": "DEAD" if recovery_ready else "LIVING",
         }
         event_payload = {
@@ -789,18 +795,25 @@ class RansomwareDefense:
             self._pending_outcome = None
             if not self._save_state():
                 if getattr(self, "_last_save_replaced_unconfirmed", False):
+                    # R-682 (جولة 15 — فصل صريح): الالتزام المادي وقع (الاستبدال
+                    # + الحدث مُلحق) — ليس فشلًا متراجعًا عنه؛ لكن المتانة غير
+                    # مؤكدة — وليس نجاح العقد (الذي يشترط الحفظ المتين).
+                    # النتيجة False، السجل success=True، وحالة المتانة ظاهرة.
+                    self.last_death_durability = "unconfirmed"
                     logger.warning(
-                        "R-682: الموت مكتمل على القرص (الاستبدال وقع والحدث "
-                        "مُلحق) لكن متانة الحفظ غير مؤكدة (فشل مزامنة المجلد) — "
-                        "النتيجة متسقة مع القرص: نجاح مع تحذير متانة"
+                        "R-682: الالتزام المادي وقع (الاستبدال + الحدث مُلحق — "
+                        "ليس فشلًا متراجعًا) لكن متانة الحفظ غير مؤكدة (فشل "
+                        "مزامنة المجلد) — النتيجة False: عقد المتانة غير مستوفى، "
+                        "والسجل success=True مع last_death_durability=unconfirmed"
                     )
-                    return True
+                    return False
                 logger.error(
                     "R-682 [SECURITY-FAIL]: فشل حفظ رفع علامة الإنهاء (قبل "
                     "الاستبدال) — العملية غير محسومة ولا يُعلن موت (التوفيق مع "
                     "سجل الأحداث عند التحميل يحدد النتيجة)"
                 )
                 return _failed_outcome("pending-outcome commit save failed")
+            self.last_death_durability = "confirmed"
             logger.warning(
                 f"⚰️ الموت تم: نسخ الاسترداد جاهزة ({protection['blobs_encrypted']} blob "
                 "مشفر إلى رماد موثق) والحالة محفوظة. الأصول تبقى مقروءة (الحماية "
@@ -1672,7 +1685,10 @@ class RansomwareDefense:
         if not op_id:
             return None
         try:
-            for event in self.core.iterate_events(reverse=True, limit=100):
+            # R-682 (جولة 15): استنفاد السجل فعليًا — البحث المحدود (ذيل 100)
+            # ليس توفيقًا حاسمًا: الدليل لا يغيب لبعده عن الذيل. يُفحص السجل
+            # كاملًا (الأحدث أولًا) حتى العثور على نتيجة العملية أو النهاية.
+            for event in self.core.iterate_events(reverse=True):
                 et = event.get("type")
                 if et not in ("phoenix::death", "phoenix::death_failed"):
                     continue
