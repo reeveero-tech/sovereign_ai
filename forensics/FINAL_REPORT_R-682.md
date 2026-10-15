@@ -1,7 +1,7 @@
 # FINAL REPORT — R-682 (Real Closure Before Production)
 
 **التاريخ:** 2026-10-15
-**HEAD:** `f33256735ada31d25382f45676b1b8bc0c6c176b`
+**HEAD:** `240058444bc004c891905894658469d562cf387d`
 **الفرع:** `main`
 **المرجع:** أمر التسليم R-682 — الإغلاق الحقيقي قبل الإنتاج
 **الحالة النهائية:** REVIEW-READY (partial delivery — انظر الفجوات)
@@ -33,10 +33,12 @@ $ ./verify.sh
 ### JUnit XML مقتطف (من الـ artifact الفعلي — CI run)
 
 ```xml
-<testsuites git_sha="f33256735ada31d25382f45676b1b8bc0c6c176b"
-            junit_prefix="R-682-ci-sha-f332567..."
+<testsuites git_sha="240058444bc004c891905894658469d562cf387d"
+            junit_prefix="R-682-ci-sha-240058444bc004c891905894658469d562cf387d"
             name="pytest tests" tests="316" failures="0" errors="0" skipped="0">
 ```
+
+**مصدر JUnit:** CI run `38662055044` (headSha `2400584`), artifact `junit-with-sha-2400584` (ID `11939845737`).
 
 **تنفيذ:** 316 اختبارًا، **مُستبعد:** 1 (operational)، **مُضاف:** 17 اختبار أمان + 7 اختبار fixture.
 

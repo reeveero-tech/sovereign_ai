@@ -164,6 +164,12 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Capture git SHA (provenance)
+        id: sha
+        run: |
+          echo "short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+          git rev-parse HEAD > forensics/.ci_sha.txt
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
@@ -188,6 +194,7 @@ jobs:
         run: |
           set -euo pipefail
           SHA=$(git rev-parse HEAD)
+          SHORT_SHA=$(git rev-parse --short HEAD)
           python -m pytest -m operational -v --run-operational \
             --junitxml=forensics/pytest_operational.xml \
             --junit-prefix="R-682-operational-sha-${SHA}" \

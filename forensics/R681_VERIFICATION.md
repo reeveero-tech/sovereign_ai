@@ -89,9 +89,11 @@ gh api repos/reeveero-tech/sovereign_ai/actions/artifacts/11936413564/zip
 ```
 # واحد أمر — يعمل في clone نظيف:
 python -m pytest tests/ backend/tests/ -q -m "not operational"
-# النتيجة: 292 passed, 2 deselected, 0 skipped, 0 failed
+# النتيجة (بعد advisor جولة 2): 316 passed, 1 deselected, 0 skipped, 0 failed
 ```
 
 **الفرق عن R-681:**
 - R-681: 284 passed + 10 skipped (clone نظيف) ← 7 skips لم تُغلق
-- R-682: 292 passed + 0 skipped + 2 deselected ← كل skip أُغلق فعليًا
+- R-682: 316 passed + 0 skipped + 1 deselected (operational) ← كل skip أُغلق فعليًا + 17 اختبار أمان جديد + 7 fixture
+
+**ملاحظة (تصحيح لاحق):** الأرقام المتوسطة (292 ثم 309) كانت لحظات مؤقتة أثناء advisor جولة 1 و 2 — الرقم النهائي المعتمد هو 316 (CI run `38662055044` على headSha `2400584`).
