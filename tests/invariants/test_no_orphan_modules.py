@@ -138,6 +138,12 @@ def test_no_orphan_modules():
             continue  # سكربتات أدوات (نقاط دخول — تُشغّل يدويًا، مثل verify_new_key.py)
         if f.endswith("__init__.py"):
             continue  # ملفات حزمة Python (مطلوبة)
+        if Path(f).name == "conftest.py":
+            # R-682 (الجولة التشغيلية): conftest.py ليس يتيمًا أبدًا —
+            # pytest يحمّله تلقائيًا (نقطة دخول معيارية)، وأي ملف جذر
+            # conftest.py وُجد لاحقًا (تسجيل --run-operational) كشف أن
+            # نموذج الحارس لم يشمل هذه الآلية — تحديد دقيق لا تعطيل.
+            continue
         if f.startswith("archive/"):
             continue  # أرشيف (موثق في INVENTORY.py)
         orphans.append(f)

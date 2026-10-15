@@ -26,6 +26,22 @@ import pytest
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent
 
+# R-682 (الجولة التشغيلية — إصلاح فجوة كشفها التشغيل الفعلي): الدالتان
+# كانتا مستخدمتين (الأسطر أدناه) وغير معرّفتين — NameError عند أول تشغيل
+# حقيقي للاختبار (لم يُشغَّل الاختبار بنجاح قط قبله: كان يتخطى بدون
+# العلم، ويرفض pytest الأمر مع العلم قبل تسجيله — راجع
+# forensics/OPERATIONAL_TESTS.md).
+def _load_key_from_file(path: Path) -> str:
+    """قراءة مفتاح من ملف (سطر واحد) — الفارغ يُرفض صراحة."""
+    content = path.read_text(encoding="utf-8").strip()
+    assert content, f"key file is empty: {path}"
+    return content
+
+
+def _fp(key: str) -> str:
+    """بصمة المفتاح (sha256 مقتطعة) — تُطبع آمنة، لا تسرّب المفتاح."""
+    return hashlib.sha256(key.encode("utf-8")).hexdigest()[:16]
+
 # R-661: لا يُشغّل في المجموعة الاعتيادية — يتطلب --run-operational
 # R-682 (Task 3.3): marker on the operational test ONLY.
 # test_identity_seal_path_follows_code_definition is SAFE (no secrets) — not marked.
