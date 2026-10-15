@@ -15,6 +15,7 @@
 هذا ليس دفاعاً. هذه هي معجزة القيامة الرقمية.
 """
 
+import dataclasses
 import hmac
 import json
 import hashlib
@@ -121,7 +122,12 @@ class PhoenixAshes:
 
 @dataclass
 class ResurrectionRecord:
-    """سجل القيامة"""
+    """سجل القيامة/الموت — مرتبط بمعرف المحاولة (op_id).
+
+    R-682 (جولة 16): فصل الالتزام المادي عن تأكيد المتانة داخل السجل نفسه:
+    - material_commit: هل وقع الالتزام المادي (الاستبدال + الحدث)؟
+    - durability: تأكيد المتانة ("confirmed" / "unconfirmed" / None).
+    تُحدّثان لكل محاولة — لا توريث من محاولة سابقة."""
     id: str
     before_hash: str
     after_hash: str
@@ -130,6 +136,8 @@ class ResurrectionRecord:
     timestamp: float
     duration: float
     success: bool
+    material_commit: Optional[bool] = None
+    durability: Optional[str] = None
 
 
 # ============================================================
@@ -674,6 +682,8 @@ class RansomwareDefense:
         # و_pending_outcome). ثانية واحدة لا تكفي (تصادم محاولتين يجعل التوفيق
         # يحسم محاولة بحدث محاولة سابقة).
         death_op_id = f"death_{int(time.time())}_{secrets.token_hex(6)}"
+        # إعادة ضبط وصف المتانة لكل محاولة — لا توريث من محاولة سابقة
+        self.last_death_durability = None
 
         def _failed_outcome(fail_reason: str) -> bool:
             """اتساق كامل عند أي فشل: LIVING + لا تحول + سجل فاشل + حالة محفوظة."""
@@ -692,7 +702,9 @@ class RansomwareDefense:
                 method="self_encryption",
                 timestamp=start_time,
                 duration=time.time() - start_time,
-                success=False
+                success=False,
+                material_commit=False,  # فشل = لا التزام مادي
+                durability=None,
             )
             # حدث الفشل بمرحلة معلنة — أفضل جهد: فشل تسجيله يُعلن ولا يُبتلع
             # (ولكنه لا يغير النتيجة: الفشل فشل)
@@ -729,7 +741,9 @@ class RansomwareDefense:
             method="self_encryption",
             timestamp=start_time,
             duration=time.time() - start_time,
-            success=recovery_ready
+            success=recovery_ready,
+            material_commit=False,  # يُحدَّث عند النتيجة (لا توريث)
+            durability=None,
         )
         self.last_death_record = death_record
         
@@ -793,18 +807,28 @@ class RansomwareDefense:
             # مكتملة ماديًا (نجاح مع تحذير متانة، متسق مع القرص)؛
             # (ج) الاستبدال لم يقع → غير محسوم: تراجع كامل.
             self._pending_outcome = None
+            # R-682 (جولة 17): حقلا السجل يُحدَّثان **قبل** حفظ رفع العلامة —
+            # القيمة المحافظة "unconfirmed" تُكتب أولًا (لا يُدَّعى confirmed قبل
+            # إثباته)، فالسجل المحفوظ يحمل الالتزام المادي ووصف المتانة معًا،
+            # ويستمر عبر إعادة التحميل. الترقية إلى "confirmed" حفظ مفحوص
+            # لاحق — لا حفظ أخير غير مفحوص أبدًا.
+            death_record.material_commit = True   # الحدث مُلحق — الالتزام وقع
+            death_record.durability = "unconfirmed"  # محافظة حتى إثبات المتانة
             if not self._save_state():
                 if getattr(self, "_last_save_replaced_unconfirmed", False):
                     # R-682 (جولة 15 — فصل صريح): الالتزام المادي وقع (الاستبدال
                     # + الحدث مُلحق) — ليس فشلًا متراجعًا عنه؛ لكن المتانة غير
                     # مؤكدة — وليس نجاح العقد (الذي يشترط الحفظ المتين).
-                    # النتيجة False، السجل success=True، وحالة المتانة ظاهرة.
+                    # النتيجة False، والسجل المحفوظ (في الملف الجديد الموجود
+                    # فعلًا) يحمل success=True + material_commit=True +
+                    # durability=unconfirmed — محافظة وصريحة.
                     self.last_death_durability = "unconfirmed"
                     logger.warning(
                         "R-682: الالتزام المادي وقع (الاستبدال + الحدث مُلحق — "
                         "ليس فشلًا متراجعًا) لكن متانة الحفظ غير مؤكدة (فشل "
                         "مزامنة المجلد) — النتيجة False: عقد المتانة غير مستوفى، "
-                        "والسجل success=True مع last_death_durability=unconfirmed"
+                        "والسجل success=True + material_commit=True + "
+                        "durability=unconfirmed"
                     )
                     return False
                 logger.error(
@@ -813,7 +837,31 @@ class RansomwareDefense:
                     "سجل الأحداث عند التحميل يحدد النتيجة)"
                 )
                 return _failed_outcome("pending-outcome commit save failed")
+            # الترقية إلى "confirmed" — حفظ مفحوص: نجاحه يُثبت الوصف على القرص؛
+            # فشله يُبقي القرص على الوصف المحافظ (صريح — لا ادعاء بلا إثبات).
+            # حالة الموت نفسها متينة (حفظ رفع العلامة نجح كاملًا) — فشل ترقية
+            # الوصف لا يغير النتيجة، والتحميل يوفّق مع سجل الأحداث (الدليل
+            # الدائم) في كل الأحوال.
             self.last_death_durability = "confirmed"
+            death_record.durability = "confirmed"
+            if not self._save_state():
+                if getattr(self, "_last_save_replaced_unconfirmed", False):
+                    # R-682 (جولة 18): تمييز وقوع الكتابة من تأكيد متانتها —
+                    # الاستبدال وقع فالمحتوى الجديد (confirmed) هو الموجود
+                    # فعلًا؛ لا يُدَّعى بقاء المحتوى القديم.
+                    logger.warning(
+                        "R-682: ترقية وصف المتانة كُتبت فعلًا (الاستبدال وقع — "
+                        "JSON القرص يحمل confirmed) لكن متانتها غير مؤكدة (فشل "
+                        "مزامنة المجلد) — وقوع الكتابة ≠ تأكيد متانتها"
+                    )
+                else:
+                    # فشل قبل الاستبدال — القرص فعليًا يبقى على الوصف المحافظ
+                    logger.warning(
+                        "R-682: حالة الموت متينة (حفظ رفع العلامة نجح) لكن حفظ "
+                        "ترقية وصف المتانة (confirmed) فشل قبل الاستبدال — "
+                        "القرص يبقى على الوصف المحافظ (unconfirmed)؛ التوفيق مع "
+                        "سجل الأحداث عند التحميل يحدث عند وجود علامة معلقة فقط"
+                    )
             logger.warning(
                 f"⚰️ الموت تم: نسخ الاسترداد جاهزة ({protection['blobs_encrypted']} blob "
                 "مشفر إلى رماد موثق) والحالة محفوظة. الأصول تبقى مقروءة (الحماية "
@@ -1597,6 +1645,12 @@ class RansomwareDefense:
                 "seeds_count": len(self.seeds),
                 "ashes_count": len(self.ashes),
                 "last_resurrection": self.last_resurrection.__dict__ if self.last_resurrection else None,
+                # R-682 (جولة 17): سجل نتيجة الموت يستمر عبر الحفظ وإعادة
+                # التحميل — معرف العملية + الالتزام المادي + وصف المتانة.
+                "last_death_record": (
+                    getattr(self, "last_death_record", None).__dict__
+                    if getattr(self, "last_death_record", None) else None
+                ),
                 "master_key_enc": self._wrap_master_key(),
                 "saved_at": time.time()
             }
@@ -1674,6 +1728,33 @@ class RansomwareDefense:
         except OSError:  # R-682: best-effort cleanup only — the original file was never touched
             pass  # تنظيف أفضل-جهد فقط — الملف الأصلي لم يُمس
 
+    def _reconcile_record_with_outcome(
+        self, op_id: Optional[str], completed: bool, why: Optional[str] = None
+    ) -> None:
+        """R-682 (جولة 18): السجل المُعاد تحميله يعكس نتيجة التوفيق نفسها.
+
+        نسخة القرص مرحلية (وجود العلامة يبيّن ذلك) — قيمها محفوظة قبل حسم
+        النتيجة. بعد التوفيق مع الدليل الدائم (سجل الأحداث):
+        - اكتملت: السجل يعكس الالتزام المثبت بالحدث (material_commit=True)
+          والمتانة محافظة (unconfirmed — لا دليل عند التحميل يبرر ترقيتها).
+        - فاشلة/غير محسومة: السجل لا يعلن نجاحًا ولا DEAD بعد التوفيق.
+        لا حفظ تلقائي إضافي هنا — القرص يبقى مرحليًا حتى أول حفظ لاحق."""
+        rec = getattr(self, "last_death_record", None)
+        if rec is None or not op_id or getattr(rec, "id", None) != op_id:
+            return  # السجل لا يخص هذه العملية — لا يُمس
+        if completed:
+            rec.success = True
+            rec.after_hash = "DEAD"
+            rec.material_commit = True      # الحدث أثبت الاكتمال
+            rec.durability = "unconfirmed"  # محافظة — لا ترقية بلا دليل
+        else:
+            rec.success = False
+            rec.after_hash = "LIVING"
+            rec.material_commit = False
+            rec.durability = None
+            if why:
+                rec.reason = f"{rec.reason} [load-reconciled: {why}]"
+
     def _reconcile_pending_outcome(self, pending: Dict[str, Any]) -> Optional[str]:
         """التوفيق بين عملية معلقة والدليل الدائم (سجل الأحداث).
 
@@ -1725,6 +1806,15 @@ class RansomwareDefense:
                     self.phoenix_phase = PhoenixPhase(state.get("phoenix_phase", "living"))
                     self.resurrection_level = state.get("resurrection_level", 0)
                     self.is_transforming = state.get("is_transforming", False)
+                    # R-682 (جولة 17): استمرارية سجل نتيجة الموت — يُحمَّل من
+                    # القرص مع حقليه (الالتزام المادي + وصف المتانة). مفاتيح
+                    # غير معروفة تُهمل (توافق مع ملفات قديمة).
+                    _saved_rec = state.get("last_death_record")
+                    if isinstance(_saved_rec, dict):
+                        _valid = {f.name for f in dataclasses.fields(ResurrectionRecord)}
+                        self.last_death_record = ResurrectionRecord(**{
+                            k: v for k, v in _saved_rec.items() if k in _valid
+                        })
                     # R-682 (جولة 13): علامة إنهاء معلقة = عملية موت لم يُؤكد
                     # اكتمالها (الحدث لم يُلحق أو رفع العلامة لم يُحفظ).
                     # غير المحسوم ≠ مكتمل: تُعامل كعملية فاشلة — لا يُحمَّل
@@ -1742,7 +1832,11 @@ class RansomwareDefense:
                                 "الإكمال مُلحق فعلًا في السجل — العملية اكتملت "
                                 "(المؤجل كان رفع العلامة فقط)"
                             )
-                            # الحالة كما هي (DEAD) — العملية مكتملة
+                            # الحالة كما هي (DEAD) — العملية مكتملة، والسجل
+                            # يعكس الالتزام المثبت (المتانة محافظة)
+                            self._reconcile_record_with_outcome(
+                                (_pending or {}).get("id"), completed=True
+                            )
                         else:
                             if outcome_event == "phoenix::death_failed":
                                 _why = "حدث الفشل مُلحق — عملية فاشلة"
@@ -1756,6 +1850,11 @@ class RansomwareDefense:
                             self.phoenix_phase = PhoenixPhase.LIVING
                             self.resurrection_level = RESURRECTION_LEVEL_NONE
                             self.is_transforming = False
+                            # السجل لا يعلن نجاحًا ولا DEAD بعد توفيق فاشل —
+                            # نسخة القرص المرحلية حُفظت قبل حسم النتيجة
+                            self._reconcile_record_with_outcome(
+                                (_pending or {}).get("id"), completed=False, why=_why
+                            )
                     # R-682 (جولة 12): تسوية الحالة الانتقالية المعلقة — علم تحول
                     # محفوظ لا يمكن أن يكون جاريًا في عملية جديدة (لا عملية تعبر
                     # العمليات): يُعامل كعملية منقطعة لا كتحول يمنع المحاولة.

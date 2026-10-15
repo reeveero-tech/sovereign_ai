@@ -2223,7 +2223,30 @@ class TestCommitDurabilityWindows:
         assert obj.last_death_record.success is True, \
             "الالتزام المادي وقع (الاستبدال + الحدث) — ليس فشلًا متراجعًا عنه"
         assert getattr(obj, "last_death_durability", None) == "unconfirmed", \
-            "حالة عدم تأكيد المتانة ظاهرة في النتيجة والسجل"
+            "حالة عدم تأكيد المتانة ظاهرة في النتيجة"
+        # الحقلان داخل سجل النتيجة نفسه (مرتبط بـ op_id) — لا صفة منفصلة فقط
+        assert obj.last_death_record.durability == "unconfirmed", \
+            "المتانة داخل السجل المرتبط بمعرف المحاولة"
+        assert obj.last_death_record.material_commit is True, \
+            "الالتزام المادي داخل السجل — ليس فشلًا متراجعًا"
+
+        # R-682 (جولة 17): السجل المحفوظ على القرص (الخام) يحمل الحقلين —
+        # والسجل المُعاد تحميله يحملهما فعلًا (لا قيم الكائن الأصلي فقط)
+        raw = _json.loads(state_file.read_text())
+        raw_rec = raw.get("last_death_record")
+        assert raw_rec, "السجل يُحفظ في ملف الحالة"
+        assert raw_rec["id"] == obj.last_death_record.id
+        assert raw_rec["material_commit"] is True
+        assert raw_rec["durability"] == "unconfirmed", \
+            "وصف عدم التأكيد محفوظ على القرص — لا يُفقد ولا يُحوَّل confirmed بلا دليل"
+        obj2 = rw.RansomwareDefense()
+        assert obj2.phoenix_phase == rw.PhoenixPhase.DEAD
+        assert obj2.last_death_record is not None
+        assert obj2.last_death_record.id == obj.last_death_record.id, \
+            "معرف العملية نفسه في السجل المُعاد تحميله"
+        assert obj2.last_death_record.material_commit is True
+        assert obj2.last_death_record.durability == "unconfirmed", \
+            "السجل المُعاد تحميله يحمل وصف عدم التأكيد فعلًا"
         # القرص فعليًا: DEAD بلا علامة (الاستبدال كتب الحالة الجديدة)
         disk_state = _json.loads(state_file.read_text())
         assert disk_state["phoenix_phase"] == "dead"
@@ -2286,10 +2309,23 @@ class TestCommitDurabilityWindows:
         for i in range(120):
             core.append_event("awareness::noise", {"n": i}, user="test")
 
+        # معرف العملية من سجل المحاولة (للفحص بعد إعادة التهيئة)
+        op_id = obj.last_death_record.id
         # التحميل يوفّق مع الدليل الدائم: العملية اكتملت — لا فشلًا آليًا
         obj2 = rw.RansomwareDefense()
-        assert obj2.phoenix_phase == rw.PhoenixPhase.DEAD, \
-            "التوفيق مع سجل الأحداث: حدث الإكمال موجود — العملية اكتملت"
+        assert obj2.phoenix_phase == rw.PhoenixPhase.DEAD
+        # R-682 (جولة 18): السجل المُعاد تحميله يعكس نتيجة التوفيق نفسها —
+        # الالتزام المثبت بالحدث (لا القيم المرحلية لنسخة القرص) والمتانة
+        # محافظة (لا دليل عند التحميل يبرر ترقيتها)
+        assert obj2.last_death_record is not None
+        assert obj2.last_death_record.id == op_id, \
+            "معرف العملية نفسه بعد التوفيق"
+        assert obj2.last_death_record.success is True
+        assert obj2.last_death_record.after_hash == "DEAD"
+        assert obj2.last_death_record.material_commit is True, \
+            "الحدث أثبت الاكتمال — السجل يعكس الالتزام المثبت"
+        assert obj2.last_death_record.durability == "unconfirmed", \
+            "المتانة محافظة — لا ترقية بلا دليل عند التحميل (التوفيق مع سجل الأحداث: حدث الإكمال موجود — العملية اكتملت)"
         assert obj2._pending_outcome is None, "العلامة رُفعت بعد التوفيق"
         assert obj2.is_transforming is False
 
@@ -2333,8 +2369,11 @@ class TestOperationIdUniqueness:
         return rw, core
 
     def test_unique_op_ids_no_cross_attempt_resolution(self, tmp_path, monkeypatch):
-        """تثبيت الوقت: محاولتان في "الثانية نفسها" يجب أن تحملا معرفين
-        مختلفين، ومحاولة معلقة لا تُحسم بحدث محاولة سابقة."""
+        """عدم استعارة النتيجة (مواصفات advisor الحرفية): المحاولة 1 تنجح
+        ويبقى حدث نجاحها في السجل؛ المحاولة 2 تفشل أحداث نتيجتها كلها (النجاح
+        والفشل) ويفشل تراجع حفظها — دون حذف أي حدث. معرف الثانية يُستخرج من
+        العلامة المحفوظة ويجب أن يختلف ويطابق سجلها؛ وإعادة التحميل يجب ألا
+        تعتمد حدث الأولى لإعلان اكتمال الثانية."""
         import json as _json
         import os as _os
         import backend.memory.defense.ransomware as rw
@@ -2344,18 +2383,20 @@ class TestOperationIdUniqueness:
         monkeypatch.setattr(_time, "time", lambda: 1792042000.0)  # وقت ثابت
 
         obj = rw.RansomwareDefense()
-        # المحاولة 1: موت ناجح (حدث إكمال بمعرف op1)
+        # المحاولة 1: موت ناجح — حدث إكمالها يبقى في السجل (لا حذف لأي حدث)
         assert obj.initiate_death(reason="attempt-1") is True
         death_events = [e for e in core.iterate_events(limit=1000)
                         if e.get("type") == "phoenix::death"]
         assert len(death_events) == 1
-        import backend.memory.core as core_mod
         payload1 = _json.loads(core.blob_store.get(death_events[0]["blob"],
                                                    decompress=True))
         op1 = payload1.get("op_id")
+        assert obj.last_death_record.id == op1
+        assert obj.last_death_record.durability == "confirmed"
+        assert obj.last_death_record.material_commit is True
 
-        # المحاولة 2 (نفس "الثانية"): فشل حدث الإكمال + فشل رفع العلامة
-        # والتراجع — تبقى العلامة معلقة بمعرف op2
+        # المحاولة 2 (نفس "الثانية"): فشل حدثَي نتيجتها معًا (النجاح والفشل)
+        # + فشل تراجع الحفظ — العلامة تبقى معلقة بمعرفها
         real_replace = _os.replace
         calls = {"n": 0}
         def failing_replace(a, b):
@@ -2371,34 +2412,248 @@ class TestOperationIdUniqueness:
                 _os.replace = real_replace
         obj._save_state = counting_save
         real_append = core.append_event
-        def failing_death_append(*args, **kwargs):
+        def failing_both_appends(*args, **kwargs):
             et = kwargs.get("event_type") or (args[0] if args else None)
-            if et == "phoenix::death":
-                raise RuntimeError("inject: attempt-2 event failed")
+            if et in ("phoenix::death", "phoenix::death_failed"):
+                raise RuntimeError("inject: attempt-2 outcome events failed")
             return real_append(*args, **kwargs)
-        core.append_event = failing_death_append
+        core.append_event = failing_both_appends
 
         result2 = obj.initiate_death(reason="attempt-2")
         assert result2 is False
-        # المعرّفان مختلفان رغم تثبيت الوقت (تفرد لكل محاولة)
-        payload_failed = None
-        failed_events = [e for e in core.iterate_events(limit=1000)
-                         if e.get("type") == "phoenix::death_failed"]
-        assert failed_events, "حدث فشل المحاولة 2 مُلحق"
-        payload2 = _json.loads(core.blob_store.get(failed_events[-1]["blob"],
-                                                    decompress=True))
-        op2 = payload2.get("op_id")
-        assert op1 != op2, "معرفا المحاولتين مختلفان رغم تثبيت الوقت"
+        assert calls["n"] >= 3, "التراجع حاول فعلًا وفشل"
+        # محاولة فاشلة لاحقة لا ترث وصف متانة المحاولة السابقة
+        assert obj.last_death_record.durability is None, \
+            "المحاولة الفاشلة لا ترث durability=confirmed من سابقتها"
+        assert obj.last_death_record.material_commit is False
+        assert obj.last_death_durability is None, \
+            "الصفة المؤقتة تُعاد ضبطها لكل محاولة"
 
-        # والقرص يحمل علامة معلقة بالمعرف op2 (DEAD+علامة)
+        # معرف الثانية من العلامة المحفوظة على القرص: مختلف ومطابق لسجلها
         disk_state = _json.loads(state_file.read_text())
-        assert disk_state.get("pending_outcome", {}).get("id") == op2
+        op2 = disk_state.get("pending_outcome", {}).get("id")
+        assert op2 and op2 != op1, \
+            "معرفا المحاولتين مختلفان رغم تثبيت الوقت (لا استعارة نتيجة)"
+        assert op2 == obj.last_death_record.id, \
+            "معرف العلامة يطابق سجل المحاولة نفسها"
 
-        # التحميل: التوفيق يبحث عن op2 تحديدًا — حدث المحاولة 1 (op1) لا يحسمه
+        # إعادة التحميل: لا يعتمد حدث المحاولة الأولى (op1) لإعلان اكتمال
+        # الثانية — التوفيق يبحث عن op2 تحديدًا ولا يجد دليلًا → غير محسوم:
+        # فاشل-مغلق (LIVING)، لا موتًا مكتملًا
         obj2 = rw.RansomwareDefense()
-        # op2 له حدث فشل (death_failed مُلحق من _failed_outcome) → فاشلة: LIVING
         assert obj2.phoenix_phase == rw.PhoenixPhase.LIVING, \
-            "التوفيق مع حدث المحاولة نفسها (op2: death_failed) — لا حدث المحاولة السابقة"
+            "حدث المحاولة 1 لا يحسم المحاولة 2 — لا اكتمال بلا دليل المحاولة نفسها"
+        assert obj2._pending_outcome is None
+        # السجل المُعاد تحميله (من القرص): محاولة فاشلة — لا التزام مادي ولا
+        # وصف متانة موروث من المحاولة السابقة الناجحة
+        assert obj2.last_death_record is not None
+        assert obj2.last_death_record.id == op2, \
+            "السجل المُعاد تحميله يحمل معرف المحاولة الفاشلة نفسها"
+        assert obj2.last_death_record.material_commit is False
+        assert obj2.last_death_record.durability is None
+        # R-682 (جولة 18): بعد التوفيق إلى LIVING (لا دليل اكتمال المحاولة)
+        # لا يبقى سجلها يعلن النجاح ونتيجة DEAD (نسخة القرص المرحلية كانت
+        # success=True/after_hash=DEAD محفوظة قبل الفشل)
+        assert obj2.last_death_record.success is False, \
+            "السجل المُعاد تحميله لا يعلن نجاحًا بعد توفيق فاشل"
+        assert obj2.last_death_record.after_hash == "LIVING", \
+            "السجل المُعاد تحميله لا يعلن DEAD بعد توفيق فاشل"
+
+
+# ============================================================
+# Part 1k: جولة 17 — استمرارية سجل النتيجة عبر الحفظ وإعادة التحميل
+# ============================================================
+
+class TestRecordPersistenceAcrossReload:
+    """R-682 (جولة 17 — اعتراض advisor الثاني عشر): سجل النتيجة يجب أن
+    يستمر عبر الحفظ وإعادة التحميل — معرف العملية نفسه، الالتزام المادي
+    محفوظ (لا يتحول إلى فشل متراجع)، ووصف المتانة لا يُفقد ولا يُرفع إلى
+    confirmed بلا دليل. الحفظ يسبق تحديث الحقلين في الكود القديم — الحل:
+    تحديث السجل قبل حفظ رفع العلامة (قيمة محافظة) + ترقية مفحوصة."""
+
+    def _real_env(self, tmp_path, monkeypatch):
+        import backend.memory.defense.ransomware as rw
+        import backend.memory.store as store_mod
+        from backend.memory.core import SovereignCore
+        core_dir = tmp_path / "core"
+        core_dir.mkdir()
+        (core_dir / "blobs").mkdir()
+        core = SovereignCore(
+            log_file=core_dir / "ledger.jsonl",
+            blobs_dir=core_dir / "blobs",
+            index_file=core_dir / "index.json",
+            meta_file=core_dir / "meta.json",
+            integrity_file=core_dir / "integrity.json",
+        )
+        core.append_event("phoenix::rec_test", {"data": "seed"}, user="test")
+        seeds_dir = tmp_path / "seeds"
+        seeds_dir.mkdir(exist_ok=True)
+        monkeypatch.setattr(rw, "PHOENIX_SEEDS_DIR", seeds_dir)
+        monkeypatch.setattr(rw, "PHOENIX_STATE_FILE", tmp_path / "phoenix_state.json")
+        monkeypatch.setattr(rw, "get_core", lambda: core)
+        monkeypatch.setattr(rw, "get_encoder", lambda: MagicMock())
+        monkeypatch.setattr(rw, "get_watcher", lambda: MagicMock())
+        empty = _IsolatedStore()
+        monkeypatch.setattr(store_mod, "get_store", lambda: empty)
+        import threading as _th
+        monkeypatch.setattr(_th, "Thread", _NoThreads)
+        return rw, core
+
+    def test_durable_success_record_persists(self, tmp_path, monkeypatch):
+        """النجاح المتين: السجل المحفوظ (خام) والمُعاد تحميله يحملان
+        material_commit=True وdurability=confirmed بمعرف العملية نفسه."""
+        import json as _json
+        import backend.memory.defense.ransomware as rw
+        rw, core = self._real_env(tmp_path, monkeypatch)
+        state_file = tmp_path / "phoenix_state.json"
+
+        obj = rw.RansomwareDefense()
+        assert obj.initiate_death(reason="persist-test") is True
+        op_id = obj.last_death_record.id
+
+        # السجل الخام على القرص يحمل النتيجة كاملة
+        raw = _json.loads(state_file.read_text())
+        raw_rec = raw["last_death_record"]
+        assert raw_rec["id"] == op_id
+        assert raw_rec["success"] is True
+        assert raw_rec["material_commit"] is True
+        assert raw_rec["durability"] == "confirmed"
+
+        # إعادة التحميل: السجل يُحمَّل فعلًا من القرص (لا من الكائن الأصلي)
+        obj2 = rw.RansomwareDefense()
+        assert obj2.last_death_record is not None, "السجل يُحمَّل من القرص"
+        assert obj2.last_death_record.id == op_id
+        assert obj2.last_death_record.success is True
+        assert obj2.last_death_record.material_commit is True
+        assert obj2.last_death_record.durability == "confirmed"
+
+
+# ============================================================
+# Part 1l: جولة 18 — فشل حفظ ترقية وصف المتانة (حالتا الاستبدال)
+# ============================================================
+
+class TestUpgradeSaveFailure:
+    """R-682 (جولة 18 — اعتراض advisor الثالث عشر): فشل حفظ ترقية الوصف
+    له حالتان مختلفتان يجب تمييزهما وتشخيصهما: (1) فشل قبل الاستبدال —
+    القرص يبقى على الوصف المحافظ؛ (2) الاستبدال وقع ثم فشلت متانة مزامنة
+    المجلد — المحتوى الجديد مكتوب فعليًا (confirmed) لكن متانته غير مؤكدة.
+    لا ادعاء بقاء محتوى قديم، ولا وصف لم يُفحص."""
+
+    def _real_env(self, tmp_path, monkeypatch):
+        import backend.memory.defense.ransomware as rw
+        import backend.memory.store as store_mod
+        from backend.memory.core import SovereignCore
+        core_dir = tmp_path / "core"
+        core_dir.mkdir()
+        (core_dir / "blobs").mkdir()
+        core = SovereignCore(
+            log_file=core_dir / "ledger.jsonl",
+            blobs_dir=core_dir / "blobs",
+            index_file=core_dir / "index.json",
+            meta_file=core_dir / "meta.json",
+            integrity_file=core_dir / "integrity.json",
+        )
+        core.append_event("phoenix::upg_test", {"data": "seed"}, user="test")
+        seeds_dir = tmp_path / "seeds"
+        seeds_dir.mkdir(exist_ok=True)
+        monkeypatch.setattr(rw, "PHOENIX_SEEDS_DIR", seeds_dir)
+        monkeypatch.setattr(rw, "PHOENIX_STATE_FILE", tmp_path / "phoenix_state.json")
+        monkeypatch.setattr(rw, "get_core", lambda: core)
+        monkeypatch.setattr(rw, "get_encoder", lambda: MagicMock())
+        monkeypatch.setattr(rw, "get_watcher", lambda: MagicMock())
+        empty = _IsolatedStore()
+        monkeypatch.setattr(store_mod, "get_store", lambda: empty)
+        import threading as _th
+        monkeypatch.setattr(_th, "Thread", _NoThreads)
+        return rw, core
+
+    def test_upgrade_save_fails_before_replace(self, tmp_path, monkeypatch):
+        """فشل الترقية قبل الاستبدال: القرص يبقى على الوصف المحافظ
+        (unconfirmed) — والسجل المُعاد تحميله محافظ، والنتيجة True
+        (حالة الموت نفسها متينة: حفظ رفع العلامة نجح)."""
+        import json as _json
+        import os as _os
+        import backend.memory.defense.ransomware as rw
+        rw, core = self._real_env(tmp_path, monkeypatch)
+        state_file = tmp_path / "phoenix_state.json"
+
+        obj = rw.RansomwareDefense()
+        # الحفظات: 1=بذرة، 2=نهائي، 3=رفع العلامة، 4=ترقية الوصف ← يفشل
+        real_replace = _os.replace
+        calls = {"n": 0}
+        def failing_replace(a, b):
+            raise OSError("inject: upgrade replace failed")
+        orig_save = obj._save_state
+        def counting_save():
+            calls["n"] += 1
+            if calls["n"] >= 4:
+                _os.replace = failing_replace
+            try:
+                return orig_save()
+            finally:
+                _os.replace = real_replace
+        obj._save_state = counting_save
+
+        result = obj.initiate_death(reason="upgrade-fail-test")
+        assert result is True, \
+            "فشل ترقية الوصف لا يغير النتيجة — حفظ رفع العلامة نجح (الحالة متينة)"
+        assert calls["n"] >= 4, "حفظ الترقية حاول فعلًا وفشل"
+        # القرص (الخام) يبقى على محتوى حفظ رفع العلامة: الوصف المحافظ
+        raw = _json.loads(state_file.read_text())
+        assert raw["last_death_record"]["material_commit"] is True
+        assert raw["last_death_record"]["durability"] == "unconfirmed", \
+            "فشل قبل الاستبدال — القرص يبقى على الوصف المحافظ"
+        # إعادة التحميل: السجل محافظ (لا ترقية بلا إثبات على القرص)
+        obj2 = rw.RansomwareDefense()
+        assert obj2.phoenix_phase == rw.PhoenixPhase.DEAD
+        assert obj2.last_death_record.durability == "unconfirmed"
+        assert obj2.last_death_record.material_commit is True
+
+    def test_upgrade_save_replaced_unconfirmed(self, tmp_path, monkeypatch):
+        """الاستبدال وقع في حفظ الترقية ثم فشلت مزامنة المجلد: المحتوى
+        الجديد مكتوب فعليًا (confirmed) لكن متانته غير مؤكدة — يُفحص المحتوى
+        الفعلي لا افتراض بقاء القديم."""
+        import json as _json
+        import os as _os
+        import stat as _st
+        import backend.memory.defense.ransomware as rw
+        rw, core = self._real_env(tmp_path, monkeypatch)
+        state_file = tmp_path / "phoenix_state.json"
+
+        obj = rw.RansomwareDefense()
+        # الحفظات: 1=بذرة، 2=نهائي، 3=رفع العلامة، 4=ترقية ← الاستبدال يقع
+        # وتفشل مزامنة المجلد تحديدًا
+        real_fsync = _os.fsync
+        calls = {"n": 0}
+        orig_save = obj._save_state
+        def counting_save():
+            calls["n"] += 1
+            if calls["n"] >= 4:
+                def failing_fsync(fd):
+                    if _st.S_ISDIR(_os.fstat(fd).st_mode):
+                        raise OSError("inject: upgrade dir fsync failed")
+                    return real_fsync(fd)
+                _os.fsync = failing_fsync
+            try:
+                return orig_save()
+            finally:
+                _os.fsync = real_fsync
+        obj._save_state = counting_save
+
+        result = obj.initiate_death(reason="upgrade-unconfirmed-test")
+        assert result is True, \
+            "الترقية كُتبت (الاستبدال وقع) — النتيجة نجاح، والمتانة غير مؤكدة"
+        assert calls["n"] >= 4, "حفظ الترقية حاول فعلًا"
+        # المحتوى الجديد الفعلي: confirmed (الاستبدال وقع — لا ادعاء بقاء القديم)
+        raw = _json.loads(state_file.read_text())
+        assert raw["last_death_record"]["material_commit"] is True
+        assert raw["last_death_record"]["durability"] == "confirmed", \
+            "الاستبدال وقع — المحتوى الجديد يحمل confirmed (بمتانة غير مؤكدة)"
+        # إعادة التحميل: القرص لا يحمل علامة → لا توفيق → السجل كما هو على القرص
+        obj2 = rw.RansomwareDefense()
+        assert obj2.phoenix_phase == rw.PhoenixPhase.DEAD
+        assert obj2.last_death_record.durability == "confirmed"
+        assert obj2.last_death_record.material_commit is True
 
 
 # ============================================================
