@@ -104,11 +104,12 @@ class PhoenixSeed:
 
 @dataclass
 class PhoenixAshes:
-    """رماد الفينيق - ما يبقى بعد الموت"""
+    """رماد الفينيق - ما يبقى بعد الموت (مشفر + موثق بـ MAC)"""
     id: str
     original_id: str
     burned_at: float
     ash_data: bytes
+    mac: str = ""  # R-682: مصادقة بيانات الرماد — لا استعادة غير موثقة
     resurrection_attempts: int = 0
     last_attempt: float = 0
 
@@ -691,32 +692,53 @@ class RansomwareDefense:
         return encrypted_count
     
     def _encrypt_single_blob(self, blob_hash: str) -> bool:
-        """تشفير blob واحد"""
+        """تشفير blob واحد — R-682 (بناء): المسار القديم كان كودًا ميتًا
+        (self.core.store_blob/load_blob غير موجودين في SovereignCore — الواجهة
+        الفعلية blob_store.put/get) فكان يفشل صامتًا بلا رماد أبدًا.
+        الآن: الواجهة الحقيقية + مصادقة MAC — لا رماد بلا توثيق."""
         try:
             key = self._derive_death_key(blob_hash)
-            raw = self.core.load_blob(blob_hash, decompress=True)
+            raw = self.core.blob_store.get(blob_hash, decompress=True)
             encrypted = bytes(a ^ b for a, b in zip(raw, key * (len(raw) // 32 + 1)))
-            
-            # تخزين النسخة المشفرة
-            encrypted_hash = self.core.store_blob(encrypted, compress=True)
-            
+            # مصادقة بيانات الرماد — أي تلاعب لاحق يُرفض عند الاستعادة
+            mac = hmac.new(key, encrypted, hashlib.sha256).hexdigest()
+
+            # تخزين النسخة المشفرة (مخزن محتوى-عنواني)
+            encrypted_hash = self.core.blob_store.put(encrypted, compress=True)
+
             # تسجيل في الرماد
             ash = PhoenixAshes(
                 id=f"ash_{int(time.time())}_{secrets.token_hex(4)}",
                 original_id=blob_hash,
                 burned_at=time.time(),
-                ash_data=encrypted
+                ash_data=encrypted,
+                mac=mac
             )
             self.ashes[ash.id] = ash
-            
+
+            logger.debug(
+                f"🔥 رماد: {blob_hash[:16]}... → {encrypted_hash[:16]}... (موثق MAC)"
+            )
             return True
-        except:
+        except Exception as e:
+            # R-682: لا فشل صامت — تسجيل صريح ثم فشل
+            logger.error(
+                f"R-682: blob encryption to ash FAILED for {blob_hash}: {e}"
+            )
             return False
     
     def _encrypt_store_item(self, kind: str, item_id: str) -> bool:
-        """تشفير عنصر في التخزين الصلب"""
-        # تنفيذ مماثل
-        return True
+        """تشفير عنصر في التخزين الصلب — غير منفذ بعد.
+
+        R-682 (صدق): الكعب السابق كان يعيد True بلا أي تشفير — كذب في عدّ
+        "encrypted_items". الآن: فشل صريح مع تسجيل أن المسار غير منفذ —
+        لا يُحتسب تشفير لم يحدث أبدًا.
+        """
+        logger.warning(
+            "R-682: store-item death encryption NOT IMPLEMENTED — not counted "
+            "as encrypted (the old stub returned True without encrypting)"
+        )
+        return False
     
     def _derive_death_key(self, blob_hash: str) -> bytes:
         """استخلاص مفتاح الموت"""
@@ -760,6 +782,20 @@ class RansomwareDefense:
                 if not result.get("success"):
                     self.phoenix_phase = PhoenixPhase.DEAD
                     self.resurrection_level = RESURRECTION_LEVEL_NONE
+                    return result
+                # نجاح مُثبت — نفس دورة حياة مسار البذرة
+                self.phoenix_phase = PhoenixPhase.REBORN
+                self.resurrection_level = RESURRECTION_LEVEL_NONE
+                self.is_transforming = False
+                self._save_state()
+                self.core.append_event(
+                    event_type="phoenix::resurrection",
+                    payload={
+                        "method": "ashes",
+                        "ashes_restored": result.get("ashes_restored"),
+                        "timestamp": time.time(),
+                    },
+                )
                 return result
             
             # 2) إعادة بناء النواة — النجاح يُثبت بالبيانات المستعادة فعليًا
@@ -959,35 +995,128 @@ class RansomwareDefense:
             logger.error(f"فشل الاستعادة من البذرة: {e}")
             return False
     
+    def _restore_ash(self, ash: PhoenixAshes) -> bool:
+        """استعادة رماد واحد — قابلة للإثبات بمخزن محتوى-عنواني.
+
+        R-682 (بناء): فك التشفير بالبصمة نفسها المُشتقة عند الحرق، مع
+        التحقق من MAC أولًا (لا استعادة غير موثقة)، ثم إعادة التخزين —
+        نجاح الاستعادة يُثبت بتطابق البصمة: put يعيد بصمة المحتوى،
+        فتطابقها مع original_id يعني حرفيًا أن نفس البيانات عادت.
+        """
+        try:
+            if not ash.mac:
+                logger.error(
+                    "R-682 [SECURITY-FAIL]: ash WITHOUT MAC rejected — "
+                    "no unauthenticated restoration"
+                )
+                return False
+            key = self._derive_death_key(ash.original_id)
+            # 1) المصادقة قبل أي فك — تلاعب = رفض صريح
+            if not hmac.compare_digest(
+                hmac.new(key, ash.ash_data, hashlib.sha256).hexdigest(), ash.mac
+            ):
+                logger.error(
+                    "R-682 [SECURITY]: ash MAC verification FAILED — "
+                    f"tampered ash {ash.id} REJECTED, original {ash.original_id[:16]}..."
+                )
+                return False
+            # 2) فك التشفير (نفس التدفق الحتمي للحرق)
+            raw = bytes(a ^ b for a, b in zip(ash.ash_data, key * (len(ash.ash_data) // 32 + 1)))
+            if not raw:
+                logger.error(f"R-682: ash {ash.id} decrypted to EMPTY — rejected")
+                return False
+            # 3) الإثبات: إعادة التخزين تعيد بصمة المحتوى — التطابق = نفس البيانات
+            restored_hash = self.core.blob_store.put(raw, compress=True)
+            if restored_hash != ash.original_id:
+                logger.error(
+                    f"R-682: ash {ash.id} restoration HASH MISMATCH — "
+                    f"{restored_hash[:16]}... != {ash.original_id[:16]}... — rejected"
+                )
+                return False
+            logger.info(
+                f"🔥 رماد مستعاد فعليًا: {ash.original_id[:16]}... "
+                f"(بصمة المحتوى متطابقة = نفس البيانات)"
+            )
+            return True
+        except Exception as e:
+            logger.error(f"R-682: ash restoration FAILED for {ash.id}: {e}")
+            return False
+
     def _resurrect_from_ashes(self, resurrection_key: str) -> Dict[str, Any]:
         """القيامة من الرماد - عندما لا توجد بذرة.
 
-        R-682 (security): استعادة الرماد الفعلية غير منفَّذة — لا يُعلن
-        نجاح لعملية لم تحدث، ولا يُعد الرماد مستعادًا، ولا يُمسح.
+        R-682 (بناء): استعادة فعلية — كل رماد يُفك بمصادقة MAC ثم يُعاد
+        تخزينه، والنجاح يُثبت بتطابق بصمة المحتوى (المخزن محتوى-عنواني:
+        نفس البصمة = نفس البيانات). لا يُمسح إلا الرماد المستعاد فعلًا،
+        والعدّ صادق: نجاح كامل أو فشل صريح أو جزئي مُعلن.
         """
-        ashes_count = len(self.ashes)
-        logger.error(
-            "R-682 [SECURITY-FAIL]: resurrection from ashes NOT PERFORMED — "
-            "no seed found and ash restoration is not implemented. No success "
-            "declared for a restoration that did not happen; ashes preserved."
-        )
-        return {
-            "success": False,
-            "error": "لا استعادة حقيقية منفذة: لا بذرة ولا فك رماد — النجاح غير معلن",
-            "ashes_available": ashes_count,
+        if not self.ashes:
+            return {
+                "success": False,
+                "error": "لا رماد متاح للاستعادة",
+                "ashes_available": 0,
+            }
+        restored = 0
+        failed = 0
+        for ash_id, ash in list(self.ashes.items()):
+            ash.resurrection_attempts += 1
+            ash.last_attempt = time.time()
+            if self._restore_ash(ash):
+                restored += 1
+                del self.ashes[ash_id]  # يُمسح المستعاد فعلًا فقط
+            else:
+                failed += 1
+        if restored == 0:
+            logger.error(
+                f"R-682 [SECURITY-FAIL]: ash resurrection FAILED for all "
+                f"{failed} ashes — no success declared, ashes preserved"
+            )
+            return {
+                "success": False,
+                "error": "فشلت استعادة كل الرماد — لا نجاح معلن والرماد محفوظ",
+                "ashes_available": failed,
+            }
+        result = {
+            "success": True,
+            "resurrected_from": "ashes",
+            "ashes_restored": restored,
+            "method": "self_decryption",
         }
+        if failed:
+            # جزئي صريح — لا نجاح مطلق لعملية ناقصة
+            logger.warning(
+                f"R-682: ash resurrection PARTIAL — {restored} restored, "
+                f"{failed} failed (failed ashes preserved)"
+            )
+            result["ashes_failed"] = failed
+            result["partial"] = True
+        return result
     
     def _decrypt_all_memory(self) -> int:
-        """فك تشفير كل الذاكرة — لا يُعلن فك شيء دون فك فعلي.
+        """فك تشفير كل الذاكرة — استعادة رماد فعلية قابلة للإثبات.
 
-        R-682 (security): فك الرماد الفعلي غير منفَّذ — لا يُعد الرماد
-        مستعادًا ولا يُمسح. الاستعادة الحقيقية تحدث من البذرة فقط
-        (_restore_from_seed يكتب في مخزن التطبيق الفعلي).
+        R-682 (بناء): كل رماد يُفك بمصادقة MAC ثم يُعاد تخزينه، والنجاح
+        يُثبت بتطابق بصمة المحتوى. لا يُمسح إلا المستعاد فعلًا، والعدّ
+        يطابق الاستعادة الفعلية حصرًا.
         """
-        logger.debug(
-            "R-682: ash decryption not implemented — ashes preserved, "
-            "none claimed restored"
-        )
+        if not self.ashes:
+            return 0
+        restored = 0
+        for ash_id, ash in list(self.ashes.items()):
+            if self._restore_ash(ash):
+                restored += 1
+                del self.ashes[ash_id]  # يُمسح المستعاد فعلًا فقط
+        if restored:
+            logger.info(
+                f"🔥 فك الذاكرة: {restored} رماد مستعاد فعليًا "
+                f"(بصمة المحتوى متطابقة)"
+            )
+        else:
+            logger.error(
+                "R-682 [SECURITY-FAIL]: ash decryption restored NOTHING — "
+                "count stays 0, ashes preserved"
+            )
+        return restored
         return 0
     
     # ============================================================

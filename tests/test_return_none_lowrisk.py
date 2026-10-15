@@ -1206,6 +1206,162 @@ class TestRealInitSecurity:
 
 
 # ============================================================
+# Part 1c: دورة الرماد — موت/قيامة حقيقية قابلة للإثبات (R-682 بناء)
+# ============================================================
+
+class TestAshResurrection:
+    """R-682 (بناء): تنفيذ استعادة الرماد فعليًا. الفحصة كشفت أن المسار كله
+    كان كودًا ميتًا: `self.core.store_blob/load_blob` غير موجودين في SovereignCore
+    (الواجهة الفعلية blob_store.put/get) → كل استدعاء فشل صامتًا بلا رماد أبدًا،
+    و`_encrypt_store_item` كعب كاذب يعيد True بلا تشفير."""
+
+    def _mock_core_with_blobs(self, tmp_path, events=None):
+        from backend.memory.core import BlobStore
+        blob_dir = tmp_path / "blobs"
+        blob_dir.mkdir(exist_ok=True)
+        core = MagicMock()
+        core._last_hash = "a" * 64
+        core.get_statistics.return_value = {"index": {"total_events": 3}}
+        core.blob_store = BlobStore(blob_dir)  # مخزن حقيقي (محتوى-عنواني)
+        core.iterate_events = lambda limit=1000, **k: (events or [])
+        return core
+
+    def _setup(self, tmp_path, monkeypatch, events=None):
+        store = _IsolatedStore()
+        iso = _IsolatedStore()
+        iso.save_semantic(concept="ash_cycle_record", definition="سجل دورة الرماد",
+                          confidence=0.9)
+        import backend.memory.defense.ransomware as rw
+        import backend.memory.store as store_mod
+        seeds_dir = tmp_path / "seeds"
+        seeds_dir.mkdir(exist_ok=True)
+        monkeypatch.setattr(rw, "PHOENIX_SEEDS_DIR", seeds_dir)
+        monkeypatch.setattr(rw, "PHOENIX_STATE_FILE", tmp_path / "phoenix_state.json")
+        core = self._mock_core_with_blobs(tmp_path, events)
+        monkeypatch.setattr(rw, "get_core", lambda: core)
+        monkeypatch.setattr(rw, "get_encoder", lambda: MagicMock())
+        monkeypatch.setattr(rw, "get_watcher", lambda: MagicMock())
+        monkeypatch.setattr(store_mod, "get_store", lambda: iso)
+        import threading as _th
+        monkeypatch.setattr(_th, "Thread", _NoThreads)
+        return rw, core
+
+    def test_death_and_ash_resurrection_cycle(self, tmp_path, monkeypatch):
+        """دورة كاملة قابلة للإثبات: بيانات → موت (رماد مشفر موثق) → فقدان
+        الأصل → قيامة من الرماد → البيانات عادت بنفس البصمة والمحتوى
+        (المخزن محتوى-عنواني: نفس البصمة = نفس البيانات)."""
+        rw = self._setup.__func__(self, tmp_path, monkeypatch) if False else None
+        # (الإعداد أدناه يدويًا لأحدّث الأحداث بعد تخزين الأصل)
+        store = _IsolatedStore()
+        import backend.memory.defense.ransomware as rw
+        import backend.memory.store as store_mod
+        seeds_dir = tmp_path / "seeds"
+        seeds_dir.mkdir(exist_ok=True)
+        monkeypatch.setattr(rw, "PHOENIX_SEEDS_DIR", seeds_dir)
+        monkeypatch.setattr(rw, "PHOENIX_STATE_FILE", tmp_path / "phoenix_state.json")
+        core = self._mock_core_with_blobs(tmp_path)
+        monkeypatch.setattr(rw, "get_core", lambda: core)
+        monkeypatch.setattr(rw, "get_encoder", lambda: MagicMock())
+        monkeypatch.setattr(rw, "get_watcher", lambda: MagicMock())
+        iso = _IsolatedStore()
+        iso.save_semantic(concept="ash_cycle_record", definition="سجل دورة الرماد",
+                          confidence=0.9)
+        monkeypatch.setattr(store_mod, "get_store", lambda: iso)
+        import threading as _th
+        monkeypatch.setattr(_th, "Thread", _NoThreads)
+
+        # 1) بيانات أصلية في مخزن النواة (محتوى-عنواني)
+        original = b"sovereign_r682_ash_proof_data_" * 8
+        original_hash = core.blob_store.put(original, compress=True)
+        core.iterate_events = lambda limit=1000, **k: [{"blob": original_hash}]
+
+        # 2) الموت → رماد مشفر موثق
+        obj = rw.RansomwareDefense()
+        assert obj.initiate_death(reason="ash-cycle-test") is True
+        assert obj.phoenix_phase == rw.PhoenixPhase.DEAD
+        assert len(obj.ashes) >= 1, \
+            "الموت يجب أن يُنشئ رمادًا فعليًا (المسار القديم كان كودًا ميتًا)"
+        ash = next(iter(obj.ashes.values()))
+        assert ash.original_id == original_hash
+        assert getattr(ash, "mac", ""), "الرماد يجب أن يحمل مصادقة (MAC)"
+        # النسخة المشفرة مختلفة عن الأصل
+        assert ash.ash_data != original
+
+        # 3) فقدان الأصل + إزالة البذور (إجبار مسار الرماد)
+        core.blob_store.delete(original_hash)
+        assert not core.blob_store.exists(original_hash), "الأصل فُقد فعلًا"
+        for f in seeds_dir.glob("*.enc"):
+            f.unlink()
+        obj.seeds.clear()
+
+        # 4) القيامة من الرماد عبر الواجهة العامة
+        key = obj.get_resurrection_key()
+        result = obj.resurrect(key)
+        assert result.get("success") is True, f"القيامة من الرماد يجب أن تنجح: {result}"
+
+        # 5) الإثبات: البيانات عادت بنفس البصمة والمحتوى
+        assert core.blob_store.exists(original_hash), \
+            "البصمة الأصلية يجب أن تعود — البيانات استُعيدت فعليًا"
+        assert core.blob_store.get(original_hash) == original, \
+            "المحتوى المستعاد يجب أن يطابق الأصل تمامًا"
+
+    def test_ash_tamper_rejected(self, tmp_path, monkeypatch, caplog):
+        """تلاعب في بيانات الرماد → رفض بفشل MAC — لا استعادة غير موثقة."""
+        import backend.memory.defense.ransomware as rw
+        import backend.memory.store as store_mod
+        seeds_dir = tmp_path / "seeds"
+        seeds_dir.mkdir(exist_ok=True)
+        monkeypatch.setattr(rw, "PHOENIX_SEEDS_DIR", seeds_dir)
+        monkeypatch.setattr(rw, "PHOENIX_STATE_FILE", tmp_path / "phoenix_state.json")
+        core = self._mock_core_with_blobs(tmp_path)
+        monkeypatch.setattr(rw, "get_core", lambda: core)
+        monkeypatch.setattr(rw, "get_encoder", lambda: MagicMock())
+        monkeypatch.setattr(rw, "get_watcher", lambda: MagicMock())
+        iso = _IsolatedStore()
+        iso.save_semantic(concept="ash_tamper_record", definition="سجل", confidence=0.9)
+        monkeypatch.setattr(store_mod, "get_store", lambda: iso)
+        import threading as _th
+        monkeypatch.setattr(_th, "Thread", _NoThreads)
+
+        original = b"tamper_proof_ash_data_" * 6
+        original_hash = core.blob_store.put(original, compress=True)
+        core.iterate_events = lambda limit=1000, **k: [{"blob": original_hash}]
+        obj = rw.RansomwareDefense()
+        assert obj.initiate_death(reason="ash-tamper-test") is True
+        ash_id, ash = next(iter(obj.ashes.items()))
+        # تلاعب: قلب بايت في بيانات الرماد (الوسم يبقى — هذا هو التلاعب)
+        tampered = bytearray(ash.ash_data)
+        tampered[0] ^= 0xFF
+        ash.ash_data = bytes(tampered)
+        core.blob_store.delete(original_hash)
+        for f in seeds_dir.glob("*.enc"):
+            f.unlink()
+        obj.seeds.clear()
+        key = obj.get_resurrection_key()
+        caplog.clear()
+        with caplog.at_level(logging.ERROR, logger="backend.memory.defense.ransomware"):
+            result = obj.resurrect(key)
+        assert result.get("success") is False, \
+            "الرماد المُلاعب به يجب ألا يُستعاد — فشل MAC"
+        matches = [r for r in caplog.records if "MAC" in r.getMessage()]
+        assert matches, "رفض التلاعب يجب أن يُسجَّل كفشل MAC صريح"
+        assert ash_id in obj.ashes, "الرماد المرفوض يبقى محفوظًا (لا مسح)"
+
+    def test_encrypt_store_item_honest(self, tmp_path, monkeypatch, caplog):
+        """الكعب القديم كان يعيد True بلا تشفير (كذب في العد). الآن: يعيد False
+        صراحة مع تسجيل أن المسار غير منفذ — لا يُحتسب تشفير لم يحدث."""
+        import backend.memory.defense.ransomware as rw
+        obj = rw.RansomwareDefense.__new__(rw.RansomwareDefense)
+        caplog.clear()
+        with caplog.at_level(logging.WARNING, logger="backend.memory.defense.ransomware"):
+            result = obj._encrypt_store_item("semantic", "item_x")
+        assert result is False, \
+            "غير المنفذ يعيد False — لا يُعلن تشفير لم يحدث أبدًا"
+        matches = [r for r in caplog.records if "NOT IMPLEMENTED" in r.getMessage()]
+        assert matches, "عدم التنفيذ يُسجَّل صراحة (لا صمت ولا كذب)"
+
+
+# ============================================================
 # Part 2: المواقع منخفضة الخطورة — اختبارات سلوكية
 # ============================================================
 
