@@ -1799,6 +1799,7 @@ class TestDeathProtectionHonesty:
         assert obj.initiate_death(reason="real-store-test") is False, \
             "عنصر مخزن غير محمي = فشل الموت، لا نجاح معلن"
         assert obj.phoenix_phase == rw.PhoenixPhase.LIVING
+        assert obj.is_transforming is False
         assert obj.last_death_record.success is False
         prot = obj.last_death_protection
         assert prot["store_items_unprotected"] >= 1, \
@@ -1817,6 +1818,8 @@ class TestDeathProtectionHonesty:
         assert obj.initiate_death(reason="truncation-test") is False, \
             "اقتطاع الفحص = فشل الموت"
         assert obj.phoenix_phase == rw.PhoenixPhase.LIVING
+        assert obj.is_transforming is False
+        assert obj.last_death_record.success is False
         prot = obj.last_death_protection
         assert prot["events_truncated"] is True, \
             "الوصول لحد الفحص يُعلن اقتطاعًا — لا افتراض اكتمال"
@@ -1834,10 +1837,100 @@ class TestDeathProtectionHonesty:
         assert obj.initiate_death(reason="store-truncation-test") is False, \
             "اقتطاع استعلام المخزن = فشل الموت"
         assert obj.phoenix_phase == rw.PhoenixPhase.LIVING
+        assert obj.is_transforming is False
+        assert obj.last_death_record.success is False
         prot = obj.last_death_protection
         assert prot["store_truncated"] is True, \
             "امتلاء حد الاستعلام يُعلن اقتطاعًا"
         assert prot["recovery_ready"] is False
+
+
+# ============================================================
+# Part 1f: جولة 11 — بقاء الحالة النهائية بعد إعادة التحميل + اتساق فشل التسجيل
+# ============================================================
+
+class TestDeathStatePersistence:
+    """R-682 (جولة 11 — اعتراض advisor السادس):
+    1) الحالة النهائية يجب أن تُحفظ — علم التحول القديم (is_transforming=True
+       المحفوظ أثناء DYING عبر create_phoenix_seed) لا يمنع إعادة المحاولة بعد
+       إعادة تهيئة من نفس ملفات الحالة.
+    2) فشل تسجيل حدث الموت لا يُبتلع ثم يُعلن نجاح: النتيجة والسجل والحالة
+       والعلم متسقون، والرماد والبذور محفوظة."""
+
+    def _env(self, tmp_path, monkeypatch):
+        import backend.memory.defense.ransomware as rw
+        import backend.memory.store as store_mod
+        from backend.memory.core import BlobStore
+        blob_dir = tmp_path / "blobs"
+        blob_dir.mkdir(exist_ok=True)
+        core = MagicMock()
+        core._last_hash = "a" * 64
+        core.get_statistics.return_value = {"index": {"total_events": 1}}
+        core.blob_store = BlobStore(blob_dir)
+        seeds_dir = tmp_path / "seeds"
+        seeds_dir.mkdir(exist_ok=True)
+        monkeypatch.setattr(rw, "PHOENIX_SEEDS_DIR", seeds_dir)
+        monkeypatch.setattr(rw, "PHOENIX_STATE_FILE", tmp_path / "phoenix_state.json")
+        monkeypatch.setattr(rw, "get_core", lambda: core)
+        monkeypatch.setattr(rw, "get_encoder", lambda: MagicMock())
+        monkeypatch.setattr(rw, "get_watcher", lambda: MagicMock())
+        empty = _IsolatedStore()
+        monkeypatch.setattr(store_mod, "get_store", lambda: empty)
+        import threading as _th
+        monkeypatch.setattr(_th, "Thread", _NoThreads)
+        return rw, core
+
+    def test_retry_after_reload_not_blocked(self, tmp_path, monkeypatch):
+        """فشل موت → الحالة النهائية (LIVING + لا تحول) محفوظة على القرص →
+        مثيل جديد من نفس الملفات → إعادة المحاولة لا يمنعها العلم القديم."""
+        rw, core = self._env(tmp_path, monkeypatch)
+        h = core.blob_store.put(b"retry_reload_blob_" * 4, compress=True)
+        core.iterate_events = lambda limit=1000, **k: [{"blob": h}]
+        real_get = core.blob_store.get
+
+        obj = rw.RansomwareDefense()
+        # فشل الموت: حقن فشل قراءة → لا نسخ استرداد
+        core.blob_store.get = MagicMock(side_effect=RuntimeError("inject: read failed"))
+        assert obj.initiate_death(reason="first-attempt") is False
+        assert obj.phoenix_phase == rw.PhoenixPhase.LIVING
+        assert obj.is_transforming is False
+
+        # إعادة تهيئة من نفس ملفات الحالة (كما بعد إعادة تشغيل)
+        core.blob_store.get = real_get  # إصلاح البيئة — الفشل كان محقونًا
+        obj2 = rw.RansomwareDefense()
+        assert obj2.is_transforming is False, \
+            "العلم القديم (المحفوظ أثناء DYING) لا يمنع إعادة المحاولة"
+        # إعادة المحاولة تنجح فعلًا — الحارس لا يحبس
+        assert obj2.initiate_death(reason="second-attempt") is True, \
+            "المثيل الجديد يستطيع الموت — لا تحول معلق من المحاولة الفاشلة"
+        assert obj2.phoenix_phase == rw.PhoenixPhase.DEAD
+
+    def test_death_event_recording_failure_consistent(self, tmp_path, monkeypatch):
+        """فشل تسجيل حدث الموت تحديدًا: لا يُبتلع ثم يُعلن نجاح — النتيجة
+        False، الحالة LIVING، لا تحول معلق، السجل فاشل، والرماد/البذور محفوظة."""
+        rw, core = self._env(tmp_path, monkeypatch)
+        h = core.blob_store.put(b"event_fail_blob_" * 4, compress=True)
+        core.iterate_events = lambda limit=1000, **k: [{"blob": h}]
+        real_append = core.append_event
+
+        def failing_append(*args, **kwargs):
+            et = kwargs.get("event_type") or (args[0] if args else None)
+            if et in ("phoenix::death", "phoenix::death_failed"):
+                raise RuntimeError("inject: death event recording failed")
+            return real_append(*args, **kwargs)
+        core.append_event = failing_append
+
+        obj = rw.RansomwareDefense()
+        result = obj.initiate_death(reason="event-fail-test")
+        # اتساق كامل: النتيجة فشل (لا استثناء يهرب ولا نجاح يُعلن)
+        assert result is False, \
+            "فشل تسجيل حدث الموت = فشل العملية — لا يُبتلع ثم يُعلن نجاح"
+        assert obj.phoenix_phase == rw.PhoenixPhase.LIVING
+        assert obj.is_transforming is False
+        assert obj.last_death_record.success is False
+        # مواد الاسترداد محفوظة: الرماد أُنشئ (النسخ نجحت) ولم يُستهلك
+        assert len(obj.ashes) >= 1
+        assert len(obj.seeds) >= 1
 
 
 # ============================================================

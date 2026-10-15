@@ -659,10 +659,34 @@ class RansomwareDefense:
             "protection_complete": False,
         }
         
-        # 3) عقد النتيجة (جولة 10): الموت ينجح فقط إذا كانت نسخ الاسترداد
-        # جاهزة — فشل الجاهزية أو تعذر إثباتها = فشل العملية (False)،
-        # النظام يبقى حيًا (LIVING) وقابلًا لإعادة المحاولة، ولا تحول معلق.
+        # 3) عقد النتيجة (جولتا 10-11): الموت ينجح فقط إذا كانت نسخ الاسترداد
+        # جاهزة **و** الحدث مُسجلًا **و** الحالة النهائية محفوظة — فشل أي منها
+        # = فشل العملية (False)، النظام حي (LIVING) وقابل لإعادة المحاولة،
+        # ولا تحول معلق، ومواد الاسترداد محفوظة.
         self.is_transforming = False  # العملية انتهت (نجحت أو فشلت) — لا تحول جارٍ
+        
+        def _failed_outcome(fail_reason: str) -> bool:
+            """اتساق كامل عند أي فشل: LIVING + لا تحول + سجل فاشل + حالة محفوظة."""
+            self.phoenix_phase = PhoenixPhase.LIVING
+            self.resurrection_level = RESURRECTION_LEVEL_NONE
+            self.is_transforming = False
+            self.last_death_record = ResurrectionRecord(
+                id=f"death_{int(time.time())}",
+                before_hash=self.core._last_hash,
+                after_hash="LIVING",
+                reason=f"{reason} [{fail_reason}]",
+                method="self_encryption",
+                timestamp=start_time,
+                duration=time.time() - start_time,
+                success=False
+            )
+            # أفضل جهد لحفظ الحالة المصححة — الفشل يُعلن (لا يُبتلع)
+            if not self._save_state():
+                logger.error(
+                    "R-682 [SECURITY]: فشل حفظ حالة فشل الموت — الحالة على القرص "
+                    "قد تحمل علم تحول قديمًا"
+                )
+            return False
         
         death_record = ResurrectionRecord(
             id=f"death_{int(time.time())}",
@@ -676,77 +700,80 @@ class RansomwareDefense:
         )
         self.last_death_record = death_record
         
-        if recovery_ready:
-            self.core.append_event(
-                event_type="phoenix::death",
-                payload={
-                    "reason": reason,
-                    "resurrection_mode": resurrection_mode,
-                    "blobs_encrypted": protection["blobs_encrypted"],
-                    "blob_failures": protection["blob_failures"],
-                    "store_items_unprotected": protection["store_items_unprotected"],
-                    "recovery_ready": True,
-                    "assets_hidden": False,
-                    "protection_complete": False,
-                    "seed_id": final_seed.id if final_seed else None,
-                    "timestamp": time.time()
-                }
+        # تسجيل الحدث — فشل التسجيل لا يُبتلع ثم يُعلن نجاح (فاشل-مغلق)
+        event_type = "phoenix::death" if recovery_ready else "phoenix::death_failed"
+        event_payload = {
+            "reason": reason,
+            "resurrection_mode": resurrection_mode,
+            "blobs_encrypted": protection["blobs_encrypted"],
+            "blob_failures": protection["blob_failures"],
+            "events_scan_failed": protection["events_scan_failed"],
+            "events_truncated": protection["events_truncated"],
+            "store_items_unprotected": protection["store_items_unprotected"],
+            "store_scan_failed": protection["store_scan_failed"],
+            "store_truncated": protection["store_truncated"],
+            "recovery_ready": recovery_ready,
+            "assets_hidden": False,
+            "protection_complete": False,
+            "seed_id": final_seed.id if final_seed else None,
+            "timestamp": time.time()
+        }
+        try:
+            self.core.append_event(event_type=event_type, payload=event_payload)
+        except Exception as e:
+            logger.error(
+                f"R-682 [SECURITY-FAIL]: فشل تسجيل حدث الموت ({event_type}): {e} — "
+                "لا موت معلنًا: النتيجة False والنظام حي والرماد/البذور محفوظة"
             )
+            return _failed_outcome("death event recording failed")
+        
+        # ضبط الحالة النهائية ثم حفظها — فشل الحفظ = لا موت معلنًا (الحالة
+        # على القرص قد تحمل علم التحول القديم من DYING فيمنع إعادة المحاولة)
+        if recovery_ready:
             self.phoenix_phase = PhoenixPhase.DEAD
             self.resurrection_level = RESURRECTION_LEVEL_DEATH
+        else:
+            self.phoenix_phase = PhoenixPhase.LIVING
+            self.resurrection_level = RESURRECTION_LEVEL_NONE
+        
+        if not self._save_state():
+            logger.error(
+                "R-682 [SECURITY-FAIL]: فشل حفظ الحالة النهائية للموت — لا موت "
+                "معلنًا (الحالة على القرص قد تحمل علم تحول قديمًا)"
+            )
+            return _failed_outcome("final state save failed")
+        
+        if recovery_ready:
             logger.warning(
                 f"⚰️ الموت تم: نسخ الاسترداد جاهزة ({protection['blobs_encrypted']} blob "
-                "مشفر إلى رماد موثق). الأصول تبقى مقروءة (الحماية بالإخفاء قرار "
-                "المالك) — الحماية ليست مكتملة."
+                "مشفر إلى رماد موثق) والحالة محفوظة. الأصول تبقى مقروءة (الحماية "
+                "بالإخفاء قرار المالك) — الحماية ليست مكتملة."
             )
             return True
 
         # فشل الموت: جاهزية الاسترداد ناقصة — لا يُعلن موتًا ناجحًا أبدًا.
         # مواد الاسترداد (الرماد المُنشأ + البذور) محفوظة، والنظام حي قابل
         # لإعادة المحاولة. الأسباب معلنة في الحدث والسجل.
-        self.core.append_event(
-            event_type="phoenix::death_failed",
-            payload={
-                "reason": reason,
-                "resurrection_mode": resurrection_mode,
-                "blobs_encrypted": protection["blobs_encrypted"],
-                "blob_failures": protection["blob_failures"],
-                "events_scan_failed": protection["events_scan_failed"],
-                "events_truncated": protection["events_truncated"],
-                "store_items_unprotected": protection["store_items_unprotected"],
-                "store_scan_failed": protection["store_scan_failed"],
-                "store_truncated": protection["store_truncated"],
-                "recovery_ready": False,
-                "assets_hidden": False,
-                "protection_complete": False,
-                "seed_id": final_seed.id if final_seed else None,
-                "timestamp": time.time()
-            }
-        )
-        self.phoenix_phase = PhoenixPhase.LIVING  # لم يمت — العملية فشلت
-        self.resurrection_level = RESURRECTION_LEVEL_NONE
-        if True:
-            # صدق صريح: جاهزية الاسترداد ناقصة — والسبب معلن
-            reasons = []
-            if protection["blob_failures"]:
-                reasons.append(f"{protection['blob_failures']} فشل إنشاء رماد")
-            if protection["events_scan_failed"]:
-                reasons.append("تعذر فحص أحداث النواة")
-            if protection["events_truncated"]:
-                reasons.append("اقتطاع فحص الأحداث (حد 1000)")
-            if protection["store_scan_failed"]:
-                reasons.append("تعذر فحص المخزن")
-            if protection["store_truncated"]:
-                reasons.append("اقتطاع استعلام المخزن (حد 500)")
-            if protection["store_items_unprotected"]:
-                reasons.append(
-                    f"{protection['store_items_unprotected']} عنصر مخزن غير محمي"
-                )
-            logger.warning(
-                f"⚰️ فشل الموت — نسخ الاسترداد غير جاهزة ({'; '.join(reasons)}) — "
-                f"{protection['blobs_encrypted']} blob مشفر إلى رماد موثق. "
-                "لا موت معلنًا: النظام حي، والرماد/البذور محفوظة لإعادة المحاولة."
+        reasons = []
+        if protection["blob_failures"]:
+            reasons.append(f"{protection['blob_failures']} فشل إنشاء رماد")
+        if protection["events_scan_failed"]:
+            reasons.append("تعذر فحص أحداث النواة")
+        if protection["events_truncated"]:
+            reasons.append("اقتطاع فحص الأحداث (حد 1000)")
+        if protection["store_scan_failed"]:
+            reasons.append("تعذر فحص المخزن")
+        if protection["store_truncated"]:
+            reasons.append("اقتطاع استعلام المخزن (حد 500)")
+        if protection["store_items_unprotected"]:
+            reasons.append(
+                f"{protection['store_items_unprotected']} عنصر مخزن غير محمي"
             )
+        logger.warning(
+            f"⚰️ فشل الموت — نسخ الاسترداد غير جاهزة ({'; '.join(reasons)}) — "
+            f"{protection['blobs_encrypted']} blob مشفر إلى رماد موثق. "
+            "لا موت معلنًا: النظام حي، والرماد/البذور محفوظة لإعادة المحاولة."
+        )
         return False
     
     def _encrypt_all_memory(self) -> Dict[str, Any]:
