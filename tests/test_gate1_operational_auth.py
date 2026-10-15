@@ -6,6 +6,10 @@
 
     pytest tests/test_gate1_operational_auth.py --run-operational
 
+**R-682 (Task 3.3): عُزل تحت marker @pytest.mark.operational.**
+يُشغّل فقط بـ --run-operational أو بـ job CI مستقل عند تفعيله يدويًا.
+راجع forensics/OPERATIONAL_TESTS.md للتفاصيل.
+
 المجموعة الاعتيادية تستخدم بيانات و اعتمادات اختبارية معزولة.
 
 R-655: الفشل يجب أن يفشل الاختبار (لا skip) — عند التشغيل اليدوي.
@@ -23,6 +27,9 @@ import pytest
 _REPO_ROOT = Path(__file__).resolve().parent.parent
 
 # R-661: لا يُشغّل في المجموعة الاعتيادية — يتطلب --run-operational
+pytestmark = pytest.mark.operational  # R-682 (Task 3.3)
+
+
 class TestOperationalAuth:
     """التحقق التشغيلي المنفصل — البوابة 1 (تشغيل يدوي فقط)."""
 
@@ -173,3 +180,7 @@ class TestOperationalAuth:
         else:
             # المشروع الكامل — الختم موجود
             print(f"[R-655] seal_file={info['seal_file']} (exists)")
+
+
+# R-682 (Task 3.3): marker — this file is NOT collected by default suite.
+# It's deselected via `-m "not operational"` in CI + pytest.ini marker registration.
