@@ -27,12 +27,14 @@ import pytest
 _REPO_ROOT = Path(__file__).resolve().parent.parent
 
 # R-661: لا يُشغّل في المجموعة الاعتيادية — يتطلب --run-operational
-pytestmark = pytest.mark.operational  # R-682 (Task 3.3)
+# R-682 (Task 3.3): marker on the operational test ONLY.
+# test_identity_seal_path_follows_code_definition is SAFE (no secrets) — not marked.
 
 
 class TestOperationalAuth:
     """التحقق التشغيلي المنفصل — البوابة 1 (تشغيل يدوي فقط)."""
 
+    @pytest.mark.operational  # R-682 (Task 3.3): this test ONLY (reads host secrets)
     def test_operational_auth_new_key_accepted_old_rejected(self):
         """التشغيل الفعلي: عملية Python جديدة تُحمّل التطبيق و تختبر المصادقة.
 
