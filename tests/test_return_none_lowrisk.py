@@ -1934,6 +1934,120 @@ class TestDeathStatePersistence:
 
 
 # ============================================================
+# Part 1g: جولة 12 — فشل الحفظ المزدوج + تسوية الحالة عند التحميل
+# ============================================================
+
+class TestDeathDoubleSaveFailure:
+    """R-682 (جولة 12 — اعتراض advisor السابع): عند فشل الحفظ النهائي
+    وتراجع الحفظ معًا، يبقى على القرص DYING + is_transforming=True (محفوظان
+    أثناء إنشاء البذرة). تصحيح الذاكرة لا يصلح القرص — الحل: (1) لا يُعلن حدث
+    إكمال لعملية فشلت (الحفظ قبل الحدث)، (2) الحالة الانتقالية المعلقة تُسوّى
+    عند التحميل كعملية منقطعة لا كتحول جارٍ يمنع المحاولة."""
+
+    def _env(self, tmp_path, monkeypatch):
+        import backend.memory.defense.ransomware as rw
+        import backend.memory.store as store_mod
+        from backend.memory.core import BlobStore
+        blob_dir = tmp_path / "blobs"
+        blob_dir.mkdir(exist_ok=True)
+        core = MagicMock()
+        core._last_hash = "a" * 64
+        core.get_statistics.return_value = {"index": {"total_events": 1}}
+        core.blob_store = BlobStore(blob_dir)
+        seeds_dir = tmp_path / "seeds"
+        seeds_dir.mkdir(exist_ok=True)
+        monkeypatch.setattr(rw, "PHOENIX_SEEDS_DIR", seeds_dir)
+        monkeypatch.setattr(rw, "PHOENIX_STATE_FILE", tmp_path / "phoenix_state.json")
+        monkeypatch.setattr(rw, "get_core", lambda: core)
+        monkeypatch.setattr(rw, "get_encoder", lambda: MagicMock())
+        monkeypatch.setattr(rw, "get_watcher", lambda: MagicMock())
+        empty = _IsolatedStore()
+        monkeypatch.setattr(store_mod, "get_store", lambda: empty)
+        import threading as _th
+        monkeypatch.setattr(_th, "Thread", _NoThreads)
+        return rw, core
+
+    def test_double_save_failure_settled_on_reload(self, tmp_path, monkeypatch):
+        """الحفظ الانتقالي (أثناء البذرة) ينجح؛ الحفظ النهائي والتراجع يفشلان
+        معًا: لا موت معلن (False)، لا حدث إكمال (phoenix::death غير موجود)،
+        حدث فشل صريح بمرحلة الفشل — وبعد إعادة التهيئة من نفس الملفات تُعامل
+        الحالة المعلقة كعملية منقطعة والمحاولة تنجح."""
+        rw, core = self._env(tmp_path, monkeypatch)
+        h = core.blob_store.put(b"double_save_blob_" * 4, compress=True)
+        core.iterate_events = lambda limit=1000, **k: [{"blob": h}]
+
+        obj = rw.RansomwareDefense()
+        # الحفظ الانتقالي (استدعاء 1 — داخل create_phoenix_seed) ينجح؛
+        # كل حفظ لاحق (النهائي + التراجع) يفشل
+        orig_save = obj._save_state
+        calls = {"n": 0}
+        def flaky_save():
+            calls["n"] += 1
+            if calls["n"] >= 2:
+                return False
+            return orig_save()
+        obj._save_state = flaky_save
+
+        result = obj.initiate_death(reason="double-save-fail")
+        assert result is False, "فشل الحفظ النهائي = لا موت معلن"
+        assert calls["n"] >= 3, "التراجع حاول الحفظ فعلًا (لا يكتفي بالتحذير)"
+        assert obj.phoenix_phase == rw.PhoenixPhase.LIVING
+        assert obj.is_transforming is False
+        assert obj.last_death_record.success is False
+        # لا حدث إكمال لعملية فشلت — فقط حدث فشل بمرحلة معلنة
+        death_events = [c for c in core.append_event.call_args_list
+                        if c.kwargs.get("event_type") == "phoenix::death"]
+        assert not death_events, \
+            "لا يُعلن حدث موت ناجح لعملية فشل حفظها النهائي"
+        failed_events = [c for c in core.append_event.call_args_list
+                         if c.kwargs.get("event_type") == "phoenix::death_failed"]
+        assert failed_events, "حدث الفشل يُسجل صراحة"
+        assert failed_events[0].kwargs["payload"].get("failure_stage") == \
+            "final state save failed"
+
+        # إعادة التهيئة من نفس الملفات: الحالة المعلقة (DYING + تحول) تُعامل
+        # كعملية منقطعة — لا كتحول جارٍ يمنع المحاولة
+        obj2 = rw.RansomwareDefense()
+        assert obj2.is_transforming is False, \
+            "العلم المعلق من عملية منقطعة يُصفَّر عند التحميل"
+        assert obj2.phoenix_phase == rw.PhoenixPhase.LIVING, \
+            "DYING المعلق يُسوّى إلى LIVING — عملية منقطعة لا موت مكتمل"
+        # المحاولة تنجح فعلًا (بعد إصلاح الحفظ)
+        assert obj2.initiate_death(reason="retry-after-settlement") is True
+        assert obj2.phoenix_phase == rw.PhoenixPhase.DEAD
+
+    def test_death_failed_event_recording_consistent(self, tmp_path, monkeypatch):
+        """مسار death_failed نفسه (جاهزية ناقصة): فشل تسجيل حدث الفشل أيضًا
+        فاشل-مغلق — النتيجة False والحالة LIVING والسجل فاشل والمواد محفوظة.
+        (تصويح تغطية الجولة 11: المساران كلاهما مختبر الآن.)"""
+        rw, core = self._env(tmp_path, monkeypatch)
+        h = core.blob_store.put(b"event_fail_path2_blob_" * 4, compress=True)
+        core.iterate_events = lambda limit=1000, **k: [{"blob": h}]
+        # عنصر مخزن غير محمي → recovery_ready=False → مسار death_failed
+        import backend.memory.store as store_mod
+        iso = _IsolatedStore()
+        iso.save_semantic(concept="unprotected_item", definition="سجل",
+                           confidence=0.9)
+        monkeypatch.setattr(store_mod, "get_store", lambda: iso)
+        real_append = core.append_event
+        def failing_append(*args, **kwargs):
+            et = kwargs.get("event_type") or (args[0] if args else None)
+            if et in ("phoenix::death", "phoenix::death_failed"):
+                raise RuntimeError("inject: death-failed event recording failed")
+            return real_append(*args, **kwargs)
+        core.append_event = failing_append
+
+        obj = rw.RansomwareDefense()
+        result = obj.initiate_death(reason="death-failed-event-fail")
+        assert result is False
+        assert obj.phoenix_phase == rw.PhoenixPhase.LIVING
+        assert obj.is_transforming is False
+        assert obj.last_death_record.success is False
+        assert len(obj.ashes) >= 1  # مواد الاسترداد محفوظة
+        assert len(obj.seeds) >= 1
+
+
+# ============================================================
 # Part 2: المواقع منخفضة الخطورة — اختبارات سلوكية
 # ============================================================
 

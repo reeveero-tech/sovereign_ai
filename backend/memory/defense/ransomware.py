@@ -680,11 +680,30 @@ class RansomwareDefense:
                 duration=time.time() - start_time,
                 success=False
             )
-            # أفضل جهد لحفظ الحالة المصححة — الفشل يُعلن (لا يُبتلع)
+            # حدث الفشل بمرحلة معلنة — أفضل جهد: فشل تسجيله يُعلن ولا يُبتلع
+            # (ولكنه لا يغير النتيجة: الفشل فشل)
+            try:
+                self.core.append_event(
+                    event_type="phoenix::death_failed",
+                    payload={
+                        **event_payload,
+                        "recovery_ready": False,
+                        "failure_stage": fail_reason,
+                        "timestamp": time.time()
+                    }
+                )
+            except Exception as ev_err:
+                logger.error(
+                    f"R-682: فشل تسجيل حدث فشل الموت أيضًا ({fail_reason}): {ev_err} "
+                    "— لا حدث إكمال إطلاقًا"
+                )
+            # أفضل جهد لحفظ الحالة المصححة — الفشل يُعلن (لا يُبتلع).
+            # إن فشل أيضًا: القرص يحمل الحالة الانتقالية المعلقة وتُسوّى عند
+            # التحميل كعملية منقطعة (راجع _load_state).
             if not self._save_state():
                 logger.error(
                     "R-682 [SECURITY]: فشل حفظ حالة فشل الموت — الحالة على القرص "
-                    "قد تحمل علم تحول قديمًا"
+                    "قد تحمل علم تحول قديمًا (يُسوّى عند التحميل كعملية منقطعة)"
                 )
             return False
         
@@ -700,8 +719,15 @@ class RansomwareDefense:
         )
         self.last_death_record = death_record
         
-        # تسجيل الحدث — فشل التسجيل لا يُبتلع ثم يُعلن نجاح (فاشل-مغلق)
-        event_type = "phoenix::death" if recovery_ready else "phoenix::death_failed"
+        # R-682 (جولة 12): الحالة النهائية تُحفظ قبل حدث الإكمال — لا يُعلن
+        # موت في سجل الأحداث قبل أن يكون متينًا على القرص. فشل الحفظ النهائي =
+        # لا حدث إكمال إطلاقًا (فاشل-مغلق) — فقط حدث فشل بمرحلة معلنة.
+        if recovery_ready:
+            self.phoenix_phase = PhoenixPhase.DEAD
+            self.resurrection_level = RESURRECTION_LEVEL_DEATH
+        else:
+            self.phoenix_phase = PhoenixPhase.LIVING
+            self.resurrection_level = RESURRECTION_LEVEL_NONE
         event_payload = {
             "reason": reason,
             "resurrection_mode": resurrection_mode,
@@ -718,32 +744,26 @@ class RansomwareDefense:
             "seed_id": final_seed.id if final_seed else None,
             "timestamp": time.time()
         }
-        try:
-            self.core.append_event(event_type=event_type, payload=event_payload)
-        except Exception as e:
-            logger.error(
-                f"R-682 [SECURITY-FAIL]: فشل تسجيل حدث الموت ({event_type}): {e} — "
-                "لا موت معلنًا: النتيجة False والنظام حي والرماد/البذور محفوظة"
-            )
-            return _failed_outcome("death event recording failed")
-        
-        # ضبط الحالة النهائية ثم حفظها — فشل الحفظ = لا موت معلنًا (الحالة
-        # على القرص قد تحمل علم التحول القديم من DYING فيمنع إعادة المحاولة)
-        if recovery_ready:
-            self.phoenix_phase = PhoenixPhase.DEAD
-            self.resurrection_level = RESURRECTION_LEVEL_DEATH
-        else:
-            self.phoenix_phase = PhoenixPhase.LIVING
-            self.resurrection_level = RESURRECTION_LEVEL_NONE
-        
         if not self._save_state():
             logger.error(
                 "R-682 [SECURITY-FAIL]: فشل حفظ الحالة النهائية للموت — لا موت "
-                "معلنًا (الحالة على القرص قد تحمل علم تحول قديمًا)"
+                "معلنًا ولا حدث إكمال (الحالة على القرص قد تحمل علم تحول قديمًا "
+                "يُسوّى عند التحميل كعملية منقطعة)"
             )
             return _failed_outcome("final state save failed")
         
         if recovery_ready:
+            # حدث الإكمال — فقط بعد حفظ متين. فشله = تراجع كامل (لا DEAD بلا إعلان)
+            try:
+                self.core.append_event(
+                    event_type="phoenix::death", payload=event_payload
+                )
+            except Exception as e:
+                logger.error(
+                    f"R-682 [SECURITY-FAIL]: فشل تسجيل حدث الموت بعد حفظ الحالة — "
+                    f"تراجع كامل: {e}"
+                )
+                return _failed_outcome("death event recording failed")
             logger.warning(
                 f"⚰️ الموت تم: نسخ الاسترداد جاهزة ({protection['blobs_encrypted']} blob "
                 "مشفر إلى رماد موثق) والحالة محفوظة. الأصول تبقى مقروءة (الحماية "
@@ -754,6 +774,16 @@ class RansomwareDefense:
         # فشل الموت: جاهزية الاسترداد ناقصة — لا يُعلن موتًا ناجحًا أبدًا.
         # مواد الاسترداد (الرماد المُنشأ + البذور) محفوظة، والنظام حي قابل
         # لإعادة المحاولة. الأسباب معلنة في الحدث والسجل.
+        try:
+            self.core.append_event(
+                event_type="phoenix::death_failed", payload=event_payload
+            )
+        except Exception as e:
+            logger.error(
+                f"R-682 [SECURITY-FAIL]: فشل تسجيل حدث فشل الموت: {e} — "
+                "النتيجة False والنظام حي والرماد/البذور محفوظة"
+            )
+            return _failed_outcome("death-failed event recording failed")
         reasons = []
         if protection["blob_failures"]:
             reasons.append(f"{protection['blob_failures']} فشل إنشاء رماد")
@@ -1589,6 +1619,23 @@ class RansomwareDefense:
                     self.phoenix_phase = PhoenixPhase(state.get("phoenix_phase", "living"))
                     self.resurrection_level = state.get("resurrection_level", 0)
                     self.is_transforming = state.get("is_transforming", False)
+                    # R-682 (جولة 12): تسوية الحالة الانتقالية المعلقة — علم تحول
+                    # محفوظ لا يمكن أن يكون جاريًا في عملية جديدة (لا عملية تعبر
+                    # العمليات): يُعامل كعملية منقطعة لا كتحول يمنع المحاولة.
+                    if self.is_transforming:
+                        interrupted = self.phoenix_phase in (
+                            PhoenixPhase.DYING, PhoenixPhase.TRANSFORMING
+                        )
+                        self.is_transforming = False
+                        if interrupted:
+                            self.phoenix_phase = PhoenixPhase.LIVING
+                            self.resurrection_level = RESURRECTION_LEVEL_NONE
+                        logger.warning(
+                            "R-682: علم تحول معلق في الحالة المحفوظة (عملية "
+                            "منقطعة — لا تحول جارٍ في عملية جديدة). صُفّر العلم"
+                            + (" وأُعيدت الحالة إلى LIVING — إعادة المحاولة غير محظورة."
+                               if interrupted else ".")
+                        )
                     # R-682 (security): استمرارية مفتاح القيامة عبر إعادة التشغيل
                     # بدونها لا يمكن فك أي بذرة من القرص بعد إعادة التشغيل إطلاقًا.
                     # غيابه في حالة موجودة = فشل صريح: صلاحية JSON وحدها لا تجعل
