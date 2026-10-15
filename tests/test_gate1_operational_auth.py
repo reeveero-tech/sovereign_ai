@@ -47,6 +47,52 @@ def _fp(key: str) -> str:
 # test_identity_seal_path_follows_code_definition is SAFE (no secrets) — not marked.
 
 
+# R-682 (الجولة الرابعة — أمر المستشار): استُخرج بناء السكربت إلى دالة
+# مشتركة ليُختبر مسار تشخيص الإخفاق (str(e)) باختبار محقون — راجع
+# tests/test_operational_no_leak_on_exception.py و OPERATIONAL_TESTS.md.
+def _build_verification_script(repo_root: Path) -> str:
+    """سكربت التحقق التشغيلي (يُشغّل في عملية جديدة عبر subprocess).
+
+    المفتاحان يُمرّران عبر متغيرات البيئة (TEST_NEW_KEY/TEST_OLD_KEY) —
+    لا يُضمّنان في مصدر السكربت، فلا يظهران في أي traceback أو رسالة
+    إخفاق أو مخرجات pytest.
+    """
+    return (
+        "import sys, os, json\n"
+        f"sys.path.insert(0, {str(repo_root / 'backend')!r})\n"
+        f"os.chdir({str(repo_root)!r})\n"
+        "# إلغاء متغيرات البيئة الاختبارية (لكن المفتاح من data/key.secret)\n"
+        "os.environ.pop('SOVEREIGN_KEY', None)\n"
+        "os.environ.pop('SOVEREIGN_DATA_ROOT', None)\n"
+        "from fastapi.testclient import TestClient\n"
+        "import app\n"
+        "client = TestClient(app.app)\n"
+        # R-682 (الجولة الرابعة — أمر المستشار): تنقية نص الاستثناء قبل
+        # تخزينه — رسائل أخطاء HTTP قد تحمل URL الطلب ومعه master_key،
+        # وresults تُضمَّن في رسالة فشل pytest وJUnit. أثبت الاختبار
+        # المحقون (test_operational_no_leak_on_exception) التسريب قبل
+        # التنقية (RED) واختفاءه بعدها (GREEN).
+        "def _redact(msg):\n"
+        "    for _n in ('TEST_NEW_KEY', 'TEST_OLD_KEY'):\n"
+        "        _v = os.environ.get(_n, '')\n"
+        "        if _v:\n"
+        "            msg = msg.replace(_v, '<REDACTED-KEY>')\n"
+        "    return msg\n"
+        "results = {}\n"
+        "try:\n"
+        "    r = client.get('/api-key', params={'master_key': os.environ['TEST_NEW_KEY']})\n"
+        "    results['new_key_status'] = r.status_code\n"
+        "except Exception as e:\n"
+        "    results['new_key_error'] = _redact(str(e))\n"
+        "try:\n"
+        "    r = client.get('/api-key', params={'master_key': os.environ['TEST_OLD_KEY']})\n"
+        "    results['old_key_status'] = r.status_code\n"
+        "except Exception as e:\n"
+        "    results['old_key_error'] = _redact(str(e))\n"
+        "print(json.dumps(results))\n"
+    )
+
+
 class TestOperationalAuth:
     """التحقق التشغيلي المنفصل — البوابة 1 (تشغيل يدوي فقط)."""
 
@@ -81,29 +127,7 @@ class TestOperationalAuth:
         # R-682 (جولة التشغيلية — أمر المستشار): المفتاحان يُمرَّران عبر
         # متغيرات بيئة السب-بروسس — لا يُضمَّنان في مصدر السكربت نفسه، فلا
         # يظهران في أي traceback أو رسالة إخفاق أو مخرجات pytest.
-        script = (
-            "import sys, os, json\n"
-            f"sys.path.insert(0, {str(_REPO_ROOT / 'backend')!r})\n"
-            f"os.chdir({str(_REPO_ROOT)!r})\n"
-            "# إلغاء متغيرات البيئة الاختبارية (لكن المفتاح من data/key.secret)\n"
-            "os.environ.pop('SOVEREIGN_KEY', None)\n"
-            "os.environ.pop('SOVEREIGN_DATA_ROOT', None)\n"
-            "from fastapi.testclient import TestClient\n"
-            "import app\n"
-            "client = TestClient(app.app)\n"
-            "results = {}\n"
-            "try:\n"
-            "    r = client.get('/api-key', params={'master_key': os.environ['TEST_NEW_KEY']})\n"
-            "    results['new_key_status'] = r.status_code\n"
-            "except Exception as e:\n"
-            "    results['new_key_error'] = str(e)\n"
-            "try:\n"
-            "    r = client.get('/api-key', params={'master_key': os.environ['TEST_OLD_KEY']})\n"
-            "    results['old_key_status'] = r.status_code\n"
-            "except Exception as e:\n"
-            "    results['old_key_error'] = str(e)\n"
-            "print(json.dumps(results))\n"
-        )
+        script = _build_verification_script(_REPO_ROOT)
 
         subprocess_env = {**os.environ, "TEST_NEW_KEY": new_key, "TEST_OLD_KEY": old_key}
         result = subprocess.run(
