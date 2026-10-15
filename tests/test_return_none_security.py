@@ -437,7 +437,12 @@ class TestRansomwareSeedDecryptionSecurity:
 class TestSourceEvidence:
 
     def test_all_nine_sites_use_logger_exception(self):
-        """All 9 modified sites must use logger.exception (not logger.error)."""
+        """All 9 modified sites must log with a full stack trace.
+
+        logger.exception(msg) ≡ logger.error(msg, exc_info=...) — both emit
+        the traceback. Either form satisfies the security property (no silent
+        failure). A bare logger.error without exc_info does NOT satisfy it.
+        """
         sites = [
             ("backend/sovereign/ledger/anchor.py", "R-682 [SECURITY]: anchor_batch failed"),
             ("backend/sovereign/keys/rotation.py", "R-682 [SECURITY]: KeyRotation failed"),
@@ -457,9 +462,14 @@ class TestSourceEvidence:
             found = False
             for i, line in enumerate(lines):
                 if marker in line:
-                    for j in range(max(0, i - 3), i + 1):
-                        if "logger.exception(" in lines[j]:
-                            found = True
-                            break
+                    window = lines[max(0, i - 3): i + 5]
+                    if any("logger.exception(" in l for l in window):
+                        found = True
+                    elif (any("logger.error(" in l for l in window)
+                          and any("exc_info=" in l for l in window)):
+                        found = True
                     break
-            assert found, f"{file_path}: marker present but logger.exception not used nearby"
+            assert found, (
+                f"{file_path}: marker present but no full-traceback logging nearby "
+                f"(need logger.exception OR logger.error(..., exc_info=...))"
+            )

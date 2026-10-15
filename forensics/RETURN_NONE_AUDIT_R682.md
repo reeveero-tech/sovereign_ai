@@ -1,12 +1,24 @@
 # RETURN_NONE_AUDIT_R682.md — R-682 (corrected scope — re-verified by advisor R-682 final)
 
-**التاريخ:** 2026-10-15 (re-verified)
+**التاريخ:** 2026-10-15 (re-verified) — **تحديث تنفيذي:** 2026-10-15 (تنفيذ فعلي — راجع الأسفل)
 **المرجع:** أمر التسليم R-682 — Task 2.1 + advisor correction
 **التصحيح:** العدد الصحيح **23 موقعًا فريدًا** (وليس 25 — كان هناك عدّ مكرر في directives.py بسبب `ast.walk()` يعبر الدوال المتداخلة).
 
 **إعادة التحقق (R-682 final):** أُعيد تشغيل الماسح فعليًا في هذه الجلسة → `TOTAL = 23`. القائمة الكاملة 23 موقعًا كما في الكود أعلاه.
 
-**9 مواقع عالية الخطورة** من الـ 23 مُغطاة بـ `tests/test_return_none_security.py` (17 اختبارًا):
+## تحديث تنفيذي (الجلسة التالية — تنفيذ حقيقي)
+
+**الماسح (منهجية حدود الدوال) الآن: `TOTAL = 25` موقعًا** — الأصل 23 + موقعان جديدان نتجا عن تنفيذ خوارزمية فك تشفير البذرة:
+- `backend/memory/defense/ransomware.py:414` — رفض صريح للحقول الإلزامية الناقصة (logger.error + exc_info)
+- `backend/memory/defense/ransomware.py:674` — فشل قراءة ملف البذرة من القرص (logger.exception)
+
+**ملاحظة منهجية:** الموقع القديم `ransomware.py:364` (stub غير المنفذ) أصبح `:431` بعد إعادة كتابة `_decrypt_seed` بخوارزمية حقيقية.
+
+**الـ 14 موقعًا منخفضة الخطورة أصبحت مُغطاة باختبارات سلوكية** — `tests/test_return_none_lowrisk.py` (20 اختبارًا): لكل موقع اختبار فشل محقون (يُثبت التسجيل لا الصمت) + اختبار مسار سليم.
+
+**خوارزمية `_decrypt_seed` نُفّذت فعليًا** (RED → GREEN): `tests/test_return_none_lowrisk.py::TestPhoenixSeedDecryption` (8 اختبارات: roundtrip، مفاتيح الذاكرة، مفتاح خاطئ، تلاعب، بتر، حقل ناقص، قرص، فشل قراءة).
+
+**9 مواقع عالية الخطورة** من الـ 25 مُغطاة بـ `tests/test_return_none_security.py` (17 اختبارًا):
 1. `backend/sovereign/ledger/anchor.py:262`
 2. `backend/sovereign/keys/rotation.py:81`
 3. `guardian/integrity_checker.py:118`
@@ -15,7 +27,7 @@
 6. `nexus/user_management/auth_engine.py:76`
 7. `backend/consciousness/identity_core.py:722`
 8. `backend/memory/defense/ransomware.py:274`
-9. `backend/memory/defense/ransomware.py:364`
+9. `backend/memory/defense/ransomware.py:431` (كان 364 — خوارزمية حقيقية الآن)
 
 **14 موقعًا المتبقية** منخفضة الخطورة (لا تعالج تشفير/مصادقة/نزاهة/مرساة/تدوير مفتاح/دفاع):
 - `backend/compat/nexus_lifecycle.py:85,112`

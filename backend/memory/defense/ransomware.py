@@ -347,30 +347,114 @@ class RansomwareDefense:
         
         return base64.b64encode(layer2)
     
-    def _decrypt_seed(self, encrypted: bytes) -> Optional[PhoenixSeed]:
-        """فك تشفير بذرة الفينيق"""
+    def _decrypt_seed(self, encrypted: bytes,
+                      resurrection_key: Optional[str] = None) -> Optional[PhoenixSeed]:
+        """
+        فك تشفير بذرة الفينيق (R-682: خوارزمية حقيقية — لم تعد وهمية).
+
+        التشفير (راجع _encrypt_seed) طبقتان XOR:
+          key1 = sha256(SOVEREIGN_KEY)          — الطبقة الخارجية
+          key2 = sha256(seed.resurrection_key) — الطبقة الداخلية
+        فك التشفير: base64 → XOR(key2) → XOR(key1) → JSON → PhoenixSeed.
+
+        Args:
+            encrypted: البذرة المشفرة (bytes من _encrypt_seed).
+            resurrection_key: مفتاح قيامة البذرة. إن لم يُقدَّم، تُجرَّب
+                مفاتيح البذور المعروفة في الذاكرة (self.seeds).
+
+        Returns:
+            PhoenixSeed عند النجاح، None عند الفشل (fail-closed + تسجيل كامل — لا صمت).
+        """
         try:
-            data = base64.b64decode(encrypted)
-            
+            if not encrypted:
+                logger.warning(
+                    "R-682 [SECURITY]: Phoenix seed decryption refused — "
+                    "empty payload. Returning None (fail-closed)."
+                )
+                return None
+
+            # base64 → خام + المفتاح السيادي الثابت
+            data = base64.b64decode(encrypted, validate=True)
             key1 = hashlib.sha256(SOVEREIGN_KEY.encode()).digest()
-            
-            # فك الطبقة الثانية (بدون مفتاح القيامة؟ نحتاج محاولة كل المفاتيح)
-            # في القيامة الحقيقية، السيد يقدم المفتاح
-            logger.warning(
-                "R-682 [SECURITY]: Phoenix seed decryption is not implemented — "
-                "returning None silently. This hides real tampering or missing key."
+
+            # المفاتيح المرشحة: المفتاح المُعطى صراحةً + مفاتيح البذور المعروفة
+            candidates: List[str] = []
+            if resurrection_key:
+                candidates.append(resurrection_key)
+            known_seeds = getattr(self, "seeds", None) or {}
+            candidates.extend(s.resurrection_key for s in known_seeds.values())
+            candidates = list(dict.fromkeys(candidates))  # إزالة التكرار
+
+            if not candidates:
+                logger.warning(
+                    "R-682 [SECURITY]: Phoenix seed decryption requires the "
+                    "seed's resurrection key — none provided and no known "
+                    "seeds to try. Returning None (fail-closed, not silent)."
+                )
+                return None
+
+            last_error: Optional[Exception] = None
+            for k2_source in candidates:
+                try:
+                    key2 = hashlib.sha256(k2_source.encode()).digest()
+                    layer1 = bytes(
+                        a ^ b for a, b in zip(data, key2 * (len(data) // 32 + 1))
+                    )
+                    seed_data = bytes(
+                        a ^ b for a, b in zip(layer1, key1 * (len(layer1) // 32 + 1))
+                    )
+                    parsed = json.loads(seed_data.decode("utf-8"))
+                except (UnicodeDecodeError, json.JSONDecodeError, ValueError) as e:
+                    last_error = e
+                    continue  # مفتاح خاطئ — جرّب المرشح التالي
+
+                # JSON صالح => المفتاح صحيح. تحقق من الحقول الإلزامية.
+                try:
+                    seed = self._validate_and_build_seed(parsed)
+                except ValueError as e:
+                    logger.error(
+                        f"R-682 [SECURITY]: Phoenix seed payload REJECTED — "
+                        f"missing/invalid required fields (tampered?). exc={e}",
+                        exc_info=e,
+                    )
+                    return None
+                logger.info(f"🌱 بذرة الفينيق فُكَّت بنجاح: {seed.id[:24]}...")
+                return seed
+
+            logger.error(
+                f"R-682 [SECURITY]: Phoenix seed decryption failed — wrong key "
+                f"or tampered payload. All {len(candidates)} candidate key(s) "
+                f"rejected. exc={last_error}",
+                exc_info=last_error,
             )
             return None
         except Exception as e:
             logger.exception(
                 f"R-682 [SECURITY]: Phoenix seed decryption failed — silently "
-                f"swallowing may hide tampered seed or missing resurrection key. exc={e}"
+                f"swallowing may hide tampered seed or missing resurrection "
+                f"key. exc={e}"
             )
             return None
-    
-    # ============================================================
-    # المستوى 2: الموت والتحول (Death and Transformation)
-    # ============================================================
+
+    def _validate_and_build_seed(self, parsed: Dict[str, Any]) -> PhoenixSeed:
+        """التحقق من حقول البذرة المفكوكة وبناؤها (رفض صريح للنواقص)."""
+        required = [
+            "id", "created_at", "core_fingerprint", "essential_memory",
+            "resurrection_key", "expires_at",
+        ]
+        missing = [f for f in required if f not in parsed]
+        if missing:
+            raise ValueError(f"missing required seed fields: {missing}")
+        return PhoenixSeed(
+            id=parsed["id"],
+            created_at=parsed["created_at"],
+            core_fingerprint=parsed["core_fingerprint"],
+            essential_memory=parsed["essential_memory"],
+            resurrection_key=parsed["resurrection_key"],
+            expires_at=parsed["expires_at"],
+            phase=parsed.get("phase", PhoenixPhase.LIVING.value),
+        )
+
     
     def initiate_death(self, reason: str = "threat_detected", 
                        resurrection_mode: int = RESURRECTION_MODE_QUANTUM) -> bool:
@@ -516,7 +600,7 @@ class RansomwareDefense:
         
         try:
             # 1) فك تشفير البذرة الأساسية
-            seed = self._find_latest_seed()
+            seed = self._find_latest_seed(resurrection_key)
             if not seed:
                 # قيامة من الرماد
                 return self._resurrect_from_ashes(resurrection_key)
@@ -576,17 +660,23 @@ class RansomwareDefense:
         expected = hashlib.sha256(f"{SOVEREIGN_KEY}:{self.master_resurrection_key}".encode()).hexdigest()
         return key == expected
     
-    def _find_latest_seed(self) -> Optional[PhoenixSeed]:
-        """العثور على أحدث بذرة"""
+    def _find_latest_seed(self,
+                          resurrection_key: Optional[str] = None) -> Optional[PhoenixSeed]:
+        """العثور على أحدث بذرة — من الذاكرة أو من القرص (فك تشفير حقيقي)."""
         seeds = list(self.seeds.values())
         if not seeds:
-            # البحث في الملفات
+            # البحث في الملفات — فك تشفير بالمفاتيح المعروفة أو المفتاح المُعطى
             seed_files = list(PHOENIX_SEEDS_DIR.glob("*.enc"))
             if seed_files:
-                # محاولة فك تشفير أحدث ملف
                 latest = max(seed_files, key=lambda x: x.stat().st_mtime)
-                # هنا يحتاج مفتاح القيامة
-                pass
+                try:
+                    encrypted = latest.read_bytes()
+                except OSError as e:
+                    logger.exception(
+                        f"R-682 [SECURITY]: failed reading seed file {latest}"
+                    )
+                    return None
+                return self._decrypt_seed(encrypted, resurrection_key=resurrection_key)
             return None
         
         return max(seeds, key=lambda x: x.created_at)
