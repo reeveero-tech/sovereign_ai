@@ -19,7 +19,7 @@
 
 ---
 
-### 2) "CI: 294 tests, 0 failures, 0 errors, 7 skipped" — **صحيح جزئيًا**
+### 2) "CI: 294 tests, 0 failures, 0 errors, 7 skipped" — **صحيح** ✓ (correction)
 
 **الأمر (للتحقق):**
 ```bash
@@ -31,7 +31,10 @@ gh run view 38655894142 --repo reeveero-tech/sovereign_ai --log | grep passed
 ```
 **الJUnit artifact:** `tests=294 failures=0 errors=0 skipped=7`
 
-**التفسير:** `294` = 287 passed + 7 skipped (مجموع الاختبارات، لا الـ passed). التقرير لم يوضح هذا — إيحاء خاطئ.
+**CORRECTION (R-682 advisor):** `294 tests = 287 passed + 7 skipped` وصفٌ صحيح وليس تناقضًا.
+التقرير الأصلي كان واضحًا — الادعاء الأصلي صحيح.
+
+**التصحيح:** الادعاء كان صحيحًا. تم تصحيح هذا الملف (الإصدار السابق وصفه خطأً بأنه مُضلل).
 
 ---
 
@@ -74,10 +77,10 @@ gh api repos/reeveero-tech/sovereign_ai/actions/artifacts/11936413564/zip
 
 | الادعاء | الحالة | التصحيح |
 |---|---|---|
-| "HEAD: 39d02ca" | مُضلل (merge commit) | التقرير الجديد يوضح التسلسل |
-| "CI: 294 tests" | مُضلل (287 passed + 7 skipped) | التقرير الجديد يفصل الأرقام |
+| "HEAD: 39d02ca" | مُسمّى بـ HEAD النهائي خطأً (كان merge commit مؤقت) | التقرير الجديد يوضح التسلسل |
+| "CI: 294 tests" | **صحيح** (287 passed + 7 skipped = 294 total) | لا تصحيح مطلوب |
 | "clone نظيف = 0 skipped مخفي" | غير مُحقَّق (7 skips بقيت) | R-682 أغلقها فعليًا |
-| "بأمر واحد" | غير دقيق (يتطلب 3 أوامر مختلفة) | R-682 يوفر script واحد |
+| "بأمر واحد" | غير دقيق (يتطلب 3 أوامر مختلفة) | R-682 يوفر `./verify.sh` (مع --full) |
 
 ---
 

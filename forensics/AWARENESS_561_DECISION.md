@@ -55,9 +55,11 @@ time.sleep(0.1)
 
 ---
 
-## Issue #R-682-561
+## Issue
 
-**العنوان:** Implement real subliminal processing algorithm in awareness.py
+**GitHub Issue:** [#7](https://github.com/reeveero-tech/sovereign_ai/issues/7) — حقيقي، مُنشأ على GitHub (وليس مُعرّفًا محليًا).
+
+**العنوان:** Implement real subliminal processing in awareness.py (R-682-561)
 **الحالة:** OPEN — awaiting owner's architectural decision
 **الأولوية:** Medium
 **الاعتماديات:** needs spec for "subliminal processing" (no clear definition in docs)
