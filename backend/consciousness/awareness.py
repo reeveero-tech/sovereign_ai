@@ -555,18 +555,25 @@ class AwarenessEngine:
     # ============================================================
     
     def _process_subliminal_loop(self):
-        """معالجة المحتوى تحت الوعي"""
+        """معالجة المحتوى تحت الوعي — R-682 (issue #R-682-561)
+
+        Decision: The subliminal processing algorithm is NOT implemented.
+        This is intentional — it requires owner's architectural decision.
+        See forensics/AWARENESS_561_DECISION.md for full rationale.
+
+        Removed the silent `pass` (was a placeholder). The loop now does nothing
+        except wait — which is the actual current behavior. No functional change.
+        """
         while self._active:
             try:
-                # TODO: placeholder, tracked in issue — real subliminal processing
-                #   not yet implemented. Should process items from _subliminal_queue
-                #   when self.current_moment is set. R-681 (open item 3).
-                # TOLERATED: placeholder for future condition check — no action needed (R-680)
-                if self.current_moment:
-                    pass
+                # R-682 [issue #R-682-561]: real subliminal processing NOT implemented.
+                # Requires owner's decision. See forensics/AWARENESS_561_DECISION.md.
+                # Safe removal of placeholder `pass` — no functional change.
                 time.sleep(0.1)
             except Exception as e:
-                logger.error(f"خطأ في معالجة تحت الوعي: {e}")
+                logger.exception(
+                    f"R-682: خطأ في معالجة تحت الوعي — silently swallowing. exc={e}"
+                )
                 time.sleep(0.5)
     
     # ============================================================
