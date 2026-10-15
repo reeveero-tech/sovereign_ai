@@ -555,18 +555,19 @@ class AwarenessEngine:
     # ============================================================
     
     def _process_subliminal_loop(self):
-        """معالجة المحتوى تحت الوعي — R-682 (issue #R-682-561)
+        """معالجة المحتوى تحت الوعي — R-682
 
         Decision: The subliminal processing algorithm is NOT implemented.
         This is intentional — it requires owner's architectural decision.
-        See forensics/AWARENESS_561_DECISION.md for full rationale.
+        See forensics/AWARENESS_561_DECISION.md + GitHub issue #7 for full rationale:
+        https://github.com/reeveero-tech/sovereign_ai/issues/7
 
         Removed the silent `pass` (was a placeholder). The loop now does nothing
         except wait — which is the actual current behavior. No functional change.
         """
         while self._active:
             try:
-                # R-682 [issue #R-682-561]: real subliminal processing NOT implemented.
+                # R-682 [GitHub issue #7]: real subliminal processing NOT implemented.
                 # Requires owner's decision. See forensics/AWARENESS_561_DECISION.md.
                 # Safe removal of placeholder `pass` — no functional change.
                 time.sleep(0.1)

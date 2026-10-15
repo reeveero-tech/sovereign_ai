@@ -84,53 +84,134 @@ if [ "$FULL_MODE" = "--full" ]; then
     echo " [FULL MODE] CI + Clean Clone comparison"
     echo "=========================================="
 
-    # 6a) Get latest CI run
+    # 6a) Find CI run for THIS EXACT SHA (not just latest)
     echo ""
-    echo "[3/4] Fetching latest CI run..."
-    CI_RUN_ID=$(gh run list --repo reeveero-tech/sovereign_ai --limit 1 --json databaseId --jq '.[0].databaseId')
-    CI_STATUS=$(gh run list --repo reeveero-tech/sovereign_ai --limit 1 --json status --jq '.[0].status')
-    echo "CI Run: $CI_RUN_ID (status: $CI_STATUS)"
+    echo "[3/4] Fetching CI run for HEAD SHA=$SHORT_SHA..."
+    CI_RUNS=$(gh run list --repo reeveero-tech/sovereign_ai --limit 20 --json databaseId,headSha,status,conclusion)
+    CI_RUN_ID=$(echo "$CI_RUNS" | python3 -c "
+import sys, json
+runs = json.load(sys.stdin)
+target_sha = '$SHA'
+for r in runs:
+    if r['headSha'] == target_sha:
+        print(r['databaseId'])
+        break
+else:
+    print('')
+")
 
-    if [ "$CI_STATUS" = "completed" ]; then
-        CI_CONCLUSION=$(gh run list --repo reeveero-tech/sovereign_ai --limit 1 --json conclusion --jq '.[0].conclusion')
-        echo "CI Conclusion: $CI_CONCLUSION"
-        if [ "$CI_CONCLUSION" != "success" ]; then
-            echo "❌ CI is not green"
-            exit 1
-        fi
-        # Download JUnit artifact and compare
-        ARTIFACT_ID=$(gh api repos/reeveero-tech/sovereign_ai/actions/runs/$CI_RUN_ID/artifacts --jq '.artifacts[] | select(.name | startswith("junit-with-sha")) | .id' | head -1)
-        if [ -n "$ARTIFACT_ID" ]; then
-            TMPDIR_VERIFY=$(mktemp -d)
-            gh api repos/reeveero-tech/sovereign_ai/actions/artifacts/$ARTIFACT_ID/zip > "$TMPDIR_VERIFY/junit.zip"
-            python3 -c "
+    if [ -z "$CI_RUN_ID" ]; then
+        echo "❌ No CI run found for HEAD SHA $SHA — cannot verify"
+        echo "   (CI must have run on this exact commit)"
+        exit 1
+    fi
+
+    CI_STATUS=$(echo "$CI_RUNS" | python3 -c "
+import sys, json
+runs = json.load(sys.stdin)
+target_sha = '$SHA'
+for r in runs:
+    if r['headSha'] == target_sha:
+        print(r['status'])
+        break
+")
+    CI_CONCLUSION=$(echo "$CI_RUNS" | python3 -c "
+import sys, json
+runs = json.load(sys.stdin)
+target_sha = '$SHA'
+for r in runs:
+    if r['headSha'] == target_sha:
+        print(r['conclusion'])
+        break
+")
+    echo "CI Run: $CI_RUN_ID (status: $CI_STATUS, conclusion: $CI_CONCLUSION)"
+
+    if [ "$CI_STATUS" != "completed" ]; then
+        echo "❌ CI run $CI_RUN_ID is NOT completed (status: $CI_STATUS)"
+        exit 1
+    fi
+    if [ "$CI_CONCLUSION" != "success" ]; then
+        echo "❌ CI run $CI_RUN_ID conclusion: $CI_CONCLUSION (must be success)"
+        exit 1
+    fi
+
+    # 6b) Download JUnit artifact and COMPARE with local
+    ARTIFACT_ID=$(gh api repos/reeveero-tech/sovereign_ai/actions/runs/$CI_RUN_ID/artifacts --jq '.artifacts[] | select(.name | startswith("junit-with-sha")) | .id' | head -1)
+    if [ -z "$ARTIFACT_ID" ]; then
+        echo "❌ No junit-with-sha artifact found for CI run $CI_RUN_ID"
+        exit 1
+    fi
+
+    TMPDIR_VERIFY=$(mktemp -d)
+    gh api repos/reeveero-tech/sovereign_ai/actions/artifacts/$ARTIFACT_ID/zip > "$TMPDIR_VERIFY/junit.zip" || {
+        echo "❌ Failed to download artifact $ARTIFACT_ID"
+        rm -rf "$TMPDIR_VERIFY"; exit 1
+    }
+    python3 -c "
 import zipfile
 with zipfile.ZipFile('$TMPDIR_VERIFY/junit.zip') as z:
     z.extractall('$TMPDIR_VERIFY')
-"
-            python3 - "$TMPDIR_VERIFY/pytest_results.xml" << 'PYEOF'
+" || { echo "❌ Failed to extract artifact"; rm -rf "$TMPDIR_VERIFY"; exit 1; }
+
+    # Compare local vs CI (SHA + test counts)
+    python3 - "$TMPDIR_VERIFY/pytest_results.xml" "forensics/pytest_results.xml" << 'PYEOF'
 import sys, xml.etree.ElementTree as ET
-tree = ET.parse(sys.argv[1])
-root = tree.getroot()
-ci_sha = root.get("git_sha", "MISSING")
-ci_tests = sum(int(ts.get("tests", 0)) for ts in root.iter("testsuite"))
-ci_skipped = sum(int(ts.get("skipped", 0)) for ts in root.iter("testsuite"))
-ci_failed = sum(int(ts.get("failures", 0)) + int(ts.get("errors", 0)) for ts in root.iter("testsuite"))
-print(f"CI JUnit: sha={ci_sha} tests={ci_tests} skipped={ci_skipped} failed={ci_failed}")
+
+ci_tree = ET.parse(sys.argv[1])
+local_tree = ET.parse(sys.argv[2])
+ci_root = ci_tree.getroot()
+local_root = local_tree.getroot()
+
+def stats(root):
+    tests = sum(int(ts.get("tests", 0)) for ts in root.iter("testsuite"))
+    failed = sum(int(ts.get("failures", 0)) + int(ts.get("errors", 0)) for ts in root.iter("testsuite"))
+    skipped = sum(int(ts.get("skipped", 0)) for ts in root.iter("testsuite"))
+    return tests, failed, skipped
+
+ci_sha = ci_root.get("git_sha", "MISSING")
+ci_tests, ci_failed, ci_skipped = stats(ci_root)
+local_sha = local_root.get("git_sha", "MISSING")
+local_tests, local_failed, local_skipped = stats(local_root)
+
+print(f"CI:     sha={ci_sha[:12]}... tests={ci_tests} failed={ci_failed} skipped={ci_skipped}")
+print(f"Local:  sha={local_sha[:12]}... tests={local_tests} failed={local_failed} skipped={local_skipped}")
+
+errors = []
+if ci_sha != local_sha:
+    errors.append(f"SHA mismatch: CI={ci_sha} vs Local={local_sha}")
+if ci_sha == "MISSING" or local_sha == "MISSING":
+    errors.append("git_sha missing in JUnit")
+if ci_tests != local_tests:
+    errors.append(f"Test count mismatch: CI={ci_tests} vs Local={local_tests}")
+if ci_failed != 0 or local_failed != 0:
+    errors.append(f"Failures: CI={ci_failed} Local={local_failed} (must be 0)")
+if ci_skipped != 0 or local_skipped != 0:
+    errors.append(f"Skipped: CI={ci_skipped} Local={local_skipped} (must be 0)")
+
+if errors:
+    for e in errors:
+        print(f"❌ {e}")
+    sys.exit(1)
+print("✅ CI + Local MATCH (SHA + test counts + zero failures + zero skips)")
 PYEOF
-            rm -rf "$TMPDIR_VERIFY"
-        fi
-    else
-        echo "[warn] CI still running — check later"
+    COMPARE_EXIT=$?
+    rm -rf "$TMPDIR_VERIFY"
+    if [ $COMPARE_EXIT -ne 0 ]; then
+        echo "❌ CI vs Local comparison FAILED"
+        exit 1
     fi
 
-    # 6b) Clean clone verification
+    # 6c) Clean clone verification (pinned to THIS SHA)
     echo ""
-    echo "[4/4] Clean clone verification..."
+    echo "[4/4] Clean clone verification (pinned to SHA=$SHORT_SHA)..."
     TMP_CLONE=$(mktemp -d)
     git clone -q https://github.com/reeveero-tech/sovereign_ai.git "$TMP_CLONE/clone"
     cd "$TMP_CLONE/clone"
-    echo "Clone HEAD: $(git rev-parse HEAD)"
+    CLONE_SHA=$(git rev-parse HEAD)
+    if [ "$CLONE_SHA" != "$SHA" ]; then
+        echo "❌ Clone HEAD ($CLONE_SHA) != Local HEAD ($SHA)"
+        cd - > /dev/null; rm -rf "$TMP_CLONE"; exit 1
+    fi
     ./verify.sh 2>&1 | tail -5
     CLONE_EXIT=$?
     cd - > /dev/null

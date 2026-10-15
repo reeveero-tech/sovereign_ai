@@ -3,7 +3,7 @@
 **التاريخ:** 2026-10-15
 **المرجع:** أمر التسليم R-682 — Task 5.2
 **البند المتعلق:** البند 8 ("لا حذف" — انتهاك عقد)
-**الحالة:** PENDING_OWNER_APPROVAL
+**التصنيف:** BLOCKED — بانتظار قرار المالك
 
 ---
 
@@ -14,6 +14,27 @@
 **متوافق.** هذا الملف **لا يُعلن استثناءً** — إنه **طلب** استثناء ينتظر موافقة المالك.
 
 ---
+
+## الحذف الفعلي (مُعاد استخراجه من الالتزامات)
+
+**ملاحظة (advisor):** العدد 223 كان من فرق قديم (قبل تغييرات لاحقة) — لا يصف النطاق الحالي.
+
+**إعادة الاستخراج (أمر واحد):**
+
+```bash
+cd sovereign_ai && git diff da0ae02 HEAD | python3 -c "
+import sys
+current_file=''
+deletions=[]
+for line in sys.stdin:
+    if line.startswith('+++ b/'):
+        current_file = line[6:].strip()
+    elif line.startswith('-') and not line.startswith('---'):
+        deletions.append((current_file, line.rstrip()))
+code_del = [d for d in deletions if d[0] != 'forensics/pytest_results.xml']
+print(f'Code deletions: {len(code_del)}')
+"
+```
 
 ## طلب استثناء صريح (Scope: كل الحذف في R-682)
 
@@ -51,6 +72,6 @@
 
 **الموافقة الصريحة** على الاستثناءات المذكورة أعلاه، أو تحديد أي فئة يجب استرجاعها.
 
-**حتى الموافقة:** البند 8 يبقى **PENDING_OWNER_APPROVAL** (وليس CLOSED).
+**حتى القرار:** البند 8 يبقى **BLOCKED** (وليس CLOSED).
 
-**إعادة الإنتاج:** `git log --oneline; git diff <r681_commit> HEAD --stat`
+**موافقة لاحقة لا تصبح استثناءً سابقًا بأثر رجعي** — حتى مع الموافقة، البند 8 يُصبح CLOSED فقط بعد التوثيق.

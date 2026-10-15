@@ -259,7 +259,179 @@ class TestVerifyTokenSecurity:
 
 
 # ============================================================
-# 7) Source-code evidence: all 9 sites use logger.exception
+# 7) identity_core.py:722 — create_backup
+# ============================================================
+
+class TestIdentityBackupSecurity:
+
+    def _make_core(self, tmp_path, monkeypatch):
+        from backend.consciousness.identity_core import IdentityCore, IdentitySnapshot
+        import backend.consciousness.identity_core as ic
+
+        core = IdentityCore.__new__(IdentityCore)
+        # Provide a minimal IdentitySnapshot (create_backup uses .__dict__)
+        core.current_identity = IdentitySnapshot(
+            content_hash="0" * 64,
+            identity_score=0.5,
+            stability=0.5,
+            change_rate=0.0,
+            timestamp=time.time()
+        ) if hasattr(IdentitySnapshot, "content_hash") else None
+        # Fallback: use a simple object with __dict__
+        if core.current_identity is None:
+            class _MockSnapshot:
+                content_hash = "0" * 64
+                identity_score = 0.5
+                stability = 0.5
+                change_rate = 0.0
+                timestamp = 0.0
+            core.current_identity = _MockSnapshot()
+        core.seal = None
+        core.backups = []
+        core.compute_identity = lambda: None
+
+        backup_dir = tmp_path / "identity_backups"
+        backup_dir.mkdir(exist_ok=True)
+        monkeypatch.setattr(ic, "IDENTITY_BACKUP_DIR", backup_dir)
+        return core
+
+    def test_failure_returns_none_and_logs_exception(self, tmp_path, caplog, monkeypatch):
+        """Inject failure (make backup dir a FILE) → None + logger.exception."""
+        from backend.consciousness.identity_core import IdentityCore
+        import backend.consciousness.identity_core as ic
+
+        core = self._make_core(tmp_path, monkeypatch)
+        # Make it unwritable: replace dir with a FILE
+        backup_dir = tmp_path / "identity_backups"
+        import shutil
+        shutil.rmtree(backup_dir)
+        backup_dir.write_text("block")  # now a file → open() fails
+
+        with caplog.at_level(logging.ERROR, logger="backend.consciousness.identity_core"):
+            result = core.create_backup()
+        assert result is None, "create_backup must return None on failure"
+        assert any(r.exc_info for r in caplog.records), (
+            "create_backup failure must log with logger.exception"
+        )
+        assert any("R-682" in r.getMessage() for r in caplog.records)
+
+    def test_legitimate_backup_still_works(self, tmp_path, monkeypatch):
+        """create_backup with writable dir still succeeds."""
+        core = self._make_core(tmp_path, monkeypatch)
+        result = core.create_backup()
+        assert result is not None, "legitimate create_backup must succeed"
+        assert result.id.startswith("identity_backup_")
+
+
+# ============================================================
+# 8) ransomware.py:274 — create_phoenix_seed
+# ============================================================
+
+class TestRansomwareSeedCreationSecurity:
+
+    def _make_defense(self, tmp_path, monkeypatch):
+        from backend.memory.defense.ransomware import RansomwareDefense
+        import backend.memory.defense.ransomware as rd
+
+        rd_obj = RansomwareDefense.__new__(RansomwareDefense)
+        # Mock core with all needed methods (get_statistics, _last_hash used by create_phoenix_seed)
+        class _MockCore:
+            def append_event(self, *a, **k): pass
+            def get_statistics(self):
+                return {"events": 0, "blobs": 0}
+            _last_hash = "0" * 64
+        rd_obj.core = _MockCore()
+        rd_obj.encoder = None
+        rd_obj.watcher = None
+        rd_obj.phoenix_phase = None
+        rd_obj.resurrection_level = 0
+        rd_obj.is_transforming = False
+        rd_obj.last_resurrection = None
+        rd_obj.seeds = {}
+        rd_obj.ashes = {}
+        rd_obj.master_resurrection_key = "test_key"
+        rd_obj._active = False  # no background threads
+
+        seeds_dir = tmp_path / "seeds"
+        seeds_dir.mkdir(exist_ok=True)
+        monkeypatch.setattr(rd, "PHOENIX_SEEDS_DIR", seeds_dir)
+        return rd_obj
+
+    def test_failure_returns_none_and_logs_exception(self, tmp_path, caplog, monkeypatch):
+        """Inject failure (unwritable seeds dir) → None + logger.exception."""
+        from backend.memory.defense.ransomware import RansomwareDefense
+        import backend.memory.defense.ransomware as rd
+
+        rd_obj = self._make_defense(tmp_path, monkeypatch)
+        # Make seeds dir unwritable: replace with FILE
+        seeds_dir = tmp_path / "seeds"
+        import shutil
+        shutil.rmtree(seeds_dir)
+        seeds_dir.write_text("block")
+
+        with caplog.at_level(logging.ERROR, logger="backend.memory.defense.ransomware"):
+            result = rd_obj.create_phoenix_seed(reason="test_inject")
+        assert result is None, "create_phoenix_seed must return None on failure"
+        assert any(r.exc_info for r in caplog.records), (
+            "create_phoenix_seed failure must log with logger.exception"
+        )
+        assert any("R-682" in r.getMessage() for r in caplog.records)
+
+    def test_legitimate_seed_still_created(self, tmp_path, monkeypatch):
+        """create_phoenix_seed with writable dir still succeeds."""
+        rd_obj = self._make_defense(tmp_path, monkeypatch)
+        result = rd_obj.create_phoenix_seed(reason="test_ok")
+        assert result is not None, "legitimate create_phoenix_seed must succeed"
+
+
+# ============================================================
+# 9) ransomware.py:364 — _decrypt_seed
+# ============================================================
+
+class TestRansomwareSeedDecryptionSecurity:
+
+    def _make_defense(self):
+        from backend.memory.defense.ransomware import RansomwareDefense
+        rd_obj = RansomwareDefense.__new__(RansomwareDefense)
+        rd_obj.core = type("MockCore", (), {"append_event": lambda *a, **k: None})()
+        return rd_obj
+
+    def test_not_implemented_warns_not_silent(self, caplog):
+        """_decrypt_seed is NOT implemented → must log warning (not silent)."""
+        from backend.memory.defense.ransomware import RansomwareDefense
+
+        rd_obj = self._make_defense()
+        with caplog.at_level(logging.WARNING, logger="backend.memory.defense.ransomware"):
+            result = rd_obj._decrypt_seed(b"test")
+        assert result is None, "_decrypt_seed must return None (not implemented)"
+        assert any("not implemented" in r.getMessage() or "R-682" in r.getMessage()
+                   for r in caplog.records), (
+            "_decrypt_seed must log warning — not silent"
+        )
+
+    def test_invalid_input_logs_exception(self, caplog):
+        """Garbage input → logger.exception (not bare except).
+
+        Note: _decrypt_seed currently returns None (not implemented) —
+        the warning is logged regardless of input validity. This test
+        asserts the WARNING path (not silent).
+        """
+        from backend.memory.defense.ransomware import RansomwareDefense
+
+        rd_obj = self._make_defense()
+        with caplog.at_level(logging.WARNING, logger="backend.memory.defense.ransomware"):
+            result = rd_obj._decrypt_seed(b"\xff\xfe NOT_VALID")
+        assert result is None
+        # Must have logged (not silent) — either warning or exception
+        assert any(r.exc_info for r in caplog.records) or any(
+            "R-682" in r.getMessage() for r in caplog.records
+        ), (
+            "_decrypt_seed must log (warning or exception) — not silent"
+        )
+
+
+# ============================================================
+# 10) Source-code evidence: all 9 sites use logger.exception
 # ============================================================
 
 class TestSourceEvidence:

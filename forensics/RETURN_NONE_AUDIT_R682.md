@@ -6,7 +6,9 @@
 
 ---
 
-## كيفية إعادة الإنتاج (أمر واحد)
+## كيفية إعادة الإنتاج (أمر واحد — منهجية شاملة)
+
+**المنهجية (advisor):** يفحص داخل المعالج بما يشمل الشرط/الحلقة، لكن يتوقف عند حدود الدوال/الفئات المتداخلة.
 
 ```bash
 cd sovereign_ai && python3 - << 'PYEOF'
@@ -15,6 +17,16 @@ from pathlib import Path
 
 REPO = Path(".")
 EXCLUDED = {"tests", "backend/tests", "__pycache__", "archive", "frontend", "data", "guardian/data"}
+
+class _Finder(ast.NodeVisitor):
+    def __init__(self): self.results = []
+    def visit_FunctionDef(self, node): pass  # stop at nested functions
+    def visit_AsyncFunctionDef(self, node): pass
+    def visit_ClassDef(self, node): pass
+    def visit_Return(self, node):
+        if node.value is None or (isinstance(node.value, ast.Constant) and node.value.value is None):
+            self.results.append(node)
+
 sites = set()
 for p in REPO.rglob("*.py"):
     rel = str(p.relative_to(REPO))
@@ -25,16 +37,20 @@ for p in REPO.rglob("*.py"):
     except Exception: continue
     for node in ast.walk(tree):
         if isinstance(node, ast.ExceptHandler):
-            for stmt in node.body:  # direct body only (not nested)
-                if isinstance(stmt, ast.Return) and (stmt.value is None or
-                        (isinstance(stmt.value, ast.Constant) and stmt.value.value is None)):
-                    sites.add((rel, node.lineno))
-print(f"TOTAL UNIQUE = {len(sites)}")
+            finder = _Finder()
+            for stmt in node.body:
+                finder.visit(stmt)  # includes if/loop, excludes nested functions
+            if finder.results:
+                sites.add((rel, node.lineno))
+
+print(f"TOTAL = {len(sites)}")
 for f, l in sorted(sites): print(f"{f}:{l}")
 PYEOF
 ```
 
-**النتيجة:** `TOTAL UNIQUE = 23`
+**النتيجة:** `TOTAL = 23`
+
+**ملاحظة:** التدقيق الشامل (بما في الشرط/الحلقة) يُعيد نفس 23 موقعًا — لا يوجد `return None` إضافي داخل شرط أو حلقة ضمن المعالجات.
 
 ---
 
@@ -84,7 +100,9 @@ PYEOF
 8. **ransomware.py:274** — `create_seed` يُستخدم في الدفاع؛ رفع الاستثناء سيوقف الدفاع. **Log + None** يسمح بالاستمرار.
 9. **ransomware.py:364** — `decrypt_seed` يُستخدم في القيامة؛ رفع الاستثناء سيوقف القيامة. **Log + None** يسمح بالمحاولة.
 
-**الاختبارات:** `tests/test_return_none_security.py` — 11 اختبارًا يُثبت كل موقع.
+**الاختبارات:** `tests/test_return_none_security.py` — 17 اختبارًا يُثبت كل موقع.
+
+**SECURITY_FIXES_R682.md:** توثيق كامل لكل موقع + سبب عدم الرفع + الحقيقة (تحسين تشخيصي، ليس إغلاق ثغرة).
 
 ---
 
