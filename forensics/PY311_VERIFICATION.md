@@ -22,7 +22,17 @@
 | بوابة الإصدار (البند ١٢) | ✅ Python 3.11 مقبول داخل verify.sh | نفس التشغيل |
 | صفر R-626 في السجل الكامل | ✅ (محليًا) | قياس 2026-10-16 — keyring_rejection_count.json |
 
-## تشغيلات GitHub Actions المعتمدة (على الالتزام f2577ca)
+## تشغيلات GitHub Actions المعتمدة (على الالتزام f2577ca البرمجي وعلى الالتزام الختامي 10c2bf5)
+
+**الالتزام الختامي `10c2bf5` (توثيقي خالص — لا كود):**
+
+| التشغيل | المعرّف | الحدث | النتيجة |
+|---|---|---|---|
+| push CI | 38819079098 | push | success — 424/0/0 |
+| operational | 38819575692 | workflow_dispatch (run_operational=true) | success |
+| verify-full (الأمر الحرفي، ci_run_id=38819079098) | 38819578463 | workflow_dispatch (run_verify_full=true) | success — TARGET_SHA=10c2bf5c4921721529d9a3878cd03ddf3720e0fe، تطابق ثلاثي 424/0/0/0، صفر skips مؤكد |
+
+**الالتزام البرمجي `f2577ca`:**
 
 | التشغيل | المعرّف | الحدث | النتيجة |
 |---|---|---|---|
