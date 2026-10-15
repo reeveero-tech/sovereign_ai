@@ -539,7 +539,7 @@ def reset(self):
                 # يعود
                 time.sleep(random.uniform(0.5, 3.0))
         
-        threading.Thread(target=phase, daemon=True).start()
+        threads.start_managed(phase, owner=self)
         
         logger.debug(f"🌀 تموج كمومي: {phantom_id[:12]}...")
         return True
@@ -689,7 +689,7 @@ def reset(self):
                     logger.debug(f"🔄 تجديد ظل: {phantom_id[:12]}...")
                     self._schedule_renewal(phantom_id)
         
-        threading.Thread(target=renew, daemon=True).start()
+        threads.start_managed(renew, owner=self)
     
     def _bait_triggered(self, bait_id: str, bait: PhantomItem):
         """تم تفعيل الطعم - هجوم مكتشف"""

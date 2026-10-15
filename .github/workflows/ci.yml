@@ -273,10 +273,13 @@ jobs:
           chmod 600 data/key.secret
           echo "key.secret auto-generated for CI (ephemeral — not committed)"
 
-      - name: Run verify.sh --full (explicit CI run selection)
+      - name: Run the LITERAL owner verification command (verify.sh --full from a clean clone)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CI_RUN_ID: ${{ github.event.inputs.ci_run_id }}
         run: |
           set -euo pipefail
-          bash verify.sh --full
+          TARGET_SHA="$(git rev-parse HEAD)"
+          echo "TARGET_SHA=$TARGET_SHA"
+          # الأمر الحرفي من الأمر الدائم للمالك — من clone نظيف مثبّت على الـ SHA
+          cd /tmp && rm -rf verify_exec && git clone -q https://github.com/reeveero-tech/sovereign_ai.git verify_exec && cd verify_exec && git checkout -q "$TARGET_SHA" && timeout 1500 bash verify.sh --full

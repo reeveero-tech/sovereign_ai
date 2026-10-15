@@ -46,14 +46,30 @@ class TestKeySelectionAfterRotation:
         kr.save_to_disk()
         return kr
 
-    def test_event_with_key_a_verifies_after_rotation_to_b(self):
-        """حدث موقّع بالمفتاح A يُتحقق بنجاح بعد الدوران إلى B."""
+    def test_event_with_key_a_verifies_after_rotation_to_b(self, tmp_path):
+        """حدث موقّع بالمفتاح A يُتحقق بنجاح بعد الدوران إلى B.
+
+        R-682: مسارات صريحة معزولة — SovereignCore() بلا مسارات يكتب في
+        سجل الجذر المشترك للجلسة (عزل الوحدة النمطية يأتي بعد استيراد
+        config فلا يُعيد توجيه DATA_DIR)، فيلوّث سجل الجلسة بأحداث
+        بمفاتيح معزولة تُفشل تحقق السلامة لاحقًا (رفض R-626).
+        """
+        _core_dir = tmp_path / "sovereign_core"
+        _core_dir.mkdir(parents=True, exist_ok=True)
+        (_core_dir / "blobs").mkdir(exist_ok=True)
+        _core_paths = dict(
+            log_file=_core_dir / "ledger.jsonl",
+            blobs_dir=_core_dir / "blobs",
+            index_file=_core_dir / "index.json",
+            meta_file=_core_dir / "meta.json",
+            integrity_file=_core_dir / "integrity.json",
+        )
         # R-627: عزل كامل — KeyRing معزول (بدون fallback للحقيقي)
         keyring = self._isolated_keyring()
         key_a = keyring.get_active_key().key_id
 
         # 1) كتابة حدث بالمفتاح A — عبر ربط keyring يدويًا
-        core1 = SovereignCore()
+        core1 = SovereignCore(**_core_paths)
         core1._keyring = keyring
         core1._keyring_key_id = key_a
         r1 = core1.append_event(EventType.INTERACTION, {"test": "rotate_a"}, user="test")
@@ -65,7 +81,7 @@ class TestKeySelectionAfterRotation:
         key_b = new_key.key_id
 
         # 3) كتابة حدث بالمفتاح B (النشط الجديد)
-        core2 = SovereignCore()
+        core2 = SovereignCore(**_core_paths)
         core2._keyring = keyring
         core2._keyring_key_id = key_b
         r2 = core2.append_event(EventType.INTERACTION, {"test": "rotate_b"}, user="test")
@@ -145,13 +161,27 @@ class TestKeySelectionAfterRotation:
         status = core2.verify_integrity()
         assert status.value == "verified", f"integrity failed after rotation: {status}"
 
-    def test_tampered_key_id_detected(self):
-        """تغيير key_id وحده (تزييف) يُكتشف — الحدث لا يُتحقق بالمفتاح المزيّف."""
+    def test_tampered_key_id_detected(self, tmp_path):
+        """تغيير key_id وحده (تزييف) يُكتشف — الحدث لا يُتحقق بالمفتاح المزيّف.
+
+        R-682: مسارات صريحة معزولة (نفس سبب الاختبار أعلاه — SovereignCore()
+        بلا مسارات يلوّث سجل الجلسة المشترك).
+        """
+        _core_dir = tmp_path / "sovereign_core"
+        _core_dir.mkdir(parents=True, exist_ok=True)
+        (_core_dir / "blobs").mkdir(exist_ok=True)
+        _core_paths = dict(
+            log_file=_core_dir / "ledger.jsonl",
+            blobs_dir=_core_dir / "blobs",
+            index_file=_core_dir / "index.json",
+            meta_file=_core_dir / "meta.json",
+            integrity_file=_core_dir / "integrity.json",
+        )
         # R-627: عزل كامل — KeyRing معزول
         keyring = self._isolated_keyring()
         key_a = keyring.get_active_key().key_id
 
-        core = SovereignCore()
+        core = SovereignCore(**_core_paths)
         core._keyring = keyring
         core._keyring_key_id = key_a
         r = core.append_event(EventType.INTERACTION, {"test": "tamper_kid"}, user="test")

@@ -99,3 +99,53 @@ def _shutdown_background_threads():
             f"R-682: {remaining} خيط خلفي لم يتوقف بعد stop_all_and_join — "
             "خطر كتابة بعد إغلاق ملفات السجل"
         )
+
+# R-682: حراسة نظافة مفاتيح سجل الجلسة — كل حدث في سجل الجذر المشترك يحمل
+# key_id يجب أن يكون في keyring الجلسة. تمنع تلوث السجل المشترك بأحداث
+# بمفاتيح معزولة (السبب الجذري لرفض R-626 المتبقي في تحقق السلامة).
+# الجذر يُلتقط عند بدء الجلسة (قبل أي fixture وحدة يغيّر SOVEREIGN_DATA_ROOT).
+@pytest.fixture(scope="session", autouse=True)
+def _guard_session_ledger_key_hygiene():
+    import json as _json
+    from pathlib import Path as _Path
+
+    data_root = os.environ.get("SOVEREIGN_DATA_ROOT")
+    ledger_file = _Path(data_root) / "sovereign_core" / "ledger.jsonl" if data_root else None
+    keyring_file = _Path(data_root) / "keys" / "keyring.json" if data_root else None
+
+    yield
+
+    if not data_root or not ledger_file or not ledger_file.exists():
+        return
+
+    known_key_ids = set()
+    if keyring_file and keyring_file.exists():
+        try:
+            kr = _json.loads(keyring_file.read_text(encoding="utf-8"))
+            known_key_ids = {k.get("key_id") for k in kr.get("keys", []) if k.get("key_id")}
+        except Exception:
+            pass
+
+    offenders = []
+    for line_no, line in enumerate(ledger_file.read_text(encoding="utf-8", errors="replace").splitlines(), 1):
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            ev = _json.loads(line)
+        except Exception:
+            continue
+        kid = ev.get("key_id")
+        if kid is not None and kid not in known_key_ids:
+            offenders.append(
+                f"سطر {line_no}: حدث نوع {ev.get('type', '?')} يحمل key_id={kid} "
+                "وهو ليس في keyring الجلسة — تلوث يفشل تحقق السلامة (رفض R-626)"
+            )
+
+    assert not offenders, (
+        "R-682 — تلوث سجل الجلسة بأحداث بمفاتيح معزولة "
+        f"({len(offenders)} حدثًا):\n" + "\n".join(offenders[:10]) +
+        "\nالسبب الشائع: SovereignCore() بلا مسارات صريحة مع keyring معزول، "
+        "أو KeyRotation بلا ledger_path — استخدم مسارات tmp_path صريحة."
+    )
+

@@ -25,8 +25,11 @@ R-682 — إدارة موحدة لخيوط الخلفية (daemon).
 ويظل atexit يشغّل الإنهاء المنظم عند خروج العملية.
 """
 import atexit
+import logging
 import os
 import threading
+
+_log = logging.getLogger("runtime.threads")
 
 _THREADS: list = []   # مراجع الخيوط الحية المسجلة
 _STOPPERS: list = []   # دوال الإيقاف — كل دالة تُنزل أعلام حلقة خيط واحد
@@ -50,19 +53,25 @@ def background_threads_enabled() -> bool:
 
 
 def _stopper_for(owner) -> "object":
-    """دالة إيقاف تُنزل كل أعلام الحلقات المعروفة في الكائن المالك."""
-    def stop() -> None:
+    """دالة إيقاف تُنزل كل أعلام الحلقات المعروفة في الكائن المالك.
+
+    تعيد قائمة أخطاء (فارغة إن نجح كل شيء) — الإخفاقات تُجمع وتُظهر،
+    ولا تُبتلع صامتة.
+    """
+    def stop() -> list:
+        errors = []
         # أعلام الحلقات المعروفة عبر النظام: _active (الأغلبية)،
         # _processing (الذاكرة الديناميكية)، _monitoring (حارس الدفاع watcher.py)
         for attr in ("_active", "_processing", "_monitoring"):
             try:
                 setattr(owner, attr, False)
-            except Exception:  # TOLERATED: R-682 — إيقاف خيط لا يجب أن يفشل كله إن رُفض ضبط علم واحد
-                pass
+            except Exception as e:
+                errors.append(f"{attr}: {type(e).__name__}: {e}")
         try:
             setattr(owner, "_dead", True)  # علم Mr.py (while not self._dead)
-        except Exception:  # TOLERATED: R-682 — علم Mr.py اختياري في بقية الوحدات
-            pass
+        except Exception as e:
+            errors.append(f"_dead: {type(e).__name__}: {e}")
+        return errors
     return stop
 
 
@@ -92,22 +101,34 @@ def active_count() -> int:
 def stop_all_and_join(timeout: float = 8.0) -> int:
     """إيقاف كل الخيوط المسجلة والانتظار حتى انتهائها (deadline واحد).
 
-    تعيد عدد الخيوط التي لم تتوقف خلال المدة — المفروض صفر.
+    الترتيب: أعلام الإيقاف أولًا ثم إيقاظ النوم (الخيط المستيقظ يجد العلم
+    منزولًا فيخرج فورًا). إخفاقات الموقِفات تُجمع وتُظهر كلها ولا توقف
+    محاولة إيقاف البقية. تعيد عدد الخيوط التي لم تتوقف خلال المدة.
+
+    لا تُمسح المراجع إن بقيت خيوط حية — تبقى قابلة للإيقاف في استدعاء
+    لاحق (وإلا صار عدّ الأحياء بعدها صفرًا زورًا).
     """
     import time
-    deadline = time.monotonic() + timeout
-    _STOP_EVENT.set()  # إيقاظ كل النوم المقاطع قبل ضبط الأعلام
+    stopper_errors = []
     for s in list(_STOPPERS):
         try:
-            s()
-        except Exception:  # TOLERATED: R-682 — استثناء إيقاف خيط لا يوقف إيقاف البقية
-            pass
+            errors = s()
+            if errors:
+                stopper_errors.extend(errors)
+        except Exception as e:
+            stopper_errors.append(f"{type(e).__name__}: {e}")
+    if stopper_errors:
+        for err in stopper_errors:
+            _log.error(f"⚠️ فشل إيقاف أحد أعلام الخيوط (استمر إيقاف البقية): {err}")
+    deadline = time.monotonic() + timeout
+    _STOP_EVENT.set()  # إيقاظ كل النوم المقاطع بعد نزول الأعلام
     for t in list(_THREADS):
         if t.is_alive():
             t.join(timeout=max(0.0, deadline - time.monotonic()))
     remaining = sum(1 for t in _THREADS if t.is_alive())
-    _THREADS.clear()
-    _STOPPERS.clear()
+    if remaining == 0:
+        _THREADS.clear()
+        _STOPPERS.clear()
     return remaining
 
 

@@ -73,13 +73,16 @@ def test_lifecycle_real_threads_stop_and_join():
         from runtime import threads
         time.sleep(1.5)  # إعطاء الخيوط وقتًا لتعمل فعلًا
         alive_before = threads.active_count()
+        # مراجع مستقلة قبل الإغلاق — العد بعد الإغلاق لا يكفي (القائمة قد تُمسح)
+        refs_before = [t for t in threads._THREADS]
         # مهلة سخية: 57 خيطًا تتنافس على المعالج وتحتاج إنهاء دورتها الحالية
         remaining = threads.stop_all_and_join(timeout=30.0)
-        alive_after = threads.active_count()
+        still_alive_after = sum(1 for t in refs_before if t.is_alive())
         print("LIFECYCLE_RESULT:" + json.dumps({
             "alive_before": alive_before,
+            "refs_held": len(refs_before),
             "remaining": remaining,
-            "alive_after": alive_after,
+            "still_alive_after": still_alive_after,
         }))
         """
         % _REPO_ROOT
@@ -100,11 +103,80 @@ def test_lifecycle_real_threads_stop_and_join():
         "لم تبدأ أي خيوط خلفية في العملية الفرعية — الاختبار لا يثبت شيئًا: "
         f"{metrics}"
     )
-    # الدليل أن الإنهاء أوقفها كلها وانضم إليها
+    # الدليل أن الإنهاء أوقفها كلها وانضم إليها — عبر المراجع المستقلة
     assert metrics["remaining"] == 0, (
         f"خيوط لم تتوقف بعد stop_all_and_join: {metrics}"
     )
-    assert metrics["alive_after"] == 0
+    assert metrics["still_alive_after"] == 0, (
+        f"خيوط ما زالت حية بعد الإنهاء (فحص مستقل عبر المراجع): {metrics}"
+    )
+
+
+def test_stopper_failure_collected_and_others_still_stopped():
+    """مسار فشل الموقفات: إخفاق إيقاف خيط لا يوقف إيقاف البقية ولا يُبتلع.
+
+    R-682 (أمر المستشار): مالك يعترض كل setattr → الموقفة تفشل وتُجمع
+    الأخطاء وتُظهر، والبقية تتوقف، والدالة لا ترفع استثناء. ثم يُوقف
+    الخيط العنيد عبر object.__setattr__ مباشرة ويُعاد الإنهاء فينجح.
+    """
+    import os as _os
+
+    class _HostileOwner:
+        """يرفض كل setattr عبر الآلية الاعتيادية — يحاكي فشل الموقفة."""
+        def __init__(self):
+            object.__setattr__(self, "_active", True)
+
+        def __setattr__(self, name, value):
+            raise RuntimeError(f"hostile setattr: {name}")
+
+    def _loop(owner):
+        while getattr(owner, "_active", False):
+            _os_thread_sleep(0.05)
+
+    import time as _time
+    import threading as _threading
+
+    def _os_thread_sleep(t):
+        _time.sleep(t)
+
+    # تشغيل خيطين: عنيد (مالك معادٍ) + سليم (مالك عادي) — الخيوط معطلة
+    # في بيئة الجلسة، فنرفع المانع مؤقتًا لهذا الاختبار فقط ثم نعيده.
+    _saved = _os.environ.get("SOVEREIGN_DISABLE_BACKGROUND_THREADS")
+    _os.environ.pop("SOVEREIGN_DISABLE_BACKGROUND_THREADS", None)
+    try:
+        import runtime.threads as threads
+
+        hostile = _HostileOwner()
+        normal = _threading.Event()
+
+        class _NormalOwner:
+            pass
+
+        normal_owner = _NormalOwner()
+        normal_owner._active = True
+
+        t_hostile = threads.start_managed(lambda: _loop(hostile), owner=hostile)
+        t_normal = threads.start_managed(lambda: _loop(normal_owner), owner=normal_owner)
+        assert t_hostile is not None and t_normal is not None
+        _time.sleep(0.3)
+
+        # الإنهاء الأول: الموقفة العنيدة تفشل (تُجمع وتُظهر) — لا استثناء،
+        # والخيط السليم يتوقف، والعنيد يبقى (remaining >= 1).
+        remaining = threads.stop_all_and_join(timeout=2.0)
+        assert remaining >= 1, (
+            f"المالك العنيد كان يجب ألا يتوقف عبر الموقفة الفاشلة: {remaining}"
+        )
+        assert t_hostile.is_alive(), "الخيط العنيد كان يجب أن يبقى حيًا"
+        assert not t_normal.is_alive(), "الخيط السليم كان يجب أن يتوقف رغم فشل موقفة الآخر"
+
+        # الإيقاف اليدوي للعنيد (تجاوز الآلية المعادية) ثم الإنهاء الثاني ينجح
+        object.__setattr__(hostile, "_active", False)
+        remaining2 = threads.stop_all_and_join(timeout=5.0)
+        assert remaining2 == 0, f"بعد الإيقاف اليدوي كان يجب أن يتوقف الكل: {remaining2}"
+        assert not t_hostile.is_alive()
+    finally:
+        if _saved is not None:
+            _os.environ["SOVEREIGN_DISABLE_BACKGROUND_THREADS"] = _saved
 
 
 def test_clean_session_no_logging_error_and_no_keyring_rejection(tmp_path):

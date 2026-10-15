@@ -499,7 +499,7 @@ class StealthDefense:
             operation.ended_at = time.time()
             operation.status = "completed"
         
-        threading.Thread(target=reappear, daemon=True).start()
+        threads.start_managed(reappear, owner=self)
         
         return True
     

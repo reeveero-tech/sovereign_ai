@@ -35,16 +35,9 @@ Python 3.14.3 (main, Mar 10 2026, 18:18:50) [Clang 21.1.4]
 ملاحظة: غياب numpy/scikit-learn/scipy محليًا لم يمنع الاختبارات لأن الوحدات
 المستخدمة في الحزمة لا تستوردها في مسارات الاختبار (أو تستوردها بكفالة).
 
-## قائمة pip freeze المحلية الكاملة (الفعلية)
+## الاستخراج البرمجي للحزم المثبتة (importlib.metadata — ليس استعلامًا مصفيًا)
 
 ```
-Flask==3.1.3
-Jinja2==3.1.6
-MarkupSafe==3.0.4
-PyGObject==3.48.2
-PyYAML==6.0.3
-Pygments==2.21.0
-Werkzeug==3.1.9
 aiohappyeyeballs==2.7.1
 aiohttp==3.14.5
 aiosignal==1.4.0
@@ -68,8 +61,8 @@ contourpy==1.4.0
 cryptography==50.0.2
 cycler==0.12.1
 datadog==0.51.0
-ddtrace-internal==0.1.0
 ddtrace==4.15.6
+ddtrace-internal==0.1.0
 defusedxml==0.7.1
 docstring_parser==0.18.0
 envier==0.6.1
@@ -78,6 +71,7 @@ fast-langdetect==1.0.1
 fastapi==0.143.1
 fasttext-predict==0.9.2.4
 fire==0.7.1
+Flask==3.1.3
 flatbuffers==25.12.19
 fonttools==4.67.0
 fpdf2==2.8.9
@@ -94,11 +88,12 @@ httptools==0.9.0
 httpx2==2.13.1
 hyperframe==6.1.0
 idl-protobuf-perplexity-llm-api-common-llm-api-common-pyproto==2026.10.15.1792023210+9d31e6b
-idl-protobuf-perplexity-llm-api-llm-api-pygrpc @ file:///tmp/asi-template-build/local-wheels/idl-protobuf-perplexity-llm-api-llm-api-pygrpc/idl_protobuf_perplexity_llm_api_llm_api_pygrpc-0.0.0%2Blocal-py3-none-any.whl#sha256=3c52f9a92106543572c496a85feb2ba7df33f3e891898409083dd01c6a77e3d8
-idl-protobuf-perplexity-llm-api-llm-api-pyproto @ file:///tmp/asi-template-build/local-wheels/idl-protobuf-perplexity-llm-api-llm-api-pyproto/idl_protobuf_perplexity_llm_api_llm_api_pyproto-0.0.0%2Blocal-py3-none-any.whl#sha256=26fdbb219a808acdab0e8dd067549904302134035d8e0ab4763cddb630303731
+idl-protobuf-perplexity-llm-api-llm-api-pygrpc==0.0.0+local
+idl-protobuf-perplexity-llm-api-llm-api-pyproto==0.0.0+local
 idna==3.20
 iniconfig==2.3.1
 itsdangerous==2.2.0
+Jinja2==3.1.6
 jiter==0.13.0
 jmespath==1.1.0
 kiwisolver==1.5.1
@@ -108,6 +103,7 @@ magika==0.6.3
 markdown-it-py==4.2.0
 markdownify==1.2.3
 markitdown==0.1.8
+MarkupSafe==3.0.4
 mat2==0.15.0
 matplotlib==3.11.2
 mdurl==0.1.2
@@ -129,9 +125,10 @@ pdfminer.six==20260107
 pdfplumber==0.11.10
 pillow==12.3.0
 pillow_heif==1.8.0
+pip==26.2.1
 pluggy==1.7.0
-pplx-python-sdks-llm-api @ file:///tmp/asi-template-build/local-wheels/pplx-python-sdks-llm-api/pplx_python_sdks_llm_api-0.0.0%2Blocal-py3-none-any.whl#sha256=aed3ccfa8c24b913c4138e20716d8eb7606138eb1b84ed4263f2101fa03b5201
-pplx_sdk @ file:///tmp/asi-template-build/local-wheels/pplx-sdk/pplx_sdk-0.0.0%2Blocal-cp312-abi3-manylinux2014_x86_64.whl#sha256=9a1a3f068c8d3344b247930812be5018147f2d07360c596872678c0baaa358b4
+pplx-python-sdks-llm-api==0.0.0+local
+pplx_sdk==0.0.0+local
 propcache==0.5.4
 protobuf==7.35.1
 pycairo==1.29.2
@@ -139,6 +136,8 @@ pycparser==3.11
 pycryptodome==3.24.1
 pydantic==2.12.5
 pydantic_core==2.41.5
+Pygments==2.21.0
+PyGObject==3.48.2
 pymupdf==1.28.2
 pyparsing==3.3.3
 pypdf==6.20.1
@@ -151,6 +150,7 @@ python-dotenv==1.2.4
 python-pptx==1.0.2
 pytz==2026.5
 pyvips==3.2.0
+PyYAML==6.0.3
 reportlab==5.0.1
 requests==2.34.2
 rich==15.0.0
@@ -180,6 +180,7 @@ uvicorn==0.54.0
 uvloop==0.23.0
 watchfiles==1.3.0
 websockets==17.2
+Werkzeug==3.1.9
 wrapt==2.5.1
 xlrd==2.0.2
 xlsxwriter==3.2.9
@@ -187,6 +188,22 @@ yarl==1.25.1
 yt-dlp==2026.8.19
 zhon==2.1.1
 ```
+
+## فحص الاستيراد الفعلي للمكتبات الثقيلة (importlib.util.find_spec)
+
+```
+numpy: مستورد
+sklearn: غير موجود في البيئة المحلية
+scipy: مستورد
+fastapi: مستورد
+pydantic: مستورد
+Crypto: مستورد
+```
+
+ملاحظة صادقة: غياب numpy/scipy/sklearn **محليًا** لا يثبت أن الاختبارات لا
+تستوردها أبدًا — يثبت فقط أنها غير مثبتة في بيئة الوكيل، وأن أي مسار
+يستوردها سيفشل صراحةً (لا يمر صامتًا). نجاح الحزمة محليًا يعني أن مسارات
+الاختبار المُشغّلة لا تصل إلى استيرادها.
 
 ## كيف يعيد المالك إنتاج النتائج على Python 3.11 حرفيًا
 

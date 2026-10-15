@@ -116,7 +116,10 @@ class TestKeyRotationSecurity:
         kr = KeyRing(keys_dir=tmp_path / "keys")
         kr.generate_new_key(reason="test-r682")
         kr.save_to_disk()
-        return KeyRotation(keyring=kr)
+        # R-682: مسار ledger معزول صراحة — دون هذا يكتب rotate() حدث
+        # KEY_ROTATED في سجل الجذر المشترك للجلسة بمفتاح معزول ليس في
+        # keyring الجلسة، فيفشل تحقق سلامة السجل لاحقًا (رفض R-626)
+        return KeyRotation(keyring=kr, ledger_path=tmp_path / "ledger.jsonl")
 
     def test_failure_returns_none_and_logs_exception(self, tmp_path, caplog):
         """Inject failure (monkeypatch save_to_disk to raise) → None + logger.exception."""
