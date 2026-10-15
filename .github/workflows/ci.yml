@@ -5,6 +5,13 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch:  # R-682 (Task 3.3): manual trigger for operational job
+    inputs:
+      run_operational:
+        description: 'Run operational tests (requires KEY_SECRET secret)'
+        required: false
+        default: false
+        type: boolean
 
 jobs:
   test:
@@ -101,7 +108,7 @@ jobs:
           print(f"PROVENANCE git SHA = {sha}")
           # inject SHA into XML root attributes for tamper-evidence
           root.set("git_sha", sha)
-          root.set("junit_prefix", f"R-681-ci-sha-{sha}")
+          root.set("junit_prefix", f"R-682-ci-sha-{sha}")
           ET.indent(tree)
           tree.write("forensics/pytest_results.xml", encoding="utf-8", xml_declaration=True)
           print("✅ git SHA embedded in JUnit XML")
@@ -145,3 +152,51 @@ jobs:
 
           print(f"✅ Atomic batch gate passed — {len(code_files)} code files + docs updated together.")
           EOF
+
+  # R-682 (Task 3.3): Separate operational job — manual trigger only.
+  # Reads host secrets (KEY_SECRET), writes real data. NOT part of default CI.
+  operational:
+    name: Operational Tests (manual only)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.run_operational == 'true'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Load KEY_SECRET from repository secret
+        run: |
+          if [ -z "${{ secrets.KEY_SECRET }}" ]; then
+            echo "❌ KEY_SECRET secret not configured — cannot run operational tests"
+            exit 1
+          fi
+          mkdir -p data
+          printf '%s' "${{ secrets.KEY_SECRET }}" > data/key.secret
+          chmod 600 data/key.secret
+          echo "key.secret loaded from secret"
+
+      - name: Run operational tests
+        run: |
+          set -euo pipefail
+          SHA=$(git rev-parse HEAD)
+          python -m pytest -m operational -v --run-operational \
+            --junitxml=forensics/pytest_operational.xml \
+            --junit-prefix="R-682-operational-sha-${SHA}" \
+            || { echo "❌ operational tests FAILED"; exit 1; }
+
+      - name: Upload operational JUnit
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: junit-operational-${{ steps.sha.outputs.short }}
+          path: forensics/pytest_operational.xml
+          if-no-files-found: warn
