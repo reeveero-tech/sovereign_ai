@@ -491,19 +491,36 @@ class SolidMemoryStore:
             tmp_path.replace(path)
     
     def _encrypt_payload(self, payload: Dict, kind: str) -> str:
-        """تشفير الـ payload للتخزين"""
-        # استخدام التشفير السيادي
-        encoded = self.encoder.encode(payload, importance=0.5)
-        return encoded
+        """تشفير الـ payload للتخزين — قابل للعكس بالكامل.
+
+        R-682 (security/data-integrity): عقد المخزن الموثق هو تخزين "دائم،
+        مشفر، ومتكامل". المسار السابق استخدم encoder.encode (الذي هو فقداني
+        بالتصميم — يعيد الجوهر التقريبي) ففقدت الحمولات بنيتها، وأيضًا بتر
+        التشفير الكمي الحمولات الأطول من 64 بايت. الآن: التشفير السيادي
+        (crypto) القابل للعكس — البيانات تعود كما كُتبت عبر واجهة القراءة.
+        """
+        return self.encoder.crypto.encrypt(
+            json.dumps(payload, ensure_ascii=False).encode("utf-8"),
+            level="high",
+        )
     
     def _decrypt_payload(self, encrypted: str, kind: str) -> Dict:
-        """فك تشفير الـ payload"""
-        decoded = self.encoder.decode(encrypted)
-        if decoded and decoded.get("_decoded"):
-            # محاولة استرجاع البيانات
-            content = decoded.get("content", "")
-            return {"_decoded_content": content, "_fingerprint": decoded.get("_fingerprint")}
-        return {"_error": "فشل فك التشفير"}
+        """فك تشفير الـ payload — إرجاع الحمولة الأصلية كما كُتبت."""
+        decrypted = self.encoder.crypto.decrypt(encrypted)
+        if decrypted is None:
+            logger.error(f"R-682: فشل فك تشفير حمولة {kind}")
+            return {"_error": "فشل فك التشفير"}
+        try:
+            payload = json.loads(decrypted.decode("utf-8"))
+            if isinstance(payload, dict):
+                return payload
+            return {"_error": "حمولة غير قابلة للتفسير"}
+        except (UnicodeDecodeError, json.JSONDecodeError) as e:
+            # عناصر إرثية بالصيغة الفقدانية القديمة — لا انهيار
+            logger.warning(
+                f"R-682: حمولة {kind} بصيغة إرثية غير قابلة للفك الدقيق: {e}"
+            )
+            return {"_error": "صيغة إرثية"}
     
     def _extract_text_content(self, payload: Dict, kind: str) -> str:
         """استخراج النص من الـ payload للفهرسة"""

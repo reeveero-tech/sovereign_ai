@@ -174,11 +174,18 @@ class RansomwareDefense:
         if not self._load_state():
             raise RuntimeError(
                 "R-682 [SECURITY-FAIL]: phoenix state file exists but failed to "
-                "load (corrupt master_key_enc / invalid JSON / different "
+                "load (corrupt/missing master_key_enc / invalid JSON / different "
                 "sovereign key). Initialization REFUSED before threads, save, "
                 "or seed creation. Original file preserved untouched."
             )
-        self._save_state()
+        if not self._save_state():
+            # R-682 (security — fail-closed): المفتاح غير متين على القرص =
+            # لا خيوط ولا جاهزية ولا بذور معلنة
+            raise RuntimeError(
+                "R-682 [SECURITY-FAIL]: phoenix state could not be durably "
+                "saved (master key not durable on disk). Initialization "
+                "REFUSED before threads or readiness."
+            )
 
         # خلفيات الفينيق (بعد استقرار المفتاح)
         self._active = True
@@ -362,12 +369,16 @@ class RansomwareDefense:
                     "importance": item.get("_importance", 0)
                 })
             
-            # من الذاكرة الإجرائية
+            # من الذاكرة الإجرائية — R-682: بيانات كاملة قابلة للاستعادة
             procedural_items = store.query("procedural", min_importance=0.7, limit=20)
             for item in procedural_items:
                 critical.append({
                     "type": "procedural",
                     "name": item.get("name"),
+                    "description": item.get("description", ""),
+                    "trigger_patterns": item.get("trigger_patterns", []),
+                    "action_sequence": item.get("action_sequence", []),
+                    "parameters": item.get("parameters", {}),
                     "importance": item.get("_importance", 0)
                 })
         # TOLERATED: known-safe fallback — non-fatal diagnostic path (R-680)
@@ -740,8 +751,12 @@ class RansomwareDefense:
             # 1) فك تشفير البذرة الأساسية
             seed = self._find_latest_seed(resurrection_key)
             if not seed:
-                # قيامة من الرماد
-                return self._resurrect_from_ashes(resurrection_key)
+                # قيامة من الرماد — فشلها يترك النظام DEAD (لا مرحلة انتقالية معلقة)
+                result = self._resurrect_from_ashes(resurrection_key)
+                if not result.get("success"):
+                    self.phoenix_phase = PhoenixPhase.DEAD
+                    self.resurrection_level = RESURRECTION_LEVEL_NONE
+                return result
             
             # 2) إعادة بناء النواة — النجاح يُثبت بالبيانات المستعادة فعليًا
             restored = self._restore_from_seed(seed)
@@ -862,23 +877,44 @@ class RansomwareDefense:
                 )
                 return False
 
-            # الكتابة في مخزن التطبيق الفعلي — العناصر الحرجة الدلالية
+            # الكتابة في مخزن التطبيق الفعلي — العناصر الحرجة (دلالية + إجرائية)
             restored_items = 0
             critical_items = essential.get("critical_memory") or []
             if critical_items:
                 from ..store import get_store
                 store = get_store()
                 for item in critical_items:
-                    if item.get("type") != "semantic" or not item.get("concept"):
-                        continue
-                    store.save_semantic(
-                        concept=item["concept"],
-                        definition=item.get("definition", ""),
-                        aliases=item.get("aliases") or [],
-                        related_concepts=item.get("related_concepts") or {},
-                        confidence=item.get("confidence", 0.5),
-                    )
-                    restored_items += 1
+                    if item.get("type") == "semantic" and item.get("concept"):
+                        store.save_semantic(
+                            concept=item["concept"],
+                            definition=item.get("definition", ""),
+                            aliases=item.get("aliases") or [],
+                            related_concepts=item.get("related_concepts") or {},
+                            confidence=item.get("confidence", 0.5),
+                        )
+                        restored_items += 1
+                    elif item.get("type") == "procedural" and item.get("name"):
+                        store.save_procedural(
+                            name=item["name"],
+                            description=item.get("description", ""),
+                            trigger_patterns=item.get("trigger_patterns") or [],
+                            action_sequence=item.get("action_sequence") or [],
+                            parameters=item.get("parameters") or {},
+                            importance=item.get("importance", 0.8),
+                        )
+                        restored_items += 1
+
+            # R-682 (security — صدق النتيجة): لا نجاح عام دون أي بيانات مستعادة
+            # فعليًا — بذرة بلا بيانات قابلة للاستعادة = فشل صريح، لا استعادة
+            # "مكتملة" تدّعي ما لم يحدث.
+            if restored_items == 0:
+                logger.error(
+                    "R-682 [SECURITY-FAIL]: restoration restored ZERO items — "
+                    "no restorable data in seed (empty critical_memory or "
+                    "unsupported item types). Restoration REFUSED (no success "
+                    "declared for an unperformed restoration)."
+                )
+                return False
 
             # سجل تدقيق داخلي (إثبات قابل للفحص — لا بديلًا عن المخزن)
             self.restored_seeds[seed.id] = json.loads(json.dumps(essential))
@@ -1101,7 +1137,10 @@ class RansomwareDefense:
 
             # كتابة ذرّية متينة: ملف مؤقت في نفس المجلد + fsync + استبدال
             # ذري + fsync للمجلد — فشل في أي خطوة يترك الملف الأصلي كما هو.
-            tmp_path = PHOENIX_STATE_FILE.with_suffix(".json.tmp")
+            # ملف مؤقت فريد لكل عملية (لا اسم مشترك بين عمليات الحفظ المتزامنة)
+            tmp_path = PHOENIX_STATE_FILE.with_name(
+                f"{PHOENIX_STATE_FILE.name}.{os.getpid()}.{time.time_ns()}.tmp"
+            )
             with open(tmp_path, 'w', encoding='utf-8') as f:
                 json.dump(state, f, ensure_ascii=False, indent=2)
                 f.flush()
@@ -1132,8 +1171,19 @@ class RansomwareDefense:
                     self.resurrection_level = state.get("resurrection_level", 0)
                     self.is_transforming = state.get("is_transforming", False)
                     # R-682 (security): استمرارية مفتاح القيامة عبر إعادة التشغيل
-                    # بدونها لا يمكن فك أي بذرة من القرص بعد إعادة التشغيل إطلاقًا
+                    # بدونها لا يمكن فك أي بذرة من القرص بعد إعادة التشغيل إطلاقًا.
+                    # غيابه في حالة موجودة = فشل صريح: صلاحية JSON وحدها لا تجعل
+                    # الحالة قابلة للاسترجاع — المتابعة بمفتاح جديد تستبدل الحالة
+                    # صامتًا وتتيه البذور القديمة نهائيًا.
                     master_enc = state.get("master_key_enc")
+                    if not master_enc:
+                        logger.critical(
+                            "R-682 [SECURITY-FAIL]: state file exists WITHOUT "
+                            "master_key_enc — key continuity impossible. "
+                            "Initialization REFUSED; original file preserved "
+                            "(no silent replacement)."
+                        )
+                        return False
                     if master_enc:
                         restored = self._unwrap_master_key(master_enc)
                         if restored:

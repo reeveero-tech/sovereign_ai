@@ -204,15 +204,23 @@ class TestPhoenixResurrectionContinuity:
         obj.master_resurrection_key = obj._generate_master_key()
         obj._state_master_key_invalid = False
         obj._state_master_key_enc_original = None
-        obj._extract_critical_items = lambda: []  # تبسيط حجم البيانات (ليس المسار الأمني)
         return obj
 
     def _setup_dirs(self, tmp_path, monkeypatch):
         import backend.memory.defense.ransomware as rw
+        import backend.memory.store as store_mod
         seeds_dir = tmp_path / "seeds"
         seeds_dir.mkdir()
         monkeypatch.setattr(rw, "PHOENIX_SEEDS_DIR", seeds_dir)
         monkeypatch.setattr(rw, "PHOENIX_STATE_FILE", tmp_path / "phoenix_state.json")
+        # عزل المخزن (واجهة get_store نفسها) بسجل مميز قابل للاستعادة
+        iso = _IsolatedStore()
+        iso.save_semantic(
+            concept="continuity_proof_record",
+            definition="سجل استمرارية",
+            confidence=0.9,
+        )
+        monkeypatch.setattr(store_mod, "get_store", lambda: iso)
         return rw
 
     def _make_seed(self, essential=None):
@@ -667,6 +675,206 @@ class TestRealInitSecurity:
             "تلاعب 5→6 الموضعي (JSON يبقى صالحًا) يجب أن يُرفض بفشل مصادقة GCM"
         matches = [r for r in caplog.records if "GCM authentication FAILED" in r.getMessage()]
         assert matches
+
+    def _make_real_store(self, store_dir, monkeypatch):
+        """SolidMemoryStore حقيقي (لا بديل قاموسي) بملفات معزولة تحت tmp_path."""
+        import backend.memory.store as store_mod
+        from backend.memory.store import SolidMemoryStore
+        from backend.memory.encoding import get_encoder
+        store_dir.mkdir(parents=True, exist_ok=True)
+        file_map = {"index": store_dir / "index.json"}
+        for kind in store_mod.MemoryKind:
+            file_map[kind.value] = store_dir / f"{kind.value}.json"
+        monkeypatch.setattr(store_mod, "FILE_MAP", file_map)
+        monkeypatch.setattr(store_mod, "get_core", self._mock_core)
+        monkeypatch.setattr(store_mod, "get_encoder", get_encoder)  # المشفر الحقيقي
+        return SolidMemoryStore()
+
+    def test_real_store_e2e_restoration(self, tmp_path, monkeypatch):
+        """إثبات الاستعادة عبر مخزن التطبيق الفعلي (SolidMemoryStore الحقيقي
+        بملفات معزولة) — لا بديل قاموسيًا: سجل مميز → بذرة → فقدان (مخزن
+        فارغ جديد) → إعادة تشغيل حقيقية → resurrect → السجل عاد عبر واجهة
+        القراءة المعتادة، وبعد إعادة فتح المخزن (إثبات استمرار على القرص)."""
+        store = _IsolatedStore()  # لا يُستخدم — فقط لتوافق _patch_env
+        rw = self._patch_env(tmp_path, monkeypatch, store)
+        import backend.memory.store as store_mod
+        concept = "sovereign_ai_r682_real_store_proof"
+        definition = "دليل استعادة عبر SolidMemoryStore الحقيقي"
+        # 1) المخزن الحقيقي الأول (ملفات معزولة) + السجل المميز
+        store1 = self._make_real_store(tmp_path / "store_a", monkeypatch)
+        monkeypatch.setattr(store_mod, "get_store", lambda: store1)
+        store1.save_semantic(concept=concept, definition=definition, confidence=0.95)
+        assert any(i.get("concept") == concept
+                   for i in store1.query("semantic", min_importance=0.7))
+        # 2) تهيئة حقيقية + بذرة تحمل السجل
+        first = rw.RansomwareDefense()
+        seed = first.create_phoenix_seed(reason="real-store-e2e")
+        assert seed is not None
+        carried = [i for i in seed.essential_memory.get("critical_memory", [])
+                   if i.get("concept") == concept]
+        assert carried, "البذرة يجب أن تحمل السجل المميز"
+        key = first.get_resurrection_key()
+        # 3) الفقدان: مخزن جديد فارغ تمامًا (ملفات جديدة) — البيانات ضاعت
+        store2 = self._make_real_store(tmp_path / "store_b", monkeypatch)
+        monkeypatch.setattr(store_mod, "get_store", lambda: store2)
+        assert not store2.query("semantic", min_importance=0.7), "المخزن الجديد فارغ"
+        # 4) إعادة تشغيل حقيقية (بلا تحميل/حفظ يدوي) + قيامة عبر الواجهة العامة
+        restarted = rw.RansomwareDefense()
+        assert restarted.master_resurrection_key == first.master_resurrection_key
+        restarted.phoenix_phase = rw.PhoenixPhase.DEAD
+        result = restarted.resurrect(key)
+        assert result.get("success") is True, f"القيامة يجب أن تنجح: {result}"
+        # 5) الإثبات عبر واجهة القراءة المعتادة للمخزن الحقيقي
+        restored = [i for i in store2.query("semantic", min_importance=0.7)
+                    if i.get("concept") == concept]
+        assert restored, "السجل عاد عبر واجهة القراءة المعتادة للمخزن الحقيقي"
+        assert restored[0].get("definition") == definition
+        # 6) إعادة فتح المخزن من القرص — إثبات الاستمرار (لا ذاكرة فقط)
+        store3 = self._make_real_store(tmp_path / "store_b", monkeypatch)
+        reopened = [i for i in store3.query("semantic", min_importance=0.7)
+                    if i.get("concept") == concept]
+        assert reopened, "السجل مستمر على القرص — عاد بعد إعادة فتح المخزن"
+
+    def test_restore_empty_critical_memory_fails(self, tmp_path, monkeypatch):
+        """بذرة بلا بيانات قابلة للاستعادة → لا يُعلن نجاح استعادة (فشل صريح)."""
+        store = _IsolatedStore()
+        rw = self._patch_env(tmp_path, monkeypatch, store)
+        obj = rw.RansomwareDefense.__new__(rw.RansomwareDefense)
+        obj.core = self._mock_core()
+        obj.seeds = {}
+        obj.ashes = {}
+        obj.restored_seeds = {}
+        obj.master_resurrection_key = "c" * 128
+        from backend.memory.defense.ransomware import PhoenixSeed
+        seed = PhoenixSeed(
+            id="phoenix_seed_empty_001",
+            created_at=1000000.0,
+            core_fingerprint="deadbeef1234",
+            essential_memory={"core": {"last_hash": "x"}, "critical_memory": []},
+            resurrection_key="beef" * 16,
+            expires_at=1000000.0 + 604800,
+            phase="living",
+        )
+        assert obj._restore_from_seed(seed) is False, \
+            "لا يجوز إعلان نجاح استعادة دون أي بيانات مستعادة فعليًا"
+
+    def test_restore_procedural_item_restored(self, tmp_path, monkeypatch):
+        """عنصر إجرائي في البذرة يجب أن يُستعاد فعليًا في المخزن الحقيقي —
+        لا يُعلن نجاح عام مع تخطي البيانات المقصودة."""
+        store = _IsolatedStore()
+        rw = self._patch_env(tmp_path, monkeypatch, store)
+        import backend.memory.store as store_mod
+        store1 = self._make_real_store(tmp_path / "store_p", monkeypatch)
+        monkeypatch.setattr(store_mod, "get_store", lambda: store1)
+        store1.save_procedural(
+            name="sovereign_r682_skill",
+            description="مهارة إثبات الاستعادة الإجرائية",
+            trigger_patterns=["proof"],
+            action_sequence=["verify"],
+            importance=0.9,
+        )
+        assert any(i.get("name") == "sovereign_r682_skill"
+                   for i in store1.query("procedural", min_importance=0.7))
+        first = rw.RansomwareDefense()
+        seed = first.create_phoenix_seed(reason="procedural-restore")
+        assert seed is not None
+        carried = [i for i in seed.essential_memory.get("critical_memory", [])
+                   if i.get("type") == "procedural"]
+        assert carried, "البذرة يجب أن تحمل العنصر الإجرائي (ببياناته القابلة للاستعادة)"
+        key = first.get_resurrection_key()
+        # الفقدان: مخزن فارغ جديد
+        store2 = self._make_real_store(tmp_path / "store_q", monkeypatch)
+        monkeypatch.setattr(store_mod, "get_store", lambda: store2)
+        restarted = rw.RansomwareDefense()
+        restarted.phoenix_phase = rw.PhoenixPhase.DEAD
+        result = restarted.resurrect(key)
+        assert result.get("success") is True, f"القيامة يجب أن تنجح: {result}"
+        restored = [i for i in store2.query("procedural", min_importance=0.7)
+                    if i.get("name") == "sovereign_r682_skill"]
+        assert restored, \
+            "العنصر الإجرائي يجب أن يعود عبر واجهة القراءة المعتادة للمخزن الحقيقي"
+        assert restored[0].get("description") == "مهارة إثبات الاستعادة الإجرائية"
+
+    def test_state_missing_master_key_fails_init(self, tmp_path, monkeypatch):
+        """JSON صالح لكن master_key_enc محذوف → التهيئة تفشل (صلاحية JSON
+        وحدها لا تجعل الحالة قابلة للاسترجاع) والملف محفوظ دون تعديل."""
+        import json as _json
+        import pytest as _pytest
+        store = _IsolatedStore()
+        rw = self._patch_env(tmp_path, monkeypatch, store)
+        state_file = tmp_path / "phoenix_state.json"
+        state_file.write_text(_json.dumps({
+            "phoenix_phase": "dead",
+            "seeds_count": 1,
+        }), encoding="utf-8")
+        raw = state_file.read_bytes()
+        with _pytest.raises(RuntimeError, match="R-682"):
+            rw.RansomwareDefense()
+        assert state_file.read_bytes() == raw, \
+            "الملف محفوظ كاملًا — لا استبدال صامت بحالة جديدة تخفي فقدان المفتاح"
+
+    def test_init_save_failure_stops_init(self, tmp_path, monkeypatch):
+        """فشل حفظ الحالة الأولي يوقف التهيئة قبل الخيوط وإعلان الجاهزية."""
+        import pytest as _pytest
+        store = _IsolatedStore()
+        rw = self._patch_env(tmp_path, monkeypatch, store)
+        import os as _os
+        def _boom(src, dst):
+            raise OSError("replace exploded (injected)")
+        monkeypatch.setattr(_os, "replace", _boom)
+        with _pytest.raises(RuntimeError, match="R-682"):
+            rw.RansomwareDefense()
+
+    def test_sovereign_key_differs_real_init_fails(self, tmp_path, monkeypatch):
+        """مفتاح سيادة مختلف عبر التهيئة الحقيقية → فشل صريح + الملف محفوظ."""
+        import pytest as _pytest
+        store = _IsolatedStore()
+        rw = self._patch_env(tmp_path, monkeypatch, store)
+        first = rw.RansomwareDefense()  # يكتب الحالة بالمفتاح الأصلي
+        state_file = tmp_path / "phoenix_state.json"
+        assert state_file.exists()
+        raw = state_file.read_bytes()
+        monkeypatch.setattr(rw, "SOVEREIGN_KEY", "z" * 128)
+        with _pytest.raises(RuntimeError, match="R-682"):
+            rw.RansomwareDefense()
+        assert state_file.read_bytes() == raw, "الملف محفوظ دون تعديل"
+
+    def test_ash_failure_returns_dead_phase(self, tmp_path, monkeypatch):
+        """مفتاح صحيح، لا بذرة قابلة للاستعادة، رماد موجود → فشل + المرحلة
+        DEAD (لا مرحلة انتقالية معلقة) + الرماد محفوظ — بلا سجل نجاح."""
+        store = _IsolatedStore()
+        rw = self._patch_env(tmp_path, monkeypatch, store)
+        obj = rw.RansomwareDefense()
+        ash = MagicMock()
+        obj.ashes["ash_e2e"] = ash
+        obj.phoenix_phase = rw.PhoenixPhase.DEAD
+        key = obj.get_resurrection_key()
+        result = obj.resurrect(key)
+        assert result.get("success") is False, \
+            "لا نجاح معلن لاستعادة رماد غير منفذة"
+        assert obj.phoenix_phase == rw.PhoenixPhase.DEAD, \
+            "الفشل يجب أن يعيد النظام إلى DEAD — لا مرحلة RESURRECTING معلقة"
+        assert "ash_e2e" in obj.ashes, "الرماد محفوظ — لا مسح"
+        assert obj.last_resurrection is None or obj.last_resurrection.success is False, \
+            "لا سجل قيامة ناجح لعملية فاشلة"
+
+    def test_save_failure_before_replace_preserves_file_no_seed(self, tmp_path, monkeypatch):
+        """فشل الحفظ قبل الاستبدال: الملف السابق يبقى بايت-مطابقًا، ولا يُعلن
+        نجاح إنشاء بذرة (create_phoenix_seed يرفض)."""
+        import os as _os
+        store = _IsolatedStore()
+        rw = self._patch_env(tmp_path, monkeypatch, store)
+        obj = rw.RansomwareDefense()
+        state_file = tmp_path / "phoenix_state.json"
+        raw = state_file.read_bytes()
+        def _boom(src, dst):
+            raise OSError("replace exploded (injected)")
+        monkeypatch.setattr(_os, "replace", _boom)
+        assert obj._save_state() is False, "فشل الحفظ يجب أن يُعاد False"
+        assert state_file.read_bytes() == raw, \
+            "الملف السابق بايت-مطابق — الفشل قبل الاستبدال يتركه كما هو"
+        seed = obj.create_phoenix_seed(reason="save-failure-test")
+        assert seed is None, "لا يُعلن نجاح بذرة دون حفظ متين للحالة"
 
     def test_reset_preserve_seeds_keeps_master_key(self, tmp_path, monkeypatch):
         """reset(preserve_seeds=True) يجب ألا يولّد مفتاحًا جديدًا — توليده

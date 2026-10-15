@@ -363,8 +363,11 @@ class QuantumLikeEncryption:
             state_id, quantum_state = self._generate_quantum_state(data)
             
             # تشفير الطبقة الثانية بمفتاح رئيسي
+            # R-682 (bug fix): تكرار المفتاح بدل بتره — zip كان يبتر الحمولات
+            # الأطول من المفتاح (64 بايت) فساد بيانات صامت
             key = self.master_key
-            encrypted = bytes(a ^ b for a, b in zip(quantum_state, key[:len(quantum_state)]))
+            key_stream = (key * (len(quantum_state) // len(key) + 1))[:len(quantum_state)]
+            encrypted = bytes(a ^ b for a, b in zip(quantum_state, key_stream))
             
             result = {
                 "type": "quantum",
@@ -428,8 +431,9 @@ class QuantumLikeEncryption:
                 noise = bytes.fromhex(state["noise"])
                 key = self.master_key
                 
-                # فك التشفير
-                decrypted_quantum = bytes(a ^ b for a, b in zip(encrypted, key[:len(encrypted)]))
+                # فك التشفير (R-682: تكرار المفتاح بدل بتره — نفس إصلاح التشفير)
+                key_stream = (key * (len(encrypted) // len(key) + 1))[:len(encrypted)]
+                decrypted_quantum = bytes(a ^ b for a, b in zip(encrypted, key_stream))
                 decrypted = bytes(a ^ b for a, b in zip(decrypted_quantum, noise))
                 
                 return decrypted
