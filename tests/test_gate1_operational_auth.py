@@ -62,6 +62,9 @@ class TestOperationalAuth:
 
         # سكربت التحقق التشغيلي (subprocess — عملية جديدة)
         # يُحمّل التطبيق بالإعدادات الحقيقية (دون monkeypatch/reload)
+        # R-682 (جولة التشغيلية — أمر المستشار): المفتاحان يُمرَّران عبر
+        # متغيرات بيئة السب-بروسس — لا يُضمَّنان في مصدر السكربت نفسه، فلا
+        # يظهران في أي traceback أو رسالة إخفاق أو مخرجات pytest.
         script = (
             "import sys, os, json\n"
             f"sys.path.insert(0, {str(_REPO_ROOT / 'backend')!r})\n"
@@ -74,23 +77,25 @@ class TestOperationalAuth:
             "client = TestClient(app.app)\n"
             "results = {}\n"
             "try:\n"
-            f"    r = client.get('/api-key', params={{'master_key': {new_key!r}}})\n"
+            "    r = client.get('/api-key', params={'master_key': os.environ['TEST_NEW_KEY']})\n"
             "    results['new_key_status'] = r.status_code\n"
             "except Exception as e:\n"
             "    results['new_key_error'] = str(e)\n"
             "try:\n"
-            f"    r = client.get('/api-key', params={{'master_key': {old_key!r}}})\n"
+            "    r = client.get('/api-key', params={'master_key': os.environ['TEST_OLD_KEY']})\n"
             "    results['old_key_status'] = r.status_code\n"
             "except Exception as e:\n"
             "    results['old_key_error'] = str(e)\n"
             "print(json.dumps(results))\n"
         )
 
+        subprocess_env = {**os.environ, "TEST_NEW_KEY": new_key, "TEST_OLD_KEY": old_key}
         result = subprocess.run(
             [sys.executable, "-c", script],
             capture_output=True,
             text=True,
             cwd=str(_REPO_ROOT),
+            env=subprocess_env,
             timeout=120,
         )
 

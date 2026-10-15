@@ -179,16 +179,27 @@ jobs:
           pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Load KEY_SECRET from repository secret
+      # R-682 (جولة التشغيلية — أمر المستشار): السران يُمرَّران عبر env (لا
+      # استيفاء مباشر داخل run)، والملفات بـ umask 077 + printf، وقيمهما لا
+      # تُطبع أبدًا ولا تدخل أي artifact.
+      - name: Load keys from repository secrets (KEY_SECRET + KEY_OLD_SECRET)
+        env:
+          KEY_SECRET: ${{ secrets.KEY_SECRET }}
+          KEY_OLD_SECRET: ${{ secrets.KEY_OLD_SECRET }}
         run: |
-          if [ -z "${{ secrets.KEY_SECRET }}" ]; then
-            echo "❌ KEY_SECRET secret not configured — cannot run operational tests"
+          set -euo pipefail
+          if [ -z "${KEY_SECRET}" ] || [ -z "${KEY_OLD_SECRET}" ]; then
+            echo "❌ KEY_SECRET and KEY_OLD_SECRET secrets must both be configured"
+            echo "   KEY_SECRET     = current master key (data/key.secret)"
+            echo "   KEY_OLD_SECRET = old rotated key (data/key.secret.old_rotated_2026_10_14)"
+            echo "   — cannot run operational tests"
             exit 1
           fi
+          umask 077
           mkdir -p data
-          printf '%s' "${{ secrets.KEY_SECRET }}" > data/key.secret
-          chmod 600 data/key.secret
-          echo "key.secret loaded from secret"
+          printf '%s' "$KEY_SECRET" > data/key.secret
+          printf '%s' "$KEY_OLD_SECRET" > data/key.secret.old_rotated_2026_10_14
+          echo "key.secret + old_rotated loaded from secrets (values never printed)"
 
       - name: Run operational tests
         run: |
