@@ -495,6 +495,7 @@ class _IsolatedStore:
     def save_semantic(self, concept, definition, aliases=None,
                       related_concepts=None, examples=None, confidence=0.5):
         self.items[("semantic", concept)] = {
+            "_id": concept,
             "concept": concept,
             "definition": definition,
             "aliases": aliases or [],
@@ -512,6 +513,7 @@ class _IsolatedStore:
     def save_procedural(self, name, description, trigger_patterns,
                         action_sequence, parameters=None, importance=0.8):
         self.items[("procedural", name)] = {
+            "_id": name,
             "name": name,
             "description": description,
             "trigger_patterns": trigger_patterns,
@@ -1283,7 +1285,9 @@ class TestAshResurrection:
             "الموت يجب أن يُنشئ رمادًا فعليًا (المسار القديم كان كودًا ميتًا)"
         ash = next(iter(obj.ashes.values()))
         assert ash.original_id == original_hash
-        assert getattr(ash, "mac", ""), "الرماد يجب أن يحمل مصادقة (MAC)"
+        # مظروف GCM موثق (لا XOR) — الرماد بلا مصادقة يُرفض عند الاستعادة
+        assert ash.ash_data.startswith(b"ASHV2"), \
+            "الرماد يجب أن يكون مظروف AES-GCM موثقًا"
         # النسخة المشفرة مختلفة عن الأصل
         assert ash.ash_data != original
 
@@ -1331,7 +1335,7 @@ class TestAshResurrection:
         ash_id, ash = next(iter(obj.ashes.items()))
         # تلاعب: قلب بايت في بيانات الرماد (الوسم يبقى — هذا هو التلاعب)
         tampered = bytearray(ash.ash_data)
-        tampered[0] ^= 0xFF
+        tampered[20] ^= 0xFF  # داخل النص المشفر — يفشل وسم GCM
         ash.ash_data = bytes(tampered)
         core.blob_store.delete(original_hash)
         for f in seeds_dir.glob("*.enc"):
@@ -1342,9 +1346,9 @@ class TestAshResurrection:
         with caplog.at_level(logging.ERROR, logger="backend.memory.defense.ransomware"):
             result = obj.resurrect(key)
         assert result.get("success") is False, \
-            "الرماد المُلاعب به يجب ألا يُستعاد — فشل MAC"
-        matches = [r for r in caplog.records if "MAC" in r.getMessage()]
-        assert matches, "رفض التلاعب يجب أن يُسجَّل كفشل MAC صريح"
+            "الرماد المُلاعب به يجب ألا يُستعاد — فشل مصادقة GCM"
+        matches = [r for r in caplog.records if "GCM authentication FAILED" in r.getMessage()]
+        assert matches, "رفض التلاعب يجب أن يُسجَّل كفشل مصادقة GCM صريح"
         assert ash_id in obj.ashes, "الرماد المرفوض يبقى محفوظًا (لا مسح)"
 
     def test_encrypt_store_item_honest(self, tmp_path, monkeypatch, caplog):
@@ -1359,6 +1363,261 @@ class TestAshResurrection:
             "غير المنفذ يعيد False — لا يُعلن تشفير لم يحدث أبدًا"
         matches = [r for r in caplog.records if "NOT IMPLEMENTED" in r.getMessage()]
         assert matches, "عدم التنفيذ يُسجَّل صراحة (لا صمت ولا كذب)"
+
+
+# ============================================================
+# Part 1d: جولة 8 — لا نجاح لاستعادة ناقصة + إثبات بالقراءة المستقلة
+# ============================================================
+
+class TestAshResurrectionStrict:
+    """R-682 (جولة 8 — اعتراض advisor الرابع على بناء الرماد):
+    1) استعادة جزئية (رماد صالح + تالف) = لا success ولا REBORN — بلا بذرة ومع بذرة.
+    2) إثبات التخزين بالقراءة المستقلة: ملف تالف قائم تحت بصمة صحيحة يُكشف
+       ويُصلح (حذف + إعادة تخزين + تحقق قراءة) — لا نجاح شكلي.
+    3) المصادقة تُختبر بعد إثبات الحالة السليمة، مع إثبات عدم استدعاء
+       التخزين عند فشل المصادقة.
+    4) مسار حقيقي كامل مع SovereignCore فعلية (لا واجهة مفترضة)."""
+
+    def _env(self, tmp_path, monkeypatch, events=None):
+        import backend.memory.defense.ransomware as rw
+        import backend.memory.store as store_mod
+        from backend.memory.core import BlobStore
+        blob_dir = tmp_path / "blobs"
+        blob_dir.mkdir(exist_ok=True)
+        core = MagicMock()
+        core._last_hash = "a" * 64
+        core.get_statistics.return_value = {"index": {"total_events": 3}}
+        core.blob_store = BlobStore(blob_dir)
+        core.iterate_events = lambda limit=1000, **k: (events or [])
+        seeds_dir = tmp_path / "seeds"
+        seeds_dir.mkdir(exist_ok=True)
+        monkeypatch.setattr(rw, "PHOENIX_SEEDS_DIR", seeds_dir)
+        monkeypatch.setattr(rw, "PHOENIX_STATE_FILE", tmp_path / "phoenix_state.json")
+        monkeypatch.setattr(rw, "get_core", lambda: core)
+        monkeypatch.setattr(rw, "get_encoder", lambda: MagicMock())
+        monkeypatch.setattr(rw, "get_watcher", lambda: MagicMock())
+        iso = _IsolatedStore()
+        iso.save_semantic(concept="ash_strict_record", definition="سجل",
+                          confidence=0.9)
+        monkeypatch.setattr(store_mod, "get_store", lambda: iso)
+        import threading as _th
+        monkeypatch.setattr(_th, "Thread", _NoThreads)
+        return rw, core
+
+    def _two_blobs(self, core):
+        h1 = core.blob_store.put(b"valid_blob_payload_" * 6, compress=True)
+        h2 = core.blob_store.put(b"doomed_blob_payload_" * 6, compress=True)
+        core.iterate_events = lambda limit=1000, **k: [{"blob": h1}, {"blob": h2}]
+        return h1, h2
+
+    def test_partial_ash_restoration_no_reborn(self, tmp_path, monkeypatch):
+        """رماد صالح + رماد مُلاعب، بلا بذرة: المستعاد يُحصى لكن لا نجاح
+        ولا REBORN — والفاشل يبقى محفوظًا."""
+        rw, core = self._env(tmp_path, monkeypatch)
+        h1, h2 = self._two_blobs(core)
+        obj = rw.RansomwareDefense()
+        assert obj.initiate_death(reason="partial-test") is True
+        assert len(obj.ashes) == 2
+        # تلاعب في رماد واحد فقط
+        for ash in obj.ashes.values():
+            if ash.original_id == h2:
+                tampered = bytearray(ash.ash_data)
+                tampered[-3] ^= 0xFF  # داخل الوسم
+                ash.ash_data = bytes(tampered)
+        for f in (tmp_path / "seeds").glob("*.enc"):
+            f.unlink()
+        obj.seeds.clear()
+        result = obj.resurrect(obj.get_resurrection_key())
+        assert result.get("success") is False, \
+            f"استعادة ناقصة يجب ألا تنجح: {result}"
+        assert result.get("partial") is True
+        assert result.get("ashes_restored") == 1
+        assert result.get("ashes_failed") == 1
+        assert obj.phoenix_phase == rw.PhoenixPhase.DEAD, \
+            "لا REBORN لاستعادة ناقصة"
+        # الفاشل محفوظ — الصالح استُهلك فعلًا
+        assert len(obj.ashes) == 1
+        assert next(iter(obj.ashes.values())).original_id == h2
+
+    def test_seed_path_partial_ash_no_reborn(self, tmp_path, monkeypatch):
+        """بذرة سليمة + رماد مختلط: البذرة تستعاد لكن فك الرماد ناقص —
+        لا REBORN، والنتيجة تعكس الجزئية، والفاشل محفوظ."""
+        rw, core = self._env(tmp_path, monkeypatch)
+        h1, h2 = self._two_blobs(core)
+        obj = rw.RansomwareDefense()
+        assert obj.initiate_death(reason="seed-partial-test") is True
+        assert len(obj.ashes) == 2
+        for ash in obj.ashes.values():
+            if ash.original_id == h2:
+                tampered = bytearray(ash.ash_data)
+                tampered[-3] ^= 0xFF
+                ash.ash_data = bytes(tampered)
+        # البذرة تبقى (المسار الطبيعي: بذرة + رماد)
+        result = obj.resurrect(obj.get_resurrection_key())
+        assert result.get("success") is False, \
+            f"مسار البذرة مع رماد ناقص يجب ألا ينجح: {result}"
+        assert result.get("partial") is True
+        assert result.get("seed_restored") is True
+        assert result.get("ashes_failed") == 1
+        assert obj.phoenix_phase == rw.PhoenixPhase.DEAD, \
+            "لا REBORN لاستعادة ناقصة حتى مع بذرة سليمة"
+        assert len(obj.ashes) == 1  # الفاشل محفوظ
+
+    def test_ash_restore_corrupted_existing_blob(self, tmp_path, monkeypatch):
+        """ملف تالف قائم تحت البصمة الصحيحة: put يتجاوز الكتابة فيعيد
+        البصمة المتوقعة — النجاح الشكلي مرفوض. الإثبات بالقراءة المستقلة:
+        يُكشف التلف ويُصلح (حذف + إعادة تخزين + تحقق) والمحتوى يعود سليمًا."""
+        rw, core = self._env(tmp_path, monkeypatch)
+        original = b"corrupt_path_proof_payload_" * 7
+        h = core.blob_store.put(original, compress=True)
+        core.iterate_events = lambda limit=1000, **k: [{"blob": h}]
+        obj = rw.RansomwareDefense()
+        assert obj.initiate_death(reason="corrupt-test") is True
+        assert len(obj.ashes) == 1
+        # تلف الملف القائم (يبقى المسار موجودًا — put سيتجاوز الكتابة)
+        blob_file = core.blob_store._blob_path(h)
+        blob_file.write_bytes(b"CORRUPTED_GARBAGE_NOT_THE_BLOB")
+        for f in (tmp_path / "seeds").glob("*.enc"):
+            f.unlink()
+        obj.seeds.clear()
+        result = obj.resurrect(obj.get_resurrection_key())
+        assert result.get("success") is True, \
+            f"الإصلاح بعد كشف التلف يجب أن ينجح: {result}"
+        # الإثبات الفعلي: المحتوى المقروء من القرص سليم — لا نجاح شكلي
+        assert core.blob_store.get(h) == original, \
+            "الملف التالف يجب أن يُصلح فعلًا — قراءة مستقلة مطابقة"
+        assert core.blob_store.verify_content_hash(h)
+        assert len(obj.ashes) == 0  # استُهلك الرماد بعد إثبات فعلي
+
+    def test_tamper_rejected_without_storage(self, tmp_path, monkeypatch):
+        """إثبات بوابة المصادقة: الحالة السليمة تستعاد (تخزين يُستدعى)،
+        ثم التلاعب يُرفض قبل أي تخزين (لا استدعاء put للرماد المرفوض)."""
+        rw, core = self._env(tmp_path, monkeypatch)
+        h = core.blob_store.put(b"auth_gate_proof_" * 8, compress=True)
+        core.iterate_events = lambda limit=1000, **k: [{"blob": h}]
+        obj = rw.RansomwareDefense()
+        assert obj.initiate_death(reason="auth-test") is True
+        ash_id, ash = next(iter(obj.ashes.items()))
+
+        # 1) الحالة السليمة (ضابط): الاستعادة تعمل والتخزين يُستدعى
+        calls_before = {"n": 0}
+        real_put = core.blob_store.put
+        def counting_put(data, compress=True):
+            calls_before["n"] += 1
+            return real_put(data, compress=compress)
+        core.blob_store.put = counting_put
+        for f in (tmp_path / "seeds").glob("*.enc"):
+            f.unlink()
+        obj.seeds.clear()
+        ok = obj.resurrect(obj.get_resurrection_key())
+        assert ok.get("success") is True, f"الضابط: الرماد السليم يستعاد: {ok}"
+        assert calls_before["n"] >= 1, "الضابط: التخزين يجب أن يُستدعى للحالة السليمة"
+
+        # 2) التلاعب: رفض قبل أي تخزين (العداد لا يزيد بعد الرفض)
+        obj2 = rw.RansomwareDefense()
+        core.iterate_events = lambda limit=1000, **k: [{"blob": h}]
+        assert obj2.initiate_death(reason="auth-test-2") is True
+        ash2 = next(iter(obj2.ashes.values()))
+        tampered = bytearray(ash2.ash_data)
+        tampered[-3] ^= 0xFF
+        ash2.ash_data = bytes(tampered)
+        for f in (tmp_path / "seeds").glob("*.enc"):
+            f.unlink()
+        obj2.seeds.clear()
+        core.blob_store.delete(h)  # الأصل غير موجود — أي put لاحق لافت
+        calls_after = {"n": 0}
+        def strict_put(data, compress=True):
+            calls_after["n"] += 1
+            return real_put(data, compress=compress)
+        core.blob_store.put = strict_put
+        result = obj2.resurrect(obj2.get_resurrection_key())
+        assert result.get("success") is False
+        assert calls_after["n"] == 0, \
+            "الرماد المرفوض مصادقةً لا يجب أن يصل إلى التخزين أصلًا"
+        assert len(obj2.ashes) == 1  # محفوظ
+
+    def test_death_resurrection_real_core(self, tmp_path, monkeypatch):
+        """مسار حقيقي كامل مع SovereignCore فعلية — لا واجهة مفترضة:
+        الأحداث الحقيقية تحمل blobs فعلية، والموت يشفّرها، والقيامة من
+        الرماد تعيدها بنفس المحتوى."""
+        import backend.memory.defense.ransomware as rw
+        import backend.memory.store as store_mod
+        from backend.memory.core import SovereignCore
+
+        core_dir = tmp_path / "core"
+        core_dir.mkdir()
+        (core_dir / "blobs").mkdir()
+        core = SovereignCore(
+            log_file=core_dir / "ledger.jsonl",
+            blobs_dir=core_dir / "blobs",
+            index_file=core_dir / "index.json",
+            meta_file=core_dir / "meta.json",
+            integrity_file=core_dir / "integrity.json",
+        )
+        assert core._keyring is not None, "بيئة الاختبار توفر KeyRing نشطًا"
+
+        # حدثان حقيقيان → payload blobs حقيقية
+        core.append_event("phoenix::ash_test_1", {"data": "first_real_payload"}, user="test")
+        core.append_event("phoenix::ash_test_2", {"data": "second_real_payload"}, user="test")
+        event_blobs = [e["blob"] for e in core.iterate_events(limit=100)]
+        assert len(event_blobs) == 2, "الأحداث الحقيقية تحمل blobs فعلية"
+
+        seeds_dir = tmp_path / "seeds"
+        seeds_dir.mkdir(exist_ok=True)
+        monkeypatch.setattr(rw, "PHOENIX_SEEDS_DIR", seeds_dir)
+        monkeypatch.setattr(rw, "PHOENIX_STATE_FILE", tmp_path / "phoenix_state.json")
+        monkeypatch.setattr(rw, "get_core", lambda: core)
+        monkeypatch.setattr(rw, "get_encoder", lambda: MagicMock())
+        monkeypatch.setattr(rw, "get_watcher", lambda: MagicMock())
+        iso = _IsolatedStore()
+        iso.save_semantic(concept="real_core_record", definition="سجل", confidence=0.9)
+        monkeypatch.setattr(store_mod, "get_store", lambda: iso)
+        import threading as _th
+        monkeypatch.setattr(_th, "Thread", _NoThreads)
+
+        obj = rw.RansomwareDefense()
+        assert obj.initiate_death(reason="real-core-test") is True
+        # صدق الحماية: جزئية (عنصر مخزن واحد غير محمي — المسار غير منفذ)
+        assert obj.last_death_protection["complete"] is False
+        # 3 blobs: حدثا الاختبار + حدث بذرة الفينيق (يُنشأ قبل التشفير)
+        assert obj.last_death_protection["blobs_encrypted"] == 3
+        assert obj.last_death_protection["store_items_unprotected"] == 1
+        assert len(obj.ashes) == 3, "الرماد نشأ من الأحداث الحقيقية فعلًا"
+
+        # فقدان الأصول + إزالة البذور → مسار الرماد
+        original_contents = {h: core.blob_store.get(h) for h in event_blobs}
+        for h in event_blobs:
+            core.blob_store.delete(h)
+        for f in seeds_dir.glob("*.enc"):
+            f.unlink()
+        obj.seeds.clear()
+
+        result = obj.resurrect(obj.get_resurrection_key())
+        assert result.get("success") is True, f"القيامة من رماد حقيقي: {result}"
+        # الإثبات: كل blob عاد بنفس المحتوى الحرفي
+        for h in event_blobs:
+            assert core.blob_store.exists(h), f"البصمة {h[:12]}... يجب أن تعود"
+            assert core.blob_store.get(h) == original_contents[h], \
+                "المحتوى المستعاد يجب أن يطابق الأصل حرفيًا"
+
+    def test_initiate_death_honest_protection_reporting(self, tmp_path, monkeypatch):
+        """الحدث نفسه يحمل الأعداد الصادقة: لا ادعاء encrypted_items كامل،
+        بل blobs_encrypted + store_items_unprotected + protection_complete."""
+        rw, core = self._env(tmp_path, monkeypatch)
+        h = core.blob_store.put(b"honest_reporting_" * 5, compress=True)
+        core.iterate_events = lambda limit=1000, **k: [{"blob": h}]
+        obj = rw.RansomwareDefense()
+        assert obj.initiate_death(reason="honest-test") is True
+        death_calls = [c for c in core.append_event.call_args_list
+                       if c.kwargs.get("event_type") == "phoenix::death"
+                       or (c.args and c.args[0] == "phoenix::death")]
+        assert death_calls, "حدث الموت يجب أن يُسجل"
+        payload = death_calls[0].kwargs["payload"]
+        assert payload["blobs_encrypted"] == 1
+        assert payload["store_items_unprotected"] >= 1, \
+            "عنصر المخزن غير المحمي يُعلن صراحة لا يُخفى"
+        assert payload["protection_complete"] is False, \
+            "لا ادعاء حماية كاملة والمسار ناقص"
 
 
 # ============================================================
