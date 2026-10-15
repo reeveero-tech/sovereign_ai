@@ -147,18 +147,18 @@ else:
     CI_STATUS=$(echo "$CI_RUNS" | python3 -c "
 import sys, json
 runs = json.load(sys.stdin)
-target_sha = '$SHA'
+run_id = int('$CI_RUN_ID')
 for r in runs:
-    if r['headSha'] == target_sha:
+    if r['databaseId'] == run_id:
         print(r['status'])
         break
 ")
     CI_CONCLUSION=$(echo "$CI_RUNS" | python3 -c "
 import sys, json
 runs = json.load(sys.stdin)
-target_sha = '$SHA'
+run_id = int('$CI_RUN_ID')
 for r in runs:
-    if r['headSha'] == target_sha:
+    if r['databaseId'] == run_id:
         print(r['conclusion'])
         break
 ")
