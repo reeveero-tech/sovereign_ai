@@ -740,13 +740,32 @@ class SolidMemoryStore:
                     if payload.get("_error"):
                         # سجل مرفوض (تلاعب/تلف/إرثي) — لا يُعاد كبيانات
                         continue
-                    # R-682 (security): البصمة المحفوظة عند الكتابة يجب أن
-                    # تطابق بصمة الحمولة المفكوكة — وإلا فالتلاعب مكشوف
+                    # R-682 (security): بوابة البصمة فاشلة-مغلقة — تعذر حساب
+                    # البصمة أو غياب أي من البصمتين = رفض السجل مع تسجيل
+                    # السبب (لا فشل مفتوحًا يتجاوز التحقق)
                     try:
                         current_fp = self.encoder.fingerprint(payload)
-                    except Exception:
-                        current_fp = None
-                    if current_fp and item.fingerprint and current_fp != item.fingerprint:
+                    except Exception as e:
+                        logger.error(
+                            f"R-682 [SECURITY]: {kind} fingerprint computation "
+                            f"FAILED for {item_id} — record REJECTED "
+                            f"(fail-closed gate). exc={e}"
+                        )
+                        continue
+                    if not current_fp:
+                        logger.error(
+                            f"R-682 [SECURITY]: {kind} fingerprint unavailable "
+                            f"for {item_id} — record REJECTED (fail-closed gate)"
+                        )
+                        continue
+                    if not item.fingerprint:
+                        logger.error(
+                            f"R-682 [SECURITY]: {kind} stored fingerprint "
+                            f"MISSING for {item_id} — record REJECTED "
+                            f"(fail-closed gate)"
+                        )
+                        continue
+                    if current_fp != item.fingerprint:
                         logger.error(
                             f"R-682 [SECURITY]: {kind} payload FINGERPRINT "
                             f"MISMATCH for {item_id} — tampered record REJECTED"

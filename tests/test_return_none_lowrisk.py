@@ -688,8 +688,9 @@ class TestRealInitSecurity:
         matches = [r for r in caplog.records if "GCM authentication FAILED" in r.getMessage()]
         assert matches
 
-    def _make_real_store(self, store_dir, monkeypatch):
-        """SolidMemoryStore حقيقي (لا بديل قاموسي) بملفات معزولة تحت tmp_path."""
+    def _make_real_store(self, store_dir, monkeypatch, encoder=None):
+        """SolidMemoryStore حقيقي (لا بديل قاموسي) بملفات معزولة تحت tmp_path.
+        encoder=None → المفرد؛ أو مشفر محدد (لاختبار استمرارية المشتق)."""
         import backend.memory.store as store_mod
         from backend.memory.store import SolidMemoryStore
         from backend.memory.encoding import get_encoder
@@ -699,7 +700,10 @@ class TestRealInitSecurity:
             file_map[kind.value] = store_dir / f"{kind.value}.json"
         monkeypatch.setattr(store_mod, "FILE_MAP", file_map)
         monkeypatch.setattr(store_mod, "get_core", self._mock_core)
-        monkeypatch.setattr(store_mod, "get_encoder", get_encoder)  # المشفر الحقيقي
+        if encoder is None:
+            monkeypatch.setattr(store_mod, "get_encoder", get_encoder)
+        else:
+            monkeypatch.setattr(store_mod, "get_encoder", lambda: encoder)
         return SolidMemoryStore()
 
     def test_real_store_e2e_restoration(self, tmp_path, monkeypatch):
@@ -888,7 +892,7 @@ class TestRealInitSecurity:
         seed = obj.create_phoenix_seed(reason="save-failure-test")
         assert seed is None, "لا يُعلن نجاح بذرة دون حفظ متين للحالة"
 
-    def test_store_tamper_detected_on_reopen(self, tmp_path, monkeypatch):
+    def test_store_tamper_detected_on_reopen(self, tmp_path, monkeypatch, caplog):
         """تلاعب موضعي في نص حمولة مخزنة (يُبقي JSON صالحًا) ثم إعادة فتح
         المخزن وقراءته: يجب ألا تُقبل القيمة المعدلة صامتًا — إما كشف
         التلاعب (فشل مصادقة/بصمة) أو رفض العنصر، لا قبول صامت."""
@@ -914,6 +918,12 @@ class TestRealInitSecurity:
         assert items_data, "العنصر مخزَّن على القرص"
         item = items_data[0]
         enc_str = item["encrypted_payload"]
+        # قراءة الأصل قبل التعديل — يثبت أن السجل كان يُقرأ سليمًا
+        store_pre = self._make_real_store(tmp_path / "store_t", monkeypatch)
+        pre = [r for r in store_pre.query("semantic", min_importance=0.7)
+               if r.get("concept") == concept]
+        assert pre, "السجل الأصلي يجب أن يُقرأ سليمًا قبل التلاعب"
+        assert pre[0].get("definition") == "قيمة 5 الأصلية للإثبات"
         # تلاعب موضعي مقصود: قلب بايت النص المشفر المقابل لموضع '5' في
         # النص الصريح المعروف — يغيّرها إلى '6' مع بقاء JSON صالحًا تمامًا
         # (التشفير الطبقي XOR موضعي؛ لولا المصادقة لَقُبلت القيمة المعدلة)
@@ -941,19 +951,118 @@ class TestRealInitSecurity:
         envelope["d"] = _b64.b64encode(bytes(ct)).decode()
         item["encrypted_payload"] = _json.dumps(envelope)
         sem_file.write_text(_json.dumps(items_data), encoding="utf-8")
-        # إعادة فتح المخزن من القرص ثم القراءة المعتادة
+        # إعادة فتح المخزن من القرص بعد التلاعب ثم القراءة المعتادة
         store2 = self._make_real_store(tmp_path / "store_t", monkeypatch)
-        results = store2.query("semantic", min_importance=0.7)
-        # لا يجوز قبول قيمة معدلة صامتة: كل عنصر مقبول يجب أن يحمل بيانات
-        # سليمة (لا _error) — التلاعب إما مرفوض أو مكشوف صراحة
-        for r in results:
-            assert not r.get("_error") or "فشل" not in str(r.get("_error", "")) or True
-        clean = [r for r in results if not r.get("_error")]
-        # إن قُبل العنصر فلا بد أن يكشف التلاعب: قيمة معدلة أو بصمة غير مطابقة
-        # المطلوب: لا عنصر سليم-الشكل يحمل حمولة معدلة غير مكتشفة
-        for r in clean:
-            assert r.get("concept") != concept or r.get("definition") == "قيمة 5 الأصلية للإثبات", \
-                "الحمولة المعدلة قُبلت صامتة — لا مصادقة في تخزين المخزن"
+        caplog.clear()
+        with caplog.at_level(logging.ERROR, logger="backend.memory.store"):
+            results = store2.query("semantic", min_importance=0.7)
+        # 1) السجل المعدل مرفوض — لا يُعاد كبيانات سليمة
+        accepted = [r for r in results
+                    if r.get("concept") == concept and not r.get("_error")]
+        assert not accepted, \
+            "الحمولة المعدلة قُبلت صامتة — لا مصادقة في تخزين المخزن"
+        # 2) رفضه مُسجَّل كفشل مصادقة صريح
+        matches = [r for r in caplog.records
+                   if "GCM authentication FAILED" in r.getMessage()]
+        assert matches, "الرفض يجب أن يُسجَّل كفشل مصادقة GCM صريح"
+        # 3) سجله المشفر يبقى على القرص (دليل — لا حذف)
+        items_after = _json.loads(sem_file.read_text(encoding="utf-8"))
+        assert any(i.get("id") == item.get("id") for i in items_after), \
+            "السجل المشفر المعدل يبقى على القرص — دليل، لا حذف"
+
+    def test_fingerprint_gate_fail_closed(self, tmp_path, monkeypatch, caplog):
+        """بوابة البصمة لا تفشل مفتوحة: تعذر حساب البصمة أو غياب البصمة
+        المحفوظة = رفض السجل مع تسجيل السبب — لا إرجاعه دون تحقق."""
+        import backend.memory.store as store_mod
+        store = _IsolatedStore()
+        rw = self._patch_env(tmp_path, monkeypatch, store)
+        store1 = self._make_real_store(tmp_path / "store_fp", monkeypatch)
+        monkeypatch.setattr(store_mod, "get_store", lambda: store1)
+        store1.save_semantic(
+            concept="fp_gate_proof", definition="دليل بوابة البصمة", confidence=0.9,
+        )
+        # 1) حقن فشل حساب البصمة عند القراءة
+        def _boom(data):
+            raise RuntimeError("fingerprint computation exploded (injected)")
+        monkeypatch.setattr(store1.encoder, "fingerprint", _boom)
+        caplog.clear()
+        with caplog.at_level(logging.ERROR, logger="backend.memory.store"):
+            results = store1.query("semantic", min_importance=0.7)
+        assert not [r for r in results if r.get("concept") == "fp_gate_proof"], \
+            "تعذر حساب البصمة = رفض السجل — لا فشل مفتوح"
+        matches = [r for r in caplog.records if "fingerprint" in r.getMessage().lower()]
+        assert matches, "سبب الرفض (تعذر البصمة) يجب أن يُسجَّل صراحة"
+        # 2) غياب البصمة المحفوظة (عنصر بلا بصمة) = رفض بالسياسة نفسها
+        for item in store1._data.get("semantic", {}).values():
+            item.fingerprint = None
+        caplog.clear()
+        with caplog.at_level(logging.ERROR, logger="backend.memory.store"):
+            results2 = store1.query("semantic", min_importance=0.7)
+        assert not [r for r in results2 if r.get("concept") == "fp_gate_proof"], \
+            "غياب البصمة المحفوظة = رفض السجل — لا فشل مفتوح"
+
+    def test_restoration_preserves_all_payload_fields(self, tmp_path, monkeypatch):
+        """الاستعادة تحفظ كل حقول الحمولة المقصودة — لا يُحتسب العنصر
+        مستعادًا كاملًا إذا أُسقطت بعض حمولته (aliases/related/examples/
+        confidence + محفزات/تسلسل/معاملات الإجرائية)."""
+        store = _IsolatedStore()
+        rw = self._patch_env(tmp_path, monkeypatch, store)
+        import backend.memory.store as store_mod
+        concept = "full_fields_proof"
+        store1 = self._make_real_store(tmp_path / "store_f", monkeypatch)
+        monkeypatch.setattr(store_mod, "get_store", lambda: store1)
+        store1.save_semantic(
+            concept=concept,
+            definition="تعريف كامل الحقول",
+            aliases=["alias_a", "alias_b"],
+            related_concepts={"related_x": 0.7},
+            examples=["example_1", "example_2"],
+            confidence=0.88,
+        )
+        store1.save_procedural(
+            name="full_fields_skill",
+            description="مهارة كاملة الحقول",
+            trigger_patterns=["trigger_a", "trigger_b"],
+            action_sequence=["step_1", "step_2", "step_3"],
+            parameters={"param_x": 42},
+            importance=0.9,
+        )
+        first = rw.RansomwareDefense()
+        seed = first.create_phoenix_seed(reason="full-fields")
+        assert seed is not None
+        key = first.get_resurrection_key()
+        # الفقدان: مخزن فارغ جديد
+        store2 = self._make_real_store(tmp_path / "store_g", monkeypatch)
+        monkeypatch.setattr(store_mod, "get_store", lambda: store2)
+        restarted = rw.RansomwareDefense()
+        restarted.phoenix_phase = rw.PhoenixPhase.DEAD
+        result = restarted.resurrect(key)
+        assert result.get("success") is True, f"القيامة يجب أن تنجح: {result}"
+        # إعادة فتح المخزن من القرص ثم مقارنة كل الحقول المقصودة
+        store3 = self._make_real_store(tmp_path / "store_g", monkeypatch)
+        sem = [i for i in store3.query("semantic", min_importance=0.7)
+               if i.get("concept") == concept]
+        assert sem, "السجل الدلالي عاد"
+        it = sem[0]
+        assert it.get("definition") == "تعريف كامل الحقول"
+        assert it.get("aliases") == ["alias_a", "alias_b"], \
+            "الأسماء البديلة يجب أن تُستعاد — لا إسقاط حمولة"
+        assert it.get("related_concepts") == {"related_x": 0.7}, \
+            "العلاقات يجب أن تُستعاد — لا إسقاط حمولة"
+        assert it.get("examples") == ["example_1", "example_2"], \
+            "الأمثلة يجب أن تُستعاد — لا إسقاط حمولة"
+        assert it.get("confidence") == 0.88, "الثقة يجب أن تُستعاد"
+        proc = [i for i in store3.query("procedural", min_importance=0.7)
+                if i.get("name") == "full_fields_skill"]
+        assert proc, "المهارة الإجرائية عادت"
+        pr = proc[0]
+        assert pr.get("description") == "مهارة كاملة الحقول"
+        assert pr.get("trigger_patterns") == ["trigger_a", "trigger_b"], \
+            "المحفزات يجب أن تُستعاد — لا إسقاط حمولة"
+        assert pr.get("action_sequence") == ["step_1", "step_2", "step_3"], \
+            "تسلسل الإجراءات يجب أن يُستعاد — لا إسقاط حمولة"
+        assert pr.get("parameters") == {"param_x": 42}, \
+            "المعاملات يجب أن تُستعاد — لا إسقاط حمولة"
 
     def test_new_encoder_instance_key_continuity(self, tmp_path, monkeypatch):
         """استمرارية اشتقاق المفتاح: بيانات كتبها مشفّر تُفك بمشفّر جديد
@@ -968,10 +1077,16 @@ class TestRealInitSecurity:
             concept="key_continuity_proof", definition="دليل استمرارية المشتق",
             confidence=0.95,
         )
-        # مشفّر جديد كليًا (ليس get_encoder المفرد)
+        # مشفّر جديد كليًا (ليس get_encoder المفرد) — يُمرر للمساعد مباشرة
         fresh_encoder = SovereignEncoder()
-        monkeypatch.setattr(store_mod, "get_encoder", lambda: fresh_encoder)
-        store2 = self._make_real_store(tmp_path / "store_k", monkeypatch)
+        store2 = self._make_real_store(
+            tmp_path / "store_k", monkeypatch, encoder=fresh_encoder
+        )
+        # التوكيدات المطلوبة: المخزن الثاني يستخدم المشفر الجديد فعلًا
+        assert store2.encoder is fresh_encoder, \
+            "المخزن الثاني يجب أن يستخدم المشفر الجديد — لا المفرد"
+        assert store2.encoder is not store1.encoder, \
+            "المشفران مختلفان فعلًا — وإلا فالاختبار لا يثبت الاستمرارية"
         restored = [i for i in store2.query("semantic", min_importance=0.7)
                     if i.get("concept") == "key_continuity_proof"]
         assert restored, \
@@ -1044,14 +1159,15 @@ class TestRealInitSecurity:
         state_file = tmp_path / "phoenix_state.json"
         assert state_file.exists()
         import os as _os
-        calls = {"n": 0}
+        import stat as _stat
         real_fsync = _os.fsync
-        def _flaky(fd):
-            calls["n"] += 1
-            if calls["n"] >= 2:  # الأولى للملف المؤقت، الثانية للمجلد
+        def _dir_only_flaky(fd):
+            # يفشل فقط على واصف المجلد (مزامنة المجلد) — ملف الحالة يُزامن طبيعيًا
+            st = _os.fstat(fd)
+            if _stat.S_ISDIR(st.st_mode):
                 raise OSError("dir fsync exploded (injected)")
             return real_fsync(fd)
-        monkeypatch.setattr(_os, "fsync", _flaky)
+        monkeypatch.setattr(_os, "fsync", _dir_only_flaky)
         caplog.clear()
         with caplog.at_level(logging.ERROR, logger="backend.memory.defense.ransomware"):
             ok = obj._save_state()
@@ -1063,8 +1179,12 @@ class TestRealInitSecurity:
             "يجب توثيق أن الملف استُبدل لكن متانته لم تُؤكد — لا ادعاء تراجع لم يحدث"
         # الملف استُبدل فعلًا (المحتوى الجديد موجود) — ولا يُدّعى أنه كما كان
         assert state_file.exists()
+        content_before_seed = state_file.read_text(encoding="utf-8")
+        # إنشاء البذرة يفشل عند مزامنة المجلد تحديدًا (لا عند مزامنة الملف)
         seed = obj.create_phoenix_seed(reason="dir-fsync-failure")
         assert seed is None, "لا بذرة معلنة دون حفظ متين مؤكد"
+        assert state_file.read_text(encoding="utf-8") != content_before_seed, \
+            "محاولة البذرة وصلت لمرحلة الاستبدال فعلًا — الفشل عند تأكيد المتانة"
 
     def test_reset_preserve_seeds_keeps_master_key(self, tmp_path, monkeypatch):
         """reset(preserve_seeds=True) يجب ألا يولّد مفتاحًا جديدًا — توليده

@@ -365,6 +365,10 @@ class RansomwareDefense:
                     "definition": item.get("definition", ""),
                     "aliases": item.get("aliases", []),
                     "related_concepts": item.get("related_concepts", {}),
+                    # R-682: examples جزء من الحمولة المقصودة — إسقاطها =
+                    # استعادة ناقصة تُعلن نجاحًا (لا يحتسب العنصر مستعادًا
+                    # كاملًا إذا أُسقطت بعض حمولته)
+                    "examples": item.get("examples", []),
                     "confidence": item.get("confidence", 0.5),
                     "importance": item.get("_importance", 0)
                 })
@@ -894,6 +898,7 @@ class RansomwareDefense:
                             definition=item.get("definition", ""),
                             aliases=item.get("aliases") or [],
                             related_concepts=item.get("related_concepts") or {},
+                            examples=item.get("examples") or [],
                             confidence=item.get("confidence", 0.5),
                         )
                         restored_items += 1
