@@ -113,23 +113,29 @@ class TestPhoenixSeedDecryption:
         assert any("R-682" in r.getMessage() for r in caplog.records)
 
     def test_decrypt_seed_missing_required_field_rejected(self, caplog):
-        """RED: JSON صالح لكنه ينقصه حقل إلزامي → None + تسجيل (رفض صريح)."""
-        obj = self._make_defense()
-        seed = self._make_seed()
-        encrypted = obj._encrypt_seed(seed)
-        # فك التشفير اليدوي بالطبقتين ثم إعادة تشفير نسخة ناقصة الحقول
+        """RED: JSON صالح لكنه ينقصه حقل إلزامي → None + تسجيل (رفض صريح).
+
+        تُصنع البذرة بصيغة إرثية v1 (يدويًا) بعد حذف الحقل — لأن الغرض
+        اختبار الرفض عند غياب الحقل، لا صيغة المظروف.
+        """
         import base64 as _b64
         import hashlib as _hl
+        import json as _json
         from backend.config import SOVEREIGN_KEY as _SK
+        obj = self._make_defense()
+        seed = self._make_seed()
+        payload = _json.dumps({
+            "id": seed.id,
+            "created_at": seed.created_at,
+            "core_fingerprint": seed.core_fingerprint,
+            "essential_memory": seed.essential_memory,
+            "expires_at": seed.expires_at,
+            "phase": seed.phase,
+            # resurrection_key محذوف عمدًا — حقل إلزامي
+        }, ensure_ascii=False).encode()
         key1 = _hl.sha256(_SK.encode()).digest()
         key2 = _hl.sha256(seed.resurrection_key.encode()).digest()
-        raw = _b64.b64decode(encrypted)
-        layer1 = bytes(a ^ b for a, b in zip(raw, key2 * (len(raw) // 32 + 1)))
-        plain = bytes(a ^ b for a, b in zip(layer1, key1 * (len(layer1) // 32 + 1)))
-        parsed = json.loads(plain.decode("utf-8"))
-        del parsed["resurrection_key"]  # حذف حقل إلزامي
-        tampered_plain = json.dumps(parsed).encode("utf-8")
-        l1 = bytes(a ^ b for a, b in zip(tampered_plain, key1 * (len(tampered_plain) // 32 + 1)))
+        l1 = bytes(a ^ b for a, b in zip(payload, key1 * (len(payload) // 32 + 1)))
         l2 = bytes(a ^ b for a, b in zip(l1, key2 * (len(l1) // 32 + 1)))
         tampered_encrypted = _b64.b64encode(l2)
         with caplog.at_level(logging.ERROR, logger="backend.memory.defense.ransomware"):
@@ -167,6 +173,162 @@ class TestPhoenixSeedDecryption:
 
 
 # ============================================================
+# Part 3: استمرارية القيامة + نزاهة البذرة (RED → GREEN)
+# ============================================================
+
+class TestPhoenixResurrectionContinuity:
+    """R-682 (security): الاستعادة عبر الواجهة العامة بعد إعادة التشغيل
+    + رفض التلاعب الذي يُبقي JSON صالحًا (MAC)."""
+
+    def _make_core(self):
+        core = MagicMock()
+        core._last_hash = "a" * 64
+        core.get_statistics.return_value = {"index": {"total_events": 3}}
+        return core
+
+    def _new_defense(self, monkeypatch):
+        import backend.memory.defense.ransomware as rw
+        obj = rw.RansomwareDefense.__new__(rw.RansomwareDefense)
+        obj.core = self._make_core()
+        obj.seeds = {}
+        obj.ashes = {}
+        obj.phoenix_phase = rw.PhoenixPhase.LIVING
+        obj.resurrection_level = 0
+        obj.is_transforming = False
+        obj.last_resurrection = None
+        obj.master_resurrection_key = obj._generate_master_key()
+        obj._extract_critical_items = lambda: []  # تبسيط حجم البيانات (ليس المسار الأمني)
+        return obj
+
+    def _setup_dirs(self, tmp_path, monkeypatch):
+        import backend.memory.defense.ransomware as rw
+        seeds_dir = tmp_path / "seeds"
+        seeds_dir.mkdir()
+        monkeypatch.setattr(rw, "PHOENIX_SEEDS_DIR", seeds_dir)
+        monkeypatch.setattr(rw, "PHOENIX_STATE_FILE", tmp_path / "phoenix_state.json")
+        return rw
+
+    def test_resurrect_via_public_interface_after_restart(self, tmp_path, monkeypatch):
+        """RED: إنشاء بذرة → إعادة تشغيل (مثيل جديد) → resurrect() العام يجب أن ينجح.
+
+        عقد المفاتيح الحالي مكسور: master_resurrection_key يُولّد عشوائيًا لكل مثيل
+        ولا يُخزَّن — بعد إعادة التشغيل لا يمكن فك أي بذرة من القرص إطلاقًا.
+        """
+        import hashlib as _hl
+        rw = self._setup_dirs(tmp_path, monkeypatch)
+        # 1) مثيل A: إنشاء بذرة حقيقية عبر المسار العام
+        a = self._new_defense(monkeypatch)
+        seed = a.create_phoenix_seed(reason="continuity-test")
+        assert seed is not None
+        seed_file = tmp_path / "seeds" / f"{seed.id}.enc"
+        assert seed_file.exists(), "البذرة يجب أن تُكتب إلى القرص"
+        a._save_state()  # حفظ الحالة
+        # 2) مثيل B جديد (إعادة تشغيل) — يفقد الذاكرة، يسترجع المفتاح من الحالة
+        b = self._new_defense(monkeypatch)
+        b._load_state()
+        assert b.master_resurrection_key == a.master_resurrection_key, \
+            "المفتاح الرئيسي يجب أن يستمر عبر إعادة التشغيل (استمرارية عقد المفاتيح)"
+        # 3) الاستعادة عبر الواجهة العامة
+        from backend.config import SOVEREIGN_KEY
+        b.phoenix_phase = rw.PhoenixPhase.DEAD
+        verification_key = _hl.sha256(
+            f"{SOVEREIGN_KEY}:{b.master_resurrection_key}".encode()
+        ).hexdigest()
+        result = b.resurrect(verification_key)
+        assert result.get("success") is True, \
+            f"القيامة عبر الواجهة العامة يجب أن تنجح بعد إعادة التشغيل: {result}"
+        assert b.phoenix_phase == rw.PhoenixPhase.REBORN
+
+    def test_tamper_valid_json_rejected(self, tmp_path, monkeypatch, caplog):
+        """RED: تلاعب يغيّر قيمة داخل essential_memory ويُبقي JSON صالحًا
+        يجب أن يُرفض (MAC) — التشفير XOR متكرر بلا مصادقة يسمح به اليوم.
+        """
+        import base64 as _b64
+        import hashlib as _hl
+        import json as _json
+        from backend.config import SOVEREIGN_KEY as _SK
+        rw = self._setup_dirs(tmp_path, monkeypatch)
+        obj = self._new_defense(monkeypatch)
+        seed = None
+        # بذرة بقيمة رقمية معروفة داخل essential_memory
+        from backend.memory.defense.ransomware import PhoenixSeed
+        seed = PhoenixSeed(
+            id="phoenix_seed_tamper_001",
+            created_at=1000000.0,
+            core_fingerprint="deadbeef1234",
+            essential_memory={"core": {"integrity_count": 5}},
+            resurrection_key="beef" * 16,
+            expires_at=1000000.0 + 604800,
+            phase="living",
+        )
+        encrypted = obj._encrypt_seed(seed)
+        # فك المظروف يدويًا — الصيغة الجديدة يجب أن تكون مظروفًا مُعايَرًا (v2) بـ MAC
+        env = _json.loads(_b64.b64decode(encrypted).decode("utf-8"))
+        assert env.get("v") == 2, "الصيغة يجب أن تحمل مظروفًا بإصدار + MAC"
+        assert "m" in env, "المظروف يجب أن يحمل MAC"
+        inner = bytearray(_b64.b64decode(env["d"]))
+        # موضع القيمة '5' في النص الصريح
+        key2 = _hl.sha256(seed.resurrection_key.encode()).digest()
+        key1 = _hl.sha256(_SK.encode()).digest()
+        layer1 = bytes(x ^ y for x, y in zip(inner, key2 * (len(inner) // 32 + 1)))
+        plain = bytes(x ^ y for x, y in zip(layer1, key1 * (len(layer1) // 32 + 1)))
+        target = b'"integrity_count": 5'
+        idx = plain.find(target)
+        assert idx >= 0, "القيمة المستهدفة يجب أن تكون في النص الصريح"
+        pos = idx + len(b'"integrity_count": ')  # موضع '5'
+        # تغيير '5' → '6' في النص الصريح عبر تعديل النص المشفر (JSON يبقى صالحًا)
+        inner[pos] ^= ord("5") ^ ord("6")
+        env["d"] = _b64.b64encode(bytes(inner)).decode()
+        # لا يُعاد حساب MAC — هذا تلاعب
+        tampered = _b64.b64encode(_json.dumps(env).encode())
+        with caplog.at_level(logging.ERROR, logger="backend.memory.defense.ransomware"):
+            result = obj._decrypt_seed(tampered, resurrection_key=seed.resurrection_key)
+        assert result is None, \
+            "البذرة المُلاعب بها (JSON صالح، قيمة مغيرة) يجب أن تُرفض — MAC"
+        assert any("MAC" in r.getMessage() for r in caplog.records), \
+            "رفض التلاعب يجب أن يُسجّل صراحة كفشل MAC"
+
+    def test_legacy_v1_seed_decrypts_with_warning(self, tmp_path, monkeypatch, caplog):
+        """سياسة البيانات الإرثية الموثقة: بذرة v1 (بلا MAC) تُفك مع تحذير صريح
+        أن النزاهة غير قابلة للتحقق."""
+        import base64 as _b64
+        import hashlib as _hl
+        import json as _json
+        from backend.config import SOVEREIGN_KEY as _SK
+        rw = self._setup_dirs(tmp_path, monkeypatch)
+        obj = self._new_defense(monkeypatch)
+        from backend.memory.defense.ransomware import PhoenixSeed
+        seed = PhoenixSeed(
+            id="phoenix_seed_legacy_001",
+            created_at=1000000.0,
+            core_fingerprint="deadbeef1234",
+            essential_memory={"core": {"last_hash": "x"}},
+            resurrection_key="abcd" * 16,
+            expires_at=1000000.0 + 604800,
+            phase="living",
+        )
+        # تشفير بالصيغة الإرثية v1 (خام — بلا مظروف)
+        payload = _json.dumps({
+            "id": seed.id, "created_at": seed.created_at,
+            "core_fingerprint": seed.core_fingerprint,
+            "essential_memory": seed.essential_memory,
+            "resurrection_key": seed.resurrection_key,
+            "expires_at": seed.expires_at, "phase": seed.phase,
+        }, ensure_ascii=False).encode()
+        key1 = _hl.sha256(_SK.encode()).digest()
+        key2 = _hl.sha256(seed.resurrection_key.encode()).digest()
+        l1 = bytes(x ^ y for x, y in zip(payload, key1 * (len(payload) // 32 + 1)))
+        l2 = bytes(x ^ y for x, y in zip(l1, key2 * (len(l1) // 32 + 1)))
+        legacy_encrypted = _b64.b64encode(l2)
+        with caplog.at_level(logging.WARNING, logger="backend.memory.defense.ransomware"):
+            result = obj._decrypt_seed(legacy_encrypted, resurrection_key=seed.resurrection_key)
+        assert result is not None, "البذرة الإرثية v1 يجب أن تُفك (سياسة موثقة)"
+        assert result.id == seed.id
+        assert any("legacy" in r.getMessage().lower() for r in caplog.records), \
+            "تحذير صريح: بذرة إرثية بلا MAC — النزاهة غير قابلة للتحقق"
+
+
+# ============================================================
 # Part 2: المواقع منخفضة الخطورة — اختبارات سلوكية
 # ============================================================
 
@@ -180,6 +342,13 @@ class TestNexusLifecycleSites:
         monkeypatch.setattr(lc, "_LAST_START_TIME", 0.0)
         return lc
 
+    def _assert_logged(self, caplog, expected_msg):
+        matches = [r for r in caplog.records
+                   if r.name == "backend.compat.nexus_lifecycle"
+                   and expected_msg in r.getMessage()]
+        assert matches, \
+            f"يجب أن يُسجَّل من المسجّل الصحيح رسالة تحتوي '{expected_msg}'"
+
     def test_engine_init_failure_returns_none_logged(self, monkeypatch, caplog):
         lc = self._reset(monkeypatch)
         # حقن فشل في get_engine
@@ -187,11 +356,12 @@ class TestNexusLifecycleSites:
         def _boom():
             raise RuntimeError("engine init exploded (injected)")
         monkeypatch.setattr(engine_mod, "get_engine", _boom)
+        caplog.clear()  # إزالة سجلات التهيئة
         with caplog.at_level(logging.ERROR, logger="backend.compat.nexus_lifecycle"):
             result = asyncio.run(lc.ensure_nexus_running_async())
         assert result is None
-        assert any("R-682" in r.getMessage() for r in caplog.records), \
-            "فشل تهيئة المحرك يجب أن يُسجَّل (لا صمت)"
+        self._assert_logged(caplog, "R-682")
+        self._assert_logged(caplog, "engine init exploded")
 
     def test_component_init_failure_returns_none_logged(self, monkeypatch, caplog):
         lc = self._reset(monkeypatch)
@@ -205,11 +375,21 @@ class TestNexusLifecycleSites:
         def _boom2():
             raise RuntimeError("component init exploded (injected)")
         monkeypatch.setattr(nexus_main, "initialize_nexus", _boom2)
+        caplog.clear()
         with caplog.at_level(logging.ERROR, logger="backend.compat.nexus_lifecycle"):
             result = asyncio.run(lc.ensure_nexus_running_async())
         assert result is None
-        assert any("R-682" in r.getMessage() for r in caplog.records), \
-            "فشل تهيئة المكونات يجب أن يُسجَّل (لا صمت)"
+        self._assert_logged(caplog, "R-682")
+        self._assert_logged(caplog, "component init exploded")
+
+    def test_success_path_running_engine_returned(self, monkeypatch):
+        """المسار السليم: محرك يعمل → يُعاد كما هو."""
+        lc = self._reset(monkeypatch)
+        engine = MagicMock()
+        engine._running = True
+        monkeypatch.setattr(lc, "_ENGINE", engine)
+        result = asyncio.run(lc.ensure_nexus_running_async())
+        assert result is engine
 
 
 class TestNexusRecommendationsSite:
@@ -221,35 +401,75 @@ class TestNexusRecommendationsSite:
             raise RuntimeError("recommendations engine exploded (injected)")
         monkeypatch.setattr(engine_mod, "get_engine", _boom)
         from backend.compat import nexus_recommendations as rec
+        caplog.clear()
         with caplog.at_level(logging.ERROR, logger="backend.compat.nexus_recommendations"):
             result = rec.get_recommendation_engine()
         assert result is None
-        assert any("R-682" in r.getMessage() for r in caplog.records)
+        matches = [r for r in caplog.records
+                   if r.name == "backend.compat.nexus_recommendations"
+                   and "R-682" in r.getMessage()
+                   and "recommendations engine exploded" in r.getMessage()]
+        assert matches, "يجب تسجيل الرسالة المحقونة من المسجّل الصحيح"
+
+    def test_success_path_recommender_returned(self, monkeypatch):
+        """المسار السليم: مكوّن recommender مسجل → يُعاد كما هو."""
+        import nexus.core.engine as engine_mod
+        sentinel = object()
+        engine = MagicMock()
+        engine.get_component.return_value = sentinel
+        monkeypatch.setattr(engine_mod, "get_engine", lambda: engine)
+        from backend.compat import nexus_recommendations as rec
+        result = rec.get_recommendation_engine()
+        assert result is sentinel
 
 
 class TestEvolutionMutationSite:
     """backend/memory/biological/evolution.py:411 — فشل إجراء طفرة في التطور."""
 
     def _make_evolution(self):
+        """حالة سليمة كاملة الحد الأدنى (ليست كائنًا ناقص التهيئة)."""
         from backend.memory.biological.evolution import MemoryEvolution
         evo = MemoryEvolution.__new__(MemoryEvolution)
-        # الحد الأدنى الذي يلمسه معالج الاستثناء
+        evo.genome = {}                    # جينوم صالح (فارغ — الطفرة تُنشئ مفاهيم جديدة)
+        evo.current_generation = 1
         evo.mutations = []
+        evo.store = MagicMock()            # مخزن صالح
         evo._save_mutation = lambda m: None
         evo.core = type("MockCore", (), {"append_event": lambda *a, **k: None})()
         return evo
 
-    def test_mutation_failure_logged_and_returns_none(self, caplog):
-        """فشل الطفرة (حقن خطأ) → None + تسجيل استثناء + طفرة فاشلة في السجل."""
+    def test_mutation_success_path(self):
+        """المسار السليم: طفرة على مفهوم → مفهوم جديد + طفرة ناجحة في السجل."""
+        from backend.memory.biological.evolution import MUTATION_TYPE_GENERALIZE
         evo = self._make_evolution()
-        with caplog.at_level(logging.ERROR, logger="backend.memory.biological.evolution"):
-            result = evo.mutate_concept("nonexistent_concept")
-        assert result is None
-        assert any("R-682" in r.getMessage() for r in caplog.records), \
-            "فشل الطفرة يجب أن يُسجَّل (لا صمت)"
-        # الطفرة الفاشلة تُسجَّل في سجل الطفرات
+        result = evo.mutate_concept("sovereignty", mutation_type=MUTATION_TYPE_GENERALIZE)
+        assert result is not None, "الطفرة السليمة يجب أن تُنتج مفهومًا"
         assert len(evo.mutations) == 1
-        assert evo.mutations[0].success is False
+        assert evo.mutations[0].success is True
+        assert len(evo.genome) == 1  # المفهوم الجديد أُنشئ فعلاً
+
+    def test_mutation_failure_logged_and_returns_none(self, monkeypatch, caplog):
+        """حقن فشل مستهدف في الاعتماد المقصود (_save_mutation) →
+        None + تسجيل استثناء + طفرة فاشلة في السجل (لا صمت)."""
+        evo = self._make_evolution()
+        def _boom(mutation):
+            raise RuntimeError("save_mutation exploded (injected)")
+        monkeypatch.setattr(evo, "_save_mutation", _boom)
+        from backend.memory.biological.evolution import MUTATION_TYPE_GENERALIZE
+        caplog.clear()
+        with caplog.at_level(logging.ERROR, logger="backend.memory.biological.evolution"):
+            result = evo.mutate_concept("sovereignty", mutation_type=MUTATION_TYPE_GENERALIZE)
+        assert result is None
+        matches = [r for r in caplog.records
+                   if r.name == "backend.memory.biological.evolution"
+                   and "R-682" in r.getMessage()
+                   and "save_mutation exploded" in r.getMessage()]
+        assert matches, "يجب تسجيل الرسالة المحقونة من المسجّل الصحيح"
+        # الطفرة الفاشلة تُسجَّل في سجل الطفرات
+        # (الطفرة الأصلية تُسجّل قبل الحفظ، ثم يُضاف سجل الفشل بعد الاستثناء)
+        assert len(evo.mutations) >= 1
+        assert evo.mutations[-1].success is False, \
+            "آخر طفرة يجب أن تكون الفاشلة (المسجلة بعد الاستثناء)"
 
 
 class TestMemoryCoreSigningKeySite:
@@ -317,59 +537,104 @@ class TestOrchestratorLoadSites:
         orch._update_component_health = lambda *a, **k: None
         return orch
 
-    def _assert_failure_logged(self, caplog, result):
+    def _assert_failure_logged(self, caplog, result, injected_msg):
         assert result is None
-        assert len(caplog.records) > 0, "فشل تحميل المكون يجب أن يُسجَّل (لا صمت)"
+        matches = [r for r in caplog.records
+                   if r.name == "backend.orchestrator"
+                   and injected_msg in r.getMessage()]
+        assert matches, f"يجب تسجيل '{injected_msg}' من مسجّل orchestrator"
+
+    def _patch_boom(self, monkeypatch, module, attr):
+        def _boom():
+            raise RuntimeError(f"{attr} exploded (injected)")
+        monkeypatch.setattr(module, attr, _boom)
+        return f"{attr} exploded (injected)"
 
     def test_load_memory_core_failure_logged(self, monkeypatch, caplog):
         orch = self._make_orchestrator()
         import memory.core as mem_core
-        def _boom():
-            raise RuntimeError("memory core exploded (injected)")
-        monkeypatch.setattr(mem_core, "get_core", _boom)
+        msg = self._patch_boom(monkeypatch, mem_core, "get_core")
+        caplog.clear()
         with caplog.at_level(logging.WARNING, logger="backend.orchestrator"):
             result = orch._load_memory_core()
-        self._assert_failure_logged(caplog, result)
+        self._assert_failure_logged(caplog, result, msg)
+
+    def test_load_memory_core_success_path(self, monkeypatch):
+        """المسار السليم: get_core يعيد قيمة → تُعاد كما هي."""
+        orch = self._make_orchestrator()
+        import memory.core as mem_core
+        sentinel = object()
+        monkeypatch.setattr(mem_core, "get_core", lambda: sentinel)
+        result = orch._load_memory_core()
+        assert result is sentinel
 
     def test_load_memory_dynamic_failure_logged(self, monkeypatch, caplog):
         orch = self._make_orchestrator()
         import memory.dynamic as dyn
-        def _boom():
-            raise RuntimeError("dynamic exploded (injected)")
-        monkeypatch.setattr(dyn, "get_dynamic_memory", _boom)
+        msg = self._patch_boom(monkeypatch, dyn, "get_dynamic_memory")
+        caplog.clear()
         with caplog.at_level(logging.WARNING, logger="backend.orchestrator"):
             result = orch._load_memory_dynamic()
-        self._assert_failure_logged(caplog, result)
+        self._assert_failure_logged(caplog, result, msg)
+
+    def test_load_memory_dynamic_success_path(self, monkeypatch):
+        orch = self._make_orchestrator()
+        import memory.dynamic as dyn
+        sentinel = object()
+        monkeypatch.setattr(dyn, "get_dynamic_memory", lambda: sentinel)
+        result = orch._load_memory_dynamic()
+        assert result is sentinel
 
     def test_load_memory_store_failure_logged(self, monkeypatch, caplog):
         orch = self._make_orchestrator()
         import memory.store as st
-        def _boom():
-            raise RuntimeError("store exploded (injected)")
-        monkeypatch.setattr(st, "get_store", _boom)
+        msg = self._patch_boom(monkeypatch, st, "get_store")
+        caplog.clear()
         with caplog.at_level(logging.WARNING, logger="backend.orchestrator"):
             result = orch._load_memory_store()
-        self._assert_failure_logged(caplog, result)
+        self._assert_failure_logged(caplog, result, msg)
+
+    def test_load_memory_store_success_path(self, monkeypatch):
+        orch = self._make_orchestrator()
+        import memory.store as st
+        sentinel = object()
+        monkeypatch.setattr(st, "get_store", lambda: sentinel)
+        result = orch._load_memory_store()
+        assert result is sentinel
 
     def test_load_quantum_failure_logged(self, monkeypatch, caplog):
         orch = self._make_orchestrator()
         import quantum.quantum_controller as qc
-        def _boom():
-            raise RuntimeError("quantum exploded (injected)")
-        monkeypatch.setattr(qc, "get_quantum_controller", _boom)
+        msg = self._patch_boom(monkeypatch, qc, "get_quantum_controller")
+        caplog.clear()
         with caplog.at_level(logging.WARNING, logger="backend.orchestrator"):
             result = orch._load_quantum()
-        self._assert_failure_logged(caplog, result)
+        self._assert_failure_logged(caplog, result, msg)
+
+    def test_load_quantum_success_path(self, monkeypatch):
+        orch = self._make_orchestrator()
+        import quantum.quantum_controller as qc
+        sentinel = object()
+        monkeypatch.setattr(qc, "get_quantum_controller", lambda: sentinel)
+        result = orch._load_quantum()
+        assert result is sentinel
 
     def test_load_nexus_failure_logged(self, monkeypatch, caplog):
         orch = self._make_orchestrator()
         import nexus.main as nmain
-        def _boom():
-            raise RuntimeError("nexus exploded (injected)")
-        monkeypatch.setattr(nmain, "initialize_nexus", _boom)
+        msg = self._patch_boom(monkeypatch, nmain, "initialize_nexus")
+        caplog.clear()
         with caplog.at_level(logging.WARNING, logger="backend.orchestrator"):
             result = orch._load_nexus()
-        self._assert_failure_logged(caplog, result)
+        self._assert_failure_logged(caplog, result, msg)
+
+    def test_load_nexus_success_path(self, monkeypatch):
+        orch = self._make_orchestrator()
+        import nexus.main as nmain
+        sentinel = object()
+        monkeypatch.setattr(nmain, "initialize_nexus", lambda: sentinel)
+        result = orch._load_nexus()
+        assert result is sentinel
 
 
 class TestDataProcessorSite:
@@ -413,10 +678,14 @@ class TestCodeAnalyzerSite:
         bad = tmp_path / "bad.py"
         bad.write_text("def broken(:\n    pass\n", encoding="utf-8")
         analyzer = self._make_analyzer()
+        caplog.clear()
         with caplog.at_level(logging.WARNING, logger="nexus.performance.code_analyzer"):
             result = analyzer.analyze_file(str(bad))
         assert result is None
-        assert len(caplog.records) > 0
+        matches = [r for r in caplog.records
+                   if r.name == "nexus.performance.code_analyzer"
+                   and "bad.py" in r.getMessage()]
+        assert matches, "يجب تسجيل اسم الملف المعطوب من المسجّل الصحيح"
 
     def test_analyze_valid_python_success_path(self, tmp_path):
         """المسار السليم: ملف صالح يعيد تحليلًا."""
