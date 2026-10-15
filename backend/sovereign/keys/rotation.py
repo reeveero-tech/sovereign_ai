@@ -79,7 +79,10 @@ class KeyRotation:
             return new_key
 
         except Exception as e:
-            logger.error(f"❌ KeyRotation failed: {e}")
+            logger.exception(
+                f"R-682 [SECURITY]: KeyRotation failed — silently swallowing may hide "
+                f"a real key compromise. exc={e}"
+            )
             return None
 
     def _write_rotation_event(

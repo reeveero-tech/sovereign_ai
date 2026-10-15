@@ -260,7 +260,10 @@ class LedgerAnchor:
             return anchor_record
 
         except Exception as e:
-            logger.error(f"❌ anchor_batch failed: {e}")
+            logger.exception(
+                f"R-682 [SECURITY]: anchor_batch failed — silently swallowing may "
+                f"hide ledger corruption or tampered events. exc={e}"
+            )
             return None
 
     def compute_anchor_signature_data(

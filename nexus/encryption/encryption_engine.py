@@ -75,7 +75,10 @@ class EncryptionEngine:
                 plaintext = self._xor_encrypt(ciphertext, self._master_key)
             return plaintext.decode("utf-8")
         except Exception as exc:
-            logger.error(f"Decryption error: {exc}")
+            logger.exception(
+                f"R-682 [SECURITY]: Decryption error — silently swallowing may hide "
+                f"tampered payload or corrupted ciphertext. exc={exc}"
+            )
             return None
 
     def encrypt_dict(self, data: dict) -> EncryptedPayload:

@@ -272,7 +272,10 @@ class RansomwareDefense:
             return seed
             
         except Exception as e:
-            logger.error(f"فشل إنشاء البذرة: {e}")
+            logger.exception(
+                f"R-682 [SECURITY]: Ransomware seed creation failed — silently swallowing "
+                f"may hide an active ransomware attack or disk corruption. exc={e}"
+            )
             return None
     
     def _extract_essential_memory(self) -> Dict[str, Any]:
@@ -353,8 +356,16 @@ class RansomwareDefense:
             
             # فك الطبقة الثانية (بدون مفتاح القيامة؟ نحتاج محاولة كل المفاتيح)
             # في القيامة الحقيقية، السيد يقدم المفتاح
+            logger.warning(
+                "R-682 [SECURITY]: Phoenix seed decryption is not implemented — "
+                "returning None silently. This hides real tampering or missing key."
+            )
             return None
-        except:
+        except Exception as e:
+            logger.exception(
+                f"R-682 [SECURITY]: Phoenix seed decryption failed — silently "
+                f"swallowing may hide tampered seed or missing resurrection key. exc={e}"
+            )
             return None
     
     # ============================================================

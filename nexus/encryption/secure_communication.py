@@ -81,5 +81,8 @@ class SecureCommunication:
             except Exception:
                 return text
         except Exception as exc:
-            logger.error(f"Decode error: {exc}")
+            logger.exception(
+                f"R-682 [SECURITY]: Decode error — silently swallowing may hide "
+                f"tampered/invalid payload. exc={exc}"
+            )
             return None

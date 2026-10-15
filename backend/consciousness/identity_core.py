@@ -720,7 +720,10 @@ class IdentityCore:
             return backup
             
         except Exception as e:
-            logger.error(f"خطأ في إنشاء النسخة الاحتياطية: {e}")
+            logger.exception(
+                f"R-682 [SECURITY]: Identity backup failed — silently swallowing may "
+                f"hide disk full or tampered identity file. exc={e}"
+            )
             return None
     
     def restore_identity(self, backup_id: str) -> bool:

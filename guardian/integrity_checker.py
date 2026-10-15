@@ -116,7 +116,11 @@ class IntegrityChecker:
                 last_modified=stat.st_mtime,
             )
         except Exception as exc:
-            logger.warning(f"Snapshot error [{path}]: {exc}")
+            logger.exception(
+                f"R-682 [SECURITY]: Snapshot error [{path}] — file skipped from "
+                f"integrity baseline. This may hide a real integrity problem. "
+                f"exc={exc}"
+            )
             return None
 
     # ══════════════════════════════════════════════════════════════════

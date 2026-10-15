@@ -74,6 +74,10 @@ class AuthEngine:
                 return session
             return None
         except Exception:
+            logger.exception(
+                "R-682 [SECURITY]: verify_token failed — silently swallowing may "
+                "hide tampered token or invalid HMAC. This may be an active attack."
+            )
             return None
 
     def revoke_token(self, token: str) -> bool:
