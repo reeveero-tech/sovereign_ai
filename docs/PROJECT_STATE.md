@@ -263,3 +263,11 @@ sovereign_ai/
 - **الحالة**: كاملة (موجودة وعاملة) — فحص هذه الجولة على الكود لا الوثائق: راجع `forensics/PHASE1_STATUS.md`.
 - **الدليل**: كل مكونات المرحلة ١ (keys/__init__.py، keyring.py بكل الحقول، verifier.py بالتفريق الصارم UNVERIFIABLE_MISSING_KEY/INVALID، rotation.py بواجهة rotate(reason)، data/keys/HISTORY.jsonl المحمي باختبار ثابت) + 33 اختبارًا ناجحًا.
 - **المرحلة ٦ (سجل إجراءات الوكيل)**: بدأت — `forensics/agent_ledger.jsonl` (سطر لكل إجراء: ts/phase/action/files_touched/before_hash/after_hash/reason/verified_by).
+
+---
+
+## 17) المرحلة ٢ (مرساة اليدجر) من ROADMAP_V2 — حالة مثبتة على الكود
+
+- **الحالة**: كاملة (موجودة وعاملة) — فحص هذه الجولة على الكود: راجع `forensics/PHASE2_STATUS.md`.
+- **الدليل**: compute_merkle_root + anchor_batch + verify_anchor (تفشل عند تغيير بايت واحد) + مسار `/ledger/verify` (الأعداد الأربعة المطلوبة) + المراسي الفعلية تغطي 0–116909 + 33 اختبارًا ناجحًا.
+- **عائق بيانات موثق (لا كود)**: `data/sovereign_core/ledger.jsonl` الخام (116,910 حدثًا) غائب عن clone — لا يعطل الكود ولا الاختبارات.

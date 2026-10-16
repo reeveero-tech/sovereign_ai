@@ -308,3 +308,15 @@
 
 ### تحقق
 - `python -m pytest tests/test_sovereign_keys.py tests/test_key_selection_rotation.py tests/test_return_none_security.py tests/test_ledger_anchor.py tests/test_ledger_verify_endpoint.py -q` → **33 passed**.
+
+---
+
+## [ROADMAP_V2] — 2026-10-16 — المرحلة 2 (مرساة اليدجر): الحالة على الكود
+
+### أُضيف
+- `forensics/PHASE2_STATUS.md`: تقرير حالة المرحلة ٢ على الكود (compute_merkle_root + anchor_batch + verify_anchor + `/ledger/verify` — كلها موجودة وكاملة؛ المراسي الفعلية تغطي 0–116909).
+- تحديث `forensics/agent_ledger.jsonl`: تثبيت after_hash للإدخال الأول (42446ac) + إدخال المرحلة ٢.
+
+### تحقق
+- 33 اختبارًا ناجحًا (منها كشف تغيير البايت الواحد وحقول تقرير `/ledger/verify`).
+- عائق بيانات موثق: `ledger.jsonl` الخام غائب عن clone — لا يعطل الكود.
