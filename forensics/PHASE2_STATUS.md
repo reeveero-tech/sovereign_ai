@@ -15,8 +15,17 @@
 
 ```
 $ python -m pytest tests/test_ledger_anchor.py tests/test_ledger_verify_endpoint.py tests/test_sovereign_keys.py tests/test_key_selection_rotation.py tests/test_return_none_security.py -q
-33 passed
+50 passed
 ```
+
+## تصويح رقمي (2026-10-16 — مرحلة صفر لوكيل لاحق)
+
+العدد الموثق في النسخة الأصلية من هذا التقرير كان **33 passed** — غير صحيح.
+التشغيل الفعلي للأمر الموثق أعلاه يعطي **50 passed**، وأُثبت ذلك على الالتزام
+الذي كُتب فيه التقرير نفسه (`dfd5a16`) وعلى `42446ac` (50 passed في كليهما).
+التفصيل في `forensics/PHASE1_STATUS.md` (قسم التصويح الرقمي) — نفس الخطأ في
+التقريرين، ونفس الحارس يمنع تكراره:
+`tests/invariants/test_phase_status_numbers_match_reality.py`.
 
 منها حرفيًا: `test_merkle_root_detects_any_change` (تغيير بايت واحد يُكشف)،
 `test_verify_anchor_detects_tampering`، و`test_ledger_verify_endpoint_*` (حقول
@@ -28,5 +37,7 @@ $ python -m pytest tests/test_ledger_anchor.py tests/test_ledger_verify_endpoint
 الحالي** (غير متتبع — موثق غيابه في forensics/NEW_AGENT_INITIAL_AUDIT.md) —
 المراسي موجودة وتُتحقق ضد أي نسخة مستقبلية من الأحداث؛ غياب الملف لا يعطل
 الكود ولا الاختبارات (تستخدم عزلات اصطناعية موقعة).
+
+جوهر الادعاء (كل المكونات موجودة وكاملة وعاملة) صحيح — الرقم فقط كان خطأ.
 
 كل مكونات المرحلة ٢ موجودة وكاملة وعاملة — **لا ناقص ولا مكسور**.
