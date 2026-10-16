@@ -83,3 +83,12 @@
 **عدد المخالفات الجديدة = 7**
 
 كلها موثقة، بانتظار قرار المالك في CONTRACT_EXCEPTION_1.md (البندان 4 و5).
+
+---
+
+## قرار المالك — الإغلاق الموثق (Issue #8، 2026-10-16)
+
+قرار المالك: «تُغلق موثقة كما في forensics/THIS_ROUND_VIOLATIONS.md.
+لا تصحيح إضافي.» — المخالفات السبع أعلاه مغلقة موثقة بقرار المالك
+(راجع [Issue #8](https://github.com/reeverero-tech/sovereign_ai/issues/8)
+وforensics/OWNER_DECISIONS.md). التوثيق يبقى — لا يُحذف ولا يُجمّل.

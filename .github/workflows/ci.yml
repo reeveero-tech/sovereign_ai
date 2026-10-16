@@ -32,6 +32,31 @@ jobs:
         with:
           fetch-depth: 0
 
+      # قرار المالك (Issue #8): أي التزام يحذف سطراً بلا # DELETION-JUSTIFIED
+      # في نفس الالتزام يُرفض تلقائياً (checkout بعمق كامل — fetch-depth: 0).
+      - name: 'Owner rule (Issue #8): reject commits deleting lines without # DELETION-JUSTIFIED'
+        run: |
+          set -euo pipefail
+          SHA="${GITHUB_SHA}"
+          # الالتزامات الدمجية تُفحص عند وقوعها (git show لا يعطي numstat لها افتراضياً)
+          PARENTS=$(git rev-list --parents -n 1 "${SHA}" | wc -w)
+          if [ "${PARENTS}" -gt 2 ]; then
+            echo "⏭️ التزام دمجي — يُفحص بمعايير خاصة عند وقوعه"
+            exit 0
+          fi
+          DELETIONS=$(git show --numstat --format= "${SHA}" | awk '$1 != "-" && $2 ~ /^[0-9]+$/ {s+=$2} END {print s+0}')
+          echo "أسطر الحذف في هذا الالتزام: ${DELETIONS}"
+          if [ "${DELETIONS}" -eq 0 ]; then
+            echo "✅ لا حذوفات — لا يلزم تبرير"
+            exit 0
+          fi
+          if git log -1 --format=%B "${SHA}" | grep -q "# DELETION-JUSTIFIED" || git show "${SHA}" | grep -q "# DELETION-JUSTIFIED"; then
+            echo "✅ الحذوفات مبررة بعلامة # DELETION-JUSTIFIED في نفس الالتزام"
+            exit 0
+          fi
+          echo "❌ مرفوض تلقائياً: الالتزام يحذف ${DELETIONS} سطراً بلا # DELETION-JUSTIFIED في نفس الالتزام — قرار المالك (Issue #8)"
+          exit 1
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"

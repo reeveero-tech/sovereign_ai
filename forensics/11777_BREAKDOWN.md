@@ -68,3 +68,11 @@ wc -l data/sovereign_core/ledger.jsonl   # = 11,777 وقت القياس (2026-10
 {"anchor_id": "5767b314b752e152", "batch_start": 116452, "batch_end": 116909, "event_count": 458, "merkle_root": "sha256:bbc6d7481900629566833e21662fcf6f75cede0a2f4947c9cebf6606e0276603", "reason": "R641_ANCHOR_V2_ROOT_SIGNED", "key_id": "433759679aca9268", "signature": "715b7fe375f67017bf0589d7aaec03be8866ff548114529217e7d614d6d73490", "anchored_at": "2026-10-14T11:56:35Z", "notes": "Anchor v2: signature covers merkle_root, batch range, event_count, and key_id (corrected from v1 which only signed batch range)", "sig_format": "v2", "sig_data_v2": "anchor_sig_v2|116452|116909|458|bbc6d7481900629566833e21662fcf6f75cede0a2f4947c9cebf6606e0276603|433759679aca9268"}
 {"anchor_id": "4891c7ce824fdc68", "batch_start": 0, "batch_end": 116909, "event_count": 116910, "merkle_root": "sha256:24a8cd6ad69b20f7b19edf09d57aada0c6e938483ee4bf883b36004a981d4a27", "reason": "R643_FULL_COVERAGE_V2", "key_id": "433759679aca9268", "signature": "a2a7ed72c12d43da87a1a421fe38419f0b4fe877b0029506f2d89a7d487f1d20", "anchored_at": "2026-10-14T12:00:32Z", "notes": "Anchor v2 covering ALL events (0 to end) with root-signed signature (covers merkle_root + range + event_count + key_id)", "sig_format": "v2", "sig_data_v2": "anchor_sig_v2|0|116909|116910|24a8cd6ad69b20f7b19edf09d57aada0c6e938483ee4bf883b36004a981d4a27|433759679aca9268"}
 ```
+
+---
+
+## قرار المالك (Issue #8، 2026-10-16)
+
+«الرقم المرجعي 116,910. الرقم 11,777 لقطة مبكرة ملغاة.» — اعتمد المالك
+محاسبة المراسي (116,910) مرجعًا وألغى اللقطة المبكرة كمرجع. التفاصيل
+في forensics/OWNER_DECISIONS.md.
