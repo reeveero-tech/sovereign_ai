@@ -5,7 +5,8 @@
     "calculator": "compute_sovereignty_score_v2 (R-683 contract) executed from the measured tree itself (repo_root = copy of the working tree)",
     "gate_evidence": "tools/run_gate.py on the measured tree: exit=0, 467 passed / 0 failed / 0 errors / 0 skipped, 1 deselected (operational); JUnit sealed with HEAD 91c92f3 + the content fingerprint above",
     "owner_decision": "R-683 (2026-10-16): ledger_verified, ledger_anchored, score_capped_by_missing_ledger, confidence_range removed from the contract; no upper bound declared; if the score is lower it stays lower",
-    "previous_value_note": "0.8198 equals the previous closure-round value — the previous calculator already averaged the same five components; only the removed fields and the aggregation text changed"
+    "previous_value_note": "0.8198 equals the previous closure-round value — the previous calculator already averaged the same five components; only the removed fields and the aggregation text changed",
+    "capped_vs_measured": "0.8713 (previous, included two ledger components at a theoretical upper bound) − 0.8198 (now, five measured components) = 0.0515 = effect of the upper bound"
   },
   "result": {
     "files_reachable": 0.6354,

@@ -515,7 +515,7 @@ async def sovereignty_score():
     composite_obj = Composite(primitives_obj, junit_xml_path=_junit_path)
     composite_result = composite_obj.compute()
 
-    # الجولة الإنشائية 2026-10-16: معادلة ROADMAP_V2 الثمانية مكونات —
+    # الجولة الإنشائية 2026-10-16: معادلة ROADMAP_V2 خمسة مكونات قابلة للقياس —
     # مربوطة بالاستجابة الفعلية (تصويب المراجع — الاعتراض 1). الدالة لا
     # تشغل pytest (فصل الحاسبة عن مشغل الاختبارات): invariants_passing
     # من دليل JUnit معلوم الهوية (SHA مطابق) — لا ثابت نجاح بلا دليل.

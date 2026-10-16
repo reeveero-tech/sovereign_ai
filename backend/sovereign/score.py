@@ -1080,9 +1080,7 @@ def compute_sovereignty_score_v2(repo_root=None, invariants_evidence=None) -> di
             except (ValueError, KeyError, TypeError):
                 anchors_malformed += 1
     documented_total = 116910  # الإجمالي الموثق في تقارير الحالة
-    ledger_upper = (
-        min(len(anchored_union), documented_total) / documented_total
-    ) if documented_total else 0.0
+    # DELETION-JUSTIFIED — ledger_upper (3 أسطر) حُذف: كود ميت منذ R-683 (لا يدخل الرد)
 
     # 5) compat_pending_sunset — من السجل الفعلي (استيراد حقيقي)
     from backend.compat.__meta__ import COMPAT_LIFECYCLE
