@@ -7,7 +7,9 @@ Invariant: أرقام التوثيق تطابق التجميع الفعلي — 
 الحارس محصور في التقريرين الحاليين (PHASE1_STATUS.md وPHASE2_STATUS.md):
 كل «N passed» موثق فيهما كدليل وظيفي يجب أن يطابق التجميع الفعلي
 (--collect-only مع اشتراط رمز خروج صفر) للأمر الموثق نفسه بعد تحليله
-بـshlex (النطاق والمرشحات محفوظان كما وثقها التقرير).
+بـshlex (النطاق والمرشحات محفوظان كما وثقها التقرير). مع مرشّح اختيار
+(-k أو -m) يُعدّ المُختار (البسط) لا المقام — لأن «N passed» يعني ما
+يُشغّل فعليًا.
 
 سبب الإنشاء (2026-10-16): تقارير المرحلتين أدّعت «33 passed» بينما التجميع
 الفعلي للأمر الموثق 50 — اكتشفها وكيل لاحق في مرحلة صفر. RED الفعلي المرصود
@@ -17,9 +19,9 @@ Invariant: أرقام التوثيق تطابق التجميع الفعلي — 
     التشغيل الفعلي لنفس الأمر (50). قواعد التوثيق: الأرقام تُطابق التشغيل
     الفعلي — لا أرقام من الذاكرة.
 
-ملاحظة نطاق: التقريران يدّعيان «passed» والفحص هنا ضد التجميع المُجمَّع
-(--collect-only) — لملفات التقريرين لا اختبارات معلّمة تُحذف ولا skips،
-فالمجمَّع = الناجح (50 = 50، مُثبت بالتشغيلين معًا في جولة 2026-10-16).
+ملاحظة نطاق: التقرران يدّعيان «passed» والفحص هنا ضد التجميع (--collect-only)
+— لملفات التقريرين لا اختبارات معلّمة تُحذف ولا skips، فالمُجمَّع = الناجح
+(50 = 50، مُثبت بالتشغيلين معًا في جولة 2026-10-16).
 """
 
 import re
@@ -50,11 +52,15 @@ def _extract_claims(text):
 
 
 def _collect(command_line):
-    """يشغّل الأمر الموثق بوضع التجميع فقط — يعيد (رمز الخروج، عدد المُجمَّع).
+    """يشغّل الأمر الموثق بوضع التجميع فقط — يعيد (رمز الخروج، عدد المُختار).
 
     يُحلَّل الأمر بـshlex: يُحذف المُشغِّل (python -m pytest) والعلم -q
     (لا يؤثر في التجميع)، ويُحافظ على النطاق والمرشحات الأخرى كما وثقها
     التقرير، ثم يُضاف --collect-only. لا يُنفَّذ أي اختبار فعلي هنا.
+
+    عدّ المُختار (البسط) لا المقام: مع مرشّح اختيار يخرج pytest بصيغة
+    «6/16 tests collected (10 deselected)» — المُختار 6 وهو ما يعنيه
+    «N passed» في التوثيق (ما يُشغّل فعليًا)، لا 16.
     """
     tokens = shlex.split(command_line)
     try:
@@ -71,7 +77,12 @@ def _collect(command_line):
     )
     if result.returncode != 0:
         return result.returncode, -1
-    m = re.search(r"(\d+)\s+tests?\s+collected", result.stdout)
+    tail = result.stdout.strip().splitlines()[-1] if result.stdout.strip() else ""
+    # صيغة المرشّح: «N/M tests collected (K deselected)» → المُختار = N (البسط)
+    m_filtered = re.search(r"(\d+)/(\d+)\s+tests?\s+collected\s+\((\d+)\s+deselected\)", tail)
+    if m_filtered:
+        return 0, int(m_filtered.group(1))
+    m = re.search(r"(\d+)\s+tests?\s+collected", tail)
     if not m:
         return 1, -1
     return 0, int(m.group(1))
@@ -115,6 +126,21 @@ def test_collection_failure_is_rejected():
         assert "فشل تجميع الأمر الموثق" in str(e)
     else:
         raise AssertionError("فشل التجميع يجب أن يُرفض برسالة صريحة")
+
+
+def test_filtered_collection_counts_selected_not_total():
+    """مع مرشّح اختيار: العدّ للمُختار (البسط) لا المقام — إثبات سلوكي حقيقي.
+
+    الأمر يجمع بصيغة «6/16 tests collected (10 deselected)» — المطلوب 6
+    (المُختار = ما يعنيه «N passed») لا 16.
+    """
+    returncode, collected = _collect(
+        "python -m pytest tests/test_sovereign_keys.py tests/test_key_selection_rotation.py -k rotation -q"
+    )
+    assert returncode == 0
+    assert collected == 6, (
+        f"المرشّح يجب أن يُعطي المُختار (6) لا المقام (16) — حصلنا على {collected}"
+    )
 
 
 def test_count_mismatch_is_rejected():
