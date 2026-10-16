@@ -17,6 +17,9 @@
 
 import asyncio
 import logging
+
+# الجولة الإنشائية 2026-10-16: تسجيل الاستدعاءات (المرحلة 4 — ROADMAP_V2)
+from backend.compat.__meta__ import compat_tracked
 import sys
 from pathlib import Path
 from typing import Optional
@@ -34,6 +37,7 @@ _START_ERROR: Optional[str] = None
 _LAST_START_TIME: float = 0.0
 
 
+@compat_tracked("nexus_lifecycle")
 async def start_nexus_engine(engine) -> bool:
     """
     يبدأ محرك NexusCore فعليًا (استدعاء حقيقي لـ engine.start()).
@@ -50,6 +54,7 @@ async def start_nexus_engine(engine) -> bool:
         return False
 
 
+@compat_tracked("nexus_lifecycle")
 async def ensure_nexus_running_async() -> Optional[object]:
     """
     يضمن أن محرك NexusCore مستورد + مُبدأ (state=RUNNING).
@@ -123,6 +128,7 @@ async def ensure_nexus_running_async() -> Optional[object]:
     return None
 
 
+@compat_tracked("nexus_lifecycle")
 def nexus_startup_status() -> dict:
     """يُعيد حالة الربط الفعلية — تُستخدم للتشخيص وللتحقق في الاختبارات"""
     running = _ENGINE is not None and getattr(_ENGINE, "_running", False)
@@ -140,6 +146,7 @@ def nexus_startup_status() -> dict:
 
 # توافق رجعي: الدالة المتزامنة القديمة تُستخدم فقط في الاختبارات التي
 # تعمل خارج حلقة حدث. داخل حلقة نشطة يجب استخدام ensure_nexus_running_async().
+@compat_tracked("nexus_lifecycle")
 def ensure_nexus_running() -> Optional[object]:
     """
     نسخة متزامنة للتوافق — تُستخدم فقط عندما لا توجد حلقة حدث نشطة

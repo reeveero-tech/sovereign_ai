@@ -9,10 +9,12 @@ Invariant 5: KeyRing غير قابل للتلاعب (المرحلة 3 من ROADM
 """
 
 import json
+import os
 import sys
 from pathlib import Path
 
-_REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+# الملف في backend/tests/invariants/ — الجذر أربع مستويات أعلى
+_REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 _BACKEND_DIR = _REPO_ROOT / "backend"
 for p in [str(_REPO_ROOT), str(_BACKEND_DIR)]:
     if p not in sys.path:
@@ -29,8 +31,12 @@ def test_keyring_all_keys_have_valid_status():
     keyring.load_from_disk()
 
     stats = keyring.stats()
-    if stats["total_keys"] == 0:
-        pytest.skip("KeyRing is empty (no keys to verify)")
+    # (قاعدة الجولة الإنشائية 2026-10-16: لا skip — KeyRing الفارغ فشل صريح:
+    # الـconftest يُنشئ keyring معزولًا بمفتاح نشط (R-634)، والواقع يتتبع HISTORY)
+    assert stats["total_keys"] > 0, (
+        "KeyRing is empty — invariant violated (conftest must provision "
+        "the isolated test keyring per R-634)"
+    )
 
     valid_statuses = {s.value for s in KeyStatus}
 
@@ -54,8 +60,10 @@ def test_no_active_lost_keys():
     keyring.load_from_disk()
 
     stats = keyring.stats()
-    if stats["total_keys"] == 0:
-        pytest.skip("KeyRing is empty")
+    assert stats["total_keys"] > 0, (
+        "KeyRing is empty — invariant violated (conftest must provision "
+        "the isolated test keyring per R-634)"
+    )
 
     contradictions = []
     all_keys = list(keyring._keys.values())
@@ -113,27 +121,56 @@ def test_real_key_secret_exists():
     (هذا هو الدرس من جريمة الاختبارات التي حذفته مرتين).
 
     R-680c: في clone نظيف، data/key.secret غير موجود (سر مُستثنى من git).
-    config.py سيُنشئه عند أول تشغيل (المصدر 4 — R-610).
-    هذا السلوك متوقع — يجب أن يُتخطى الاختبار، لا أن يفشل.
+    (قاعدة الجولة الإنشائية 2026-10-16: لا skip — إن وُجد الملف الفعلي تُفحص
+    خصائصه، وفي كل الأحوال يُثبت الاختبار مسار التوليد R-610 نفسه في جذر
+    معزول: الاستيراد الفعلي لـ config بلا SOVEREIGN_KEY يولّد key.secret
+    بحجم > 0 وصلاحيات 0600 — نفس الخصائص المطلوبة للملف الفعلي.)
     """
+    import subprocess
+    import tempfile
+
+    # (أ) الملف الفعلي إن وُجد: خصائصه الصحيحة إلزامية
     key_file = _REPO_ROOT / "data" / "key.secret"
-    if not key_file.exists():
-        pytest.skip(
-            "key.secret not found in clean clone (R-680c) — "
-            "config.py will generate it on first run (Source 4, R-610)"
+    if key_file.exists():
+        size = key_file.stat().st_size
+        assert size > 0, (
+            f"data/key.secret is empty (size={size}) — key must be non-empty"
+        )
+        mode = key_file.stat().st_mode & 0o777
+        assert mode == 0o600, (
+            f"data/key.secret has insecure permissions: {oct(mode)} (expected 0600)"
         )
 
-    # حجم صالح (ليس فارغًا)
-    size = key_file.stat().st_size
-    assert size > 0, (
-        f"data/key.secret is empty (size={size}) — key must be non-empty"
-    )
-
-    # صلاحيات آمنة (0600 — فقط المالك يقرأ)
-    mode = key_file.stat().st_mode & 0o777
-    assert mode == 0o600, (
-        f"data/key.secret has insecure permissions: {oct(mode)} (expected 0600)"
-    )
+    # (ب) مسار التوليد R-610 يُثبت نفسه في جذر معزول (بلا skip في أي حالة)
+    with tempfile.TemporaryDirectory(prefix="keygen_probe_") as tmp:
+        env = {
+            k: v for k, v in os.environ.items() if k != "SOVEREIGN_KEY"
+        }
+        env["SOVEREIGN_DATA_ROOT"] = tmp
+        # لا .env في جذر المستودع (متحقق منه أعلاه في تشغيل الجولة) —
+        # المصدر 4 هو أول مصدر متاح في الجذر المعزول
+        r = subprocess.run(
+            [sys.executable, "-c",
+             "import sys; sys.path.insert(0, 'backend'); "
+             "import config; print('KEYGEN_OK')"],
+            capture_output=True, text=True, cwd=str(_REPO_ROOT),
+            env=env, timeout=120,
+        )
+        assert r.returncode == 0, (
+            f"config import failed in isolated root: {r.stderr[-300:]}"
+        )
+        generated = Path(tmp) / "key.secret"
+        assert generated.exists(), (
+            "R-610 generation path did not create key.secret in isolated root"
+        )
+        assert generated.stat().st_size > 0, (
+            "generated key.secret is empty — key must be non-empty"
+        )
+        gmode = generated.stat().st_mode & 0o777
+        assert gmode == 0o600, (
+            f"generated key.secret has insecure permissions: {oct(gmode)} "
+            "(expected 0600 per R-610)"
+        )
 
 
 def test_tests_do_not_touch_real_key():

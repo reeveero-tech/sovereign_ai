@@ -20,6 +20,9 @@
 # دون تعديل الملف الأصلي.
 
 import logging
+
+# الجولة الإنشائية 2026-10-16: تسجيل الاستدعاءات (المرحلة 4 — ROADMAP_V2)
+from backend.compat.__meta__ import compat_tracked
 from typing import Optional
 
 logger = logging.getLogger("backend.compat.nexus_router_compat")
@@ -31,6 +34,7 @@ compat_router = APIRouter(prefix="/nexus", tags=["NexusCore"])
 
 
 @compat_router.get("/recommendations")
+@compat_tracked("nexus_router_compat")
 def get_recommendations_original_path():
     """
     إصلاح المسار الأصلي GET /nexus/recommendations — يُعيد التوصيات
@@ -56,6 +60,7 @@ def get_recommendations_original_path():
     }
 
 
+@compat_tracked("nexus_router_compat")
 def register_compat_router(app) -> bool:
     """
     يُسجّل router التوافق على التطبيق — يُستدعى من backend/app.py بعد

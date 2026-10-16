@@ -1,0 +1,34 @@
+{
+ "files_reachable": 0.4056,
+ "modules_tested": 0.2439,
+ "ledger_verified": 1.0,
+ "ledger_anchored": 1.0,
+ "compat_pending_sunset": 1.0,
+ "no_mocks_in_prod": 1,
+ "invariants_passing": 1,
+ "final_score": 0.8071,
+ "score_capped_by_missing_ledger": true,
+ "confidence_range": {
+  "lower": 0.5214,
+  "upper": 0.8071,
+  "note": "ledger.jsonl raw file absent from clone — ledger components are upper bounds (anchors-file declared coverage); conservative bound uses 0.0 for both ledger components"
+ },
+ "inputs": {
+  "files_total_count": 286,
+  "files_imported_count": 116,
+  "backend_live_modules": 82,
+  "backend_modules_tested": 20,
+  "ledger_present": false,
+  "anchors_declared_coverage": 116910,
+  "anchors_malformed_lines": 0,
+  "documented_total_events": 116910,
+  "compat_total": 4,
+  "compat_with_sunset": 4,
+  "mocks_outside_tests_count": 0,
+  "invariants_run_tail": "97 passed, 1 warning in 39.70s",
+  "repo_head_sha": "d08ec6a45d0df981e6476da9196f742a5af81e41"
+ },
+ "aggregation": "final_score = mean(7 scored components) — documented choice; ROADMAP_V2 does not specify weights; not tunable to improve results",
+ "evaluated_against": "d08ec6a45d0df981e6476da9196f742a5af81e41 (قاعدة الجولة — قبل تعديلات البناء)",
+ "comparison": null
+}

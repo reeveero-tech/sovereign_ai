@@ -707,3 +707,230 @@ class SovereigntyScorer:
         if not hasattr(self, "_report"):
             self.compute()
         return self._report.to_dict()
+
+
+# ============================================================
+# الجولة الإنشائية 2026-10-16 — معادلة ROADMAP_V2 (المرحلة 5) الحرفية
+# ============================================================
+# SOVEREIGNTY_SCORE الثمانية مكونات كما وردت في ROADMAP_V2.md نصًّا.
+# تُعاد القيم 0.0-1.0 (والثنائيان 0/1) وfinal_score 0.0-1.0.
+#
+# تعريف التجميع (ROADMAP_V2 لا يحدد أوزان final_score): متوسط المكونات
+# السبعة المسجلة (خمس نسب + ثنائيان) — موثق هنا وفي REPORT_V2.md، ولا
+# يُعدل لتحسين نتيجة.
+#
+# حدّ السجل الغائب: ledger.jsonl الخام غير متتبع في git (موثق غيابه في
+# forensics/INVARIANT_LIMITS.md). مكونا ledger_verified وledger_anchored
+# يُحسبان من ملف المراسي المتتبع (نطاقات الدفعات المعلنة) — حد أعلى
+# معلن، والقيمة المحافظة 0.0. النتيجة النهائية المعلنة هي الحد الأعلى مع
+# score_capped_by_missing_ledger=true ونطاق ثقة [محافظ، متفائل].
+
+import ast as _ast
+import subprocess as _subprocess
+from pathlib import Path as _Path
+
+
+def _v2_live_backend_modules(repo_root: _Path) -> list:
+    """وحدات backend الحية (بدون tests/ و __pycache__ والأرشيف)."""
+    live = []
+    for p in (repo_root / "backend").rglob("*.py"):
+        rel = str(p.relative_to(repo_root))
+        if any(x in rel for x in ["__pycache__", ".git"]):
+            continue
+        if rel.startswith("backend/tests/"):
+            continue
+        live.append((rel, p))
+    return live
+
+
+def _v2_test_import_stems(repo_root: _Path) -> set:
+    """أسماء (stems) الوحدات المستوردة من ملفات الاختبارات كلها."""
+    stems = set()
+    for tests_dir in ("tests", "backend/tests"):
+        d = repo_root / tests_dir
+        if not d.exists():
+            continue
+        for p in d.rglob("*.py"):
+            if "__pycache__" in str(p):
+                continue
+            # TOLERATED: test file unreadable/unparsable — excluded from
+            # test-import stems (matches scanner policy; counted files only)
+            try:
+                tree = _ast.parse(p.read_text(encoding="utf-8"))
+            except Exception:
+                continue
+            for node in _ast.walk(tree):
+                if isinstance(node, _ast.Import):
+                    for a in node.names:
+                        stems.add(a.name.split(".")[0])
+                elif isinstance(node, _ast.ImportFrom):
+                    if node.module:
+                        stems.add(node.module.split(".")[0])
+                    for a in node.names:
+                        stems.add(a.name.split(".")[0])
+    return stems
+
+
+def _v2_run_invariants(repo_root: _Path) -> dict:
+    """تشغيل فعلي لاختبارات invariants (المساران) — نتيجة 0/1 صادقة."""
+    import sys as _sys
+    cmd = [
+        _sys.executable, "-m", "pytest",
+        "tests/invariants/", "backend/tests/invariants/",
+        "-q", "--no-header", "-p", "no:cacheprovider",
+    ]
+    try:
+        r = _subprocess.run(
+            cmd, capture_output=True, text=True,
+            cwd=str(repo_root), timeout=900,
+        )
+        passed = (r.returncode == 0)
+        tail = r.stdout.strip().split("\n")[-1] if r.stdout.strip() else ""
+    except _subprocess.TimeoutExpired:
+        passed = False
+        tail = "invariants run timed out (900s)"
+    return {"passing": 1 if passed else 0, "run_tail": tail}
+
+
+def compute_sovereignty_score_v2(repo_root=None) -> dict:
+    """معادلة ROADMAP_V2 (المرحلة 5) — SOVEREIGNTY_SCORE الثمانية مكونات.
+
+    تُحسب الآن من حالة المستودع الفعلية. غياب ledger.jsonl الخام يُعلن
+    صراحة: مكونا السجل عند حدهما الأعلى (تغطية المراسي المعلنة) مع
+    score_capped_by_missing_ledger=true ونطاق ثقة [محافظ، متفائل].
+    """
+    from backend.sovereign.primitives import Primitives
+
+    if repo_root is None:
+        repo_root = _Path(__file__).resolve().parent.parent.parent
+    repo_root = _Path(repo_root)
+    prim = Primitives(repo_root=repo_root)
+
+    # 1) files_reachable — نسبة الملفات المستوردة (تعريف Primitives:
+    #    ملفات .py التي يستوردها ملف آخر، بتحليل AST — قابل لإعادة الحساب)
+    files_total = prim.files_total_count()
+    files_imported = prim.files_imported_count()
+    files_reachable = (files_imported / files_total) if files_total else 0.0
+
+    # 2) modules_tested — نسبة وحدات backend الحية المستوردة من اختبار واحد+
+    backend_modules = _v2_live_backend_modules(repo_root)
+    test_stems = _v2_test_import_stems(repo_root)
+    tested = [rel for rel, p in backend_modules
+              if p.stem in test_stems or p.name == "__init__.py"]
+    # ملفات __init__.py تُعد مغطاة (بنية الحزمة يغطيها استيراد الحزمة)
+    modules_tested = (len(tested) / len(backend_modules)) if backend_modules else 0.0
+
+    # 3+4) ledger_verified / ledger_anchored — من ملف المراسي المتتبع.
+    # السجل الخام غائب (gitignored) → التغطية المعلنة حد أعلى؛ المحافظ 0.0
+    ledger_path = repo_root / "data" / "sovereign_core" / "ledger.jsonl"
+    anchors_path = repo_root / "data" / "sovereign_core" / "ledger.anchors.jsonl"
+    ledger_present = ledger_path.exists()
+    anchored_union = set()
+    anchors_malformed = 0
+    if anchors_path.exists():
+        import json as _json
+        for line in anchors_path.read_text(encoding="utf-8").split("\n"):
+            if not line.strip():
+                continue
+            # سطر مرساة تالف/ناقص الحقول: يُعدّ ولا يُسكت عليه (لا إخفاء فشل)
+            try:
+                a = _json.loads(line)
+                for i in range(a["batch_start"], a["batch_end"] + 1):
+                    anchored_union.add(i)
+            except (ValueError, KeyError, TypeError):
+                anchors_malformed += 1
+    if ledger_present:
+        # السجل موجود: التغطية الفعلية من عدد الأسطر
+        n_lines = sum(
+            1 for line in ledger_path.read_text(encoding="utf-8").split("\n")
+            if line.strip()
+        )
+        total_events = max(n_lines, 1)
+    else:
+        # السجل غائب: الإجمالي الموثق في تقارير الحالة (116,910) —
+        # والتغطية المعلنة في المراسي (0..116909) حد أعلى
+        total_events = 116910
+    ledger_anchored_upper = (
+        min(len(anchored_union), total_events) / total_events
+    ) if total_events else 0.0
+    ledger_verified_upper = ledger_anchored_upper  # بلا سجل: لا تحقق بالمفتاح قابلًا للقياس
+    score_capped = not ledger_present
+
+    # 5) compat_pending_sunset — نسبة وحدات compat ذات sunset_criteria
+    from backend.compat.__meta__ import COMPAT_LIFECYCLE
+    compat_total = len(COMPAT_LIFECYCLE)
+    compat_with = sum(
+        1 for v in COMPAT_LIFECYCLE.values() if v.get("sunset_criteria")
+    )
+    compat_ratio = (compat_with / compat_total) if compat_total else 0.0
+
+    # 6) no_mocks_in_prod — ثنائي من المسح الفعلي
+    no_mocks = 1 if prim.mocks_outside_tests_count() == 0 else 0
+
+    # 7) invariants_passing — ثنائي من تشغيل فعلي (سب-بروسس)
+    inv = _v2_run_invariants(repo_root)
+
+    components = {
+        "files_reachable": round(files_reachable, 4),
+        "modules_tested": round(modules_tested, 4),
+        "ledger_verified": round(ledger_verified_upper, 4),
+        "ledger_anchored": round(ledger_anchored_upper, 4),
+        "compat_pending_sunset": round(compat_ratio, 4),
+        "no_mocks_in_prod": no_mocks,
+        "invariants_passing": inv["passing"],
+    }
+
+    def _final(ledger_value: float) -> float:
+        c = dict(components)
+        c["ledger_verified"] = ledger_value
+        c["ledger_anchored"] = ledger_value
+        return round(sum(c.values()) / 7, 4)
+
+    final_upper = _final(ledger_anchored_upper)
+    final_lower = _final(0.0)
+
+    try:
+        import subprocess as _sp
+        sha = _sp.run(
+            ["git", "rev-parse", "HEAD"],
+            capture_output=True, text=True, cwd=str(repo_root),
+        ).stdout.strip()
+    except Exception:
+        sha = "unknown"
+
+    result = dict(components)
+    result["final_score"] = final_upper
+    result["score_capped_by_missing_ledger"] = bool(score_capped)
+    result["confidence_range"] = {
+        "lower": final_lower,
+        "upper": final_upper,
+        "note": (
+            "ledger.jsonl raw file absent from clone — ledger components are "
+            "upper bounds (anchors-file declared coverage); conservative "
+            "bound uses 0.0 for both ledger components"
+        ) if score_capped else {
+            "lower": final_upper,
+            "upper": final_upper,
+            "note": "ledger present — components computed from actual file",
+        },
+    }
+    result["inputs"] = {
+        "files_total_count": files_total,
+        "files_imported_count": files_imported,
+        "backend_live_modules": len(backend_modules),
+        "backend_modules_tested": len(tested),
+        "ledger_present": ledger_present,
+        "anchors_declared_coverage": len(anchored_union),
+        "anchors_malformed_lines": anchors_malformed,
+        "documented_total_events": total_events,
+        "compat_total": compat_total,
+        "compat_with_sunset": compat_with,
+        "mocks_outside_tests_count": prim.mocks_outside_tests_count(),
+        "invariants_run_tail": inv["run_tail"],
+        "repo_head_sha": sha,
+    }
+    result["aggregation"] = (
+        "final_score = mean(7 scored components) — documented choice; "
+        "ROADMAP_V2 does not specify weights; not tunable to improve results"
+    )
+    return result

@@ -754,3 +754,20 @@ tests/ci_run_selection.py (--require-completed). الحذف كله استبدا�
   فقط) وIssue #7 (متحقق من أصله). لا حذف معلومات — كل محذوف استُبدل بأدقّ منه.
 
 العلامة `# DELETION-JUSTIFIED` في رسالة الالتزام نفسه (قاعدة Issue #8).
+
+## بناء 2026-10-16 (الجولة الإنشائية — المراحل 3-7): 36 سطرًا — من الـstaged diff
+
+`git diff --cached --numstat` (إجمالي الإضافات 691 / الحذوفات 36 — كلها استبدالات):
+- `backend/tests/invariants/test_keyring_immutability.py` (59+22): حذف 3 مواقع skip
+  — استُبدلت بفشل صريح (KeyRing الفارغ = انتهاك) وإثبات مسار التوليد R-610
+  فعليًا في جذر معزول (قاعدة المالك: لا skip).
+- `backend/tests/invariants/test_compat_sunset_criteria.py` (54+3) و`test_all_entrypoints_respond.py`
+  (4+4): حذف تخطيين متقادمين (المسار/الملف موجودان) — استُبدلا بتوكيد صريح.
+- `backend/tests/invariants/test_no_mock_outside_tests.py` (55+2): توسيع ALLOWED_DIRS
+  (إدراج backend/tests/ — مجلد اختبارات شرعي بعد نقل invariants إليه).
+- `backend/tests/invariants/test_no_orphan_modules.py` (3+2) و`test_no_unsigned_ledger_events.py`
+  (79+1): تحديث المسار الذاتي للمسبار + إصلاح التزوير (التعديل على blob الموقّع).
+- `backend/compat/__meta__.py` (7+2): تحسين الديكوريتور بـ functools.wraps.
+- النقل بـ git mv (الستة) — إعادة تسمية موثقة لا حذف ملفات.
+
+العلامة `# DELETION-JUSTIFIED` في رسالة الالتزام نفسه (قاعدة Issue #8).

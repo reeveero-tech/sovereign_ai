@@ -15,6 +15,9 @@
 # لا يُحذف أو يُعدَّل أي ملف أصلي — هذه إضافة فقط.
 
 import logging
+
+# الجولة الإنشائية 2026-10-16: تسجيل الاستدعاءات (المرحلة 4 — ROADMAP_V2)
+from backend.compat.__meta__ import compat_tracked
 import sys
 from pathlib import Path
 from typing import Optional
@@ -27,6 +30,7 @@ if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 
+@compat_tracked("nexus_recommendations")
 def get_recommendation_engine():
     """
     يُعيد مكوّن recommender المسجل في المحرك المشترك (get_engine()).
@@ -45,6 +49,7 @@ def get_recommendation_engine():
         return None
 
 
+@compat_tracked("nexus_recommendations")
 def generate_live_recommendations(context: dict) -> dict:
     """
     يُولّد توصيات فعلية من RecommendationEngine المسجل، باستخدام
@@ -93,6 +98,7 @@ def generate_live_recommendations(context: dict) -> dict:
     }
 
 
+@compat_tracked("nexus_recommendations")
 def get_pending_recommendations() -> dict:
     """
     يُعيد التوصيات المعلقة (pending) من RecommendationEngine المسجل —

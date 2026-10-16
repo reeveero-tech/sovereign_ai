@@ -13,7 +13,8 @@ import ast
 import sys
 from pathlib import Path
 
-_REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+# الملف في backend/tests/invariants/ — الجذر أربع مستويات أعلى
+_REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 _BACKEND_DIR = _REPO_ROOT / "backend"
 for p in [str(_REPO_ROOT), str(_BACKEND_DIR)]:
     if p not in sys.path:
@@ -204,7 +205,7 @@ def test_guard_flags_stray_conftest_outside_root(tmp_path):
     )
     cmd = [
         sys.executable, "-m", "pytest",
-        "tests/invariants/test_no_orphan_modules.py::test_no_orphan_modules",
+        "backend/tests/invariants/test_no_orphan_modules.py::test_no_orphan_modules",
         "-q", "--no-header",
     ]
     try:

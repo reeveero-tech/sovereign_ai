@@ -9,7 +9,8 @@ import re
 import sys
 from pathlib import Path
 
-_REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+# الملف في backend/tests/invariants/ — الجذر أربع مستويات أعلى
+_REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 _BACKEND_DIR = _REPO_ROOT / "backend"
 for p in [str(_REPO_ROOT), str(_BACKEND_DIR)]:
     if p not in sys.path:
@@ -27,9 +28,11 @@ MOCK_PATTERNS = [
     r"\bfrom unittest\.mock import",
 ]
 
-# مجلدات مسموح فيها mock (اختبارات فقط)
+# مجلدات مسموح فيها mock (اختبارات فقط — backend/tests/ مجلد اختبارات
+# شرعي مثل tests/: انتقلت إليه invariants المرحلة 3 وفق مسار ROADMAP_V2)
 ALLOWED_DIRS = {
     "tests/",
+    "backend/tests/",  # مجلد اختبارات (نُقلت إليه invariants — مسار ROADMAP)
     "archive/",       # أرشيف (موثق — لا يُشغّل)
 }
 
@@ -121,4 +124,54 @@ def test_no_stub_placeholders_in_production():
     assert len(violations) == 0, (
         f"Found stub/placeholder in production code: {violations}. "
         f"Stubs that hide failures are forbidden per the constitution."
+    )
+
+
+def test_guard_flags_mock_outside_tests():
+    """إثبات RED سلوكي دائم (قاعدة الجولة الإنشائية 2026-10-16):
+
+    الحارس يفشل عند إدخال ملف تجريبي يستخدم Mock() خارج مجلدات الاختبارات،
+    ويعود أخضر بعد إزالته — نفس المسبار يُنفذ في كل تشغيل (سب-بروسس مع ملف
+    تجريبي موجود ثم بعد إزالته)، فلا يعتمد الإثبات على تشغيل تاريخي.
+    """
+    import shutil
+    import subprocess
+
+    probe_dir = _REPO_ROOT / "_mock_probe_tmp"
+    probe = probe_dir / "uses_mock.py"
+    probe_dir.mkdir(parents=True, exist_ok=True)
+    probe.write_text(
+        "# probe — uses Mock() outside test dirs (guard must flag it)\n"
+        "from unittest.mock import Mock\n"
+        "thing = Mock()\n",
+        encoding="utf-8",
+    )
+    cmd = [
+        sys.executable, "-m", "pytest",
+        "backend/tests/invariants/test_no_mock_outside_tests.py"
+        "::test_no_mock_outside_tests",
+        "-q", "--no-header",
+    ]
+    try:
+        r = subprocess.run(
+            cmd, capture_output=True, text=True,
+            cwd=str(_REPO_ROOT), timeout=300,
+        )
+        # مع الملف المخالف: الحارس يفشل ويذكره بالاسم
+        assert r.returncode != 0, (
+            "guard must FAIL while a Mock()-using file exists outside test dirs"
+        )
+        assert "_mock_probe_tmp/uses_mock.py" in r.stdout, (
+            f"probe must be named in the failure output: {r.stdout[-300:]}"
+        )
+    finally:
+        shutil.rmtree(probe_dir, ignore_errors=True)
+
+    # بعد الإزالة: الحارس يعود أخضر
+    r2 = subprocess.run(
+        cmd, capture_output=True, text=True,
+        cwd=str(_REPO_ROOT), timeout=300,
+    )
+    assert r2.returncode == 0, (
+        f"guard must pass again after probe removal: {r2.stdout[-300:]}"
     )

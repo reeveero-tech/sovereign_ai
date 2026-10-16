@@ -1,0 +1,39 @@
+{
+ "files_reachable": 0.4042,
+ "modules_tested": 0.2439,
+ "ledger_verified": 1.0,
+ "ledger_anchored": 1.0,
+ "compat_pending_sunset": 1.0,
+ "no_mocks_in_prod": 1,
+ "invariants_passing": 1,
+ "final_score": 0.8069,
+ "score_capped_by_missing_ledger": true,
+ "confidence_range": {
+  "lower": 0.5212,
+  "upper": 0.8069,
+  "note": "ledger.jsonl raw file absent from clone — ledger components are upper bounds (anchors-file declared coverage); conservative bound uses 0.0 for both ledger components"
+ },
+ "inputs": {
+  "files_total_count": 287,
+  "files_imported_count": 116,
+  "backend_live_modules": 82,
+  "backend_modules_tested": 20,
+  "ledger_present": false,
+  "anchors_declared_coverage": 116910,
+  "anchors_malformed_lines": 0,
+  "documented_total_events": 116910,
+  "compat_total": 4,
+  "compat_with_sunset": 4,
+  "mocks_outside_tests_count": 0,
+  "invariants_run_tail": "101 passed, 1 warning in 40.54s",
+  "repo_head_sha": "d08ec6a45d0df981e6476da9196f742a5af81e41"
+ },
+ "aggregation": "final_score = mean(7 scored components) — documented choice; ROADMAP_V2 does not specify weights; not tunable to improve results",
+ "evaluated_against": "شجرة البناء الحالية (قبل الالتزام — الالتزام في رسالة الدفعة)",
+ "comparison": {
+  "before_final_upper": 0.8071,
+  "after_final_upper": 0.8069,
+  "delta": -0.0002,
+  "announcement": "AFTER < BEFORE بفارق 0.0002 — السبب الكامل المحدد: ملف backend/tests/conftest.py الجديد (بنية اختبارية يحمّلها pytest تلقائيًا — لا يستوردها ملف آخر) رفع files_total_count من 286 إلى 287 دون رفع files_imported_count، فنزلت files_reachable من 0.4056 إلى 0.4042. لا تعديل في الصيغة (أمر المالك). عدد invariants ارتفع من 97 إلى 101 (أربعة اختبارات RED سلوكية جديدة). مكونا السجل عند حدهما الأعلى في الحالتين (السجل الخام غائب)."
+ }
+}

@@ -8,7 +8,8 @@ Invariant 6: كل نقاط الدخول تستجيب (المرحلة 3 من ROAD
 import sys
 from pathlib import Path
 
-_REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+# الملف في backend/tests/invariants/ — الجذر أربع مستويات أعلى
+_REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 _BACKEND_DIR = _REPO_ROOT / "backend"
 for p in [str(_REPO_ROOT), str(_BACKEND_DIR)]:
     if p not in sys.path:
@@ -58,9 +59,8 @@ def test_required_endpoints_not_500(client):
 def test_compat_status_reports_lifecycle(client):
     """/compat/status يجب أن يُعيد lifecycle من __meta__.py (COMPAT_LIFECYCLE)."""
     resp = client.get("/compat/status")
-    if resp.status_code == 404:
-        pytest.skip("/compat/status not registered yet")
-
+    # (قاعدة الجولة الإنشائية 2026-10-16: لا skip — المسار مسجل؛
+    # وغيابه فشل صريح لا حالة تُتخطى)
     assert resp.status_code == 200, (
         f"/compat/status returned {resp.status_code}"
     )

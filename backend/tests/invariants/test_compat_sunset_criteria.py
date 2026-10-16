@@ -9,7 +9,8 @@ import ast
 import sys
 from pathlib import Path
 
-_REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+# الملف في backend/tests/invariants/ — الجذر أربع مستويات أعلى
+_REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 _BACKEND_DIR = _REPO_ROOT / "backend"
 for p in [str(_REPO_ROOT), str(_BACKEND_DIR)]:
     if p not in sys.path:
@@ -65,8 +66,11 @@ def test_compat_meta_exists():
 def test_compat_meta_contains_lifecycle_dict():
     """__meta__.py يجب أن يحتوي COMPAT_LIFECYCLE (قاموس lifecycle)."""
     meta_file = COMPAT_DIR / "__meta__.py"
-    if not meta_file.exists():
-        pytest.skip("__meta__.py does not exist yet")
+    # (قاعدة الجولة الإنشائية 2026-10-16: لا skip — الملف موجود؛
+    # وغيابه فشل صريح للاختبار لا حالة تُتخطى)
+    assert meta_file.exists(), (
+        "backend/compat/__meta__.py must exist (compat lifecycle metadata)"
+    )
 
     src = meta_file.read_text(encoding="utf-8")
     assert "COMPAT_LIFECYCLE" in src, (
@@ -94,4 +98,51 @@ def test_compat_meta_contains_lifecycle_dict():
     missing = [cf for cf in compat_files if cf not in lifecycle_entries]
     assert len(missing) == 0, (
         f"Compat modules missing from COMPAT_LIFECYCLE: {missing}"
+    )
+
+
+def test_guard_flags_new_compat_without_sunset():
+    """إثبات RED سلوكي دائم (قاعدة الجولة الإنشائية 2026-10-16):
+
+    وحدة compat جديدة بلا SUNSET_CRITERIA تفشل الحارس، وإضافتها تعيد النجاح —
+    المسبار يُنفذ في كل تشغيل (سب-بروسس)، فلا يعتمد على تشغيل تاريخي.
+    """
+    import shutil
+    import subprocess
+
+    probe = COMPAT_DIR / "_probe_no_criteria.py"
+    probe.write_text(
+        "# probe — compat module missing its retirement criterion\n"
+        "def probe_helper():\n"
+        "    return 1\n",
+        encoding="utf-8",
+    )
+    cmd = [
+        sys.executable, "-m", "pytest",
+        "backend/tests/invariants/test_compat_sunset_criteria.py"
+        "::test_every_compat_module_has_sunset_criteria",
+        "-q", "--no-header",
+    ]
+    try:
+        r = subprocess.run(
+            cmd, capture_output=True, text=True,
+            cwd=str(_REPO_ROOT), timeout=300,
+        )
+        # مع الوحدة الجديدة بلا معيار: الحارس يفشل ويذكرها بالاسم
+        assert r.returncode != 0, (
+            "guard must FAIL while a compat module lacks SUNSET_CRITERIA"
+        )
+        assert "_probe_no_criteria.py" in r.stdout, (
+            f"probe module must be named in the failure output: {r.stdout[-300:]}"
+        )
+    finally:
+        probe.unlink(missing_ok=True)
+
+    # بعد الإزالة: الحارس يعود أخضر
+    r2 = subprocess.run(
+        cmd, capture_output=True, text=True,
+        cwd=str(_REPO_ROOT), timeout=300,
+    )
+    assert r2.returncode == 0, (
+        f"guard must pass again after probe removal: {r2.stdout[-300:]}"
     )

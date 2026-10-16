@@ -13,7 +13,8 @@ import json
 import sys
 from pathlib import Path
 
-_REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+# الملف في backend/tests/invariants/ — الجذر أربع مستويات أعلى
+_REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 _BACKEND_DIR = _REPO_ROOT / "backend"
 for p in [str(_REPO_ROOT), str(_BACKEND_DIR)]:
     if p not in sys.path:
@@ -185,4 +186,81 @@ def test_anchored_coverage(synthetic_ledger):
     assert coverage > 0.9, (
         f"Anchored coverage too low: {coverage:.2%} "
         f"({len(anchored_events)}/{len(lines)} events)"
+    )
+
+
+def test_anchor_detects_single_byte_tamper(synthetic_ledger):
+    """إثبات RED سلوكي دائم (قاعدة الجولة الإنشائية 2026-10-16):
+
+    تغيير بايت واحد في حدث مُرسى يجعل التحقق يفشل — الحارس يكشف العبث.
+    (سجل تجريبي داخل مجلد مؤقت عبر واجهات التوقيع والإرساء الحقيقية —
+    السجل التاريخي الحقيقي غائب عن الـclone وموثق غيابه في
+    forensics/INVARIANT_LIMITS.md.)
+    """
+    _real_ledger = synthetic_ledger["ledger"]
+    _real_anchors = synthetic_ledger["anchors"]
+
+    anchor = LedgerAnchor(ledger_path=_real_ledger, anchors_path=_real_anchors)
+    anchors_list = anchor.list_anchors()
+    assert anchors_list, "fixture: no anchors"
+
+    # الحالة السليمة: الجذر يُتحقق
+    ok = anchor.verify_anchor_detailed(anchors_list[0])
+    assert ok["root_verified"] is True, (
+        f"fixture must verify cleanly before tampering: {ok['message']}"
+    )
+
+    # تغيير بايت واحد داخل نطاق المرساة (الحدث الأول — داخل النطاق حكمًا)
+    lines = _real_ledger.read_text(encoding="utf-8").split("\n")
+    non_empty = [i for i, l in enumerate(lines) if l.strip()]
+    target_idx = non_empty[0]
+    original = lines[target_idx]
+    assert len(original) > 0
+    # قلب بايت واحد (حرف واحد) في منتصف السطر — لا يتلف البنية، فقط المحتوى
+    mid = len(original) // 2
+    flipped = original[:mid] + ("X" if original[mid] != "X" else "Y") + original[mid + 1:]
+    assert flipped != original, "tamper must actually change a byte"
+    lines[target_idx] = flipped
+    _real_ledger.write_text("\n".join(lines), encoding="utf-8")
+
+    # بعد العبث: الجذر يفشل — الحارس يكشف تغيير البايت الواحد
+    tampered = anchor.verify_anchor_detailed(anchors_list[0])
+    assert tampered["root_verified"] is False, (
+        "single-byte tamper inside anchored range MUST be detected "
+        "(merkle root mismatch)"
+    )
+
+
+def test_invalid_signature_event_detected(synthetic_ledger):
+    """إثبات RED سلوكي دائم: حدث بتوقيع مزوّر (تغيير محتوى مع إبقاء التوقيع)
+    يُصنَّف INVALID — لا يُقبل أبدًا كموثق.
+
+    الحارس (test_no_unsigned_ledger_events) يفشل عند وجود أي حدث INVALID —
+    هذا الاختبار يثبت أن آلية الكشف نفسها تعمل.
+    """
+    _real_ledger = synthetic_ledger["ledger"]
+    _keys_dir = synthetic_ledger["keys_dir"]
+
+    keyring = KeyRing(keys_dir=_keys_dir)
+    keyring.load_from_disk()
+    verifier = SignatureVerifier(keyring)
+
+    # أول حدث موقّع صالح
+    lines = [l for l in _real_ledger.read_text(encoding="utf-8").split("\n") if l.strip()]
+    event = json.loads(lines[0])
+
+    # الحالة السليمة: يُصنَّف (VERIFIED أو UNVERIFIABLE_MISSING_KEY — كلاهما معروف)
+    result_ok = verifier.verify_event(event)
+    assert result_ok.status in (
+        VerificationStatus.VERIFIED,
+        VerificationStatus.UNVERIFIABLE_MISSING_KEY,
+    ), f"fixture event must be classifiable, got {result_ok.status}"
+
+    # التزوير: تغيير المحتوى الموقّع (blob) مع إبقاء التوقيع القديم
+    # (التوقيع يغطي hash|prev_hash|blob|time|type|key_id — راجع verifier.py)
+    event["blob"] = event["blob"] + "TAMPERED"
+    result_bad = verifier.verify_event(event)
+    assert result_bad.status == VerificationStatus.INVALID, (
+        f"content-modified event with stale signature must be INVALID, "
+        f"got {result_bad.status}"
     )

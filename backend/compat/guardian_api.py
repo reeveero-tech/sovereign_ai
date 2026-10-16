@@ -15,6 +15,9 @@
 # أعلام حالة تشخيصية غير حساسة (present / locked / frozen) دون أي محتوى خام.
 
 import logging
+
+# الجولة الإنشائية 2026-10-16: تسجيل الاستدعاءات (المرحلة 4 — ROADMAP_V2)
+from backend.compat.__meta__ import compat_tracked
 import sys
 import time
 from pathlib import Path
@@ -42,6 +45,7 @@ def _flag_present(path: Path) -> bool:
         return False
 
 
+@compat_tracked("guardian_api")
 def guardian_status_snapshot() -> dict:
     """
     يُعيد لحظة حالة نظام الحارس (قراءة فقط — لا يُفعّل أي إجراء).

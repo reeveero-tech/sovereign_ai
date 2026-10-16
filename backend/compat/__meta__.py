@@ -92,14 +92,19 @@ def compat_tracked(name: str):
     """
     Decorator يُسجّل عدد الاستدعاءات لوحدة compat.
     يُستخدم على كل دالة/كلاس في compat لقياس الاستخدام الفعلي.
+
+    (الجولة الإنشائية 2026-10-16: functools.wraps — يحفظ توقيع الدالة
+    وبياناتها للـintrospection، وآمن للدوال async: الغلاف يستدعي الأصل
+    ويعيد الناتج كما هو)
     """
+    from functools import wraps
+
     def decorator(func):
+        @wraps(func)
         def wrapper(*args, **kwargs):
             record_call(name)
             return func(*args, **kwargs)
         # الحفاظ على اسم الدالة الأصلية (لا حذف للواجهة)
-        wrapper.__name__ = func.__name__
-        wrapper.__doc__ = func.__doc__
         wrapper.__compat_tracked__ = name
         return wrapper
     return decorator
