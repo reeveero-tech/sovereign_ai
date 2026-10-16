@@ -90,5 +90,5 @@
 
 قرار المالك: «تُغلق موثقة كما في forensics/THIS_ROUND_VIOLATIONS.md.
 لا تصحيح إضافي.» — المخالفات السبع أعلاه مغلقة موثقة بقرار المالك
-(راجع [Issue #8](https://github.com/reeverero-tech/sovereign_ai/issues/8)
+(راجع [Issue #8](https://github.com/reeveero-tech/sovereign_ai/issues/8)
 وforensics/OWNER_DECISIONS.md). التوثيق يبقى — لا يُحذف ولا يُجمّل.

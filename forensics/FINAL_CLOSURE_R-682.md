@@ -165,7 +165,7 @@ DELETED_LINES_AUDIT.md وضمن نص استثناء المالك.
 
 ## البند ٨ (لا حذف): الحالة النهائية — closed
 
-أغلقه توقيع المالك في [Issue #8](https://github.com/reeverero-tech/sovereign_ai/issues/8).
+أغلقه توقيع المالك في [Issue #8](https://github.com/reeveero-tech/sovereign_ai/issues/8).
 النص الذي أغلق البند حرفيًا:
 
 > «التوقيع: أعتمده    التاريخ: 16 / 10 /2026»

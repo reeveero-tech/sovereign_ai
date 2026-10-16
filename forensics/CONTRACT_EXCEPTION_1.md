@@ -224,7 +224,7 @@ print(f'Code deletions: {len(code_del)}')
 ## قرار المالك — الاعتماد (Issue #8، 2026-10-16)
 
 وقّع المالك نص البنود الخمسة أعلاه في
-[Issue #8](https://github.com/reeverero-tech/sovereign_ai/issues/8):
+[Issue #8](https://github.com/reeveero-tech/sovereign_ai/issues/8):
 «التوقيع: أعتمده    التاريخ: 16 / 10 /2026».
 
 أثر التوقيع (قرار المالك المباشر):

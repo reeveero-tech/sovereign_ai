@@ -1,7 +1,7 @@
 # forensics/OWNER_DECISIONS.md — قرارات المالك (Issue #8)
 
 **التاريخ:** 2026-10-16 — أمر المالك المباشر (الجولة الحالية) + توقيع Issue #8
-**المرجع:** [Issue #8 — توقيع المالك ـ استثناء الحذوفات](https://github.com/reeverero-tech/sovereign_ai/issues/8)
+**المرجع:** [Issue #8 — توقيع المالك ـ استثناء الحذوفات](https://github.com/reeveero-tech/sovereign_ai/issues/8)
 
 ## القرارات الثلاثة (نص أمر المالك حرفيًا)
 

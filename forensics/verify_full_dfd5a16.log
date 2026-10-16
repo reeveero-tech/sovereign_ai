@@ -1,0 +1,53 @@
+✅ [بوابة الإصدار] Python 3.11 — مقبول (3.11.x)
+==========================================
+ R-682 Verification Script
+==========================================
+HEAD: dfd5a16e81d4cddc0ef09f6915294728116d7bca
+
+[1/2] Running test suite (tests/ + backend/tests/, excluding operational)...
+........................................................................ [ 16%]
+........................................................................ [ 33%]
+........................................................................ [ 50%]
+........................................................................ [ 67%]
+........................................................................ [ 84%]
+................................................................         [100%]
+=============================== warnings summary ===============================
+../../../../tmp/sovereign311/lib/python3.11/site-packages/starlette/testclient.py:40
+  /tmp/sovereign311/lib/python3.11/site-packages/starlette/testclient.py:40: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.
+    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+424 passed, 1 deselected, 1 warning in 192.29s (0:03:12)
+✅ git SHA embedded in JUnit XML: dfd5a16e81d4cddc0ef09f6915294728116d7bca
+
+[2/2] Verifying zero skips (DoD hard requirement)...
+✅ بوابة الاختبارات ناجحة: 424 passed, 0 skipped, 0 failed
+
+==========================================
+ [FULL MODE] CI + Clean Clone comparison
+==========================================
+
+[3/4] Fetching CI run for HEAD SHA=dfd5a16...
+CI Run: 38836206439 (completed/success — اختيار صريح + فحص هوية workflow)
+CI:     sha=dfd5a16e81d4... tests=424 failed=0 skipped=0 unique_ids=424
+Local:  sha=dfd5a16e81d4... tests=424 failed=0 skipped=0 unique_ids=424
+✅ CI + Local MATCH (SHA + test counts + (normalized_classname,name) Counter + zero failures + zero skips)
+
+[4/4] Clean clone verification (git checkout pinned to SHA=dfd5a16)...
+[info] Generated ephemeral data/key.secret in clone (not committed)
+  /tmp/sovereign311/lib/python3.11/site-packages/starlette/testclient.py:40: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.
+    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+424 passed, 1 deselected, 1 warning in 191.20s (0:03:11)
+✅ SHA embedded in clone JUnit: dfd5a16e81d4cddc0ef09f6915294728116d7bca
+Clone:  tests=424 failed=0 skipped=0 unique_ids=424
+Local:  tests=424 failed=0 skipped=0 unique_ids=424
+✅ Clean clone JUnit MATCHES Local (count + (normalized_classname,name) Counter + zero failures + zero skips)
+
+==========================================
+ VERIFICATION COMPLETE
+ HEAD: dfd5a16e81d4cddc0ef09f6915294728116d7bca
+ JUnit: forensics/pytest_results.xml (git_sha embedded)
+ Mode: --full
+==========================================
