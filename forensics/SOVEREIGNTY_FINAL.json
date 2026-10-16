@@ -1,30 +1,24 @@
 {
-  "measurement": "FINAL (closure round — measurable fields only)",
+  "measurement": "FINAL (R-683 — score contract: five measurable components only)",
   "meta": {
-    "measured_tree": "6f9553c139bf6a8ccf143c439b93fe4e593ae6e2 — the score is attributed to THIS tree (the externally-verified closure state), not to the closure-round tree",
-    "calculator": "compute_sovereignty_score_v2 (closure-round version: ledger components null, not scored) — the modified calculator executed OUTSIDE the measured tree (imported from the closure working tree, NOT from the measured tree); measurement via repo_root=/tmp/verify_exec (the 6f9553c clone) with its sealed JUnit evidence",
-    "gate_evidence": "sealed JUnit from the actual verify.sh --full run at 6f9553c (exit=0, 467/0/0/1 deselected, fingerprint captured before the run, accepted without re-sealing)",
-    "owner_order": "closure round section 2: ledger_verified/ledger_anchored removed from the equation (declared null, not scored) — score_capped_by_missing_ledger: false"
-  },
-  "comparison_with_capped_v2": {
-    "v2_capped_after_at_6f9553c": 0.8713,
-    "final_uncapped": 0.8198,
-    "note": "the new score is LOWER — announced as-is, formula not tuned (owner order: if lower, it is lower)"
+    "measured_tree": "working tree of the R-683 commit before committing: parent HEAD 91c92f364cd4ec5839465f0c01fc4dd8b9d6c7e5 + R-683 changes; content_fingerprint b079ac6756e927d9b756b619d6967015a073285735334113d465589432e6e31c (recomputable at the R-683 commit with backend.sovereign.score._v2_content_fingerprint — .py content is identical)",
+    "calculator": "compute_sovereignty_score_v2 (R-683 contract) executed from the measured tree itself (repo_root = copy of the working tree)",
+    "gate_evidence": "tools/run_gate.py on the measured tree: exit=0, 467 passed / 0 failed / 0 errors / 0 skipped, 1 deselected (operational); JUnit sealed with HEAD 91c92f3 + the content fingerprint above",
+    "owner_decision": "R-683 (2026-10-16): ledger_verified, ledger_anchored, score_capped_by_missing_ledger, confidence_range removed from the contract; no upper bound declared; if the score is lower it stays lower",
+    "previous_value_note": "0.8198 equals the previous closure-round value — the previous calculator already averaged the same five components; only the removed fields and the aggregation text changed"
   },
   "result": {
     "files_reachable": 0.6354,
     "modules_tested": 0.4634,
-    "ledger_verified": null,
-    "ledger_anchored": null,
     "compat_pending_sunset": 1.0,
     "no_mocks_in_prod": 1,
     "invariants_passing": 1,
     "final_score": 0.8198,
-    "ledger_components_note": "raw ledger is absent and never opened/searched (owner prohibition) — the two ledger components are declared null and NOT scored (closure round, owner order section 2)",
+    "ledger_components_note": "raw ledger is absent and never opened/searched (owner prohibition) — the two ledger components are removed from the score contract, not estimated (owner decision R-683)",
     "invariants_evidence": {
       "source": "JUnit XML parse",
-      "head_sha": "6f9553c139bf6a8ccf143c439b93fe4e593ae6e2",
-      "junit_path": "/tmp/verify_exec/forensics/pytest_results.xml",
+      "head_sha": "91c92f364cd4ec5839465f0c01fc4dd8b9d6c7e5",
+      "junit_path": "forensics/pytest_results.xml (measurement copy of the working tree, not committed)",
       "passing": 1,
       "tests_total": 467,
       "failures": 0,
@@ -39,7 +33,7 @@
         "backend.tests.invariants.test_no_silent_exceptions.TestNoSilentExceptions::test_no_silent_except_in_production",
         "backend.tests.invariants.test_no_mock_outside_tests::test_no_mock_outside_tests"
       ],
-      "tree_fingerprint": "ab0eb54aa82512a4"
+      "tree_fingerprint": "52ed5976cf9c8879"
     },
     "inputs": {
       "py_files_total": 288,
@@ -52,9 +46,8 @@
       "compat_total": 4,
       "compat_with_sunset": 4,
       "mocks_outside_tests_count": 0,
-      "repo_head_sha": "6f9553c139bf6a8ccf143c439b93fe4e593ae6e2"
+      "repo_head_sha": "91c92f364cd4ec5839465f0c01fc4dd8b9d6c7e5"
     },
-    "aggregation": "final_score = mean(7 scored components) — documented choice; ROADMAP_V2 does not specify weights; not tunable to improve results",
-    "score_capped_by_missing_ledger": false
+    "aggregation": "final_score = mean(5 scored components) — documented choice; ROADMAP_V2 does not specify weights; not tunable to improve results"
   }
 }

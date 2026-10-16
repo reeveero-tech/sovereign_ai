@@ -154,34 +154,83 @@ def test_ledger_verify_full_report(client):
     assert "unverifiable" in summary
 
 
+# DELETION-JUSTIFIED — R-683 (قرار المالك 2026-10-16): أُعيدت كتابة هذا
+# الاختبار ليعكس عقد /sovereignty/score الجديد (المكونات الخمسة القابلة
+# للقياس فقط) — تحديث اختبار ليعكس عقدًا جديدًا بقرار مالك، ليس تخفيفًا.
+# مفصل في forensics/DELETED_LINES_AUDIT.md (جولة R-683).
+_V2_EXPECTED_FIELDS = sorted([
+    "files_reachable",
+    "modules_tested",
+    "compat_pending_sunset",
+    "no_mocks_in_prod",
+    "invariants_passing",
+    "final_score",
+    "ledger_components_note",
+    "invariants_evidence",
+    "inputs",
+    "aggregation",
+])
+
+_V2_AGGREGATION_EXACT = (
+    "final_score = mean(5 scored components) — documented choice; "
+    "ROADMAP_V2 does not specify weights; not tunable to improve results"
+)
+
+
+def _assert_unit_number(v2, name):
+    value = v2[name]
+    assert type(value) is not bool, f"{name} must be numeric, got bool {value!r}"
+    assert isinstance(value, (int, float)), f"{name} must be numeric, got {value!r}"
+    assert value >= 0.0, f"{name} below 0: {value!r}"
+    assert value <= 1.0, f"{name} above 1: {value!r}"
+
+
 def test_sovereignty_score_reports_roadmap_v2(client):
-    """تصويب المراجع (الاعتراض 1): /sovereignty/score يعرض معادلة ROADMAP_V2
-    فعلًا — الثمانية مكونات + علم الحد + نطاق الثقة + دليل invariants
-    (لا ثابت نجاح: القيمة من دليل معلوم الهوية أو 0 مسبب)."""
+    """R-683 (قرار المالك): /sovereignty/score يعرض عقد الدرجة الجديد —
+    المكونات الخمسة القابلة للقياس فقط، بلا مكونات سجل ولا علم حد ولا
+    نطاق ثقة، وaggregation يطابق mean(5) حرفيًا."""
     resp = client.get("/sovereignty/score")
     assert resp.status_code == 200, f"/sovereignty/score returned {resp.status_code}"
 
     data = resp.json()
     assert "roadmap_v2" in data, "route must expose the ROADMAP_V2 equation"
-
     v2 = data["roadmap_v2"]
-    for component in (
-        "files_reachable", "modules_tested", "ledger_verified",
-        "ledger_anchored", "compat_pending_sunset", "no_mocks_in_prod",
-        "invariants_passing", "final_score",
-    ):
-        assert component in v2, f"missing component: {component}"
 
-    # العلم ونطاق الثقة — الصدق حول غياب السجل الخام
-    assert v2["score_capped_by_missing_ledger"] is True
-    cr = v2["confidence_range"]
-    assert "lower" in cr and "upper" in cr
-    assert 0.0 <= cr["lower"] <= cr["upper"] <= 1.0
+    # قائمة الحقول بالضبط — لا زيادة ولا نقص
+    assert sorted(v2.keys()) == _V2_EXPECTED_FIELDS, (
+        f"roadmap_v2 fields mismatch: {sorted(v2.keys())}"
+    )
 
-    # الثنائيان قيمتان صحيحتان 0/1
-    assert v2["no_mocks_in_prod"] in (0, 1)
-    assert v2["invariants_passing"] in (0, 1)
+    # الحقول الأربعة المحذوفة غائبة — تأكيد صريح لكل حقل
+    assert "ledger_verified" not in v2, "ledger_verified must be removed"
+    assert "ledger_anchored" not in v2, "ledger_anchored must be removed"
+    assert "score_capped_by_missing_ledger" not in v2, (
+        "score_capped_by_missing_ledger must be removed"
+    )
+    assert "confidence_range" not in v2, "confidence_range must be removed"
+
+    # المكونات الخمسة أرقام بين 0 و1 — تأكيد صريح لكل مكون
+    _assert_unit_number(v2, "files_reachable")
+    _assert_unit_number(v2, "modules_tested")
+    _assert_unit_number(v2, "compat_pending_sunset")
+    _assert_unit_number(v2, "no_mocks_in_prod")
+    _assert_unit_number(v2, "invariants_passing")
+
+    # final_score = متوسط الخمسة بالضبط
+    expected_final = round(
+        (v2["files_reachable"] + v2["modules_tested"]
+         + v2["compat_pending_sunset"] + v2["no_mocks_in_prod"]
+         + v2["invariants_passing"]) / 5, 4)
+    assert v2["final_score"] == expected_final, (
+        f"final_score {v2['final_score']} != mean(5) {expected_final}"
+    )
+
+    # aggregation يساوي mean(5) حرفيًا
+    assert v2["aggregation"] == _V2_AGGREGATION_EXACT, (
+        f"aggregation mismatch: {v2['aggregation']!r}"
+    )
 
     # الدليل معلوم الهوية — لا نجاح صامت بلا مصدر
     ev = v2["invariants_evidence"]
-    assert "source" in ev and "head_sha" in ev
+    assert "source" in ev, "invariants_evidence must declare source"
+    assert "head_sha" in ev, "invariants_evidence must declare head_sha"

@@ -804,3 +804,38 @@ tests/ci_run_selection.py (--require-completed). الحذف كله استبدا�
 forensics/DELETIONS_RECONCILIATION_556_216.md والملحق
 DELETED_LINES_AUDIT_ADDENDUM.md (5753ab8) — وسم رسالة الالتزام لا يغطي هذه
 الحذوفات الجديدة؛ هذا القسم هو سجلها.
+
+---
+
+## جولة R-683 (2026-10-16) — حسم تعارض القسمين ٢ و٦ بقرار المالك
+
+**كيف وُجد:** فحص المرحلة صفر على HEAD `91c92f3` أعطى محليًا (Python 3.11.15)
+`1 failed, 465 passed, 1 skipped`، وانتهى CI run `38877956328` على الـ SHA نفسه
+بـ failure (`1 failed, 466 passed`). الاختبار الفاشل هو
+`test_all_entrypoints_respond.py:176`. التخطي المحلي سببه بيئي: `data/key.secret`
+غائب في أول تشغيل خارج verify.sh.
+**تصويب صريح للسلف:** عنوان الالتزام `91c92f3` "إغلاق نظيف" غير صحيح، لأن
+الشجرة دُفعت حمراء وCI فشل عليها. وسجل "جولة الإغلاق" أعلاه يقول إن أسطر الحد
+الأعلى `ledger_upper` حُذفت، وهذا غير صحيح أيضًا: `ledger_upper` ما زال معرّفًا في
+`backend/sovereign/score.py` (كود ميت لا يدخل الرد). لم يُحذف في هذه الجولة لأن
+قرار المالك حصر النطاق، فيبقى بندًا **مفتوحًا**.
+**خلل إضافي وُجد:** حقل `aggregation` كان يقول `mean(7 scored components)`
+بينما `final_score` يُحسب على 5 مكونات.
+
+**قرار المالك (R-683):** تحديث الاختبار ليعكس العقد الجديد ليس تخفيفًا، بل هو
+التنفيذ الصحيح للقسم ٢. المطلوب التزام واحد.
+
+| # | الملف | المحذوف | المبرر |
+|---|---|---|---|
+| 1 | backend/sovereign/score.py | 9 أسطر: `"ledger_verified": None` و`"ledger_anchored": None` وتعليقها (3 أسطر)، و`result["score_capped_by_missing_ledger"] = False`، وسطرا نص `ledger_components_note` القديم ("declared null")، وسطر docstring "null معلنة" | # DELETION-JUSTIFIED — عقد الدرجة تغيّر بقرار مالك؛ المكوّنات غير القابلة للقياس أُزيلت بدلًا من تقديرها بأعلى نظري. حقل `confidence_range` كان قد حُذف من الكود في `91c92f3`، فحذفه في هذه الجولة يقتصر على توكيدات الاختبار. صُحح نص الملاحظة ليطابق الإزالة، فلم يعد يقول "null معلنة". |
+| 2 | backend/sovereign/score.py | سطر واحد: `"final_score = mean(7 scored components) — ..."` | # DELETION-JUSTIFIED — استُبدل "mean(7)" بـ"mean(5)". صار العدد يُشتق من `len(measurable)` الفعلي، فلا يبقى رقمًا مكتوبًا يدويًا. |
+| 3 | backend/tests/invariants/test_all_entrypoints_respond.py | 21 سطرًا: docstring القديم، وحلقة المكونات الثمانية، وتوكيد `score_capped_by_missing_ledger is True`، وتوكيدات `confidence_range`، و`in (0, 1)` للثنائيين، و`"source" in ev and "head_sha" in ev` | # DELETION-JUSTIFIED — تحديث اختبار ليعكس عقدًا جديدًا بقرار مالك، ليس تخفيفًا. يتضمن البديل: قائمة الحقول بالضبط، وغياب الحقول الأربعة بتوكيد لكل منها، والمكونات الخمسة أرقامًا في [0,1] بتوكيد لكل منها، و`final_score` يساوي mean(5)، و`aggregation` يساوي النص حرفيًا. لا `in (...)` ولا `or`. |
+
+**الإثبات:**
+- RED: الاختبار الجديد على الكود القديم فشل (`1 failed`) برسالة
+  `roadmap_v2 fields mismatch: [... 'ledger_anchored', ..., 'ledger_verified', ..., 'score_capped_by_missing_ledger']`.
+- GREEN: الاختبار نفسه بعد الإصلاح أعطى `1 passed`. الحزمة كاملة محليًا أعطت
+  `467 passed, 1 deselected` (0 skipped، 0 failed).
+- `forensics/SOVEREIGNTY_FINAL.json` أُعيد إنتاجه بالمكوّنات الخمسة فقط وبلا حد
+  أعلى معلن. الدرجة `0.8198`، وهي مساوية للقيمة السابقة لأن الحاسبة السابقة كانت
+  تحسب متوسط الخمسة نفسها.

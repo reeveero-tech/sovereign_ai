@@ -1026,7 +1026,7 @@ def compute_sovereignty_score_v2(repo_root=None, invariants_evidence=None) -> di
     - invariants_passing من دليل تشغيل معلوم الهوية (JUnit بـSHA مطابق
       أو دليل صريح يُمرر) — لا تشغيل اختبارات هنا.
     - التجميع موثق: متوسط المكونات القابلة للقياس (الخمسة) — مكوّنا السجل
-      null معلنة منذ جولة الإغلاق (أمر المالك — القسم ٢).
+      أُزيلا من العقد (قرار المالك R-683) — DELETION-JUSTIFIED.
     """
     if repo_root is None:
         repo_root = _Path(__file__).resolve().parent.parent.parent
@@ -1105,11 +1105,9 @@ def compute_sovereignty_score_v2(repo_root=None, invariants_evidence=None) -> di
     components = {
         "files_reachable": round(files_reachable, 4),
         "modules_tested": round(modules_tested, 4),
-        # جولة الإغلاق (أمر المالك — القسم ٢): مكوّنا السجل خارج المعادلة —
-        # null معلنة، غير محسوبة، لا تُحدّان الدرجة (السجل الخام غائب وممنوع
-        # فتحه). العلم false: لم يعد هناك قيد لأن المكونات المُقيّدة لم تعد محسوبة.
-        "ledger_verified": None,
-        "ledger_anchored": None,
+        # DELETION-JUSTIFIED — R-683 (قرار المالك 2026-10-16): عقد الدرجة تغيّر؛
+        # المكوّنات غير القابلة للقياس (ledger_verified/ledger_anchored) أُزيلت
+        # من الرد بدلًا من تقديرها بأعلى نظري. مفصل في DELETED_LINES_AUDIT.md.
         "compat_pending_sunset": round(compat_ratio, 4),
         "no_mocks_in_prod": no_mocks,
         "invariants_passing": inv_passing,
@@ -1135,11 +1133,12 @@ def compute_sovereignty_score_v2(repo_root=None, invariants_evidence=None) -> di
 
     result = dict(components)
     result["final_score"] = final_score
-    result["score_capped_by_missing_ledger"] = False
+    # DELETION-JUSTIFIED — R-683: score_capped_by_missing_ledger أُزيل من العقد
+    # (لا حد أعلى معلن)؛ نص الملاحظة صُحح ليطابق الإزالة لا "null معلنة".
     result["ledger_components_note"] = (
         "raw ledger is absent and never opened/searched (owner prohibition) "
-        "— the two ledger components are declared null and NOT scored "
-        "(closure round, owner order section 2)"
+        "— the two ledger components are removed from the score contract, "
+        "not estimated (owner decision R-683)"
     )
     result["invariants_evidence"] = invariants_evidence
     result["inputs"] = {
@@ -1156,7 +1155,8 @@ def compute_sovereignty_score_v2(repo_root=None, invariants_evidence=None) -> di
         "repo_head_sha": sha,
     }
     result["aggregation"] = (
-        "final_score = mean(7 scored components) — documented choice; "
+        # DELETION-JUSTIFIED — R-683: "mean(7)" كان ادعاءً خاطئًا؛ العدد من القائمة الفعلية
+        f"final_score = mean({len(measurable)} scored components) — documented choice; "
         "ROADMAP_V2 does not specify weights; not tunable to improve results"
     )
     return result
