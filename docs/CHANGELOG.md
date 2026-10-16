@@ -433,3 +433,96 @@
 
 ### تحقق
 - الحزمة الكاملة على شجرة هذا الالتزام: تشغيل فعلي قبل الالتزام (الرقم في رسالة الالتزام من التشغيل الفعلي نفسه).
+---
+
+## جولة R-682 وما بعدها — سجل الالتزامات المنشورة حتى 5753ab8 (جولة الإغلاق 2026-10-16)
+
+البداية المثبتة لجولة R-682: الالتزام 3961748b (R-682 Task 0+1 — أول التزام يحمل وسم R-682 في رسالته).
+الجدول يغطي كل الالتزامات المنشورة من 3961748b حتى 5753ab8 (82 التزامًا). التزام جولة الإغلاق نفسه
+لا يُدرج هنا (لا يُختلق له SHA أو رقم CI قبل وجوده). 25 التزامًا أقدم لم يظهر لها معرّف مطابق
+في قائمة التشغيلات المسترجعة (غير متاح).
+
+| SHA | الوصف | CI run ID |
+|---|---|---|
+| 5753ab8 | ملحق تدقيق الحذف — مطابقة 556 (التزام 6f9553c) مع جدول دقيق وتصنيف الفرق عن تقدير 216 السابق | 38874410002 |
+| 6f9553c | جولة تصويبات المراجع — تنفيذ الاعتراضات الثمانية وأدوارها المتتابعة (بعد b2da7f1) | 38872317050 |
+| b2da7f1 | جولة بناء — تنفيذ المراحل 3-7 من ROADMAP_V2 (لا تصحيحات — مخرج بنائي فقط) | 38858939674 |
+| d08ec6a | تصويبات المراجعة النهائية المحصورة (الأربع) — لا جولة بحث جديدة | 38855537623 |
+| 4c6ef1d | تصويب صريح لادعاءَي [PHASE0-5] + استكمال الجرد بالبحث غير المبتور (جولات مراجعة 7-9) | 38854120539 |
+| d1ca91f | تصحيح نسب قرار النطاق + أدلة الجرد الكاملة + أول قياس حي قبل التعديل | 38851908081 |
+| daa05a6 | تصويب رقمي (430→431) + استكمال جرد الادعاءات + إفصاح فجوات القياس | 38850446081 |
+| 831c61f | إصلاح عدّ الحارس مع المرشحات + سحب ادعاءات غير مُثبتة + تصحيح ادعاء إثبات مستقبلي | 38848988968 |
+| 889ab88 | استكمال مطالب المراجعة: تقييد المصادقات + إتاحة سجل التحقق + جرد الادعاءات + التحقق من أصل Issue #8 | 38847465415 |
+| 3968e93 | تصويح ادعاء رقمي من سلف: 50 لا 33 + حارس نزاهة للأرقام الموثقة | 38846109859 |
+| dfd5a16 | phase2 (ledger anchoring): status verified on code — complete | 38836206439 |
+| 42446ac | phase1 (KeyRing): status verified on code — complete; phase6 (agent ledger) started | غير متاح |
+| 3c7fe43 | R-682 closure: finalize FINAL_CLOSURE + document CI deletion gate | 38834275246 |
+| f8526e1 | docs: owner decisions on deletions, violations, and claim scope | 38833180631 |
+| a5df86c | R-682 (verification pack for owner signature) | 38827795047 |
+| d56e24e | R-682: التزام تصحيحي ثانٍ — معالجة عوائق المستشار الثلاثة الأخيرة | 38823848533 |
+| 7164044 | R-682: التزام تصحيحي تدقيقي — تصويبات خمسة طلبها المستشار قبل التوقيع | 38822409057 |
+| d05a248 | R-682: توثيق تشغيلات التحقق على الالتزام الختامي 10c2bf5 نفسه | 38820795898 |
+| 10c2bf5 | R-682: البنود ١١ و١٣ (الخاتمة) — PY311_VERIFICATION.md النهائية + FINAL_CLOSURE_R-682.md | 38819578463 |
+| f2577ca | R-682: إصلاح CI_STATUS غير المعرف في verify.sh — بقايا فحوص الحالة القديمة | 38818090658 |
+| 20a81ce | R-682: حزمة إصلاحات اعتراض المستشار — الفصل النهائي لمصادر رفض R-626 + تحصين دورة حياة الخيوط + نقل منطق اختيار CI لوحدة قابلة للاختبار | 38817055678 |
+| f636bd5 | R-682: البند ٨ — إعادة إصدار docs/KEY_STATE_MACHINE.md بملحق فحص مسار التحقق التاريخي | غير متاح |
+| 60053d4 | R-682: إصلاح خطأ الانتقاء الذاتي في فحص حالة تشغيل CI داخل verify.sh | 38813598872 |
+| a733ab8 | R-682: البنود ١١ و١٢ — بوابة إصدار Python 3.11.x في verify.sh + مهمة verify-full على Actions + إفصاح بيئة CI | 38812431011 |
+| b76e5a8 | R-682: البنود ٧ و٩ و١٠ — تضييق الادعاء التشغيلي + إفصاح جلسات المستشار + إفصاح البيئة المحلية | غير متاح |
+| e21574a | R-682: تصويب رقمي شفاف — المتبقي بعد الإصلاح 10 سجلات R-626 من مسار تحقق السجل (لا صفر) | غير متاح |
+| 5a7c8c0 | R-682: البنود ٤-٦ — إدارة موحدة لخيوط الخلفية + إصلاح جذري لرفض KeyRing في بيئة الاختبار | غير متاح |
+| 9635886 | R-682: البنود ١-٣ — المسح الشامل للحذوفات + مدخل تدقيق بأثر رجعي للتزام 182949f + تحديث استثناء العقد القابل للتوقيع | غير متاح |
+| 5264c80 | R-682 (operational round 5): fix URL-encoded key leak in exception diagnostics (percent-encoding redaction) | 38800826302 |
+| ed9128a | R-682 (operational round 4): prove + fix auth-exception key leak (str(e) redaction), inspect operational JUnit artifact, record verification (partial delivery — NOT closure) | 38798258268 |
+| fa67824 | R-682 (operational round 3): move --run-operational registration to tests/conftest.py, restore guard, add stray-conftest behavioral test — advisor corrections | 38795310330 |
+| 0c5143d | R-682 (operational round 2): register --run-operational + define missing test helpers — fixes CI job that could never pass | 38791500629 |
+| 182949f | R-682 (operational): provision old rotated key via KEY_OLD_SECRET + safe secret passing + no key leakage in subprocess | 38789092766 |
+| 2239fde | R-682 (item 8): constitutional amendment — justified-deletion regime per owner's explicit decision | 38773993100 |
+| 3a9d2d3 | R-682 (docs): fix RED-distinction placement — moved from round-15 section to round-18 section | 38702346971 |
+| 7c4e82a | R-682 (docs): evidence corrections per advisor — count breakdown (+1 round-17 test) + explicit RED distinction + item 2b closure | 38700990625 |
+| d47bd73 | R-682 (security v18): record persists across save/reload + reflects reconciliation + distinguished upgrade diagnosis | 38699576280 |
+| 6d5e965 | R-682 (security v15): separate material commit from durability + unique op ids + exhaustive reconciliation | 38696380455 |
+| 01cb711 | R-682 (security v14): tri-state save outcome + event-log reconciliation of pending deaths | 38694550657 |
+| 34648c2 | R-682 (security v13): pending-outcome marker — undecided death is distinguishable and recoverable after reload | 38692074895 |
+| e581b4d | R-682 (security v12): save-before-event ordering + stale-transform settlement on load | 38690521571 |
+| aadfb93 | R-682 (security v11): final-state persistence + fail-closed death-event recording | 38688708623 |
+| 96b9717 | R-682 (security v10): initiate_death result contract — recovery failure = False + LIVING, no hanging transform | 38687321425 |
+| 7f3f752 | R-682 (security v9): protection model separated from recovery readiness + retroactive RED proof + literal log excerpt | 38685856977 |
+| bfa64d0 | R-682 (security v8): no success for incomplete restoration + GCM ash envelope + independent read-back proof + honest death protection | 38684417139 |
+| ad4477c | R-682 (build): real ash resurrection — content-hash-proven restoration + MAC-authenticated ashes | 38682653368 |
+| b441989 | R-682 (security v6): full-payload field preservation + fail-closed fingerprint gate + test proof fixes | 38680262621 |
+| c4c1a05 | R-682 (security v5): authenticated store encryption (AES-GCM) + partial-restoration honesty + real durability semantics | 38679052227 |
+| 0e3ba69 | R-682 (security v4): real-store restoration proof + store integrity fix + fail-closed paths | 38677279153 |
+| 0c0d49f | R-682 (security v3): fail-closed init + atomic durable state + real-store restoration | 38675767329 |
+| 9c49080 | R-682 (security v2): AES-256-GCM standard encryption + downgrade prevention + data-proven restoration | 38674260005 |
+| 70cf6e4 | R-682 (security fix): key-contract continuity + MAC-authenticated seed envelope (v2) | 38672080741 |
+| 06f953e | R-682 (execution): implement _decrypt_seed (RED→GREEN) + behavioral tests for all 14 low-risk sites | 38670512171 |
+| 1a9ec07 | R-682 (report fix): literal f075077 JUnit excerpt, per-row classification (2a/2b/2c DEFERRED), no retroactive-approval wording, real run times from log, new-commit deletions audited (0 .py changed) | 38668222316 |
+| 4b3e1c0 | R-682 (report): document verified source f075077 — full --full run from clean clone with its CI run 38667166304; honest 5 open boxes | 38668016078 |
+| f075077 | R-682 (fix): SyntaxError in verify.sh heredoc — lines merged; script now syntactically valid and verified end-to-end on clean clone | 38667166304 |
+| 148399e | R-682 (advisor round 4): honest claims — normalized classname Counter compare, unverified claims section, DoD unmarked boxes, contract exception cannot be closed by retroactive approval | 38666016588 |
+| 248d692 | R-682 (final): verify.sh --full PASSED on 9eae655 — 316/0/0/0 across Local+CI+Clone; DoD honest (Python 3.14 noted, Python 3.11 not reproducible in advisor env) | 38665822342 |
+| 9eae655 | R-682 (advisor final): honest DoD — fix verify.sh --full (checkout pinned + identity compare), classify _decrypt_seed as BLOCKED, literal JUnit excerpt, no SHA loop | 38664419756 |
+| a17cb01 | R-682 (final): fix CI operational job sha step + correct HEAD in reports to 2400584 | 38663505979 |
+| 2400584 | R-682: final JUnit (316 passed) + updated report | 38662055044 |
+| f332567 | R-682 (advisor round 2): complete all advisor corrections | غير متاح |
+| 9f597c0 | R-682: final JUnit evidence (309 passed, 0 skipped) + updated report | 38660715429 |
+| 970b3c4 | R-682 (advisor): real GitHub issue #7 + correct R681 verification | غير متاح |
+| 67e5aa9 | R-682 (advisor): verify.sh --full + contract exception request + corrected audit | غير متاح |
+| 430c27b | R-682 (advisor): CI — fix junit_prefix, add workflow_dispatch + operational job | غير متاح |
+| 45ae53d | R-682 (advisor): pytestmark scoped to operational test only | غير متاح |
+| c95975d | R-682 (advisor): key-rotation tests use REAL auth code path | غير متاح |
+| 57f7289 | R-682 (advisor + Task 6): security tests for 9 high-risk sites + v2 anchor fixture | غير متاح |
+| e205074 | R-682 (advisor): restore old forensics files to original state | غير متاح |
+| 66c8d1c | R-682: update HEAD in final report | 38659350576 |
+| debf51c | R-682: update JUnit evidence — 292 passed, 0 skipped, 0 failed | غير متاح |
+| e1b205e | R-682 (Task 5): deleted-lines audit for R-682 + R-681 report correction | غير متاح |
+| e952156 | R-682 (Task 4): one-command verify.sh + final report (REVIEW-READY) | غير متاح |
+| 352b0f8 | R-682 (Task 3.3 + 4): CI — operational deselected + zero-skips verification | غير متاح |
+| b172f40 | R-682 (Task 3.3): isolate operational test under marker — closes 1 skip | غير متاح |
+| 4e4db6a | R-682 (Task 3.2): synthetic key-secret fixture — closes 3 key-rotation skips | غير متاح |
+| 4f6b97b | R-682 (Task 3.1): synthetic ledger fixture — closes 4 ledger skips | غير متاح |
+| 92a6362 | R-682 (Task 2.2): awareness.py:561 — remove silent pass, document decision | غير متاح |
+| 88de47f | R-682 (Task 2.1b): 16 medium/low-risk return None sites — logging | غير متاح |
+| a33362c | R-682 (Task 2.1a): 9 high-risk except->return None sites — logging.exception | غير متاح |
+| 3961748 | R-682 (Task 0+1): resolve SHA contradiction + verify R-681 claims | غير متاح |

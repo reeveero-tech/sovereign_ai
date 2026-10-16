@@ -1,0 +1,60 @@
+{
+  "measurement": "FINAL (closure round — measurable fields only)",
+  "meta": {
+    "measured_tree": "6f9553c139bf6a8ccf143c439b93fe4e593ae6e2 — the score is attributed to THIS tree (the externally-verified closure state), not to the closure-round tree",
+    "calculator": "compute_sovereignty_score_v2 (closure-round version: ledger components null, not scored) — the modified calculator executed OUTSIDE the measured tree (imported from the closure working tree, NOT from the measured tree); measurement via repo_root=/tmp/verify_exec (the 6f9553c clone) with its sealed JUnit evidence",
+    "gate_evidence": "sealed JUnit from the actual verify.sh --full run at 6f9553c (exit=0, 467/0/0/1 deselected, fingerprint captured before the run, accepted without re-sealing)",
+    "owner_order": "closure round section 2: ledger_verified/ledger_anchored removed from the equation (declared null, not scored) — score_capped_by_missing_ledger: false"
+  },
+  "comparison_with_capped_v2": {
+    "v2_capped_after_at_6f9553c": 0.8713,
+    "final_uncapped": 0.8198,
+    "note": "the new score is LOWER — announced as-is, formula not tuned (owner order: if lower, it is lower)"
+  },
+  "result": {
+    "files_reachable": 0.6354,
+    "modules_tested": 0.4634,
+    "ledger_verified": null,
+    "ledger_anchored": null,
+    "compat_pending_sunset": 1.0,
+    "no_mocks_in_prod": 1,
+    "invariants_passing": 1,
+    "final_score": 0.8198,
+    "ledger_components_note": "raw ledger is absent and never opened/searched (owner prohibition) — the two ledger components are declared null and NOT scored (closure round, owner order section 2)",
+    "invariants_evidence": {
+      "source": "JUnit XML parse",
+      "head_sha": "6f9553c139bf6a8ccf143c439b93fe4e593ae6e2",
+      "junit_path": "/tmp/verify_exec/forensics/pytest_results.xml",
+      "passing": 1,
+      "tests_total": 467,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "required_invariants": [
+        "backend.tests.invariants.test_no_orphan_modules::test_no_orphan_modules",
+        "backend.tests.invariants.test_no_unsigned_ledger_events::test_no_unsigned_ledger_events",
+        "backend.tests.invariants.test_all_entrypoints_respond::test_all_registered_routes_respond",
+        "backend.tests.invariants.test_keyring_immutability::test_keyring_history_immutable",
+        "backend.tests.invariants.test_compat_sunset_criteria::test_every_compat_module_has_sunset_criteria",
+        "backend.tests.invariants.test_no_silent_exceptions.TestNoSilentExceptions::test_no_silent_except_in_production",
+        "backend.tests.invariants.test_no_mock_outside_tests::test_no_mock_outside_tests"
+      ],
+      "tree_fingerprint": "ab0eb54aa82512a4"
+    },
+    "inputs": {
+      "py_files_total": 288,
+      "py_files_reachable": 183,
+      "backend_live_modules": 82,
+      "backend_modules_tested": 38,
+      "anchors_declared_coverage": 116910,
+      "anchors_malformed_lines": 0,
+      "documented_total_events": 116910,
+      "compat_total": 4,
+      "compat_with_sunset": 4,
+      "mocks_outside_tests_count": 0,
+      "repo_head_sha": "6f9553c139bf6a8ccf143c439b93fe4e593ae6e2"
+    },
+    "aggregation": "final_score = mean(7 scored components) — documented choice; ROADMAP_V2 does not specify weights; not tunable to improve results",
+    "score_capped_by_missing_ledger": false
+  }
+}

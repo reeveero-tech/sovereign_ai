@@ -1025,7 +1025,8 @@ def compute_sovereignty_score_v2(repo_root=None, invariants_evidence=None) -> di
       السجل من ملف المراسي المتتبع حصرًا (حد أعلى معلن)، والوضع صريح.
     - invariants_passing من دليل تشغيل معلوم الهوية (JUnit بـSHA مطابق
       أو دليل صريح يُمرر) — لا تشغيل اختبارات هنا.
-    - التجميع موثق: متوسط المكونات السبعة (ROADMAP لا يحدد أوزانًا).
+    - التجميع موثق: متوسط المكونات القابلة للقياس (الخمسة) — مكوّنا السجل
+      null معلنة منذ جولة الإغلاق (أمر المالك — القسم ٢).
     """
     if repo_root is None:
         repo_root = _Path(__file__).resolve().parent.parent.parent
@@ -1104,21 +1105,25 @@ def compute_sovereignty_score_v2(repo_root=None, invariants_evidence=None) -> di
     components = {
         "files_reachable": round(files_reachable, 4),
         "modules_tested": round(modules_tested, 4),
-        "ledger_verified": round(ledger_upper, 4),
-        "ledger_anchored": round(ledger_upper, 4),
+        # جولة الإغلاق (أمر المالك — القسم ٢): مكوّنا السجل خارج المعادلة —
+        # null معلنة، غير محسوبة، لا تُحدّان الدرجة (السجل الخام غائب وممنوع
+        # فتحه). العلم false: لم يعد هناك قيد لأن المكونات المُقيّدة لم تعد محسوبة.
+        "ledger_verified": None,
+        "ledger_anchored": None,
         "compat_pending_sunset": round(compat_ratio, 4),
         "no_mocks_in_prod": no_mocks,
         "invariants_passing": inv_passing,
     }
 
-    def _final(ledger_value: float) -> float:
-        c = dict(components)
-        c["ledger_verified"] = ledger_value
-        c["ledger_anchored"] = ledger_value
-        return round(sum(c.values()) / 7, 4)
-
-    final_upper = _final(ledger_upper)
-    final_lower = _final(0.0)
+    # متوسط المكونات القابلة للقياس فقط (الخمسة) — الصيغة لم تُعدّل لتمر
+    measurable = [
+        components["files_reachable"],
+        components["modules_tested"],
+        components["compat_pending_sunset"],
+        components["no_mocks_in_prod"],
+        components["invariants_passing"],
+    ]
+    final_score = round(sum(measurable) / len(measurable), 4)
 
     try:
         sha = _subprocess.run(
@@ -1129,19 +1134,13 @@ def compute_sovereignty_score_v2(repo_root=None, invariants_evidence=None) -> di
         sha = "unknown"
 
     result = dict(components)
-    result["final_score"] = final_upper
-    # وضع السجل الخام صريح: الدالة لا تفتحه ولا تبحث عنه أبدًا (منع المالك) —
-    # مكوّنا السجل حد أعلى معلن من تغطية المراسي المتتبعة
-    result["score_capped_by_missing_ledger"] = True
-    result["confidence_range"] = {
-        "lower": final_lower,
-        "upper": final_upper,
-        "note": (
-            "raw ledger is NEVER opened/searched by this calculator (owner "
-            "prohibition) — ledger components are declared upper bounds from "
-            "the tracked anchors file; conservative bound uses 0.0"
-        ),
-    }
+    result["final_score"] = final_score
+    result["score_capped_by_missing_ledger"] = False
+    result["ledger_components_note"] = (
+        "raw ledger is absent and never opened/searched (owner prohibition) "
+        "— the two ledger components are declared null and NOT scored "
+        "(closure round, owner order section 2)"
+    )
     result["invariants_evidence"] = invariants_evidence
     result["inputs"] = {
         "py_files_total": len(all_py),

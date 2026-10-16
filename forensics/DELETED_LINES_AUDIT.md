@@ -791,3 +791,16 @@ tests/ci_run_selection.py (--require-completed). الحذف كله استبدا�
 - `backend/tests/conftest.py` + `tests/fixtures/synthetic_ledger.py` (~11):
   إعادة كتابة اشتقاق المسارات + وضع إعادة الاستخدام. # DELETION-JUSTIFIED:
   الاشتقاق القديم كان كاسرًا خارج سياق واحد.
+
+---
+
+## جولة الإغلاق (2026-10-16) — حذوفات هذا الالتزام
+
+| الملف | المحذوف | المبرر |
+|---|---|---|
+| backend/sovereign/score.py | 24 سطرًا | # DELETION-JUSTIFIED — أمر المالك (جولة الإغلاق، القسم ٢): إخراج مكوّني السجل من المعادلة — حُذفت أسطر حدّهما الأعلى (ledger_upper)، ودالة التجميع الداخلية _final، وكتلة confidence_range، وأسطر docstring القديمة الموثقة للمعادلة المقيدة — استُبدلت بأسطر null المعلنة والعلم false ومتوسط الخمسة القابلة للقياس (23 سطرًا مضافًا). |
+
+مطابقة الحذوفات التاريخية (556 مقابل 216) موثقة في
+forensics/DELETIONS_RECONCILIATION_556_216.md والملحق
+DELETED_LINES_AUDIT_ADDENDUM.md (5753ab8) — وسم رسالة الالتزام لا يغطي هذه
+الحذوفات الجديدة؛ هذا القسم هو سجلها.
