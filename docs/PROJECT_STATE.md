@@ -255,3 +255,11 @@ sovereign_ai/
 - **الحالة**: مغلقة (2026-10-16) — راجع `forensics/FINAL_CLOSURE_R-682.md` (مراجعة الإغلاق) و`forensics/OWNER_DECISIONS.md` (قرارات المالك — Issue #8).
 - **الخلاصة**: إدارة موحدة لخيوط الخلفية (128 موقعًا) + فصل مصادر رفض R-626 (صفر في السجل) + بوابة إصدار Python 3.11.x في `verify.sh` + مهمة `verify-full` بالأمر الحرفي (تطابق ثلاثي 424/0/0/0) + حزمة تحقق للمالك (`VERIFICATION_PACK/`) + ثلاثة قرارات مالك (الاعتماد الرجعي للحذوفات، إغلاق المخالفات السبع موثقة، نطاق سلوكي برقم مرجعي 116,910) + بوابة CI جديدة ترفض تلقائيًا أي التزام يحذف سطرًا بلا `# DELETION-JUSTIFIED`.
 - **اختبارات**: 424 passed / 0 skipped / 0 failed على `d56e24e` (تطابق ثلاثي: محلي + CI + clone نظيف).
+
+---
+
+## 16) المرحلة ١ (KeyRing) من ROADMAP_V2 — حالة مثبتة على الكود
+
+- **الحالة**: كاملة (موجودة وعاملة) — فحص هذه الجولة على الكود لا الوثائق: راجع `forensics/PHASE1_STATUS.md`.
+- **الدليل**: كل مكونات المرحلة ١ (keys/__init__.py، keyring.py بكل الحقول، verifier.py بالتفريق الصارم UNVERIFIABLE_MISSING_KEY/INVALID، rotation.py بواجهة rotate(reason)، data/keys/HISTORY.jsonl المحمي باختبار ثابت) + 33 اختبارًا ناجحًا.
+- **المرحلة ٦ (سجل إجراءات الوكيل)**: بدأت — `forensics/agent_ledger.jsonl` (سطر لكل إجراء: ts/phase/action/files_touched/before_hash/after_hash/reason/verified_by).

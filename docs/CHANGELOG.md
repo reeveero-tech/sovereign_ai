@@ -297,3 +297,14 @@
 - **نظافة**: `data/security_log.json` و`data/approval_cache.json` (بيانات وقت تشغيل) أُضيفا إلى `.gitignore`.
 - **التحقق**: `python -m pytest tests/ -q`: **48 passed** (44 + 4 جديدة)؛ كل نقاط `/components/*` و`/security/*` و`/nexus/*` تعيد 200؛ WebSocket خطير → `blocked=True`؛ كل 54 وحدة backend + 51 وحدة nexus + 4 وحدات guardian تُستورد بنجاح؛ `main.py --test` يمر؛ لا أخطاء نحوية عربية؛ لا TODO/FIXME.
 - سُجل القرار D-022.
+
+---
+
+## [ROADMAP_V2] — 2026-10-16 — المرحلة 1 (KeyRing): الحالة على الكود + بدء المرحلة 6 (سجل إجراءات الوكيل)
+
+### أُضيف
+- `forensics/PHASE1_STATUS.md`: تقرير حالة المرحلة ١ على الكود (كل المكونات موجودة وكاملة — 33 اختبارًا ناجحًا؛ لا ناقص ولا مكسور).
+- `forensics/agent_ledger.jsonl`: سجل إجراءات الوكيل (المرحلة ٦) — سطر لكل إجراء من هذه الجولة وما بعدها (ts/phase/action/files_touched/before_hash/after_hash/reason/verified_by).
+
+### تحقق
+- `python -m pytest tests/test_sovereign_keys.py tests/test_key_selection_rotation.py tests/test_return_none_security.py tests/test_ledger_anchor.py tests/test_ledger_verify_endpoint.py -q` → **33 passed**.
