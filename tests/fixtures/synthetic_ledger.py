@@ -47,13 +47,32 @@ def _sign_event(event: Dict, private_key: str) -> Dict:
     return event
 
 
-def build_synthetic_ledger(base_dir: Path, event_count: int = 10) -> Dict[str, Path]:
+def build_synthetic_ledger(base_dir: Path, event_count: int = 10,
+                           reuse_existing: bool = False) -> Dict[str, Path]:
     """
     Build a synthetic ledger.jsonl + ledger.anchors.jsonl in base_dir.
 
     Returns {"ledger": Path, "anchors": Path, "keys_dir": Path, "keyring": KeyRing,
              "private_key": str, "key_id": str}
+
+    (الجولة الإنشائية — تصويب المراجع الاعتراض 8: reuse_existing — إن وُجدت
+    بنية سابقة كاملة في نفس الجذر تُعاد كما هي (لا إعادة بناء تمسح عبثًا
+    مُحقونًا) — يستخدمه إثبات RED الذي يشغل الحارس على بيانات مُعبث بها.)
     """
+    ledger_file = base_dir / "sovereign_core" / "ledger.jsonl"
+    anchors_file = base_dir / "sovereign_core" / "ledger.anchors.jsonl"
+    keys_dir = base_dir / "keys"
+    marker = base_dir / ".synthetic_built"
+    if (reuse_existing and ledger_file.exists() and anchors_file.exists()
+            and marker.exists()):
+        return {
+            "ledger": ledger_file,
+            "anchors": anchors_file,
+            "keys_dir": keys_dir,
+            "keyring": None,
+            "private_key": None,
+            "key_id": None,
+        }
     ledger_dir = base_dir / "sovereign_core"
     ledger_dir.mkdir(parents=True, exist_ok=True)
     keys_dir = base_dir / "keys"
@@ -131,6 +150,7 @@ def build_synthetic_ledger(base_dir: Path, event_count: int = 10) -> Dict[str, P
     with open(anchors_path, "w", encoding="utf-8") as f:
         f.write(json.dumps(anchor_record, ensure_ascii=False) + "\n")
 
+    (base_dir / ".synthetic_built").write_text("built", encoding="utf-8")
     return {
         "ledger": ledger_path,
         "anchors": anchors_path,

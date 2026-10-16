@@ -86,33 +86,144 @@ def test_no_active_lost_keys():
     )
 
 
+def _history_lines(text: str) -> list:
+    """أسطر HISTORY غير الفارغة (كما هي — لا إعادة ترتيب)."""
+    return [l for l in text.split("\n") if l.strip()]
+
+
+def _history_prefix_violations(old_lines: list, new_lines: list) -> list:
+    """تصويب المراجع (الاعتراض 2): مقارنة فعلية — كل أسطر اللقطة الأقدم
+    يجب أن تبقى في الأحدث بالترتيب نفسه وبالمحتوى نفسه (بادئة مرتبة).
+
+    الإضافة المشروعة وحدها مسموحة (أسطر جديدة في النهاية).
+    - حذف سطر قديم → انتهاك
+    - تعديل سطر قديم → انتهاك
+    """
+    violations = []
+    for idx, old_line in enumerate(old_lines):
+        if idx >= len(new_lines):
+            violations.append(
+                f"line {idx + 1} DELETED (old has {len(old_lines)} lines, "
+                f"new has only {len(new_lines)})"
+            )
+            continue
+        if new_lines[idx] != old_line:
+            violations.append(f"line {idx + 1} MODIFIED")
+    return violations
+
+
 def test_keyring_history_immutable():
     """
     HISTORY.jsonl (سجل المفاتيح) لا يمكن حذفه أو تعديله.
-    يتحقق أن الملف موجود وأن كل سطر هو JSON صالح (لا تلف).
+
+    (تصويب المراجع — الاعتراض 2: الفحص السابق كان وجودًا وصلاحية JSON فقط —
+    حذف سطر قديم مع بقاء البقية كان يمر. الفحص الجديد: مقارنة فعلية عبر
+    Git — أسطر الالتزام السابق كاملة تبقى في الملف الحالي بالترتيب،
+    والإضافة وحدها مشروعة.)
     """
     history_file = _REPO_ROOT / "data" / "keys" / "HISTORY.jsonl"
     assert history_file.exists(), (
         "data/keys/HISTORY.jsonl must exist (key history is append-only)"
     )
 
-    content = history_file.read_text(encoding="utf-8")
-    lines = [l for l in content.split("\n") if l.strip()]
+    import subprocess as _sp
 
-    assert len(lines) > 0, "HISTORY.jsonl must have at least one entry"
+    current_lines = _history_lines(history_file.read_text(encoding="utf-8"))
 
-    for i, line in enumerate(lines):
+    assert len(current_lines) > 0, "HISTORY.jsonl must have at least one entry"
+
+    for i, line in enumerate(current_lines):
         try:
             entry = json.loads(line)
         except json.JSONDecodeError as e:
             pytest.fail(
                 f"HISTORY.jsonl line {i+1} is corrupted (not valid JSON): {e}"
             )
-
-        # كل إدخال يجب أن يكون كائنًا (dict)
         assert isinstance(entry, dict), (
             f"HISTORY.jsonl line {i+1} must be a JSON object"
         )
+
+    # المقارنة الفعلية عبر Git (لقطة سابقة مقابل الحالية) — عبر دالة
+    # قابلة للاختبار على مستودعات مؤقتة أيضًا
+    all_violations = _history_git_violations(_REPO_ROOT, current_lines)
+
+    assert len(all_violations) == 0, (
+        f"HISTORY.jsonl is append-only — deletions/modifications of previous "
+        f"lines are forbidden: {all_violations}"
+    )
+
+
+def _history_git_violations(repo_root, current_lines: list) -> list:
+    """مقارنة HISTORY عبر Git (تصويب المراجع — الاعتراض 2 و6):
+
+    - مستودع سطحي = فشل صريح (قد يمر حذف ملتزم حديثًا بغياب HEAD~1).
+    - فشل جلب لقطة موجودة فعلاً = فشل صريح لا تخطٍّ صامت.
+    - كل أسطر كل لقطة أقدم (HEAD وHEAD~1 إن وُجدتا) يجب أن تبقى بادئة
+      مرتبة كاملة من الأسطر الحالية — الحذف والتعديل انتهاك، الإضافة
+      وحدها مشروعة.
+    """
+    import subprocess as _sp
+
+    def _git(*args):
+        return _sp.run(["git", *args], capture_output=True, text=True,
+                       cwd=str(repo_root))
+
+    shallow = _git("rev-parse", "--is-shallow-repository")
+    if shallow.returncode == 0 and shallow.stdout.strip() == "true":
+        pytest.fail(
+            "shallow clone — HISTORY immutability guard requires full "
+            "history (fetch-depth: 0 / full clone); a recently committed "
+            "deletion could pass silently otherwise"
+        )
+
+    all_violations = []
+    for rev in ("HEAD", "HEAD~1"):
+        # وجود المرجع نفسه: إن لم يوجد المستودع بملتزام واحد فقط — تخطٍّ موثق
+        exists = _git("rev-parse", "--verify", f"{rev}")
+        if exists.returncode != 0:
+            if rev == "HEAD~1":
+                continue  # مستودع بملتزام أول — لا لقطة سابقة للمقارنة
+            pytest.fail(f"cannot resolve {rev} — history unavailable")
+        r = _git("show", f"{rev}:data/keys/HISTORY.jsonl")
+        if r.returncode != 0:
+            # الملف لم يكن موجودًا في تلك اللقطة؟ نتحقق قبل التسليم
+            probe = _git("cat-file", "-e", f"{rev}:data/keys/HISTORY.jsonl")
+            if probe.returncode == 0:
+                pytest.fail(
+                    f"git show {rev}:data/keys/HISTORY.jsonl failed though "
+                    f"the blob exists — explicit failure, no silent skip"
+                )
+            continue  # الملف غير موجود في اللقطة — لا مقارنة ضدها
+        old_lines = _history_lines(r.stdout)
+        v = _history_prefix_violations(old_lines, current_lines)
+        if v:
+            all_violations.extend([f"[vs {rev}] {x}" for x in v])
+    return all_violations
+
+
+def test_history_prefix_checker_discriminates():
+    """اختبارات تمييزية للمقارنة نفسها (تصويب المراجع — الاعتراض 2):
+    الحذف يُرفض، التعديل يُرفض، الإضافة المشروعة تُقبل."""
+    old = ["{\"ts\": \"a\"}", "{\"ts\": \"b\"}", "{\"ts\": \"c\"}"]
+
+    # (1) إضافة مشروعة — تُقبل
+    appended = old + ["{\"ts\": \"d\"}"]
+    assert _history_prefix_violations(old, appended) == []
+
+    # (2) حذف سطر قديم — يُرفض
+    deleted = [old[0], old[2]]
+    v_del = _history_prefix_violations(old, deleted)
+    assert any("DELETED" in x for x in v_del), "deletion must be rejected"
+
+    # (3) تعديل سطر قديم — يُرفض
+    modified = [old[0], "{\"ts\": \"B-TAMPERED\"}", old[2]]
+    v_mod = _history_prefix_violations(old, modified)
+    assert any("MODIFIED" in x for x in v_mod), "modification must be rejected"
+
+    # (4) تقصيم من المنتصف — يُرفض (حذف وسط)
+    truncated = [old[0]]
+    v_tr = _history_prefix_violations(old, truncated)
+    assert len(v_tr) > 0, "truncation must be rejected"
 
 
 def test_real_key_secret_exists():
@@ -198,3 +309,55 @@ def test_tests_do_not_touch_real_key():
                     pytest.fail(
                         f"{tf.relative_to(_REPO_ROOT)}:{i} touches real key.secret: {line.strip()}"
                     )
+
+
+def test_history_guard_catches_committed_changes(tmp_path):
+    """تصويب المراجع (الاعتراض 6): الحارس يكتشف حذفًا/تعديلًا ملتزمًا فعلًا
+    (لا دالة المقارنة وحدها) داخل مستودع Git مؤقت — والإضافة المشروعة تعبر."""
+    import subprocess as _sp
+
+    repo = tmp_path / "repo"
+    (repo / "data" / "keys").mkdir(parents=True)
+    hist = repo / "data" / "keys" / "HISTORY.jsonl"
+
+    def _git(*args):
+        r = _sp.run(["git", *args], capture_output=True, text=True, cwd=str(repo))
+        assert r.returncode == 0, f"git {args} failed: {r.stderr}"
+
+    _git("init", "-q")
+
+    def _commit():
+        _git("add", "-A")
+        _git("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "c")
+
+    v1 = "{\"k\": \"a\"}\n{\"k\": \"b\"}\n{\"k\": \"c\"}\n"
+    hist.write_text(v1, encoding="utf-8")
+    _commit()
+
+    # (1) حذف ملتزم: إزالة السطر الثاني
+    hist.write_text("{\"k\": \"a\"}\n{\"k\": \"c\"}\n", encoding="utf-8")
+    _commit()
+    current = _history_lines(hist.read_text(encoding="utf-8"))
+    v_del = _history_git_violations(repo, current)
+    assert any("DELETED" in x for x in v_del), (
+        f"committed deletion must be caught: {v_del}"
+    )
+
+    # (2) تعديل ملتزم: تغيير السطر الأول
+    hist.write_text("{\"k\": \"A-TAMPERED\"}\n{\"k\": \"c\"}\n", encoding="utf-8")
+    _commit()
+    current = _history_lines(hist.read_text(encoding="utf-8"))
+    v_mod = _history_git_violations(repo, current)
+    assert any("MODIFIED" in x for x in v_mod), (
+        f"committed modification must be caught: {v_mod}"
+    )
+
+    # (3) إضافة مشروعة ملتزمة: كل الأسطر القديمة تبقى + سطر جديد
+    hist.write_text(
+        "{\"k\": \"A-TAMPERED\"}\n{\"k\": \"c\"}\n{\"k\": \"new\"}\n",
+        encoding="utf-8",
+    )
+    _commit()
+    current = _history_lines(hist.read_text(encoding="utf-8"))
+    v_ok = _history_git_violations(repo, current)
+    assert v_ok == [], f"legitimate append must pass: {v_ok}"

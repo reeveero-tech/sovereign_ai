@@ -1,0 +1,58 @@
+{
+  "measurement": "BEFORE (unmodified base)",
+  "meta": {
+    "tree": "unmodified base d08ec6a45d0df981e6476da9196f742a5af81e41 (fresh clone)",
+    "calculator": "final score.py executed OUTSIDE the measured tree (/tmp/v2calc), sys.path=[base_tree, base_tree/backend]",
+    "gate_evidence": "base tree's own gate run — the actual verify.sh command shape (--junit-prefix with real HEAD sha), sealed with the fingerprint captured BEFORE the run, accepted without re-sealing (base's own required guards): 431 passed / 0 failed / 0 skipped / 1 deselected"
+  },
+  "result": {
+    "files_reachable": 0.6396,
+    "modules_tested": 0.439,
+    "ledger_verified": 1.0,
+    "ledger_anchored": 1.0,
+    "compat_pending_sunset": 1.0,
+    "no_mocks_in_prod": 1,
+    "invariants_passing": 1,
+    "final_score": 0.8684,
+    "score_capped_by_missing_ledger": true,
+    "confidence_range": {
+      "lower": 0.5827,
+      "upper": 0.8684,
+      "note": "raw ledger is NEVER opened/searched by this calculator (owner prohibition) — ledger components are declared upper bounds from the tracked anchors file; conservative bound uses 0.0"
+    },
+    "invariants_evidence": {
+      "source": "JUnit XML parse",
+      "head_sha": "d08ec6a45d0df981e6476da9196f742a5af81e41",
+      "junit_path": "/tmp/before_base/forensics/pytest_results_base.xml",
+      "passing": 1,
+      "tests_total": 431,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "required_invariants": [
+        "tests.invariants.test_no_orphan_modules::test_no_orphan_modules",
+        "tests.invariants.test_no_unsigned_ledger_events::test_no_unsigned_ledger_events",
+        "tests.invariants.test_all_entrypoints_respond::test_required_endpoints_not_500",
+        "tests.invariants.test_keyring_immutability::test_keyring_history_immutable",
+        "tests.invariants.test_compat_sunset_criteria::test_every_compat_module_has_sunset_criteria",
+        "backend.tests.invariants.test_no_silent_exceptions.TestNoSilentExceptions::test_no_silent_except_in_production",
+        "tests.invariants.test_no_mock_outside_tests::test_no_mock_outside_tests"
+      ],
+      "tree_fingerprint": "32d747a60e897ce8"
+    },
+    "inputs": {
+      "py_files_total": 283,
+      "py_files_reachable": 181,
+      "backend_live_modules": 82,
+      "backend_modules_tested": 36,
+      "anchors_declared_coverage": 116910,
+      "anchors_malformed_lines": 0,
+      "documented_total_events": 116910,
+      "compat_total": 4,
+      "compat_with_sunset": 4,
+      "mocks_outside_tests_count": 0,
+      "repo_head_sha": "d08ec6a45d0df981e6476da9196f742a5af81e41"
+    },
+    "aggregation": "final_score = mean(7 scored components) — documented choice; ROADMAP_V2 does not specify weights; not tunable to improve results"
+  }
+}

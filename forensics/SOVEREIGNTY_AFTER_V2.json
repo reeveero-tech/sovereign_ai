@@ -1,0 +1,83 @@
+{
+  "measurement": "AFTER (fix round)",
+  "meta": {
+    "tree": "fix-round working tree: b2da7f1 + uncommitted fix-round changes (content fingerprint + tree_fingerprint in evidence)",
+    "calculator": "same final version, executed OUTSIDE the measured tree (/tmp/v2calc), sys.path=[worktree, worktree/backend]",
+    "gate_evidence": "ACTUAL verify.sh run (unified path — tools/run_gate.py: fingerprint captured BEFORE the run, actual command with real-HEAD-sha junit-prefix, conditional sealing with the captured fingerprint, logged via run_logged): 467 passed / 0 failed / 0 skipped / 1 deselected (operational), verify.sh EXIT=0, report accepted without re-sealing"
+  },
+  "result": {
+    "files_reachable": 0.6354,
+    "modules_tested": 0.4634,
+    "ledger_verified": 1.0,
+    "ledger_anchored": 1.0,
+    "compat_pending_sunset": 1.0,
+    "no_mocks_in_prod": 1,
+    "invariants_passing": 1,
+    "final_score": 0.8713,
+    "score_capped_by_missing_ledger": true,
+    "confidence_range": {
+      "lower": 0.5855,
+      "upper": 0.8713,
+      "note": "raw ledger is NEVER opened/searched by this calculator (owner prohibition) — ledger components are declared upper bounds from the tracked anchors file; conservative bound uses 0.0"
+    },
+    "invariants_evidence": {
+      "source": "JUnit XML parse",
+      "head_sha": "b2da7f1e466bd3af3cf4395bcb5bfb66660403bb",
+      "junit_path": "/home/user/workspace/sovereign_ai/forensics/pytest_results.xml",
+      "passing": 1,
+      "tests_total": 467,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "required_invariants": [
+        "backend.tests.invariants.test_no_orphan_modules::test_no_orphan_modules",
+        "backend.tests.invariants.test_no_unsigned_ledger_events::test_no_unsigned_ledger_events",
+        "backend.tests.invariants.test_all_entrypoints_respond::test_all_registered_routes_respond",
+        "backend.tests.invariants.test_keyring_immutability::test_keyring_history_immutable",
+        "backend.tests.invariants.test_compat_sunset_criteria::test_every_compat_module_has_sunset_criteria",
+        "backend.tests.invariants.test_no_silent_exceptions.TestNoSilentExceptions::test_no_silent_except_in_production",
+        "backend.tests.invariants.test_no_mock_outside_tests::test_no_mock_outside_tests"
+      ],
+      "tree_fingerprint": "d503b5d1cd7617b3"
+    },
+    "inputs": {
+      "py_files_total": 288,
+      "py_files_reachable": 183,
+      "backend_live_modules": 82,
+      "backend_modules_tested": 38,
+      "anchors_declared_coverage": 116910,
+      "anchors_malformed_lines": 0,
+      "documented_total_events": 116910,
+      "compat_total": 4,
+      "compat_with_sunset": 4,
+      "mocks_outside_tests_count": 0,
+      "repo_head_sha": "b2da7f1e466bd3af3cf4395bcb5bfb66660403bb"
+    },
+    "aggregation": "final_score = mean(7 scored components) — documented choice; ROADMAP_V2 does not specify weights; not tunable to improve results"
+  },
+  "comparison": {
+    "before_final": 0.8684,
+    "after_final": 0.8713,
+    "delta": 0.0029,
+    "verdict": "AFTER > BEFORE",
+    "component_deltas": {
+      "files_reachable": -0.0042,
+      "modules_tested": 0.0244,
+      "ledger_verified": 0.0,
+      "ledger_anchored": 0.0,
+      "compat_pending_sunset": 0.0,
+      "no_mocks_in_prod": 0,
+      "invariants_passing": 0,
+      "final_score": 0.0029,
+      "score_capped_by_missing_ledger": 0
+    },
+    "regressed_components": [
+      "files_reachable"
+    ],
+    "improved_components": [
+      "modules_tested",
+      "final_score"
+    ],
+    "note": "comparison generated automatically from the two measured results; regressed components are documented in MEASUREMENT_V2_NOTES.md"
+  }
+}

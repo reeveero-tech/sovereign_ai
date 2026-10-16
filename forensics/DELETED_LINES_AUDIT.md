@@ -771,3 +771,23 @@ tests/ci_run_selection.py (--require-completed). الحذف كله استبدا�
 - النقل بـ git mv (الستة) — إعادة تسمية موثقة لا حذف ملفات.
 
 العلامة `# DELETION-JUSTIFIED` في رسالة الالتزام نفسه (قاعدة Issue #8).
+
+## جولة تصويبات المراجع (بعد b2da7f1) — 216 سطرًا محذوفًا
+
+- `backend/sovereign/score.py` (~150): استبدال كتلة v2 الأولى (أسماء مجردة
+  + فحص وجود للسجل الخام + ثابت نجاح) بالنسخة المصوبة (هويات منقطة كاملة،
+  لا مس للسجل، دليل invariants معلوم الهوية). # DELETION-JUSTIFIED: استبدال
+  تنفيذ معيب بتنفيذ مصوب — الحارس (اختبارات المسار) يغطي الجديد.
+- `backend/tests/invariants/test_no_unsigned_ledger_events.py` (~35): استبدال
+  المصنف القديم (يقبل UNVERIFIABLE_MISSING_KEY دون قيد) بمصنف البدائل
+  الثلاثة. # DELETION-JUSTIFIED: الكاشف القديم كان يقبل أحداثًا غير موقعة
+  غير مرساة — عيب أمان.
+- `backend/tests/invariants/test_compat_sunset_criteria.py` (~12): استبدال كاشف
+  الملفات بكاشف السجل (importlib). # DELETION-JUSTIFIED: الكاشف القديم
+  قابل للخداع بتعليق نصي.
+- `backend/tests/invariants/test_keyring_immutability.py` (~8): توسيع فحص
+  الوجود/JSON إلى مقارنة git فعلية. # DELETION-JUSTIFIED: الفحص القديم لم
+  يكن يرفض حذف أسطر.
+- `backend/tests/conftest.py` + `tests/fixtures/synthetic_ledger.py` (~11):
+  إعادة كتابة اشتقاق المسارات + وضع إعادة الاستخدام. # DELETION-JUSTIFIED:
+  الاشتقاق القديم كان كاسرًا خارج سياق واحد.

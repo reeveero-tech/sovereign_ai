@@ -8,9 +8,21 @@ entrypoints (TestClient(app)) سيكتب في data/ الحقيقية (جريمة
 مسجل هناك، وتسجيله مرتين يكسر pytest بخطأ option-already-added عند تشغيل
 المسارين معًا (وهو الاستدعاء القياسي في verify.sh). اختبارات operational
 كلها في tests/ — لا أثر لهذا الحذف هنا.
+
+تصويب المراجعة (الجولة الإنشائية — الاعتراض 5): اشتقاق المسارات من موضع
+هذا الملف نفسه — الملف في <repo>/backend/tests/، إذًا:
+  backend = <repo>/backend  (مستويان أعلى)
+  repo    = <repo>          (ثلاثة مستويات أعلى)
+(الصيغة السابقة أنتجت <repo>/backend/backend ومسارًا جذريًا خاطئًا —
+اكتشفه المراجع؛ أخطاء الاستيراد كانت محجوبة بسبق تحميل tests/conftest.py)
 """
 import os
 import sys
+
+# هذا الملف: <repo>/backend/tests/conftest.py
+_THIS_DIR = os.path.dirname(os.path.abspath(__file__))        # <repo>/backend/tests
+_BACKEND_DIR = os.path.dirname(_THIS_DIR)                     # <repo>/backend
+_REPO_ROOT = os.path.dirname(_BACKEND_DIR)                    # <repo>
 
 # R-682 (بند ٦): تعطيل خيوط الخلفية في بيئة الاختبار — قبل أي استيراد.
 os.environ["SOVEREIGN_DISABLE_BACKGROUND_THREADS"] = "1"
@@ -27,38 +39,35 @@ if not os.environ.get("SOVEREIGN_DATA_ROOT"):
     )
 
 # R-634: إنشاء KeyRing معزول مع مفتاح نشط (في الجذر المعزول) — يضمن
-# KeyRing() الافتراضي يجد مفاتيح (فشل مُغلق يمنع الاختبارات المُنشئة أحداثًا).
+# KeyRing() الافتراضي يجد مفاتيح. (تصويب المراجع: فشل التجهيز لا يُبتلع —
+# اختبارات invariants تفشل صراحة بدل عمل بصمت بلا مفاتيح)
 try:
-    _test_root = os.environ.get("SOVEREIGN_DATA_ROOT")
-    if _test_root:
-        from pathlib import Path as _Path
-        _keys_dir = _Path(_test_root) / "keys"
-        _keys_dir.mkdir(parents=True, exist_ok=True)
-        _keyring_file = _keys_dir / "keyring.json"
-        if not _keyring_file.exists():
-            _backend = os.path.join(
-                os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-                "backend",
-            )
-            if _backend not in sys.path:
-                sys.path.insert(0, _backend)
-            from sovereign.keys import KeyRing as _TestKeyRing
-            _kr = _TestKeyRing(keys_dir=_keys_dir)
-            _kr.generate_new_key(reason="test_env_r634_backend")
-            _kr.save_to_disk()
-except Exception:
-    # لا نُفشل الاستيراد — الاختبارات المعزولة ستُنشئ مفاتيحها
-    pass
+    from pathlib import Path as _Path
+    _keys_dir = _Path(os.environ["SOVEREIGN_DATA_ROOT"]) / "keys"
+    _keys_dir.mkdir(parents=True, exist_ok=True)
+    if not (_keys_dir / "keyring.json").exists():
+        if _BACKEND_DIR not in sys.path:
+            sys.path.insert(0, _BACKEND_DIR)
+        from sovereign.keys import KeyRing as _TestKeyRing
+        _kr = _TestKeyRing(keys_dir=_keys_dir)
+        _kr.generate_new_key(reason="test_env_r634_backend")
+        _kr.save_to_disk()
+except Exception as _provision_error:
+    # لا ابتلاع صامت: الجذر المعزول بلا keyring يعني فشلًا صريحًا لاحقًا في
+    # invariants (KeyRing is empty — invariant violated). نرفع التحذير بصوت
+    # عالٍ ويبقى مسار الفشل الصريح في الاختبارات نفسها.
+    import warnings as _warnings
+    _warnings.warn(
+        f"backend/tests/conftest: isolated test KeyRing provisioning FAILED "
+        f"({type(_provision_error).__name__}: {_provision_error}) — invariant "
+        "tests that need keys will fail explicitly (no silent pass)"
+    )
 
 # مسارات الاستيراد (app.py يستورد orchestrator نسبيًا)
-_BACKEND = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "backend"
-)
-if _BACKEND not in sys.path:
-    sys.path.insert(0, _BACKEND)
-_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if _ROOT not in sys.path:
-    sys.path.insert(0, _ROOT)
+if _BACKEND_DIR not in sys.path:
+    sys.path.insert(0, _BACKEND_DIR)
+if _REPO_ROOT not in sys.path:
+    sys.path.insert(0, _REPO_ROOT)
 
 
 # R-682 (بند ٥): إنهاء منظم لخيوط الخلفية في نهاية جلسة pytest.

@@ -515,7 +515,15 @@ async def sovereignty_score():
     composite_obj = Composite(primitives_obj, junit_xml_path=_junit_path)
     composite_result = composite_obj.compute()
 
+    # الجولة الإنشائية 2026-10-16: معادلة ROADMAP_V2 الثمانية مكونات —
+    # مربوطة بالاستجابة الفعلية (تصويب المراجع — الاعتراض 1). الدالة لا
+    # تشغل pytest (فصل الحاسبة عن مشغل الاختبارات): invariants_passing
+    # من دليل JUnit معلوم الهوية (SHA مطابق) — لا ثابت نجاح بلا دليل.
+    from backend.sovereign.score import compute_sovereignty_score_v2
+    roadmap_v2 = compute_sovereignty_score_v2()
+
     return {
+        "roadmap_v2": roadmap_v2,
         "total_score": report.total_score,
         "grade": report.grade,
         "timestamp": report.timestamp,
@@ -564,15 +572,41 @@ async def compat_status():
     تقرير حالة طبقة التوافق (نمط التين الخانق — المرحلة 4 من ROADMAP_V2).
     يُعيد lifecycle لكل وحدة compat: عدد الاستدعاءات + معيار الإزالة.
     """
-    from backend.compat.__meta__ import get_lifecycle_summary
+    from backend.compat.__meta__ import (
+        COMPAT_LIFECYCLE, evaluate_pending_sunset, get_lifecycle_summary,
+        load_call_log,
+    )
 
-    summary = get_lifecycle_summary()
+    from datetime import datetime, timezone
+    entries = load_call_log()
+    # الحكم الزمني الفعلي (قاعدة الـ30 يومًا — ROADMAP_V2 المرحلة 4):
+    # يُحسب من السجل المثبَّت الحقيقي للاستدعاءات — المستدعي الإنتاجي
+    # لـevaluate_pending_sunset (تصويب المراجع — الاعتراض 4).
+    evaluation = evaluate_pending_sunset(
+        now=datetime.now(timezone.utc).isoformat(),
+        lifecycle=COMPAT_LIFECYCLE,
+        entries=entries,
+    )
+    # العرض والعدّادات من دورة الحياة المُقيَّمة نفسها (تصويب المراجع —
+    # الجولة 2): الوحدة الظاهرة في pending_sunset_transitions يجب أن
+    # تظهر حالتها pending_sunset في modules وتُحتسب في العدّادات — لا
+    # أن يعرض الاقتراح بينما الحالة المعروضة active.
+    evaluated = evaluation["lifecycle"]
+    active = sum(1 for v in evaluated.values() if v["status"] == "active")
+    pending = sum(1 for v in evaluated.values() if v["status"] == "pending_sunset")
+    legacy = sum(1 for v in evaluated.values() if v["status"] == "legacy_retained")
     return {
-        "total_modules": summary["total_modules"],
-        "active": summary["active"],
-        "pending_sunset": summary["pending_sunset"],
-        "legacy_retained": summary["legacy_retained"],
-        "modules": summary["modules"],
+        "total_modules": len(evaluated),
+        "active": active,
+        "pending_sunset": pending,
+        "legacy_retained": legacy,
+        "modules": evaluated,
+        "sunset_evaluation": {
+            "evaluated_at": evaluation["now"],
+            "threshold_days": evaluation["threshold_days"],
+            "pending_sunset_transitions": evaluation["transitions"],
+            "call_log_entries": len(entries),
+        },
         "policy": "لا يُحذف أي وحدة compat أبدًا — تُنقل إلى _legacy/ فقط",
     }
 

@@ -711,120 +711,359 @@ class SovereigntyScorer:
 
 # ============================================================
 # الجولة الإنشائية 2026-10-16 — معادلة ROADMAP_V2 (المرحلة 5) الحرفية
+# (تصويب المراجع — الاعتراضان 1 و6: هويات مسارات كاملة لا أسماء مجردة؛
+# لا مس لملف السجل الخام إطلاقًا — وضع الغياب صريح بلا فحص وجود؛
+# invariants_passing من دليل تشغيل معلوم الهوية — لا تشغيل pytest داخل
+# طلب HTTP يختبر الطلب نفسه، ولا ثابت نجاح بلا دليل)
 # ============================================================
-# SOVEREIGNTY_SCORE الثمانية مكونات كما وردت في ROADMAP_V2.md نصًّا.
-# تُعاد القيم 0.0-1.0 (والثنائيان 0/1) وfinal_score 0.0-1.0.
-#
-# تعريف التجميع (ROADMAP_V2 لا يحدد أوزان final_score): متوسط المكونات
-# السبعة المسجلة (خمس نسب + ثنائيان) — موثق هنا وفي REPORT_V2.md، ولا
-# يُعدل لتحسين نتيجة.
-#
-# حدّ السجل الغائب: ledger.jsonl الخام غير متتبع في git (موثق غيابه في
-# forensics/INVARIANT_LIMITS.md). مكونا ledger_verified وledger_anchored
-# يُحسبان من ملف المراسي المتتبع (نطاقات الدفعات المعلنة) — حد أعلى
-# معلن، والقيمة المحافظة 0.0. النتيجة النهائية المعلنة هي الحد الأعلى مع
-# score_capped_by_missing_ledger=true ونطاق ثقة [محافظ، متفائل].
 
 import ast as _ast
 import subprocess as _subprocess
 from pathlib import Path as _Path
 
 
-def _v2_live_backend_modules(repo_root: _Path) -> list:
-    """وحدات backend الحية (بدون tests/ و __pycache__ والأرشيف)."""
+def _v2_module_identities(repo_root: _Path, file_path: _Path) -> "set":
+    """هويات الاستيراد الممكنة لملف — مسارات منقطة كاملة من كل جذر
+    استيراد حقيقي (جذر المستودع وbackend/ — كلاهما على sys.path فعليًا).
+
+    مثال: backend/orchestrator.py → {"backend.orchestrator", "orchestrator"}.
+    ملف backend/sovereign/keys/__init__.py → {"backend.sovereign.keys",
+    "sovereign.keys"} — يُغطى باستيراد الحزمة نفسها (هويته هو مسارها).
+    """
+    rel = file_path.relative_to(repo_root)
+    parts = list(rel.with_suffix("").parts)
+    if parts[-1] == "__init__":
+        parts = parts[:-1]
+    dotted_full = ".".join(parts)
+    identities = {dotted_full}
+    if rel.parts[0] == "backend" and len(rel.parts) > 1:
+        identities.add(".".join(parts[1:]))
+    return identities
+
+
+def _v2_collect_imported_names(repo_root: _Path, files: "list") -> "set":
+    """كل أسماء الوحدات المستوردة فعليًا — مسارات منقطة كاملة:
+
+    - import a.b.c → a.b.c
+    - from a.b import x → a.b وa.b.x (x قد يكون وحدة)
+    - الاستيراد النسبي (from .m import x) يُحل ضد حزمة الملف المستورد
+    """
+    imported = set()
+    for fp in files:
+        try:
+            tree = _ast.parse(fp.read_text(encoding="utf-8"))
+        except Exception:  # TOLERATED: ملف غير قابل للتحليل — يستثنى من جمع الأسماء (سياسة الماسح نفسها)
+            continue
+        pkg_parts = list(fp.relative_to(repo_root).with_suffix("").parts[:-1])
+        for node in _ast.walk(tree):
+            if isinstance(node, _ast.Import):
+                for a in node.names:
+                    imported.add(a.name)
+            elif isinstance(node, _ast.ImportFrom):
+                if node.level == 0 and node.module:
+                    imported.add(node.module)
+                    for a in node.names:
+                        imported.add(f"{node.module}.{a.name}")
+                else:
+                    # نسبي: from .m import x / from ..m import x
+                    base = pkg_parts[: len(pkg_parts) - (node.level - 1)] if node.level > 1 else pkg_parts
+                    mod_parts = base + ([node.module] if node.module else [])
+                    mod = ".".join(p for p in mod_parts if p)
+                    if mod:
+                        imported.add(mod)
+                        for a in node.names:
+                            imported.add(f"{mod}.{a.name}")
+    return imported
+
+
+def _v2_live_py_files(repo_root: _Path, subtree: "str | None" = None) -> "list":
     live = []
-    for p in (repo_root / "backend").rglob("*.py"):
+    for p in repo_root.rglob("*.py"):
         rel = str(p.relative_to(repo_root))
-        if any(x in rel for x in ["__pycache__", ".git"]):
+        if any(x in rel for x in ["__pycache__", ".git", ".pytest_cache"]):
             continue
-        if rel.startswith("backend/tests/"):
+        if rel.startswith(("archive/", "emergency_backups/")):
             continue
-        live.append((rel, p))
+        if subtree and not rel.startswith(subtree):
+            continue
+        live.append(p)
     return live
 
 
-def _v2_test_import_stems(repo_root: _Path) -> set:
-    """أسماء (stems) الوحدات المستوردة من ملفات الاختبارات كلها."""
-    stems = set()
-    for tests_dir in ("tests", "backend/tests"):
-        d = repo_root / tests_dir
-        if not d.exists():
+# حراس ROADMAP_V2 بهوية كاملة (classname, name) — لا الاسم المجرد وحده:
+# اختبار متشابه الاسم خارج invariants لا يحقق القائمة. يشمل حارس
+# test_no_mock_outside_tests (الغائب عن القائمة المجردة سابقًا).
+_V2_REQUIRED_INVARIANT_TESTS = (
+    ("backend.tests.invariants.test_no_orphan_modules", "test_no_orphan_modules"),
+    ("backend.tests.invariants.test_no_unsigned_ledger_events",
+     "test_no_unsigned_ledger_events"),
+    ("backend.tests.invariants.test_all_entrypoints_respond",
+     "test_all_registered_routes_respond"),
+    ("backend.tests.invariants.test_keyring_immutability",
+     "test_keyring_history_immutable"),
+    ("backend.tests.invariants.test_compat_sunset_criteria",
+     "test_every_compat_module_has_sunset_criteria"),
+    ("backend.tests.invariants.test_no_silent_exceptions.TestNoSilentExceptions",
+     "test_no_silent_except_in_production"),
+    ("backend.tests.invariants.test_no_mock_outside_tests",
+     "test_no_mock_outside_tests"),
+)
+
+
+def _v2_content_fingerprint(repo_root: _Path) -> str:
+    """بصمة محتوى مدخلات الكود والاختبارات (تصويب المراجع — الجولة 2):
+
+    sha256 على (المسار النسبي + هاش المحتوى) لكل ملف .py حي، مرتبة —
+    مخرجات الأدلة (forensics/) والأرشيف والبيانات مستثناة. تغيير محتوى
+    ملف واحد (ولو بقي M على HEAD نفسه) يغير البصمة — الدليل القديم
+    يُرفض. السجل الخام لا يُفتح ولا يُبحث عنه (منع المالك)."""
+    import hashlib as _hl
+
+    repo_root = _Path(repo_root)
+    excluded = ("__pycache__", ".git", ".pytest_cache", "node_modules",
+                "venv", "archive/", "emergency_backups/", "forensics/", "data/")
+    digest = _hl.sha256()
+    for p in sorted(repo_root.rglob("*.py")):
+        rel = p.relative_to(repo_root).as_posix()
+        if any(x in rel for x in excluded):
             continue
-        for p in d.rglob("*.py"):
-            if "__pycache__" in str(p):
-                continue
-            # TOLERATED: test file unreadable/unparsable — excluded from
-            # test-import stems (matches scanner policy; counted files only)
-            try:
-                tree = _ast.parse(p.read_text(encoding="utf-8"))
-            except Exception:
-                continue
-            for node in _ast.walk(tree):
-                if isinstance(node, _ast.Import):
-                    for a in node.names:
-                        stems.add(a.name.split(".")[0])
-                elif isinstance(node, _ast.ImportFrom):
-                    if node.module:
-                        stems.add(node.module.split(".")[0])
-                    for a in node.names:
-                        stems.add(a.name.split(".")[0])
-    return stems
+        digest.update(rel.encode("utf-8"))
+        digest.update(_hl.sha256(p.read_bytes()).digest())
+    return digest.hexdigest()
 
 
-def _v2_run_invariants(repo_root: _Path) -> dict:
-    """تشغيل فعلي لاختبارات invariants (المساران) — نتيجة 0/1 صادقة."""
-    import sys as _sys
-    cmd = [
-        _sys.executable, "-m", "pytest",
-        "tests/invariants/", "backend/tests/invariants/",
-        "-q", "--no-header", "-p", "no:cacheprovider",
-    ]
-    try:
-        r = _subprocess.run(
-            cmd, capture_output=True, text=True,
-            cwd=str(repo_root), timeout=900,
+def seal_junit_identity(junit_path, repo_root: _Path,
+                       captured_fingerprint: str) -> dict:
+    """ختم هوية التشغيل بالبصمة الملتقطة قبل التشغيل (تصويب المراجع —
+    الجولة 3): مقارنة الشجرة الحالية بالملتقطة — إن اختلفت يُرفض الختم
+    (لا يُختم تقرير قديم ببصمة جديدة)، وإن تطابقت تُكتب البصمة الملتقطة
+    نفسها حرفيًا (لا إعادة حساب)."""
+    junit_path = _Path(junit_path)
+    repo_root = _Path(repo_root)
+    current_fp = _v2_content_fingerprint(repo_root)
+    if current_fp != captured_fingerprint:
+        raise RuntimeError(
+            "content changed between the run and the sealing — refusing to "
+            "seal a stale report with a fresh fingerprint"
         )
-        passed = (r.returncode == 0)
-        tail = r.stdout.strip().split("\n")[-1] if r.stdout.strip() else ""
-    except _subprocess.TimeoutExpired:
-        passed = False
-        tail = "invariants run timed out (900s)"
-    return {"passing": 1 if passed else 0, "run_tail": tail}
+    return embed_junit_identity(junit_path, repo_root,
+                                fingerprint=captured_fingerprint)
 
 
-def compute_sovereignty_score_v2(repo_root=None) -> dict:
+def embed_junit_identity(junit_path, repo_root: _Path, fingerprint=None) -> dict:
+    """تضمين هوية التشغيل في JUnit (SHA + بصمة المحتوى).
+
+    fingerprint: بصمة مسبقة (الملتقطة وقت التشغيل) تُكتب كما هي — لا
+    إعادة حساب. غيابها = حساب بصمة اللحظة (لأدلة لا تحتاج ضمان الترتيب)."""
+    import xml.etree.ElementTree as _ET
+
+    junit_path = _Path(junit_path)
+    repo_root = _Path(repo_root)
+    head = _subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        capture_output=True, text=True, cwd=str(repo_root),
+    ).stdout.strip()
+    if fingerprint is None:
+        fingerprint = _v2_content_fingerprint(repo_root)
+    tree = _ET.parse(junit_path)
+    root = tree.getroot()
+    root.set("git_sha", head)
+    root.set("junit_prefix", f"R-682-sha-{head}")
+    root.set("content_fingerprint", fingerprint)
+    _ET.indent(tree)
+    tree.write(junit_path, encoding="utf-8", xml_declaration=True)
+    return {"head": head, "content_fingerprint": fingerprint}
+
+
+def _parse_junit_evidence(junit_path: _Path, head: str,
+                           required=None, repo_root=None) -> dict:
+    """تحليل JUnit فعليًا (تصويب المراجع — الاعتراض 5): لا بحث نصي —
+    ElementTree: النطاق (الاختبارات المطلوبة حاضرة)، الأعداد، الصفر
+    فشل/خطأ/تخطٍّ، ومطابقة SHA للجذر. الرفض صريح ومسبب في كل حالة."""
+    import xml.etree.ElementTree as _ET
+
+    required = tuple(required) if required else _V2_REQUIRED_INVARIANT_TESTS
+    # هوية كاملة: (classname, name) — لا الاسم المجرد
+    required_pairs = [
+        tuple(x) if isinstance(x, (tuple, list)) else (None, x)
+        for x in required
+    ]
+    base = {
+        "source": "JUnit XML parse", "head_sha": head,
+        "junit_path": str(junit_path),
+    }
+    junit_path = _Path(junit_path)
+    if not junit_path.exists():
+        return {**base, "passing": 0, "reason": "no JUnit evidence file"}
+    try:
+        tree = _ET.parse(junit_path)
+    # TOLERATED: XML تالف — يعامل كدليل غائب (لا نجاح بلا دليل)
+    except Exception:
+        return {**base, "passing": 0, "reason": "JUnit XML unreadable/corrupt"}
+
+    root = tree.getroot()
+    sha_attr = root.get("junit_prefix", "")
+    import re as _re2
+    m = _re2.match(r"R-682-sha-([0-9a-f]{40})$", sha_attr)
+    if not m or m.group(1) != head:
+        return {**base, "passing": 0,
+                "reason": "JUnit SHA missing or mismatched (stale evidence)"}
+
+    # ربط الدليل بمحتوى الشجرة (تصويب المراجع — الجولة 2): البصمة
+    # المضمنة وقت التشغيل يجب أن تطابق بصمة الشجرة الحالية — دليل قديم
+    # على HEAD نفسه بعد تغيير كود يُرفض (تغيير المحتوى وليس حالة git).
+    embedded_fp = root.get("content_fingerprint", "")
+    if not embedded_fp:
+        return {**base, "passing": 0,
+                "reason": "JUnit not tied to content fingerprint "
+                         "(missing embedded fingerprint)"}
+    if repo_root is not None:
+        current_fp = _v2_content_fingerprint(_Path(repo_root))
+        if current_fp != embedded_fp:
+            return {**base, "passing": 0,
+                    "reason": "content fingerprint mismatch — code/tests "
+                              "changed since the evidence run"}
+
+    suites = list(root.iter("testsuite"))
+    if not suites:
+        return {**base, "passing": 0, "reason": "empty JUnit (no testsuites)"}
+
+    total = sum(int(s.get("tests", 0)) for s in suites)
+    failures = sum(int(s.get("failures", 0)) for s in suites)
+    errors = sum(int(s.get("errors", 0)) for s in suites)
+    skipped = sum(int(s.get("skipped", 0)) for s in suites)
+
+    if total == 0:
+        return {**base, "passing": 0, "reason": "JUnit reports zero tests"}
+    if failures or errors:
+        return {**base, "passing": 0,
+                "reason": f"JUnit reports failures={failures} errors={errors}"}
+    if skipped:
+        return {**base, "passing": 0,
+                "reason": f"JUnit reports skipped={skipped} (zero-skip DoD)"}
+
+    # النطاق: الاختبارات المطلوبة حاضرة — كل واحدة بحالة نظيفة
+    case_states = {}
+    import re as _re3
+
+    # بادئة هوية التقرير نفسه فقط (تصويب المراجع — الجولة 4): تُنزع البادئة
+    # المطابقة لـSHA جذره — تقرير يحمل SHA الحالي لكن أسماء اختباراته
+    # تحمل بادئة SHA آخر لا يُنظف ويُرفض (فحص التمييز في الاختبارات).
+    root_sha = (m.group(1) if m else "")
+    expected_prefix = f"R-682-sha-{root_sha}."
+
+    def _strip_junit_prefix(classname: str) -> str:
+        if root_sha and classname.startswith(expected_prefix):
+            return classname[len(expected_prefix):]
+        return classname
+
+    for tc in root.iter("testcase"):
+        key = (_strip_junit_prefix(tc.get("classname", "")), tc.get("name", ""))
+        state = "ok"
+        if tc.find("failure") is not None:
+            state = "failure"
+        elif tc.find("error") is not None:
+            state = "error"
+        elif tc.find("skipped") is not None:
+            state = "skipped"
+        case_states[key] = state
+    missing = [f"{c}::{n}" for c, n in required_pairs if (c, n) not in case_states]
+    if missing:
+        return {**base, "passing": 0,
+                "reason": f"JUnit scope missing required invariants: {missing}"}
+    bad = {f"{c}::{n}": case_states[(c, n)] for c, n in required_pairs
+           if (c, n) in case_states and case_states[(c, n)] != "ok"}
+    if bad:
+        return {**base, "passing": 0,
+                "reason": f"required invariants not clean: {bad}"}
+
+    return {
+        **base, "passing": 1,
+        "tests_total": total, "failures": failures, "errors": errors,
+        "skipped": skipped,
+        "required_invariants": [f"{c}::{n}" for c, n in required_pairs],
+    }
+
+
+def _v2_tree_fingerprint(repo_root: _Path) -> str:
+    """بصمة حالة الشجرة العاملة (تصويب المراجع: الدليل مرتبط بحالة الشجرة
+    لا بـHEAD وحده) — sha256 لخرج git status --porcelain."""
+    r = _subprocess.run(
+        ["git", "status", "--porcelain"],
+        capture_output=True, text=True, cwd=str(repo_root),
+    )
+    import hashlib as _hl
+    return _hl.sha256(r.stdout.encode("utf-8")).hexdigest()[:16]
+
+
+def _v2_invariants_evidence(repo_root: _Path, junit_path=None,
+                             required=None) -> dict:
+    """دليل تشغيل invariants معلوم الهوية والنطاق وحالة الشجرة.
+
+    يُقبل فقط إذا: تطابق SHA المضمّن مع HEAD، والنطاق يشمل الاختبارات
+    المطلوبة ناجحة، وصفر فشل/خطأ/تخطٍّ. لا نجاح بثابت بلا دليل."""
+    head = _subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        capture_output=True, text=True, cwd=str(repo_root),
+    ).stdout.strip()
+    junit = (_Path(junit_path) if junit_path
+             else repo_root / "forensics" / "pytest_results.xml")
+    evidence = _parse_junit_evidence(junit, head, required=required,
+                                     repo_root=repo_root)
+    evidence["tree_fingerprint"] = _v2_tree_fingerprint(repo_root)
+    return evidence
+
+
+def compute_sovereignty_score_v2(repo_root=None, invariants_evidence=None) -> dict:
     """معادلة ROADMAP_V2 (المرحلة 5) — SOVEREIGNTY_SCORE الثمانية مكونات.
 
-    تُحسب الآن من حالة المستودع الفعلية. غياب ledger.jsonl الخام يُعلن
-    صراحة: مكونا السجل عند حدهما الأعلى (تغطية المراسي المعلنة) مع
-    score_capped_by_missing_ledger=true ونطاق ثقة [محافظ، متفائل].
+    (تصويبات المراجع — الاعتراض 6):
+    - الوصول والاختبار يقيسان بهويات المسارات الكاملة (منقطة) — لا أسماء
+      مجردة أو أول جزء؛ و__init__.py لا يُمنح تغطية تلقائية (هويته مسار
+      الحزمة — يُغطى فقط باستيراد الحزمة الفعلي).
+    - السجل الخام لا يُفتح ولا يُبحث عنه إطلاقًا داخل هذه الدالة — مكوّنا
+      السجل من ملف المراسي المتتبع حصرًا (حد أعلى معلن)، والوضع صريح.
+    - invariants_passing من دليل تشغيل معلوم الهوية (JUnit بـSHA مطابق
+      أو دليل صريح يُمرر) — لا تشغيل اختبارات هنا.
+    - التجميع موثق: متوسط المكونات السبعة (ROADMAP لا يحدد أوزانًا).
     """
-    from backend.sovereign.primitives import Primitives
-
     if repo_root is None:
         repo_root = _Path(__file__).resolve().parent.parent.parent
     repo_root = _Path(repo_root)
-    prim = Primitives(repo_root=repo_root)
 
-    # 1) files_reachable — نسبة الملفات المستوردة (تعريف Primitives:
-    #    ملفات .py التي يستوردها ملف آخر، بتحليل AST — قابل لإعادة الحساب)
-    files_total = prim.files_total_count()
-    files_imported = prim.files_imported_count()
-    files_reachable = (files_imported / files_total) if files_total else 0.0
+    all_py = _v2_live_py_files(repo_root)
+    imported_names = _v2_collect_imported_names(repo_root, all_py)
 
-    # 2) modules_tested — نسبة وحدات backend الحية المستوردة من اختبار واحد+
-    backend_modules = _v2_live_backend_modules(repo_root)
-    test_stems = _v2_test_import_stems(repo_root)
-    tested = [rel for rel, p in backend_modules
-              if p.stem in test_stems or p.name == "__init__.py"]
-    # ملفات __init__.py تُعد مغطاة (بنية الحزمة يغطيها استيراد الحزمة)
-    modules_tested = (len(tested) / len(backend_modules)) if backend_modules else 0.0
+    # 1) files_reachable — بالهويات المنقطة الكاملة
+    reachable = []
+    for p in all_py:
+        if _v2_module_identities(repo_root, p) & imported_names:
+            reachable.append(p)
+    files_reachable = (len(reachable) / len(all_py)) if all_py else 0.0
 
-    # 3+4) ledger_verified / ledger_anchored — من ملف المراسي المتتبع.
-    # السجل الخام غائب (gitignored) → التغطية المعلنة حد أعلى؛ المحافظ 0.0
-    ledger_path = repo_root / "data" / "sovereign_core" / "ledger.jsonl"
+    # 2) modules_tested — وحدات backend الحية المستوردة من ملفات اختبار فعلًا
+    backend_modules = [
+        p for p in all_py
+        if str(p.relative_to(repo_root)).startswith("backend/")
+        and not str(p.relative_to(repo_root)).startswith("backend/tests/")
+    ]
+    test_files = [
+        p for p in all_py
+        if str(p.relative_to(repo_root)).startswith(("tests/", "backend/tests/"))
+    ]
+    test_imported = _v2_collect_imported_names(repo_root, test_files)
+    tested_modules = [
+        p for p in backend_modules
+        if _v2_module_identities(repo_root, p) & test_imported
+    ]
+    modules_tested = (
+        (len(tested_modules) / len(backend_modules)) if backend_modules else 0.0
+    )
+
+    # 3+4) ledger_verified / ledger_anchored — من ملف المراسي المتتبع حصرًا.
+    # (لا فحص وجود للسجل الخام ولا فتحه — منع صريح؛ المكوّنان حد أعلى
+    # معلن من تغطية المراسي، والقيمة المحافظة 0.0.)
     anchors_path = repo_root / "data" / "sovereign_core" / "ledger.anchors.jsonl"
-    ledger_present = ledger_path.exists()
     anchored_union = set()
     anchors_malformed = 0
     if anchors_path.exists():
@@ -832,31 +1071,19 @@ def compute_sovereignty_score_v2(repo_root=None) -> dict:
         for line in anchors_path.read_text(encoding="utf-8").split("\n"):
             if not line.strip():
                 continue
-            # سطر مرساة تالف/ناقص الحقول: يُعدّ ولا يُسكت عليه (لا إخفاء فشل)
+            # سطر مرساة تالف/ناقص الحقول: يُعدّ ولا يُسكت عليه
             try:
                 a = _json.loads(line)
                 for i in range(a["batch_start"], a["batch_end"] + 1):
                     anchored_union.add(i)
             except (ValueError, KeyError, TypeError):
                 anchors_malformed += 1
-    if ledger_present:
-        # السجل موجود: التغطية الفعلية من عدد الأسطر
-        n_lines = sum(
-            1 for line in ledger_path.read_text(encoding="utf-8").split("\n")
-            if line.strip()
-        )
-        total_events = max(n_lines, 1)
-    else:
-        # السجل غائب: الإجمالي الموثق في تقارير الحالة (116,910) —
-        # والتغطية المعلنة في المراسي (0..116909) حد أعلى
-        total_events = 116910
-    ledger_anchored_upper = (
-        min(len(anchored_union), total_events) / total_events
-    ) if total_events else 0.0
-    ledger_verified_upper = ledger_anchored_upper  # بلا سجل: لا تحقق بالمفتاح قابلًا للقياس
-    score_capped = not ledger_present
+    documented_total = 116910  # الإجمالي الموثق في تقارير الحالة
+    ledger_upper = (
+        min(len(anchored_union), documented_total) / documented_total
+    ) if documented_total else 0.0
 
-    # 5) compat_pending_sunset — نسبة وحدات compat ذات sunset_criteria
+    # 5) compat_pending_sunset — من السجل الفعلي (استيراد حقيقي)
     from backend.compat.__meta__ import COMPAT_LIFECYCLE
     compat_total = len(COMPAT_LIFECYCLE)
     compat_with = sum(
@@ -864,20 +1091,24 @@ def compute_sovereignty_score_v2(repo_root=None) -> dict:
     )
     compat_ratio = (compat_with / compat_total) if compat_total else 0.0
 
-    # 6) no_mocks_in_prod — ثنائي من المسح الفعلي
+    # 6) no_mocks_in_prod — مسح فعلي (نفس تعريف primitives القابل لإعادة الحساب)
+    from backend.sovereign.primitives import Primitives
+    prim = Primitives(repo_root=repo_root)
     no_mocks = 1 if prim.mocks_outside_tests_count() == 0 else 0
 
-    # 7) invariants_passing — ثنائي من تشغيل فعلي (سب-بروسس)
-    inv = _v2_run_invariants(repo_root)
+    # 7) invariants_passing — من دليل معلوم الهوية (لا تشغيل هنا)
+    if invariants_evidence is None:
+        invariants_evidence = _v2_invariants_evidence(repo_root)
+    inv_passing = 1 if invariants_evidence.get("passing") else 0
 
     components = {
         "files_reachable": round(files_reachable, 4),
         "modules_tested": round(modules_tested, 4),
-        "ledger_verified": round(ledger_verified_upper, 4),
-        "ledger_anchored": round(ledger_anchored_upper, 4),
+        "ledger_verified": round(ledger_upper, 4),
+        "ledger_anchored": round(ledger_upper, 4),
         "compat_pending_sunset": round(compat_ratio, 4),
         "no_mocks_in_prod": no_mocks,
-        "invariants_passing": inv["passing"],
+        "invariants_passing": inv_passing,
     }
 
     def _final(ledger_value: float) -> float:
@@ -886,12 +1117,11 @@ def compute_sovereignty_score_v2(repo_root=None) -> dict:
         c["ledger_anchored"] = ledger_value
         return round(sum(c.values()) / 7, 4)
 
-    final_upper = _final(ledger_anchored_upper)
+    final_upper = _final(ledger_upper)
     final_lower = _final(0.0)
 
     try:
-        import subprocess as _sp
-        sha = _sp.run(
+        sha = _subprocess.run(
             ["git", "rev-parse", "HEAD"],
             capture_output=True, text=True, cwd=str(repo_root),
         ).stdout.strip()
@@ -900,33 +1130,30 @@ def compute_sovereignty_score_v2(repo_root=None) -> dict:
 
     result = dict(components)
     result["final_score"] = final_upper
-    result["score_capped_by_missing_ledger"] = bool(score_capped)
+    # وضع السجل الخام صريح: الدالة لا تفتحه ولا تبحث عنه أبدًا (منع المالك) —
+    # مكوّنا السجل حد أعلى معلن من تغطية المراسي المتتبعة
+    result["score_capped_by_missing_ledger"] = True
     result["confidence_range"] = {
         "lower": final_lower,
         "upper": final_upper,
         "note": (
-            "ledger.jsonl raw file absent from clone — ledger components are "
-            "upper bounds (anchors-file declared coverage); conservative "
-            "bound uses 0.0 for both ledger components"
-        ) if score_capped else {
-            "lower": final_upper,
-            "upper": final_upper,
-            "note": "ledger present — components computed from actual file",
-        },
+            "raw ledger is NEVER opened/searched by this calculator (owner "
+            "prohibition) — ledger components are declared upper bounds from "
+            "the tracked anchors file; conservative bound uses 0.0"
+        ),
     }
+    result["invariants_evidence"] = invariants_evidence
     result["inputs"] = {
-        "files_total_count": files_total,
-        "files_imported_count": files_imported,
+        "py_files_total": len(all_py),
+        "py_files_reachable": len(reachable),
         "backend_live_modules": len(backend_modules),
-        "backend_modules_tested": len(tested),
-        "ledger_present": ledger_present,
+        "backend_modules_tested": len(tested_modules),
         "anchors_declared_coverage": len(anchored_union),
         "anchors_malformed_lines": anchors_malformed,
-        "documented_total_events": total_events,
+        "documented_total_events": documented_total,
         "compat_total": compat_total,
         "compat_with_sunset": compat_with,
         "mocks_outside_tests_count": prim.mocks_outside_tests_count(),
-        "invariants_run_tail": inv["run_tail"],
         "repo_head_sha": sha,
     }
     result["aggregation"] = (

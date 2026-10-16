@@ -43,26 +43,14 @@ if [ ! -f data/key.secret ]; then
     echo "[info] Generated ephemeral data/key.secret (not committed)"
 fi
 
-# --- 3) Run test suite with JUnit + SHA ---
+# --- 3) Run test suite via the TRUSTED gate wrapper (unified path) ---
+# (تصويب المراجع — الجولة 4: المسار الموحد — الغلاف نفسه يلتقط بصمة
+# المحتوى قبل التشغيل، يشغل الأمر الفعلي نفسه (بادئة SHA حقيقية)،
+# يقارن بعد التشغيل، ويختم بالبصمة الملتقطة حرفيًا — لا يُلحق تقرير
+# قديم ببصمة جديدة — ويوثق الفعل كاملًا عبر run_logged في build_actions)
 echo ""
-echo "[1/2] Running test suite (tests/ + backend/tests/, excluding operational)..."
-python3 -m pytest tests/ backend/tests/ -q \
-    -m "not operational" \
-    --junitxml=forensics/pytest_results.xml \
-    --junit-prefix="R-682-sha-${SHA}" \
-    || { echo "❌ pytest FAILED"; exit 1; }
-
-# --- 4) Embed SHA in JUnit XML root attributes ---
-python3 - <<EOF
-import xml.etree.ElementTree as ET
-tree = ET.parse("forensics/pytest_results.xml")
-root = tree.getroot()
-root.set("git_sha", "$SHA")
-root.set("junit_prefix", "R-682-sha-$SHA")
-ET.indent(tree)
-tree.write("forensics/pytest_results.xml", encoding="utf-8", xml_declaration=True)
-print("✅ git SHA embedded in JUnit XML: $SHA")
-EOF
+echo "[1/2] Running test suite via tools/run_gate.py (actual command, sealed identity)..."
+python3 tools/run_gate.py || { echo "❌ gate FAILED"; exit 1; }
 
 # --- 5) Verify zero skips (DoD) ---
 echo ""
