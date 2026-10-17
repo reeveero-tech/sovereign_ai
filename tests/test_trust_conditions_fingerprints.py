@@ -30,7 +30,7 @@ import pytest
 from backend.memory.core import SovereignCore, EventType
 from backend.sovereign.keys import KeyRing, SignatureVerifier, KeyStatus
 from backend.sovereign.ledger import LedgerAnchor
-from backend.sovereign.ledger.anchor import compute_merkle_root, compute_merkle_root_v2
+from backend.sovereign.ledger.anchor import compute_merkle_root
 
 
 class TestFullFingerprints:
@@ -192,8 +192,7 @@ class TestAnchorTrustConditions:
         active = keyring.get_active_key()
 
         lines = anchor.read_ledger_lines()
-        # D-036 (الجولة <2>): مرساة جديدة عبر anchor_batch = جذر v2
-        merkle_root = compute_merkle_root_v2(lines)
+        merkle_root = compute_merkle_root(lines)
         sig = anchor.sign_anchor_with_key(0, len(lines)-1, merkle_root, active.key_id, active.private_key)
 
         result = anchor.anchor_batch(0, len(lines)-1, active.key_id, sig, reason="v2_correct", keyring=keyring)
@@ -217,8 +216,7 @@ class TestAnchorTrustConditions:
         active = keyring.get_active_key()
 
         lines = anchor.read_ledger_lines()
-        # D-036 (الجولة <2>): مرساة جديدة عبر anchor_batch = جذر v2
-        merkle_root = compute_merkle_root_v2(lines)
+        merkle_root = compute_merkle_root(lines)
         sig = anchor.sign_anchor_with_key(0, len(lines)-1, merkle_root, active.key_id, active.private_key)
         result = anchor.anchor_batch(0, len(lines)-1, active.key_id, sig, reason="before_tamper", keyring=keyring)
         assert result is not None
@@ -233,7 +231,7 @@ class TestAnchorTrustConditions:
 
         # R-649: المهاجم يُحدّث الجذر في نسخة المرساة (دون إعادة التوقيع)
         tampered_lines = anchor.read_ledger_lines()
-        new_merkle_root = compute_merkle_root_v2(tampered_lines)
+        new_merkle_root = compute_merkle_root(tampered_lines)
         tampered_anchor = dict(result)
         tampered_anchor["merkle_root"] = f"sha256:{new_merkle_root}"
         # التوقيع يبقى القديم (لا يُعاد — المهاجم لا يملك المفتاح)
@@ -257,8 +255,7 @@ class TestAnchorTrustConditions:
         active = keyring.get_active_key()
 
         lines = anchor.read_ledger_lines()
-        # D-036 (الجولة <2>): مرساة جديدة عبر anchor_batch = جذر v2
-        merkle_root = compute_merkle_root_v2(lines)
+        merkle_root = compute_merkle_root(lines)
         sig = anchor.sign_anchor_with_key(0, len(lines)-1, merkle_root, active.key_id, active.private_key)
         result = anchor.anchor_batch(0, len(lines)-1, active.key_id, sig, reason="before_count_change", keyring=keyring)
         assert result is not None
@@ -280,22 +277,19 @@ class TestAnchorTrustConditions:
         """
         anchor = self._make_anchor(tmp_path)
         lines = anchor.read_ledger_lines()
-        # D-036 (الجولة <2>): مرساة جديدة عبر anchor_batch = جذر v2
-        merkle_root = compute_merkle_root_v2(lines)
+        merkle_root = compute_merkle_root(lines)
 
         # R-664: anchor_batch يرفض بدون keyring (fail-closed) — يُعيد None
         result = anchor.anchor_batch(0, len(lines)-1, "some_key", "some_sig", reason="no_kr", keyring=None)
         assert result is None, "anchor_batch must REJECT without keyring (fail-closed)"
 
         # إنشاء مرساة يدويًا (لا عبر anchor_batch — للتحقق فقط)
-        # D-036: مرساة جديدة يدوية بجذر v2 — تُوسم merkle_version=2
         manual_anchor = {
             "anchor_id": "manual_no_kr",
             "batch_start": 0,
             "batch_end": len(lines)-1,
             "event_count": len(lines),
             "merkle_root": f"sha256:{merkle_root}",
-            "merkle_version": 2,
             "reason": "no_kr",
             "key_id": "some_key",
             "signature": "some_sig",
@@ -317,7 +311,6 @@ class TestAnchorTrustConditions:
         """
         anchor = self._make_anchor(tmp_path)
         lines = anchor.read_ledger_lines()
-        # مرساة يدوية v1 للتحقق فقط — جذر v1 (اختبار مسار v1 التاريخي)
         merkle_root = compute_merkle_root(lines)
 
         # R-664: anchor_batch يرفض بدون keyring (fail-closed) — يُعيد None
@@ -349,8 +342,7 @@ class TestAnchorTrustConditions:
         active = keyring.get_active_key()
 
         lines = anchor.read_ledger_lines()
-        # D-036 (الجولة <2>): مرساة جديدة عبر anchor_batch = جذر v2
-        merkle_root = compute_merkle_root_v2(lines)
+        merkle_root = compute_merkle_root(lines)
         sig = anchor.sign_anchor_with_key(0, len(lines)-1, merkle_root, active.key_id, active.private_key)
         result = anchor.anchor_batch(0, len(lines)-1, active.key_id, sig, reason="before_compromise", keyring=keyring)
         assert result is not None
