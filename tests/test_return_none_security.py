@@ -92,8 +92,8 @@ class TestAnchorBatchSecurity:
 
         anchor = LedgerAnchor(ledger_path=ledger, anchors_path=anchors)
         # Compute valid signature (same logic as production)
-        from backend.sovereign.ledger.anchor import compute_merkle_root_v2
-        root = compute_merkle_root_v2(events)
+        from backend.sovereign.ledger.anchor import compute_merkle_root
+        root = compute_merkle_root(events)
         sig_data = f"anchor_sig_v2|0|3|4|{root}|{key_id}"
         sig = hmac.new(key.private_key.encode(), sig_data.encode(),
                       hashlib.sha256).hexdigest()
