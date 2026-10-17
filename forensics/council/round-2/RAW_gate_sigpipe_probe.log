@@ -1,7 +1,0 @@
-# سجل خام — مسبار عطل البوابة (الأمر والإخراج الفعليان)
-$ set -o pipefail
-$ git show 1a9141f | grep -q "# DELETION-JUSTIFIED"; echo "exit=$? PIPESTATUS=${PIPESTATUS[*]}"
-exit=141 PIPESTATUS=141 0
-
-$ git show 1a9141f | grep "# DELETION-JUSTIFIED" >/dev/null; echo "exit=$? PIPESTATUS=${PIPESTATUS[*]}"
-exit=0 PIPESTATUS=0 0
