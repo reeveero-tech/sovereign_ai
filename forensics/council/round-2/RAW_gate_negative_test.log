@@ -1,0 +1,8 @@
+# سجل خام — اختبار سلبي: البوابة بعد الإصلاح لا تزال ترفض غياب العلامة
+# الهدف: ff8f80a (حذف تتبع HISTORY.jsonl — لا علامة في رسالته ولا فرقه)
+$ set -euo pipefail
+$ SHA=ff8f80a
+$ DELETIONS=$(git show --numstat --format= $SHA | awk ...); echo DELETIONS=$DELETIONS
+DELETIONS=29
+$ if git log -1 --format=%B $SHA | grep "# DELETION-JUSTIFIED" >/dev/null || git show $SHA | grep "# DELETION-JUSTIFIED" >/dev/null; then echo PASS; else echo "REJECTED (صحيح — القاعدة ما زالت ذات أسنان)"; fi
+REJECTED — القاعدة ما زالت ذات أسنان

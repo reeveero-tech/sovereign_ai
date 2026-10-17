@@ -1,0 +1,50 @@
+..................................................F...                   [100%]
+=================================== FAILURES ===================================
+_ TestAnchorRejectsArbitrarySignature.test_10_anchor_batch_accepts_valid_signature _
+
+self = <tests.invariants.test_anchor_rejects_arbitrary_signature.TestAnchorRejectsArbitrarySignature object at 0x7f99d0d88f50>
+tmp_path = PosixPath('/tmp/pytest-of-user/pytest-138/test_10_anchor_batch_accepts_v0')
+
+    def test_10_anchor_batch_accepts_valid_signature(self, tmp_path):
+        """ضابط إيجابي (الإنشاء): `anchor_batch` يجب أن يقبل توقيعًا صحيحًا.
+    
+        R-664: الحماية يجب ألا تُكسر التوقيع الصحيح — فقط التعسفي.
+        """
+        setup = self._setup(tmp_path)
+        manager = setup["manager"]
+        keyring = setup["keyring"]
+    
+        # توقيع صحيح (HMAC-SHA256 لبيانات v2 بالمفتاح الحقيقي)
+        result = manager.anchor_batch(
+            batch_start=0,
+            batch_end=2,
+            key_id=setup["key_id"],
+            signature=setup["signature"],
+            reason="TEST_GATE4_VALID",
+            keyring=keyring,
+        )
+    
+        # يجب أن ينجح (يُعيد المرساة) — التوقيع الصحيح يُقبل
+>       assert result is not None, (
+            f"anchor_batch must ACCEPT valid signature — "
+            f"but it returned None. This means the protection "
+            f"is too strict (breaks valid signatures)!"
+        )
+E       AssertionError: anchor_batch must ACCEPT valid signature — but it returned None. This means the protection is too strict (breaks valid signatures)!
+E       assert None is not None
+
+backend/tests/invariants/test_anchor_rejects_arbitrary_signature.py:362: AssertionError
+----------------------------- Captured stderr call -----------------------------
+2026-10-17 18:05:32,383 - sovereign.ledger.anchor - ERROR - ❌ R-664: anchor_batch: signature mismatch — arbitrary signature REJECTED (fail-closed)
+------------------------------ Captured log call -------------------------------
+ERROR    sovereign.ledger.anchor:anchor.py:252 ❌ R-664: anchor_batch: signature mismatch — arbitrary signature REJECTED (fail-closed)
+=============================== warnings summary ===============================
+backend/config.py:312
+backend/config.py:312
+  /home/user/workspace/sovereign_ai/backend/config.py:312: UserWarning: ⚠️ CORS مفتوح للجميع — مقبول في التطوير فقط (D-034)
+    warnings.warn("⚠️ CORS مفتوح للجميع — مقبول في التطوير فقط (D-034)")
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED backend/tests/invariants/test_anchor_rejects_arbitrary_signature.py::TestAnchorRejectsArbitrarySignature::test_10_anchor_batch_accepts_valid_signature
+1 failed, 53 passed, 2 warnings in 0.34s

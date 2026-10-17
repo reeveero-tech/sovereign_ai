@@ -1,0 +1,36 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+_________________________ test_fastapi_version_pinned __________________________
+
+    def test_fastapi_version_pinned():
+        """fastapi وstarlette: المثبّت الفعلي يطابق المثبت في requirements.txt.
+    
+        يرفض الترقية الصامتة: بيئة محلية (أو CI) بإصدار مختلف عن المثبت
+        تفشل فورًا — لا نجاح زائف عبر اختلاف سلوك الإصدارات (_IncludedRouter
+        في FastAPI الحديثة كمثال موثق من الجولة <2>)."""
+        import fastapi
+        import starlette
+    
+        pinned_fastapi = _pinned("fastapi")
+        pinned_starlette = _pinned("starlette")
+>       assert fastapi.__version__ == pinned_fastapi, (
+            f"fastapi {fastapi.__version__} is installed but requirements.txt "
+            f"pins {pinned_fastapi} — silent upgrade detected (install: "
+            f"pip install -r requirements.txt)"
+        )
+E       AssertionError: fastapi 0.143.3 is installed but requirements.txt pins 0.115.0 — silent upgrade detected (install: pip install -r requirements.txt)
+E       assert '0.143.3' == '0.115.0'
+E         
+E         - 0.115.0
+E         + 0.143.3
+
+backend/tests/invariants/test_dependency_pins.py:37: AssertionError
+=============================== warnings summary ===============================
+backend/config.py:312
+  /home/user/workspace/sovereign_ai/backend/config.py:312: UserWarning: ⚠️ CORS مفتوح للجميع — مقبول في التطوير فقط (D-034)
+    warnings.warn("⚠️ CORS مفتوح للجميع — مقبول في التطوير فقط (D-034)")
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED backend/tests/invariants/test_dependency_pins.py::test_fastapi_version_pinned
+1 failed, 1 warning in 0.23s

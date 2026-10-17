@@ -1,0 +1,95 @@
+FFFF                                                                     [100%]
+=================================== FAILURES ===================================
+_________________ test_guard_catches_unreferenced_test_helper __________________
+
+    def test_guard_catches_unreferenced_test_helper():
+        """مسبار عدائي (الجولة <2> — اعتراض المراجع بصير): ملف داخل tests/ لا
+        يجمعه pytest (لا يطابق test_*.py ولا conftest.py) وليس مستوردًا — ليس
+        نقطة دخول اختبارية. إعفاء المجلد كاملاً مصفٍّ واسع يخفيه."""
+        r = _plant_and_run_guard(
+            "tests/unreferenced_helper_probe.py",
+            "# not collected by pytest, not imported — a real orphan\n",
+            "unreferenced_helper_probe.py",
+        )
+>       assert r.returncode != 0, (
+            "guard must FAIL while an unreferenced non-collected helper exists "
+            "in tests/ (prefix exemption is too wide)"
+        )
+E       AssertionError: guard must FAIL while an unreferenced non-collected helper exists in tests/ (prefix exemption is too wide)
+E       assert 0 != 0
+E        +  where 0 = CompletedProcess(args=['/usr/local/bin/python', '-m', 'pytest', 'backend/tests/invariants/test_no_orphan_modules.py::t...dout='.                                                                        [100%]\n1 passed in 0.73s\n', stderr='').returncode
+
+backend/tests/invariants/test_no_orphan_modules.py:463: AssertionError
+_____________ test_guard_catches_unreferenced_backend_test_helper ______________
+
+    def test_guard_catches_unreferenced_backend_test_helper():
+        """مسبار عدائي (الجولة <2> — اعتراض المراجع بصير): نفس الفجوة داخل
+        backend/tests/ — الملف ليس اختبارًا يجمعه pytest ولا مستوردًا."""
+        r = _plant_and_run_guard(
+            "backend/tests/unreferenced_helper_probe.py",
+            "# not collected by pytest, not imported — a real orphan\n",
+            "unreferenced_helper_probe.py",
+        )
+>       assert r.returncode != 0, (
+            "guard must FAIL while an unreferenced non-collected helper exists "
+            "in backend/tests/ (prefix exemption is too wide)"
+        )
+E       AssertionError: guard must FAIL while an unreferenced non-collected helper exists in backend/tests/ (prefix exemption is too wide)
+E       assert 0 != 0
+E        +  where 0 = CompletedProcess(args=['/usr/local/bin/python', '-m', 'pytest', 'backend/tests/invariants/test_no_orphan_modules.py::t...dout='.                                                                        [100%]\n1 passed in 0.70s\n', stderr='').returncode
+
+backend/tests/invariants/test_no_orphan_modules.py:482: AssertionError
+___________________ test_guard_catches_unlisted_archive_file ___________________
+
+    def test_guard_catches_unlisted_archive_file():
+        """مسبار عدائي (الجولة <2> — اعتراض المراجع بصير): ملف داخل archive/
+        غير مُدرج في ARCHIVED_FILES (الجرد الموثق) — إعفاء المجلد كاملاً يتجاوز
+        الجرد ويخفيه. الأرشيف المشروع هو المُدرج بالاسم فقط."""
+        r = _plant_and_run_guard(
+            "archive/unlisted_orphan_probe.py",
+            "# not in the documented ARCHIVED_FILES inventory — a real orphan\n",
+            "unlisted_orphan_probe.py",
+        )
+>       assert r.returncode != 0, (
+            "guard must FAIL while an unlisted file exists in archive/ (the "
+            "directory-wide exemption bypasses the documented inventory)"
+        )
+E       AssertionError: guard must FAIL while an unlisted file exists in archive/ (the directory-wide exemption bypasses the documented inventory)
+E       assert 0 != 0
+E        +  where 0 = CompletedProcess(args=['/usr/local/bin/python', '-m', 'pytest', 'backend/tests/invariants/test_no_orphan_modules.py::t...dout='.                                                                        [100%]\n1 passed in 0.72s\n', stderr='').returncode
+
+backend/tests/invariants/test_no_orphan_modules.py:502: AssertionError
+____________________ test_guard_catches_mutual_import_pair _____________________
+
+    def test_guard_catches_mutual_import_pair():
+        """مسبار عدائي (الجولة <2> — اعتراض المراجع بصير): ملفان يستورد أحدهما
+        الآخر ولا تصل إليهما أي نقطة دخول — الحارس الحالي يقيس «له مستورِد»
+        لا «قابل للوصول من نقطة دخول». الزوج المعزول وحدة ميتة يجب كشفها."""
+        import shutil
+        probe_a = _REPO_ROOT / "_orphan_probe_pair_a.py"
+        probe_b = _REPO_ROOT / "_orphan_probe_pair_b.py"
+        probe_a.write_text("import _orphan_probe_pair_b\n", encoding="utf-8")
+        probe_b.write_text("import _orphan_probe_pair_a\n", encoding="utf-8")
+        try:
+            r = _run_orphan_guard()
+>           assert r.returncode != 0, (
+                "guard must FAIL while a mutually-importing pair with NO entry "
+                "point exists (reachability, not mere importership)"
+            )
+E           AssertionError: guard must FAIL while a mutually-importing pair with NO entry point exists (reachability, not mere importership)
+E           assert 0 != 0
+E            +  where 0 = CompletedProcess(args=['/usr/local/bin/python', '-m', 'pytest', 'backend/tests/invariants/test_no_orphan_modules.py::t...dout='.                                                                        [100%]\n1 passed in 0.71s\n', stderr='').returncode
+
+backend/tests/invariants/test_no_orphan_modules.py:524: AssertionError
+=============================== warnings summary ===============================
+backend/config.py:312
+  /home/user/workspace/sovereign_ai/backend/config.py:312: UserWarning: ⚠️ CORS مفتوح للجميع — مقبول في التطوير فقط (D-034)
+    warnings.warn("⚠️ CORS مفتوح للجميع — مقبول في التطوير فقط (D-034)")
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED backend/tests/invariants/test_no_orphan_modules.py::test_guard_catches_unreferenced_test_helper
+FAILED backend/tests/invariants/test_no_orphan_modules.py::test_guard_catches_unreferenced_backend_test_helper
+FAILED backend/tests/invariants/test_no_orphan_modules.py::test_guard_catches_unlisted_archive_file
+FAILED backend/tests/invariants/test_no_orphan_modules.py::test_guard_catches_mutual_import_pair
+4 failed, 1 warning in 8.08s
