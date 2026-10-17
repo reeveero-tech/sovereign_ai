@@ -143,6 +143,35 @@ class EmergencyBreaker:
 
         return incident
 
+    def get_reactivation_code(self, incident_id: str,
+                             master_token: Optional[str] = None) -> Optional[str]:
+        """
+        قناة تسليم رمز إعادة التفعيل للسيد (جولة المجلس <1> — اعتراض المراجع).
+
+        الرمز لا يوضع في كائن الحادثة العام (repr/التسلسل/callbacks تمرره
+        لكل مستقبل) ولا في السجلات ولا في ev.jsonl — يُستخرج عبر هذه
+        الدالة من مضيف الحدث نفسه، **بعد إثبات سلطة المستدعي** عبر
+        تحقق الحارس (verify_master_code) — لا تسليم بلا تفويض.
+        """
+        if self.state != BreakerState.LOCKED:
+            return None
+        for inc in self.incidents:
+            if inc.incident_id != incident_id:
+                continue
+            # إثبات سلطة المستدعي عبر الحارس — فشل مغلق إن لم يُحقن حارس
+            if self.guardian is None:
+                logger.critical(
+                    "❌ Refused reactivation-code delivery — no master guardian installed"
+                )
+                return None
+            if not self.guardian.verify_master_code(master_token):
+                logger.critical(
+                    "❌ Refused reactivation-code delivery — invalid master token"
+                )
+                return None
+            return self._reactivation_code
+        return None
+
     # ══════════════════════════════════════════════════════════════════
     # خطوات التفعيل
     # ══════════════════════════════════════════════════════════════════
@@ -232,14 +261,18 @@ class EmergencyBreaker:
             ).hexdigest(),
             "message": "النظام مقفل. أدخل رمز إعادة التفعيل لاستعادته.",
         }
+        # ⚠️ SECURITY (جولة المجلس <1> — أمين 6.5/بصير BAS-S08/حكيم):
+        # 1) ملف القفل 0600 — لا قراءة لغير السيد.
+        # 2) رمز إعادة التفعيل لا يُسجّل في السجل نصًا صريحًا — يُعاد فقط
+        #    في استجابة الحادثة عبر قناة الاستجابة المحدودة الجمهور.
         LOCK_FILE.write_text(
             json.dumps(lock_data, ensure_ascii=False, indent=2), encoding="utf-8"
         )
+        LOCK_FILE.chmod(0o600)
         logger.critical(
-            f"🔒 System LOCKED. Reactivation code sent to master: {reactivation_code}"
+            f"🔒 System LOCKED [{incident_id}]. "
+            f"Reactivation code delivered via incident response — NOT logged."
         )
-        # في الإنتاج الحقيقي: أرسل عبر قناة آمنة (SMS, email مشفر)
-        # هنا نعرضه في السجل فقط للتطوير
         return reactivation_code
 
     # ══════════════════════════════════════════════════════════════════

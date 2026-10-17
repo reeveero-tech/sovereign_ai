@@ -1,5 +1,21 @@
+# fly.toml
 fly.toml
 .git/
 __pycache__/
 .envrc
 .venv/
+.env
+venv/
+
+# ⚠️ SECURITY (جولة المجلس <1> — أمين 2.3): الأسرار لا تدخل سياق البناء
+# (نسخة محلية فيها هذه الملفات كانت ستضمّن الأسرار في طبقات الصورة).
+*.secret
+*.secret.*
+data/key.secret*
+data/keys/keyring.json
+data/phoenix/
+credentials/
+*.env
+*.pem
+*.key
+*.p12

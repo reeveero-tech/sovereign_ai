@@ -10,6 +10,7 @@ Guardian — المحرك الرئيسي للحارس
 """
 
 import hashlib
+import hmac
 import json
 import logging
 import os
@@ -84,12 +85,21 @@ class MasterGuardian:
 
     def __init__(self, guardian_dir: str = None,
                  master_passphrase: Optional[str] = None):
+        """
+        ⚠️ SECURITY (جولة المجلس <1> — أمين 6.1/بصير BAS-S03/حكيم):
+        لا عبارة افتراضية — البناء بلا master_passphrase يُرفض (فشل مغلق).
+        """
+        if not master_passphrase or not str(master_passphrase).strip():
+            raise ValueError(
+                "MasterGuardian: master_passphrase مطلوبة صراحة — لا عبارة افتراضية "
+                "(فشل مغلق — جولة المجلس <1>)"
+            )
         self.guardian_dir = Path(guardian_dir or _repo_path("guardian/data"))
         self.guardian_dir.mkdir(parents=True, exist_ok=True)
 
         self.guardian_id = str(uuid.uuid4())[:8]
         self._secret     = os.urandom(32).hex()
-        self._passphrase_hash = self._hash(master_passphrase or "CHANGE_ME_IMMEDIATELY")
+        self._passphrase_hash = self._hash(master_passphrase)
 
         self.status = MonitorStatus()
         self.events: List[GuardianEvent] = []
@@ -177,7 +187,8 @@ class MasterGuardian:
     def _verify_master_token(self, token: Optional[str]) -> bool:
         if not token:
             return False
-        return self._hash(token) == self._passphrase_hash
+        # ⚠️ SECURITY (جولة المجلس <1>): مقارنة ثابتة الزمن — لا تسريب توقيت
+        return hmac.compare_digest(self._hash(token), self._passphrase_hash)
 
     # ══════════════════════════════════════════════════════════════════
     # إدارة الطوارئ
@@ -230,7 +241,33 @@ class MasterGuardian:
     # أدوات مساعدة
     # ══════════════════════════════════════════════════════════════════
     def _targets_master_code(self, target: str) -> bool:
-        return any(target.startswith(d) for d in MASTER_CODE_DIRS)
+        """
+        ⚠️ SECURITY (جولة المجلس <1> — أمين 6.3/بصير BAS-S04/حكيم):
+        قرار الحماية يُبنى على مسار مُوحّد قياسي (توحيد الفواصل + الحسم
+        المطلق على جذر المستودع) — لا على مقارنة بادئة نصية خام قابلة
+        للتجاوز بـ ./ أو مسار مطلق أو فاصل معكوس أو ../
+        """
+        if not target or not target.strip():
+            return False
+        # توحيد فواصل المسارات (backend\\app.py == backend/app.py)
+        normalized = str(target).replace("\\", "/")
+        try:
+            repo_root = Path(__file__).resolve().parent.parent
+            p = Path(normalized)
+            if not p.is_absolute():
+                p = repo_root / p
+            resolved = p.resolve()
+        except Exception:
+            # فشل الحسم = هدف محمي (فشل مغلق)
+            return True
+        for code_dir in MASTER_CODE_DIRS:
+            protected = (repo_root / code_dir).resolve()
+            if protected.is_dir():
+                if resolved == protected or protected in resolved.parents:
+                    return True
+            elif resolved == protected:
+                return True
+        return False
 
     def _record_violation(self, actor: str) -> None:
         self._violation_counts[actor] = self._violation_counts.get(actor, 0) + 1

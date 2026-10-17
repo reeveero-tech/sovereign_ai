@@ -23,7 +23,7 @@ def _client():
 def test_api_key_never_leaks_secret():
     """حتى مع مفتاح السيد الصحيح، لا يُكشف المفتاح — فقط البصمة."""
     with _client() as client:
-        r = client.get("/api-key", params={"master_key": MASTER_KEY})
+        r = client.get("/api-key", headers={"X-API-Key": MASTER_KEY})
         assert r.status_code == 200
         data = r.json()
         assert "api_key" not in data
@@ -36,7 +36,7 @@ def test_api_key_never_leaks_secret():
 def test_api_key_rejects_wrong_master():
     """مفتاح سيد خاطئ → 403."""
     with _client() as client:
-        r = client.get("/api-key", params={"master_key": "wrong"})
+        r = client.get("/api-key", headers={"X-API-Key": "wrong"})
         assert r.status_code == 403
 
 

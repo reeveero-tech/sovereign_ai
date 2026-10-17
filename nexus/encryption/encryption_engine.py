@@ -1,7 +1,7 @@
 """
 NexusCore — محرك التشفير الآمن
-تشفير AES-256-CBC قياسي (بديل آمن لـ self_mutating_crypto).
-لا يتطلب مكتبات خارجية — يستخدم Python stdlib فقط.
+تشفير AES-256-CBC (Encrypt-then-MAC) — يتطلب pycryptodome.
+⚠️ لا يوجد وضع سقوط XOR: غياب المكتبة = فشل صريح (جولة المجلس <1>).
 """
 import base64
 import hashlib
@@ -21,7 +21,9 @@ try:
     HAS_PYCRYPTO = True
 except ImportError:
     HAS_PYCRYPTO = False
-    logger.warning("pycryptodome not available — using XOR fallback (dev only)")
+    # ⚠️ SECURITY (جولة المجلس <1> — أمين 5.1/بصير BAS-S02/حكيم):
+    # لا سقوط صامت إلى XOR — فشل صريح عند الإنشاء/التشفير.
+    logger.critical("pycryptodome not available — encryption UNAVAILABLE (no XOR fallback)")
 
 
 @dataclass
@@ -36,20 +38,23 @@ class EncryptedPayload:
 class EncryptionEngine:
     """محرك تشفير آمن ومعياري"""
 
-    ALGORITHM = "AES-256-CBC" if HAS_PYCRYPTO else "XOR-DEV"
+    ALGORITHM = "AES-256-CBC"
 
     def __init__(self, master_key: Optional[bytes] = None):
+        # ⚠️ SECURITY (جولة المجلس <1>): فشل مغلق عند غياب المكتبة — لا XOR
+        if not HAS_PYCRYPTO:
+            raise RuntimeError(
+                "EncryptionEngine: pycryptodome غير متوفر — التشفير غير متاح "
+                "(لا يوجد وضع سقوط XOR — فشل صريح، جولة المجلس <1>)"
+            )
         self._master_key = master_key or os.urandom(32)
         logger.info(f"🔒 EncryptionEngine initialized ({self.ALGORITHM})")
 
     def encrypt(self, plaintext: str) -> EncryptedPayload:
         data = plaintext.encode("utf-8")
         iv   = os.urandom(16)
-        if HAS_PYCRYPTO:
-            cipher     = AES.new(self._master_key, AES.MODE_CBC, iv)
-            ciphertext = cipher.encrypt(pad(data, AES.block_size))
-        else:
-            ciphertext = self._xor_encrypt(data, self._master_key)
+        cipher     = AES.new(self._master_key, AES.MODE_CBC, iv)
+        ciphertext = cipher.encrypt(pad(data, AES.block_size))
         tag = hmac.new(self._master_key,
                         ciphertext + iv, hashlib.sha256).hexdigest()
         return EncryptedPayload(
@@ -61,6 +66,14 @@ class EncryptionEngine:
 
     def decrypt(self, payload: EncryptedPayload) -> Optional[str]:
         try:
+            # ⚠️ SECURITY (جولة المجلس <1> — حكيم): حقل الخوارزمية مُتحقَّق —
+            # لا يُفك مظروف معلن بخوارزمية غير معتمدة.
+            if payload.algorithm != self.ALGORITHM:
+                logger.error(
+                    f"❌ Unsupported algorithm in payload: {payload.algorithm!r} "
+                    f"— expected {self.ALGORITHM}"
+                )
+                return None
             ciphertext = base64.b64decode(payload.ciphertext_b64)
             iv         = base64.b64decode(payload.iv_b64)
             expected   = hmac.new(self._master_key,
@@ -68,11 +81,8 @@ class EncryptionEngine:
             if not hmac.compare_digest(payload.tag_b64, expected):
                 logger.error("❌ HMAC verification failed — tampered payload")
                 return None
-            if HAS_PYCRYPTO:
-                cipher    = AES.new(self._master_key, AES.MODE_CBC, iv)
-                plaintext = unpad(cipher.decrypt(ciphertext), AES.block_size)
-            else:
-                plaintext = self._xor_encrypt(ciphertext, self._master_key)
+            cipher    = AES.new(self._master_key, AES.MODE_CBC, iv)
+            plaintext = unpad(cipher.decrypt(ciphertext), AES.block_size)
             return plaintext.decode("utf-8")
         except Exception as exc:
             logger.exception(
@@ -95,11 +105,10 @@ class EncryptionEngine:
         key  = hashlib.pbkdf2_hmac("sha256", password.encode(), salt, 200_000, 32)
         return key, salt
 
-    @staticmethod
-    def _xor_encrypt(data: bytes, key: bytes) -> bytes:
-        return bytes(b ^ key[i % len(key)] for i, b in enumerate(data))
-
     def hash_data(self, data: str, algorithm: str = "sha256") -> str:
+        # ⚠️ SECURITY (جولة المجلس <1> — حكيم): خوارزميات معتمدة فقط
+        if algorithm not in ("sha256", "sha384", "sha512"):
+            raise ValueError(f"hash_data: خوارزمية غير معتمدة: {algorithm}")
         h = hashlib.new(algorithm)
         h.update(data.encode())
         return h.hexdigest()

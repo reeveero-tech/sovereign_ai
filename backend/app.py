@@ -18,6 +18,7 @@
 
 import asyncio
 import hashlib
+import hmac
 import json
 import time
 import uuid
@@ -32,7 +33,7 @@ import pathlib
 
 from fastapi import (
     FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect, Depends,
-    status, BackgroundTasks, Query,
+    status, BackgroundTasks, Query, Header,
 )
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.gzip import GZipMiddleware
@@ -772,8 +773,17 @@ async def chat(message: ChatMessage, background_tasks: BackgroundTasks):
 # ============================================================
 
 def verify_api_key(api_key: str) -> bool:
-    """التحقق من صحة مفتاح API للسيد"""
-    return api_key == SOVEREIGN_API_KEY
+    """التحقق من صحة مفتاح API للسيد
+
+    ⚠️ SECURITY (جولة المجلس <1> — أمين 1.6): مقارنة ثابتة الزمن — لا تسريب توقيت.
+    """
+    if not api_key:
+        return False
+    # مقارنة بايتات UTF-8 (اعتراض المراجع): المدخلات غير-ASCII تُرفض لا
+    # تتحول إلى خطأ خادم.
+    return hmac.compare_digest(
+        str(api_key).encode("utf-8"), str(SOVEREIGN_API_KEY).encode("utf-8")
+    )
 
 
 @app.post("/sovereign/command", response_model=SovereignCommandResponse)
@@ -1111,8 +1121,15 @@ async def get_security_status():
 
 
 @app.get("/security/log")
-async def get_security_log(limit: int = Query(50, ge=1, le=500)):
-    """آخر أحداث سجل الأمان"""
+async def get_security_log(limit: int = Query(50, ge=1, le=500),
+                          x_api_key: Optional[str] = Header(None, alias="X-API-Key")):
+    """آخر أحداث سجل الأمان
+
+    ⚠️ SECURITY (جولة المجلس <1> — أمين 1.4/بصير BAS-S10/حكيم):
+    سجل الأمان يكشف أوامر السيد — يتطلب مفتاح السيد (X-API-Key).
+    """
+    if not verify_api_key(x_api_key):
+        raise HTTPException(status_code=401, detail="مفتاح السيد مطلوب لقراءة سجل الأمان")
     log_file = safety_guard.security_log_file
     if not log_file.exists():
         return {"events": [], "total": 0}
@@ -1293,7 +1310,9 @@ async def get_api_key_header(
     (بعكس query params مثل master_key في /api-key).
     لا يُكشف المفتاح نفسه أبداً — يُعاد فقط بصمة المفتاح (SHA-256).
     """
-    if not x_api_key or x_api_key != SOVEREIGN_API_KEY:
+    # ⚠️ SECURITY (جولة المجلس <1> — أمين 1.6 + اعتراض المراجع): مقارنة
+    # ثابتة الزمن عبر verify_api_key — لا مقارنة مباشرة
+    if not verify_api_key(x_api_key):
         raise HTTPException(status_code=403, detail="غير مصرح: مطلوب مفتاح السيد")
     from config import SOVEREIGN_KEY_FINGERPRINT
     return {
@@ -1305,15 +1324,19 @@ async def get_api_key_header(
 
 
 @app.get("/api-key")
-async def get_api_key(master_key: str = Query(None, description="مفتاح السيد للتحقق")):
+async def get_api_key(x_api_key: str = Header(None, alias="X-API-Key")):
     """
     حالة مفتاح API للسيد (R-614/S-5).
+
+    ⚠️ SECURITY (جولة المجلس <1> — أمين 1.5/بصير BAS-C05/حكيم):
+    المفتاح يُستقبل في الرأس X-API-Key فقط — صيغة الاستعلام (master_key)
+    أُزيلت لأنها تُسجّل في سجلات الوصول (uvicorn access log).
     لا يُكشف المفتاح نفسه أبداً — يُعاد فقط بصمة المفتاح (SHA-256) ومصدره
     ومدى ثباته عبر إعادة التشغيل. المفتاح الحقيقي يُدار عبر متغير البيئة
     SOVEREIGN_KEY أو ملف data/key.secret (مستثنى من git، صلاحيات 0600).
     """
-    if not master_key or master_key != SOVEREIGN_API_KEY:
-        raise HTTPException(status_code=403, detail="غير مصرح: مطلوب مفتاح السيد")
+    if not x_api_key or not verify_api_key(x_api_key):
+        raise HTTPException(status_code=403, detail="غير مصرح: مطلوب مفتاح السيد في الرأس X-API-Key")
     from config import SOVEREIGN_KEY_FINGERPRINT, DATA_DIR, IS_DEVELOPMENT
     secret_file = DATA_DIR / "key.secret"
     return {

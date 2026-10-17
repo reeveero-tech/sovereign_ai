@@ -1,0 +1,70 @@
+# Supplemental forensic input, run from the isolated tree with the project venv.
+import json
+import logging
+import os
+from pathlib import Path
+import stat
+import sys
+import time
+from unittest.mock import patch
+
+ROOT = Path.cwd().resolve()
+assert str(ROOT) == "/home/user/workspace/council/baseer"
+RUN = ROOT / "forensics/council/round-1/runtime" / ("config-" + str(time.time_ns()))
+RUN.mkdir(parents=True)
+sys.path.insert(0, str(ROOT / "backend"))
+os.environ["SOVEREIGN_KEY"] = "baseer_public_test_key_not_secret"
+os.environ["SOVEREIGN_DATA_ROOT"] = str(RUN / "data")
+os.environ["SOVEREIGN_DISABLE_BACKGROUND_THREADS"] = "1"
+logging.disable(logging.CRITICAL)
+import config
+
+test_env = {k: v for k, v in os.environ.items() if k != "SOVEREIGN_KEY"}
+with patch.dict(os.environ, test_env, clear=True), \
+     patch.object(config, "BASE_DIR", RUN), \
+     patch.object(config, "IS_DEVELOPMENT", True), \
+     patch.object(config, "IS_PRODUCTION", False):
+    first = config.load_sovereign_key()
+    second = config.load_sovereign_key()
+    secret = config.DATA_DIR / "key.secret"
+    generated_mode = oct(stat.S_IMODE(secret.stat().st_mode))
+    secret.chmod(0o644)
+    with patch.object(config, "IS_PRODUCTION", True), patch.object(config, "IS_DEVELOPMENT", False):
+        insecure_file_accepted = config.load_sovereign_key() == first
+    existing_mode = oct(stat.S_IMODE(secret.stat().st_mode))
+    secret.chmod(0o600)
+    empty_data = RUN / "empty"
+    empty_data.mkdir()
+    with patch.object(config, "DATA_DIR", empty_data), \
+         patch.object(config, "IS_PRODUCTION", True), patch.object(config, "IS_DEVELOPMENT", False):
+        try:
+            config.load_sovereign_key()
+            production_without_secret_rejected = False
+        except ValueError:
+            production_without_secret_rejected = True
+print("C01 " + json.dumps({
+    "runtime": str(RUN.relative_to(ROOT)), "generated_mode": generated_mode,
+    "same_key_on_reload": first == second,
+    "existing_0644_file_accepted_in_production": insecure_file_accepted,
+    "mode_after_production_load": existing_mode,
+    "production_without_secret_rejected": production_without_secret_rejected}))
+
+from nexus.encryption.key_manager import KeyManager
+from Crypto.PublicKey import RSA
+manager = KeyManager(str(RUN / "nexus-keys"))
+key = manager.generate_key("fake-rsa", algorithm="RSA-2048")
+try:
+    RSA.import_key(manager.get_key_bytes(key.key_id))
+    valid_rsa = True
+except (ValueError, IndexError, TypeError):
+    valid_rsa = False
+print("C02 " + json.dumps({"labelled_algorithm": key.algorithm, "rsa_import_succeeded": valid_rsa,
+                           "returned_bytes": len(manager.get_key_bytes(key.key_id))}))
+
+from backend.sovereign.keys.keyring import KeyRing
+ring = KeyRing(RUN / "history-failure")
+ring.history_file = ring.keys_dir
+new_key = ring.generate_new_key(reason="forensic audit-failure test")
+print("C03 " + json.dumps({"history_target_is_directory": ring.history_file.is_dir(),
+                           "key_generated_despite_audit_failure": new_key is not None,
+                           "keyring_save_succeeded": ring.save_to_disk()}))

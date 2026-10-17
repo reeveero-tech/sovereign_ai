@@ -12,6 +12,9 @@ primary_region = 'ams'
 [env]
   PORT = '8080'
   PYTHONPATH = '/app'
+  # ⚠️ SECURITY (جولة المجلس <1> — أمين 2.2): الإنتاج صريح — الرفض المغلق يعمل
+  # (SOVEREIGN_KEY يُمرّر عبر `fly secrets`، لا عبر هذا الملف).
+  AI_ENVIRONMENT = 'production'
 
 [http_service]
   internal_port = 8080

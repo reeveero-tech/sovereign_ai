@@ -30,7 +30,7 @@ _REPO_ROOT = Path(__file__).resolve().parent.parent
 _DUMMY_NEW = "DUMMY+injected/new_9f3a"
 _DUMMY_OLD = "DUMMY+injected/old_7c1b"
 
-_FAKE_APP = '''"""تطبيق وهمي — مسار يرفع استثناءً يحمل قيمة master_key في نصّه (لا يستورد التطبيق الحقيقي).
+_FAKE_APP = '''"""تطبيق وهمي — مسار يرفع استثناءً يحمل قيمة المفتاح في نصّه (لا يستورد التطبيق الحقيقي).
 
 FastAPI حقيقي حتى يمر الطلب بمسار التشخيص الفعلي نفسه (استثناء من داخل
 المسار يُعاد رفعه عبر TestClient) — راجع الجولة الرابعة في
@@ -44,11 +44,17 @@ _ap = FastAPI()
 
 
 @_ap.get("/api-key")
-def api_key(request: Request, master_key: str = ""):
-    # الاستثناء يحمل URL الطلب كاملًا — والمفتاح فيه يظهر بتمثيله
-    # المرمّز (percent-encoded)، وهو الحالة الواقعية لرسائل أخطاء HTTP.
+def api_key(request: Request):
+    # ⚠️ جولة المجلس <1>: صيغة الاستعلام أُزيلت من التطبيق الحقيقي؛ ناقل
+    # التسريب الواقعي المتبقي في مسار الاستثناء هو صدى رأس المصادقة
+    # (X-API-Key) في نص الاستثناء — ويُحقن بالتمثيلين الخام والمرمّز معًا
+    # (percent-encoding) لأن رسائل الأخطاء قد تحمل أيهما.
+    import urllib.parse as _up
+    _key = request.headers.get("x-api-key", "")
     raise RuntimeError(
         "connection failed while processing request url: " + str(request.url)
+        + " auth-header=" + _key
+        + " encoded=" + _up.quote(_key, safe="")
     )
 
 

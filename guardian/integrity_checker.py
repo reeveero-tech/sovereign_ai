@@ -68,7 +68,14 @@ class IntegrityChecker:
     """
 
     def __init__(self, extra_paths: Optional[List[str]] = None,
-                 alert_callback: Optional[Callable] = None):
+                 alert_callback: Optional[Callable] = None,
+                 master_guardian=None):
+        """
+        ⚠️ SECURITY (جولة المجلس <1> — أمين 6.2/بصير BAS-S05/حكيم):
+        التحقق من رمز السيد يتم عبر MasterGuardian المخزن — لا عبر قيم
+        يمررها المستدعي نفسه (التفويض الذاتي مرفوض).
+        """
+        self.master_guardian = master_guardian
         self.protected_paths: List[str] = PROTECTED_PATHS + (extra_paths or [])
         self._baseline: Dict[str, FileSnapshot] = {}
         self.violations: List[IntegrityViolation] = []
@@ -206,13 +213,21 @@ class IntegrityChecker:
     # ══════════════════════════════════════════════════════════════════
     def approve_changes(self, paths: List[str],
                         master_token: str,
-                        master_hash: str) -> Dict:
+                        master_hash: str = None) -> Dict:
         """
         يثبّت التغييرات المعتمدة من السيد في الـ baseline الجديد.
         يتطلب رمز السيد.
+
+        ⚠️ SECURITY (جولة المجلس <1> — أمين 6.2/بصير BAS-S05/حكيم):
+        التحقق مقابل تجزئة الحارس المخزنة — المعامل الثالث (master_hash
+        من المستدعي) مرفوض ومتجاهل: أي مستدعٍ يمرر (x, sha256(x)) لن ينجح.
         """
-        if hashlib.sha256(master_token.encode()).hexdigest() != master_hash:
-            return {"success": False, "reason": "رمز السيد غير صحيح"}
+        if self.master_guardian is None:
+            return {"success": False, "reason": "لا يوجد حارس مثبت للتحقق من رمز السيد (فشل مغلق)"}
+        if not master_token:
+            return {"success": False, "reason": "رمز السيد مطلوب"}
+        if not self.master_guardian.verify_master_code(master_token):
+            return {"success": False, "reason": "رمز السيد غير صحيح (تحقق الحارس)"}
 
         updated: List[str] = []
         for path_str in paths:

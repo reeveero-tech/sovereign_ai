@@ -22,7 +22,7 @@ def test_api_key_requires_master_key():
 def test_api_key_with_master_key():
     """/api-key يعيد بصمة المفتاح (لا المفتاح نفسه) مع مفتاح السيد الصحيح"""
     with _client() as client:
-        r = client.get("/api-key", params={"master_key": MASTER_KEY})
+        r = client.get("/api-key", headers={"X-API-Key": MASTER_KEY})
         assert r.status_code == 200
         data = r.json()
         # R-614/S-5: لا يُكشف المفتاح أبداً — فقط البصمة ومصدر الثبات
@@ -35,7 +35,7 @@ def test_api_key_with_master_key():
 def test_api_key_wrong_master_key():
     """/api-key يرفض مفتاح سيد خاطئ"""
     with _client() as client:
-        r = client.get("/api-key", params={"master_key": "wrong_key"})
+        r = client.get("/api-key", headers={"X-API-Key": "wrong_key"})
         assert r.status_code == 403
 
 

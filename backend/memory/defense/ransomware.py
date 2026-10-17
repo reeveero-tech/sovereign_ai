@@ -1188,9 +1188,14 @@ class RansomwareDefense:
             return {"success": False, "error": str(e)}
     
     def _verify_resurrection_key(self, key: str) -> bool:
-        """التحقق من مفتاح القيامة"""
+        """التحقق من مفتاح القيامة
+
+        ⚠️ SECURITY (جولة المجلس <1> — أمين 4.2): مقارنة ثابتة الزمن
+        (hmac كان مستوردًا دون استخدام).
+        """
         expected = hashlib.sha256(f"{SOVEREIGN_KEY}:{self.master_resurrection_key}".encode()).hexdigest()
-        return key == expected
+        # مقارنة بايتات UTF-8 (اعتراض المراجع): إدخال غير-ASCII يُرفض لا ينهار
+        return hmac.compare_digest(str(key).encode("utf-8"), str(expected).encode("utf-8"))
     
     def _find_latest_seed(self,
                           resurrection_key: Optional[str] = None) -> Optional[PhoenixSeed]:
@@ -2001,9 +2006,10 @@ if __name__ == "__main__":
     # phoenix.initiate_death(reason="test_simulation")
     
     # 4) مفتاح القيامة
-    print("\n🔑 مفتاح القيامة (للسيد):")
+    # ⚠️ SECURITY (جولة المجلس <1> — أمين 4.6): المفتاح لا يُطبع — يُسلّم للسيد
+    # عبر قناة منفصلة (السجل والمخرجات القياسية ليست قناة سرية).
     resurrection_key = phoenix.get_resurrection_key()
-    print(f"   {resurrection_key[:32]}...")
+    print("🔑 مفتاح القيامة مُنشأ — يُسلّم للسيد عبر قناة آمنة (لا يُطبع)")
     
     # 5) الحالة النهائية
     print("\n📊 الحالة النهائية:")

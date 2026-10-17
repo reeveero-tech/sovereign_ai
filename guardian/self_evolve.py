@@ -124,13 +124,20 @@ class GuardianSelfEvolver:
 
     def execute_approved_update(self, proposal_id: str,
                                 master_token: str,
-                                master_passphrase_hash: str) -> Dict:
+                                master_passphrase_hash: str = None) -> Dict:
         """
         ينفذ التحديث بعد التحقق من رمز السيد.
         يُسجَّل في سجل التطور للتدقيق.
+
+        ⚠️ SECURITY (جولة المجلس <1> — أمين 6.2/بصير BAS-S05/حكيم):
+        التحقق مقابل تجزئة الحارس المخزنة — المعامل master_passphrase_hash
+        من المستدعي مرفوض ومتجاهل: أي مستدعٍ يمرر (x, sha256(x)) لن ينجح.
         """
-        # تحقق من هوية السيد
-        if hashlib.sha256(master_token.encode()).hexdigest() != master_passphrase_hash:
+        # تحقق من هوية السيد — عبر الحارس نفسه لا عبر قيم المستدعي
+        if self.master_guardian is None:
+            logger.critical("❌ Execute update DENIED — no master guardian installed")
+            return {"success": False, "reason": "لا يوجد حارس مثبت للتحقق من رمز السيد (فشل مغلق)"}
+        if not self.master_guardian.verify_master_code(master_token):
             logger.critical("❌ Execute update DENIED — invalid master token")
             return {"success": False,
                     "reason": "رمز السيد غير صحيح — تم رفض التنفيذ"}

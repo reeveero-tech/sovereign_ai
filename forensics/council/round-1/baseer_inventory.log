@@ -1,0 +1,42 @@
+I01 repository
+/home/user/workspace/council/baseer
+4bc5500162b62bf02fb7798f2d93046d21270070
+
+I02 tracked working/index differences
+
+I03 credential metadata only
+d 755 4096 credentials
+f 644 11575 credentials/ROTATION_RECEIPT.json
+
+I04 tracked credential/secret filenames
+credentials/ROTATION_RECEIPT.json
+
+I05 ignore verification
+.gitignore:43:*.secret	data/key.secret
+.gitignore:125:data/keys/keyring.json	data/keys/keyring.json
+
+I06 source tree secret-file presence (no content)
+.env absent
+data/key.secret absent
+
+I07 direct crypto/guardian class references in test files (filenames only)
+tests/test_return_none_lowrisk.py
+tests/test_return_none_security.py
+
+I08 guardian lock readers (only live Python source)
+backend/compat/guardian_api.py:68:            "system_locked": _flag_present(_EMERGENCY_DIR / "SYSTEM_LOCKED.lock"),
+backend/compat/guardian_api.py:69:            "ai_frozen": _flag_present(_EMERGENCY_DIR / "AI_FROZEN.flag"),
+guardian/emergency_breaker.py:36:LOCK_FILE          = EMERGENCY_LOG_DIR / "SYSTEM_LOCKED.lock"
+guardian/emergency_breaker.py:152:        freeze_flag = EMERGENCY_LOG_DIR / "AI_FROZEN.flag"
+guardian/emergency_breaker.py:226:            "SYSTEM_LOCKED": True,
+guardian/emergency_breaker.py:267:        frozen = EMERGENCY_LOG_DIR / "AI_FROZEN.flag"
+guardian/emergency_breaker.py:292:    def is_locked(self) -> bool:
+guardian/emergency_breaker.py:298:            "locked": self.is_locked(),
+
+I09 runtime identity/dependencies
+uid=2000(user) gid=2000(user) groups=2000(user)
+pycryptodome 3.24.1
+pytest 9.1.1
+
+I10 final tracked status
+?? forensics/council/

@@ -12,6 +12,8 @@ import json
 import logging
 import os
 import secrets
+import stat as statmod
+import tempfile
 import time
 from dataclasses import dataclass, field, asdict
 from enum import Enum
@@ -93,6 +95,9 @@ class KeyRing:
         self.keys_dir = Path(keys_dir)
         self.keyring_file = self.keys_dir / "keyring.json"
         self.history_file = self.keys_dir / "HISTORY.jsonl"
+        # ⚠️ SECURITY (جولة المجلس <1> — اعتراض المراجع): علم «فشل التحميل»
+        # يمنع أي حفظ لاحق فوق ملف تالف — لا يُستبدل ملف فشل تحميله.
+        self._load_failed = False
 
         # R-621 (معطل — R-634): كان fallback للقراءة فقط — إذا كان keyring.json
         # غير موجود في الجذر المعزول، يُحاول القراءة من المسار الحقيقي.
@@ -143,26 +148,82 @@ class KeyRing:
                     self._keys[rec.key_id] = rec
                 self._active_key_id = data.get("active_key_id")
             except Exception as e:
-                logger.error(f"❌ فشل تحميل KeyRing: {e}")
+                # ⚠️ SECURITY (جولة المجلس <1> — أمين 3.2/بصير BAS-S14 + اعتراض المراجع):
+                # فشل مغلق مزدوج: (1) ملف تالف يرفع استثناء — لا يُحمّل صمتًا
+                # كفارغ، (2) علم _load_failed يمنع أي حفظ لاحق فوقه حتى لو
+                # التقط المستدعي الاستثناء وواصل — فلا تضيع المفاتيح القائمة.
+                self._load_failed = True
+                logger.error(f"❌ فشل تحميل KeyRing — ملف تالف: {e}")
+                raise ValueError(
+                    f"فشل تحميل KeyRing (فشل مغلق — جولة المجلس <1>): "
+                    f"{self.keyring_file} تالف أو غير صالح"
+                ) from e
         else:
             logger.info("ℹ️ KeyRing فارغ — أول تهيئة")
         return self
 
     def save_to_disk(self) -> bool:
-        """يحفظ الحالة إلى القرص (لا يُحذف أي سطر من HISTORY)."""
+        """
+        يحفظ الحالة إلى القرص (لا يُحذف أي سطر من HISTORY).
+
+        ⚠️ SECURITY (جولة المجلس <1> — بصير BAS-S01/S14/أمين 3.1/حكيم):
+        كتابة ذرية بأذونات ضيقة — ملف مؤقت 0600 + os.replace، ودليل
+        0700. فشل الاستبدال لا يتلف النسخة السابقة (لا write_text
+        مباشر على الملف النهائي).
+        """
+        # ⚠️ SECURITY (اعتراض المراجع على الجولة <1>): رفض الحفظ بعد فشل
+        # تحميل — حتى لو التقط المستدعي استثناء التحميل وواصل، لا يُستبدل
+        # الملف التالف بمحتوى جديد فتضيع المفاتيح القائمة.
+        if self._load_failed:
+            logger.error(
+                "❌ رفض حفظ KeyRing: التحميل السابق فشل (_load_failed) — "
+                "لا يُستبدل ملف تالف؛ افحص الملف يدويًا أولًا"
+            )
+            return False
+        tmp_path = None
         try:
+            self.keys_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
+            # إن كان الدليل قائمًا بأذونات أوسع — نضيّقه، والفشل يُسقط الحفظ
+            # صراحة (لا ابتلاع صامت: ضمان 0700 جزء من العقد الأمني).
+            current_mode = statmod.S_IMODE(self.keys_dir.stat().st_mode)
+            if current_mode & 0o077:
+                self.keys_dir.chmod(0o700)
+                if statmod.S_IMODE(self.keys_dir.stat().st_mode) & 0o077:
+                    raise OSError(
+                        f"تعذر تضييق أذونات دليل المفاتيح إلى 0700 "
+                        f"(الحالي {oct(statmod.S_IMODE(self.keys_dir.stat().st_mode))})"
+                    )
             data = {
                 "keys": [k.to_full_dict() for k in self._keys.values()],
                 "active_key_id": self._active_key_id,
                 "saved_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
             }
-            self.keyring_file.write_text(
-                json.dumps(data, ensure_ascii=False, indent=2),
-                encoding="utf-8"
+            payload = json.dumps(data, ensure_ascii=False, indent=2)
+            # ملف مؤقت فريد بإنشاء حصري (0600 افتراضيًا من mkstemp) داخل
+            # دليل المفاتيح — ثم استبدال ذري. لا إعادة استخدام اسم ثابت
+            # (اعتراض المراجع: O_CREAT|O_TRUNC لا يضبط أذونات ملف قائم).
+            fd, tmp_name = tempfile.mkstemp(
+                prefix=".keyring.", suffix=".tmp", dir=str(self.keys_dir)
             )
+            tmp_path = Path(tmp_name)
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                f.write(payload)
+                f.flush()
+                os.fsync(f.fileno())
+            os.chmod(tmp_path, 0o600)
+            os.replace(tmp_path, self.keyring_file)
+            tmp_path = None  # استُبدل بنجاح
             return True
         except Exception as e:
             logger.error(f"❌ فشل حفظ KeyRing: {e}")
+            # TOLERATED: تنظيف الملف المؤقت بعد فشل الحفظ — فشل التنظيف
+            # لا يُسقط العملية (اسم الملف المؤقت فريد فلا يُشاركه أحد).
+            if tmp_path is not None:
+                try:
+                    if tmp_path.exists():
+                        tmp_path.unlink()
+                except OSError:
+                    pass
             return False
 
     def _append_history(self, entry: Dict) -> None:

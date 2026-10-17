@@ -1,0 +1,26 @@
+P00 {"actual_key_secret_present": false, "credentials": [{"bytes": 11575, "mode": "0o644", "path": "credentials/ROTATION_RECEIPT.json"}], "head": "4bc5500"}
+P01_AES {"algorithm": "AES-256-CBC", "ciphertext_tamper_rejected": true, "roundtrip": true}
+P02_XOR {"algorithm": "XOR-DEV", "randomized_iv_does_not_randomize_ciphertext": true, "recovered_without_key": true}
+P03_KEYRING {"directory_mode": "0o755", "file_mode": "0o644", "private_key_stored_plaintext": true, "public_view_redacts": true, "status_without_state_is_loaded": true}
+P04_KEYRING_WRITE_FAILURE {"json_valid": false, "original_preserved": false, "previous_bytes": 459, "remaining_bytes": 64, "save_returned": false}
+P05_KEY_LIFECYCLE {"active_signature": "verified", "compromised_to_retired_returned": true, "expired_to_lost_returned": true, "final_status": "retired", "rotated_signature": "unverifiable_missing_key"}
+P06_GUARDIAN {"default_token_accepted": true, "equivalent_path_allowed": {"./backend/config.py": true, "/home/user/workspace/council/baseer/backend/config.py": true, "backend/config.py": false}, "protected_action_allowed": true}
+P07_EVOLVER_AUTH {"genuine_guardian_rejects_fake_token": true, "update_with_caller_hash_succeeded": true}
+P08_ALIGNMENT {"live_guardian_protected_actions": 0, "reported_alignment": "aligned"}
+P09_INTEGRITY {"caller_hash_approval_succeeded": true, "tamper_detected_after": 0, "tamper_detected_before": 1, "unreadable_check_violations": 0, "unreadable_snapshot_is_none": true}
+2026-10-16 22:58:22,144 - guardian.emergency - CRITICAL - 🔒 STEP 5: Locking system...
+2026-10-16 22:58:22,144 - guardian.emergency - CRITICAL - 🔒 System LOCKED. Reactivation code sent to master: 4A618EAA87A53B17
+P10_BREAKER {"new_instance_sees_lock": true, "new_instance_state": "armed", "unlock_code_visible_in_log": true}
+P11_REPLAY_WORKERS {"first_accept": true, "second_worker_accepts_same_message": true}
+P12_REPLAY_RACE {"interleaving_only_no_signature_change": true, "same_receiver_accept_count": 2}
+P13_KEYMANAGER {"labelled_rsa_bytes": 256, "original_had_expiry": true, "rotated_has_expiry": false}
+Traceback (most recent call last):
+  File "<stdin>", line 222, in <module>
+  File "/home/user/workspace/council/baseer/backend/memory/core.py", line 208, in __init__
+    self._scan()
+  File "/home/user/workspace/council/baseer/backend/memory/core.py", line 302, in _scan
+    for blob_dir in self.blobs_dir.iterdir():
+  File "/home/user/.local/share/uv/python/cpython-3.11.15-linux-x86_64-gnu/lib/python3.11/pathlib.py", line 931, in iterdir
+    for name in os.listdir(self):
+                ^^^^^^^^^^^^^^^^
+FileNotFoundError: [Errno 2] No such file or directory: '/home/user/workspace/council/baseer/forensics/council/round-1/runtime/probes-verified/phoenix-ash/blobs'

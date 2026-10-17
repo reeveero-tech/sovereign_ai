@@ -1,0 +1,311 @@
+# Forensic reproduction input; no project source file is changed.
+# Run from this tree with:
+# PYTHONDONTWRITEBYTECODE=1 /home/user/workspace/.venv-sov/bin/python < forensics/council/round-1/baseer_probes.txt
+import base64
+import concurrent.futures
+import hashlib
+import hmac
+import importlib.util
+import io
+import json
+import logging
+import os
+from pathlib import Path
+import stat
+import subprocess
+import sys
+import threading
+import time
+from types import SimpleNamespace
+from unittest.mock import patch
+
+ROOT = Path.cwd().resolve()
+assert str(ROOT) == "/home/user/workspace/council/baseer"
+EVIDENCE = ROOT / "forensics/council/round-1"
+RUN = EVIDENCE / "runtime" / ("probes-" + str(time.time_ns()))
+RUN.mkdir(parents=True, exist_ok=True)
+os.environ["SOVEREIGN_DATA_ROOT"] = str(RUN / "data")
+os.environ["SOVEREIGN_KEY"] = "baseer_public_test_key_not_secret"
+os.environ["AI_ENVIRONMENT"] = "testing"
+os.environ["SOVEREIGN_DISABLE_BACKGROUND_THREADS"] = "1"
+sys.path.insert(0, str(ROOT / "backend"))
+logging.disable(logging.CRITICAL)
+
+def result(label, **values):
+    print(label + " " + json.dumps(values, sort_keys=True, ensure_ascii=False), flush=True)
+
+result("P00", runtime=str(RUN.relative_to(ROOT)),
+       head=subprocess.check_output(["git", "rev-parse", "--short", "HEAD"], text=True).strip(),
+       credentials=[{"path": str(p.relative_to(ROOT)), "mode": oct(stat.S_IMODE(p.stat().st_mode)),
+                     "bytes": p.stat().st_size} for p in sorted((ROOT / "credentials").rglob("*")) if p.is_file()],
+       actual_key_secret_present=(ROOT / "data/key.secret").exists())
+
+from nexus.encryption.encryption_engine import EncryptionEngine, EncryptedPayload
+engine = EncryptionEngine(master_key=b"K" * 32)
+payload = engine.encrypt("private test payload")
+tampered = EncryptedPayload(**vars(payload))
+ct = bytearray(base64.b64decode(payload.ciphertext_b64))
+ct[0] ^= 1
+tampered.ciphertext_b64 = base64.b64encode(ct).decode()
+result("P01_AES", algorithm=payload.algorithm,
+       roundtrip=engine.decrypt(payload) == "private test payload",
+       ciphertext_tamper_rejected=engine.decrypt(tampered) is None)
+
+# Reproduce actual dependency-import failure, without changing HAS_PYCRYPTO in project code.
+original_import = __import__
+def missing_crypto(name, *args, **kwargs):
+    if name == "Crypto" or name.startswith("Crypto."):
+        raise ImportError("controlled missing optional crypto dependency")
+    return original_import(name, *args, **kwargs)
+spec = importlib.util.spec_from_file_location("baseer_no_crypto", ROOT / "nexus/encryption/encryption_engine.py")
+fallback_module = importlib.util.module_from_spec(spec)
+sys.modules[spec.name] = fallback_module
+with patch("builtins.__import__", missing_crypto):
+    spec.loader.exec_module(fallback_module)
+fallback = fallback_module.EncryptionEngine(master_key=os.urandom(32))
+known = "A" * 64
+private = ("confidential test message " * 3)[:64]
+p1, p2 = fallback.encrypt(known), fallback.encrypt(private)
+c1, c2 = base64.b64decode(p1.ciphertext_b64), base64.b64decode(p2.ciphertext_b64)
+keystream = bytes(a ^ b for a, b in zip(c1, known.encode()))
+recovered = bytes(a ^ b for a, b in zip(c2, keystream)).decode()
+result("P02_XOR", algorithm=p2.algorithm, recovered_without_key=recovered == private,
+       randomized_iv_does_not_randomize_ciphertext=fallback.encrypt(known).ciphertext_b64 == p1.ciphertext_b64)
+
+from backend.sovereign.keys.keyring import KeyRing, KeyStatus
+from backend.sovereign.keys.verifier import SignatureVerifier
+old_umask = os.umask(0o022)
+try:
+    ring = KeyRing(RUN / "keyring-permissions")
+    key = ring.generate_new_key()
+    assert ring.save_to_disk()
+finally:
+    os.umask(old_umask)
+stored = json.loads(ring.keyring_file.read_text())
+result("P03_KEYRING", directory_mode=oct(stat.S_IMODE(ring.keys_dir.stat().st_mode)),
+       file_mode=oct(stat.S_IMODE(ring.keyring_file.stat().st_mode)),
+       private_key_stored_plaintext=stored["keys"][0]["private_key"] == key.private_key,
+       public_view_redacts=key.to_dict()["private_key"] == "***redacted***",
+       status_without_state_is_loaded=KeyRing(ring.keys_dir).load_from_disk().get_active_key() is not None)
+
+# Genuine OS write failure, not a mocked save implementation.
+child = r'''
+import json,resource,signal,sys
+from pathlib import Path
+sys.path.insert(0, str(Path.cwd() / "backend"))
+from backend.sovereign.keys.keyring import KeyRing
+k=KeyRing(Path(sys.argv[1])); k.generate_new_key(); assert k.save_to_disk()
+before=k.keyring_file.read_bytes()
+signal.signal(signal.SIGXFSZ,signal.SIG_IGN)
+resource.setrlimit(resource.RLIMIT_FSIZE,(64,64))
+saved=k.save_to_disk()
+after=k.keyring_file.read_bytes()
+try: json.loads(after); valid=True
+except (ValueError,UnicodeDecodeError): valid=False
+print(json.dumps({"save_returned":saved,"previous_bytes":len(before),"remaining_bytes":len(after),
+ "original_preserved":before==after,"json_valid":valid}))
+'''
+child_result = subprocess.run([sys.executable, "-c", child, str(RUN / "keyring-write-failure")],
+                              capture_output=True, text=True, check=True)
+result("P04_KEYRING_WRITE_FAILURE", **json.loads(child_result.stdout.strip()))
+
+event = {"hash": "hash", "prev_hash": "GENESIS", "blob": "blob", "time": "2026-10-14T00:00:00Z",
+         "type": "test", "key_id": key.key_id}
+verifier = SignatureVerifier(ring)
+event["signature"] = hmac.new(key.private_key.encode(),
+                              verifier.extract_event_data(event).encode(), hashlib.sha256).hexdigest()
+before_status = verifier.verify_event(event).status.value
+ring.retire_key(key.key_id, "rotated")
+after_status = verifier.verify_event(event).status.value
+key.status = KeyStatus.EXPIRED
+expired_to_lost = ring.mark_key_lost(key.key_id)
+key.status = KeyStatus.COMPROMISED
+compromised_to_retired = ring.retire_key(key.key_id, "rotated")
+result("P05_KEY_LIFECYCLE", active_signature=before_status, rotated_signature=after_status,
+       expired_to_lost_returned=expired_to_lost, compromised_to_retired_returned=compromised_to_retired,
+       final_status=key.status.value)
+
+from guardian.master_guardian import MasterGuardian
+guardian = MasterGuardian(guardian_dir=str(RUN / "guardian-default"))
+default_accepted = guardian.verify_master_code("CHANGE_ME_IMMEDIATELY")
+default_authorized = guardian.request_action("tester", "disable_guardian", master_token="CHANGE_ME_IMMEDIATELY")
+paths = ["backend/config.py", "./backend/config.py", str(ROOT / "backend/config.py")]
+path_results = {p: guardian.request_action("tester", "write_file", target=p)["allowed"] for p in paths}
+result("P06_GUARDIAN", default_token_accepted=default_accepted,
+       protected_action_allowed=default_authorized["allowed"], equivalent_path_allowed=path_results)
+
+import guardian.integrity_checker as integrity
+import guardian.self_evolve as evolve
+real_guardian = MasterGuardian(guardian_dir=str(RUN / "guardian-real"), master_passphrase="real_master_phrase_for_test")
+fake_token = "invented_by_caller"
+fake_hash = hashlib.sha256(fake_token.encode()).hexdigest()
+with patch.object(evolve, "EVOLUTION_LOG", RUN / "evolution-log.jsonl"):
+    evolver = evolve.GuardianSelfEvolver(master_guardian=real_guardian)
+    proposal = evolver.propose_key_rotation()
+    accepted = evolver.execute_approved_update(proposal["proposal_id"], fake_token, fake_hash)
+    result("P07_EVOLVER_AUTH", genuine_guardian_rejects_fake_token=not real_guardian.verify_master_code(fake_token),
+           update_with_caller_hash_succeeded=accepted["success"])
+    import guardian.master_guardian as guardian_module
+    with patch.object(guardian_module, "PROTECTED_ACTIONS", set()):
+        result("P08_ALIGNMENT", live_guardian_protected_actions=len(guardian_module.PROTECTED_ACTIONS),
+               reported_alignment=evolver.verify_alignment()["status"])
+
+sample = RUN / "protected-sample.txt"
+sample.write_text("approved content")
+with patch.object(integrity, "INTEGRITY_DB", RUN / "integrity-baseline.json"), \
+     patch.object(integrity, "INTEGRITY_LOG", RUN / "integrity-events.jsonl"):
+    checker = integrity.IntegrityChecker()
+    checker.protected_paths = [str(sample)]
+    checker.build_baseline()
+    sample.chmod(0)
+    snapshot = checker._snapshot_file(sample)
+    unreadable_violations = checker.check()
+    sample.chmod(0o600)
+    sample.write_text("unapproved replacement")
+    detected_before = len(checker.check())
+    accepted_baseline = checker.approve_changes([str(sample)], fake_token, fake_hash)
+    detected_after = len(checker.check())
+    result("P09_INTEGRITY", unreadable_snapshot_is_none=snapshot is None,
+           unreadable_check_violations=len(unreadable_violations),
+           tamper_detected_before=detected_before, caller_hash_approval_succeeded=accepted_baseline["success"],
+           tamper_detected_after=detected_after)
+
+import guardian.emergency_breaker as emergency
+emergency_dir = RUN / "emergency"
+with patch.object(emergency, "EMERGENCY_LOG_DIR", emergency_dir), \
+     patch.object(emergency, "BACKUP_DIR", emergency_dir / "backups"), \
+     patch.object(emergency, "LOCK_FILE", emergency_dir / "SYSTEM_LOCKED.lock"):
+    breaker = emergency.EmergencyBreaker()
+    sink = io.StringIO()
+    handler = logging.StreamHandler(sink)
+    emergency.logger.addHandler(handler)
+    original_propagate = emergency.logger.propagate
+    emergency.logger.propagate = False
+    logging.disable(logging.NOTSET)
+    code = breaker._step5_lock_system("baseer_test_incident")
+    logging.disable(logging.CRITICAL)
+    emergency.logger.removeHandler(handler)
+    emergency.logger.propagate = original_propagate
+    restarted_breaker = emergency.EmergencyBreaker()
+    result("P10_BREAKER", unlock_code_visible_in_log=code in sink.getvalue(),
+           new_instance_state=restarted_breaker.state.value,
+           new_instance_sees_lock=restarted_breaker.is_locked())
+
+from nexus.encryption.secure_communication import SecureCommunication
+shared_secret = b"C" * 32
+sender = SecureCommunication(shared_secret)
+message = sender.sign_message({"operation": "test"}, "component")
+first_receiver, second_receiver = SecureCommunication(shared_secret), SecureCommunication(shared_secret)
+result("P11_REPLAY_WORKERS", first_accept=first_receiver.verify_message(message),
+       second_worker_accepts_same_message=second_receiver.verify_message(message))
+receiver = SecureCommunication(shared_secret)
+barrier = threading.Barrier(2)
+compare = hmac.compare_digest
+def interleaved_compare(a, b):
+    barrier.wait(timeout=5)
+    return compare(a, b)
+with patch("nexus.encryption.secure_communication.hmac.compare_digest", interleaved_compare):
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+        results = list(pool.map(receiver.verify_message, [message, message]))
+result("P12_REPLAY_RACE", same_receiver_accept_count=sum(results), interleaving_only_no_signature_change=True)
+
+from nexus.encryption.key_manager import KeyManager
+manager = KeyManager(str(RUN / "nexus-keys"))
+timed_key = manager.generate_key("timed", ttl_days=1)
+rotated = manager.rotate_key(timed_key.key_id)
+fake_rsa = manager.generate_key("rsa", algorithm="RSA-2048")
+result("P13_KEYMANAGER", original_had_expiry=timed_key.expires_at is not None,
+       rotated_has_expiry=rotated.expires_at is not None,
+       labelled_rsa_bytes=len(manager.get_key_bytes(fake_rsa.key_id)))
+
+# Real AES-GCM and real BlobStore; replace only metadata/event providers and threads.
+import backend.memory.defense.ransomware as phoenix
+import backend.memory.store as memory_store
+from backend.memory.core import BlobStore
+phoenix_dir = RUN / "phoenix-ash"
+(phoenix_dir / "seeds").mkdir(parents=True, exist_ok=True)
+(phoenix_dir / "blobs").mkdir(parents=True, exist_ok=True)
+blob_store = BlobStore(phoenix_dir / "blobs")
+original = b"baseer original blob content"
+blob_id = blob_store.put(original)
+core = SimpleNamespace(
+    blob_store=blob_store, _last_hash="a" * 64,
+    get_statistics=lambda: {"index": {"total_events": 1}},
+    iterate_events=lambda **kwargs: [{"blob": blob_id}],
+    append_event=lambda *args, **kwargs: None)
+empty_store = SimpleNamespace(query=lambda *args, **kwargs: [])
+with patch.object(phoenix, "get_core", lambda: core), \
+     patch.object(phoenix, "get_encoder", lambda: None), \
+     patch.object(phoenix, "get_watcher", lambda: None), \
+     patch.object(phoenix, "PHOENIX_SEEDS_DIR", phoenix_dir / "seeds"), \
+     patch.object(phoenix, "PHOENIX_STATE_FILE", phoenix_dir / "phoenix_state.json"), \
+     patch.object(memory_store, "get_store", lambda: empty_store):
+    a = phoenix.RansomwareDefense()
+    death_result = a.initiate_death("baseer ash persistence probe")
+    ash_count_a = len(a.ashes)
+    persisted_count = json.loads((phoenix_dir / "phoenix_state.json").read_text())["ashes_count"]
+    # Preserve, rather than delete, the originals and seeds as forensic evidence.
+    original_path = blob_store._blob_path(blob_id)
+    original_path.rename(original_path.with_name(original_path.name + ".evidence"))
+    for seed_file in (phoenix_dir / "seeds").glob("*.enc"):
+        seed_file.rename(seed_file.with_name(seed_file.name + ".evidence"))
+    b = phoenix.RansomwareDefense()
+    resurrected = b.resurrect(a.get_resurrection_key())
+    result("P14_ASH_RESTART", death_succeeded=death_result, first_ash_count=ash_count_a,
+           saved_ash_count=persisted_count, new_instance_ash_count=len(b.ashes),
+           new_instance_restore_success=resurrected["success"],
+           restore_error=resurrected.get("error"), original_restored=blob_store.exists(blob_id),
+           encrypted_backups_remain=any(p.is_file() and p.name != original_path.name + ".evidence"
+                                       for p in (phoenix_dir / "blobs").rglob("*")))
+
+# Reuse genuine seed crypto and state I/O, supplying an isolated application-store interface.
+seed_dir = RUN / "phoenix-seed"
+(seed_dir / "seeds").mkdir(parents=True, exist_ok=True)
+semantics = [{"concept": "probe", "definition": "restorable content", "confidence": 0.9}]
+store = SimpleNamespace(query=lambda kind, **kwargs: semantics if kind == "semantic" else [],
+                        save_semantic=lambda **kwargs: None)
+with patch.object(phoenix, "get_core", lambda: core), \
+     patch.object(phoenix, "get_encoder", lambda: None), \
+     patch.object(phoenix, "get_watcher", lambda: None), \
+     patch.object(phoenix, "PHOENIX_SEEDS_DIR", seed_dir / "seeds"), \
+     patch.object(phoenix, "PHOENIX_STATE_FILE", seed_dir / "phoenix_state.json"), \
+     patch.object(memory_store, "get_store", lambda: store):
+    a = phoenix.RansomwareDefense()
+    assert a.create_phoenix_seed()
+    a.phoenix_phase = phoenix.PhoenixPhase.DEAD
+    assert a._save_state()
+    resurrection = a.resurrect(a.get_resurrection_key())
+    persisted_phase = json.loads((seed_dir / "phoenix_state.json").read_text())["phoenix_phase"]
+    b = phoenix.RansomwareDefense()
+    result("P15_SEED_RESURRECTION_STATE", returned_success=resurrection["success"],
+           in_memory_phase=a.phoenix_phase.value, saved_phase=persisted_phase,
+           reloaded_phase=b.phoenix_phase.value)
+
+# Real FastAPI dispatch, no lifespan or production orchestrator, only synthetic logs.
+from fastapi.testclient import TestClient
+import app as backend_app
+guard_log = RUN / "synthetic-security-log.json"
+synthetic = [{"event_type": "test-only", "details": {"message": "BASEER_PRIVATE_TEST_MARKER"}}]
+guard_log.write_text(json.dumps(synthetic))
+called = []
+backend_app.app.state.orchestrator = SimpleNamespace(
+    run_cycle=lambda data: called.append(True) or SimpleNamespace(
+        cycle_id="baseer-test", success=True, duration=0.01, decision={}, errors=[]))
+with patch.object(backend_app.safety_guard, "security_log_file", guard_log):
+    client = TestClient(backend_app.app, raise_server_exceptions=False)
+    exposed_log = client.get("/security/log")
+    exposed_status = client.get("/security/status")
+    denied_api = client.get("/api-key")
+    allowed_api = client.get("/api-key-header", headers={"X-API-Key": os.environ["SOVEREIGN_KEY"]})
+    guardian_flags = client.get("/guardian/status").json()["emergency_flags"]
+    cycle = client.post("/orchestrator/cycle", json={"api_key": os.environ["SOVEREIGN_KEY"]})
+    result("P16_HTTP", unauthenticated_log_status=exposed_log.status_code,
+           synthetic_private_message_visible="BASEER_PRIVATE_TEST_MARKER" in exposed_log.text,
+           unauthenticated_security_status=exposed_status.status_code,
+           internal_log_path_visible=str(guard_log) in exposed_status.text,
+           api_key_without_auth=denied_api.status_code, api_key_with_header=allowed_api.status_code,
+           api_key_response_contains_raw_secret=os.environ["SOVEREIGN_KEY"] in allowed_api.text,
+           guardian_flags=guardian_flags, locked_cycle_http_status=cycle.status_code,
+           locked_cycle_dispatched=len(called))
+
+result("P17_FINAL", tracked_diff=subprocess.check_output(["git", "diff", "--stat"], text=True).strip())

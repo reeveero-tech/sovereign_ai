@@ -2,8 +2,8 @@
 
 | # | الموضوع | الحالة |
 |---|---|---|
-| 1 | الأمان (التشفير، KeyRing، ransomware.py) | مفتوحة — الجولة <1> |
-| 2 | صحة invariants وMerkle anchor | تالية |
+| 1 | الأمان (التشفير، KeyRing، ransomware.py) | **الجولة <1> منعقدة والمعالجة قيد التحقق (2026-10-17)** — التقارير الخام في `council/round-1/RAW_*.md`، والمعالجة في `council/round-1/PROCESSING.md`؛ لا يُعلن البند مغلقًا إلا بعد توقيع المراجع واكتمال الدورة الختامية (CI + clone نظيف) |
+| 2 | صحة invariants وMerkle anchor | تالية — الجولة <2> |
 | 3 | الادعاءات في docs/ مقابل الكود | تالية |
 | 4 | بوابة CI وtools/run_gate.py | تالية |
 | 5 | مسارات HTTP و/sovereignty/score | تالية |

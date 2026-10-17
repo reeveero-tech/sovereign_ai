@@ -107,7 +107,7 @@ def load_sovereign_key() -> str:
     تحميل مفتاح السيد من عدة مصادر (مرتبة حسب الأولوية):
     1. متغير بيئة SOVEREIGN_KEY
     2. ملف .env في الجذر
-    3. ملف key.secret (مشفر)
+    3. ملف key.secret (نص صريح — وضع 0600 إلزامي)
     4. توليد مفتاح دائم في التطوير (R-610) — يُحفظ في data/key.secret (مستثنى من git)
     5. مفتاح مؤقت عشوائي (تطوير فقط) / رفض (إنتاج)
     """
@@ -134,12 +134,30 @@ def load_sovereign_key() -> str:
     secret_file = DATA_DIR / "key.secret"
     if secret_file.exists():
         try:
+            # ⚠️ SECURITY (جولة المجلس <1> — أمين 2.4/بصير BAS-S16/حكيم):
+            # ملف سر قابل للقراءة من غير صاحبه = تهيئة مكشوفة.
+            # الإنتاج: رفض صريح. التطوير: تحذير + تضييق إلى 0600.
+            import stat as _stat
+            file_mode = _stat.S_IMODE(os.stat(secret_file).st_mode)
+            if file_mode & 0o077:
+                if IS_DEVELOPMENT:
+                    warnings.warn(
+                        f"⚠️ key.secret بأذونات واسعة ({oct(file_mode)}) — يُضيّق الآن إلى 0600"
+                    )
+                    os.chmod(secret_file, 0o600)
+                else:
+                    raise ValueError(
+                        f"❌ خطأ أمني: key.secret بأذونات مكشوفة ({oct(file_mode)}) "
+                        f"— يُرفض البدء في الإنتاج (جولة المجلس <1>)"
+                    )
             with open(secret_file, "r", encoding="utf-8") as f:
                 key = f.read().strip()
                 if key and len(key) >= 16:
                     return key
         # TOLERATED: key.secret exists but is unreadable — skip to next source (R-680)
-        except:
+        except ValueError:
+            raise
+        except Exception:  # TOLERATED: key.secret unreadable — skip to next source (R-680)
             pass
     
     # المصدر 4 (R-610): توليد مفتاح سيد دائم في التطوير — الهوية السيادية تستمر عبر إعادة التشغيل

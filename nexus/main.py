@@ -4,6 +4,7 @@ NexusCore — نقطة الدخول الرئيسية
 """
 import asyncio
 import logging
+import os
 from typing import Optional
 
 logging.basicConfig(
@@ -143,16 +144,30 @@ def initialize_nexus(config: Optional[dict] = None) -> "CoreEngine":  # noqa
 
 
 def initialize_guardian(master_passphrase: Optional[str] = None) -> dict:
-    """يُهيئ نظام الحارس"""
+    """يُهيئ نظام الحارس
+
+    ⚠️ SECURITY (جولة المجلس <1> — أمين 6.1/بصير BAS-S03/حكيم):
+    لا عبارة افتراضية — العبارة تُقرأ من GUARDIAN_MASTER_PASSPHRASE
+    أو تُمرر صراحة؛ غيابها = فشل صريح (فشل مغلق).
+    """
     from guardian.master_guardian import MasterGuardian
     from guardian.self_evolve import GuardianSelfEvolver
     from guardian.emergency_breaker import EmergencyBreaker
     from guardian.integrity_checker import IntegrityChecker
 
-    guardian  = MasterGuardian(master_passphrase=master_passphrase)
+    passphrase = master_passphrase or os.environ.get("GUARDIAN_MASTER_PASSPHRASE")
+    if not passphrase:
+        raise ValueError(
+            "initialize_guardian: GUARDIAN_MASTER_PASSPHRASE غير مضبوطة ولم تُمرر "
+            "عبارة صراحة — تهيئة الحارس مرفوضة (فشل مغلق، جولة المجلس <1>)"
+        )
+
+    guardian  = MasterGuardian(master_passphrase=passphrase)
     evolver   = GuardianSelfEvolver(master_guardian=guardian)
     breaker   = EmergencyBreaker(master_guardian=guardian)
-    checker   = IntegrityChecker()
+    # ⚠️ SECURITY (جولة المجلس <1>): ربط فاحص السلامة بالحارس — التحقق
+    # من رمز السيد عبر الحارس لا عبر قيم يمررها المستدعي.
+    checker   = IntegrityChecker(master_guardian=guardian)
 
     # ربط الحارس بكسر الزجاج
     def on_emergency(event):

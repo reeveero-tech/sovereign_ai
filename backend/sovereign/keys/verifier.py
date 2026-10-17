@@ -131,6 +131,26 @@ class SignatureVerifier:
                 reason=f"key {event_key_id} is marked LOST — cannot verify, not claiming forgery"
             )
 
+        # ⚠️ SECURITY (جولة المجلس <1> — أمين 3.3/بصير BAS-D03/حكيم):
+        # فحص HMAC أولًا متى توفرت مادة المفتاح — التزوير يُكشف (INVALID)
+        # مهما كانت حالة المفتاح. الحدث المزوّر المنسوب لمفتاح RETIRED
+        # كان يُصنّف UNVERIFIABLE فلا يُعلّم مزوّرًا — الآن يُعلّم.
+        # مفتاح COMPROMISED/EXPIRED/RETIRED بتوقيع مطابق لا يُعاد VERIFIED
+        # أبدًا (سياسة R-668 محفوظة) — يبقى UNVERIFIABLE.
+        expected = self._compute_signature(event_data, key_record.private_key)
+        actual = event.get("signature", "")
+        signature_matches = hmac.compare_digest(expected, actual)
+
+        if not signature_matches:
+            return VerificationResult(
+                status=VerificationStatus.INVALID,
+                key_id=event_key_id,
+                reason=(
+                    f"signature does not match known key {event_key_id} "
+                    f"(status {key_record.status.value}) — possible tampering"
+                ),
+            )
+
         # R-668 (البوابة 5 — إصلاح الثغرة): مفتاح COMPROMISED/EXPIRED/RETIRED
         # لا يُعاد VERIFIED — التحقق به غير موثوق (المفتاح مخترق/منتهي/مستبدل).
         # RETIRED: تحقق تاريخي مشروط — لا يُعاد VERIFIED (لأن المفتاح مُستبدل).
@@ -148,27 +168,16 @@ class SignatureVerifier:
                 key_id=event_key_id,
                 reason=(
                     f"key {event_key_id} is {status_name} — "
-                    f"cannot verify (not claiming forgery, but not trusted)"
+                    f"signature matches but key is not trusted (not VERIFIED)"
                 ),
             )
 
-        # تحقق فعلي — HMAC
-        expected = self._compute_signature(event_data, key_record.private_key)
-        actual = event.get("signature", "")
-
-        if hmac.compare_digest(expected, actual):
-            return VerificationResult(
-                status=VerificationStatus.VERIFIED,
-                key_id=event_key_id,
-                reason="signature matches known key"
-            )
-        else:
-            # التوقيع لا يطابق المفتاح المعروف — INVALID (مزوّر)
-            return VerificationResult(
-                status=VerificationStatus.INVALID,
-                key_id=event_key_id,
-                reason="signature does not match known key (possible tampering)"
-            )
+        # تحقق فعلي — HMAC (مطابق + ACTIVE)
+        return VerificationResult(
+            status=VerificationStatus.VERIFIED,
+            key_id=event_key_id,
+            reason="signature matches known key"
+        )
 
     def verify_batch(self, events: List[Dict]) -> Dict[str, int]:
         """

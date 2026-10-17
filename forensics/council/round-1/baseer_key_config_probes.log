@@ -1,0 +1,6 @@
+/home/user/workspace/council/baseer/backend/config.py:154: UserWarning: 🔑 تم توليد مفتاح سيد دائم للتطوير وحفظه في data/key.secret (مستثنى من git).
+الهوية السيادية (ختم الهوية + توقيعات السجل) ستستمر عبر عمليات إعادة التشغيل.
+  warnings.warn(
+C01 {"runtime": "forensics/council/round-1/runtime/config-1792191581039467382", "generated_mode": "0o600", "same_key_on_reload": true, "existing_0644_file_accepted_in_production": true, "mode_after_production_load": "0o644", "production_without_secret_rejected": true}
+C02 {"labelled_algorithm": "RSA-2048", "rsa_import_succeeded": false, "returned_bytes": 256}
+C03 {"history_target_is_directory": true, "key_generated_despite_audit_failure": true, "keyring_save_succeeded": true}

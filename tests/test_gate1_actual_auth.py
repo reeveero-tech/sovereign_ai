@@ -76,7 +76,7 @@ class TestActualAuthentication:
         app_module = self._setup_app_key(monkeypatch, new_key)
 
         client = TestClient(app_module.app)
-        r = client.get("/api-key", params={"master_key": new_key})
+        r = client.get("/api-key", headers={"X-API-Key": new_key})
         assert r.status_code == 200, (
             f"new key must be accepted (200), got {r.status_code}: {r.text[:100]}"
         )
@@ -92,7 +92,7 @@ class TestActualAuthentication:
 
         client = TestClient(app_module.app)
         # المفتاح القديم يُرفض (403)
-        r = client.get("/api-key", params={"master_key": old_key})
+        r = client.get("/api-key", headers={"X-API-Key": old_key})
         assert r.status_code == 403, (
             f"old key must be rejected (403), got {r.status_code}"
         )
@@ -107,7 +107,7 @@ class TestActualAuthentication:
         client = TestClient(app_module.app)
         wrong_keys = ["wrong_key_123", "", "x", "a" * 43]
         for wk in wrong_keys:
-            r = client.get("/api-key", params={"master_key": wk})
+            r = client.get("/api-key", headers={"X-API-Key": wk})
             assert r.status_code == 403, (
                 f"wrong key must be rejected (403), got {r.status_code} for {wk[:10]}"
             )
@@ -131,14 +131,14 @@ class TestActualAuthentication:
 
         client = TestClient(app_module.app)
         # نجاح (200) — لا يُفصح عن المفتاح
-        r_ok = client.get("/api-key", params={"master_key": new_key})
+        r_ok = client.get("/api-key", headers={"X-API-Key": new_key})
         assert r_ok.status_code == 200
         assert new_key not in r_ok.text
         assert new_key[:10] not in r_ok.text
         assert new_key[-10:] not in r_ok.text
 
         # فشل (403) — لا يُفصح عن المفتاح
-        r_fail = client.get("/api-key", params={"master_key": old_key})
+        r_fail = client.get("/api-key", headers={"X-API-Key": old_key})
         assert r_fail.status_code == 403
         assert old_key not in r_fail.text
         assert new_key not in r_fail.text
@@ -171,8 +171,8 @@ class TestActualAuthentication:
         try:
             client = TestClient(app_module.app)
             # نجاح و فشل
-            client.get("/api-key", params={"master_key": new_key})
-            client.get("/api-key", params={"master_key": old_key})
+            client.get("/api-key", headers={"X-API-Key": new_key})
+            client.get("/api-key", headers={"X-API-Key": old_key})
 
             log_content = log_capture.getvalue()
             # لا مفاتيح في السجلات

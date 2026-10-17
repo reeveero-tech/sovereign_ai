@@ -38,7 +38,7 @@ uvicorn app:app --host 0.0.0.0 --port 8000
 
 | المتغير | الافتراضي | ملاحظة |
 |---|---|---|
-| `SOVEREIGN_KEY` | لا افتراضي ثابت؛ التطوير يولد مؤقتاً، والإنتاج يفشل مغلقاً دون سر | ✅ راجع SECURITY.md |
+| `SOVEREIGN_KEY` | لا افتراضي ثابت؛ التطوير يولّد مفتاحًا **دائمًا** يُحفظ في `data/key.secret` (0600، مستثنى من git — R-610)، والإنتاج يفشل مغلقاً دون سر | ✅ راجع SECURITY.md |
 | `DRIVE_ENABLED` | false | — |
 | `AI_ENVIRONMENT` | — | — |
 | `CORE_MODEL_NAME` | microsoft/Phi-3-mini-4k-instruct | لا يُستخدم فعلياً |

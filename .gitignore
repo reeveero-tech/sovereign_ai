@@ -44,6 +44,10 @@ key.secret
 
 # سجلات
 *.log
+
+# جولة المجلس <1> — استثناء موجه: سجلات أدلة المراجعين داخل round-1
+# (تقرير RAW_baseer.md يستشهد بها كأدلة تشغيل — يجب أن تبقى في المستودع)
+!forensics/council/round-1/*.log
 logs/
 nohup.out
 
@@ -130,3 +134,6 @@ data/key.secret.old_rotated_2026_10_14
 data/key.secret.new
 data/sovereign_core/compat_call_log.jsonl
 forensics/COUNCIL_KEY.md
+
+# جولة المجلس <1> — أمين 4.5: حالة الفينيق بيانات تشغيل لا مصدر
+data/phoenix/

@@ -97,3 +97,53 @@ def test_production_without_key_fails_closed():
         f"got 0 with key {result.stdout!r}"
     )
     assert "لم يتم تعيين مفتاح السيد" in (result.stderr + result.stdout)
+
+
+def test_production_with_loose_perm_key_secret_rejected():
+    """جولة المجلس <1> (أمين 2.4/بصير BAS-S16/حكيم): في الإنتاج، ملف سر
+    مكشوف الأذونات (0644) يُرفض صراحة — لا يُقبل بصمت."""
+    tmp_root = tempfile.mkdtemp(prefix="sovereign_loose_perm_test_")
+    tmp_data = os.path.join(tmp_root, "data")
+    os.makedirs(tmp_data, exist_ok=True)
+    key_file = os.path.join(tmp_data, "key.secret")
+    with open(key_file, "w", encoding="utf-8") as f:
+        f.write("production_key_abcdef0123456789abcdef")
+    os.chmod(key_file, 0o644)  # مكشوف للمجموعة والآخرين
+
+    env = os.environ.copy()
+    env.pop("SOVEREIGN_KEY", None)
+    env["AI_ENVIRONMENT"] = "production"
+    env["SOVEREIGN_DATA_ROOT"] = tmp_data
+
+    result = _run_config(env)
+    assert result.returncode != 0, (
+        "production with 0644 key.secret must fail closed"
+    )
+    combined = result.stderr + result.stdout
+    assert "أذونات مكشوفة" in combined, (
+        f"expected loose-permissions rejection message, got: {combined[-300:]!r}"
+    )
+
+
+def test_production_with_0600_key_secret_loads():
+    """الجانب السليم: ملف سر سليم الأذونات (0600) في الإنتاج يُقبل —
+    الفشل المغلق لا يعطل التشغيل الصحيح."""
+    tmp_root = tempfile.mkdtemp(prefix="sovereign_tight_perm_test_")
+    tmp_data = os.path.join(tmp_root, "data")
+    os.makedirs(tmp_data, exist_ok=True)
+    key_file = os.path.join(tmp_data, "key.secret")
+    expected = "production_key_abcdef0123456789abcdef"
+    with open(key_file, "w", encoding="utf-8") as f:
+        f.write(expected)
+    os.chmod(key_file, 0o600)
+
+    env = os.environ.copy()
+    env.pop("SOVEREIGN_KEY", None)
+    env["AI_ENVIRONMENT"] = "production"
+    env["SOVEREIGN_DATA_ROOT"] = tmp_data
+
+    result = _run_config(env)
+    assert result.returncode == 0, (
+        f"production with 0600 key.secret must load, stderr: {result.stderr[-300:]!r}"
+    )
+    assert result.stdout.strip() == expected

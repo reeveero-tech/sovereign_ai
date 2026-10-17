@@ -18,10 +18,11 @@
 - /api/redoc     → توثيق API (ReDoc)
 """
 
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, HTTPException, status
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect, HTTPException, Header, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict
 from typing import Dict, Any, Optional, List
+import hmac
 import json
 import time
 import uuid
@@ -35,6 +36,33 @@ except ImportError:
     import sys
     sys.path.append('.')
     from orchestrator import get_orchestrator, OrchestratorMode
+
+# مفتاح السيد (لمصادقة مسارات الكتابة — جولة المجلس <1>)
+try:
+    from config import SOVEREIGN_KEY as _SOVEREIGN_API_KEY
+except ImportError:
+    import sys as _sys
+    _sys.path.append('.')
+    from config import SOVEREIGN_KEY as _SOVEREIGN_API_KEY
+
+
+def _require_master_key(api_key: Optional[str] = None,
+                         x_api_key: Optional[str] = None) -> None:
+    """
+    ⚠️ SECURITY (جولة المجلس <1> — أمين 1.1-1.3/بصير BAS-S09/حكيم):
+    كل مسارات /api/* التي تغيّر حالة النظام تتطلب مفتاح السيد —
+    في الرأس (X-API-Key) أو في جسم الطلب (api_key). المقارنة ثابتة الزمن.
+    """
+    key = api_key or x_api_key
+    # مقارنة بايتات UTF-8 (اعتراض المراجع): المدخلات غير-ASCII يجب ألا
+    # تتحول إلى خطأ خادم من compare_digest — ترفض 401 فقط.
+    if not key or not hmac.compare_digest(
+        str(key).encode("utf-8"), str(_SOVEREIGN_API_KEY).encode("utf-8")
+    ):
+        raise HTTPException(
+            status_code=401,
+            detail="مفتاح السيد مطلوب لهذه العملية — المصادقة إلزامية (جولة المجلس <1>)"
+        )
 
 # طبقة الأمان السيادية (R-608)
 try:
@@ -64,6 +92,7 @@ class RunCycleRequest(BaseModel):
     """طلب تشغيل دورة سيادية"""
     event_type: str = "manual_run"
     payload: Dict[str, Any] = {}
+    api_key: Optional[str] = None  # مفتاح السيد — إلزامي (جولة المجلس <1>)
     
     model_config = ConfigDict(
         json_schema_extra={
@@ -78,6 +107,7 @@ class ResetRequest(BaseModel):
     """طلب إعادة تهيئة"""
     preserve_data: bool = False
     component: Optional[str] = None
+    api_key: Optional[str] = None  # مفتاح السيد — إلزامي (جولة المجلس <1>)
     
     model_config = ConfigDict(
         json_schema_extra={
@@ -93,6 +123,7 @@ class EventRequest(BaseModel):
     type: str
     payload: Dict[str, Any] = {}
     source: str = "api"
+    api_key: Optional[str] = None  # مفتاح السيد — إلزامي (جولة المجلس <1>)
     
     model_config = ConfigDict(
         json_schema_extra={
@@ -207,7 +238,8 @@ async def health_check():
 
 
 @api_router.post("/run", response_model=Dict[str, Any])
-async def run_cycle(request: RunCycleRequest = None):
+async def run_cycle(request: RunCycleRequest = None,
+                    x_api_key: Optional[str] = Header(None, alias="X-API-Key")):
     """
     تشغيل دورة سيادية كاملة.
     
@@ -217,6 +249,12 @@ async def run_cycle(request: RunCycleRequest = None):
     Returns:
         نتيجة الدورة (cycle_id, success, duration, decision)
     """
+    # ⚠️ SECURITY (جولة المجلس <1> — أمين 1.1-1.3/بصير BAS-S09/حكيم):
+    # مسار كتابة — مفتاح السيد إلزامي، وقبل أي أثر جانبي (اعتراض المراجع:
+    # المصادقة تسبق جلب المنسق — الطلب بلا مفتاح لا يستدعي المنسق أصلًا)
+    _require_master_key(api_key=request.api_key if request else None,
+                         x_api_key=x_api_key)
+    
     orch = get_orch()
     
     input_data = {
@@ -253,7 +291,8 @@ async def run_cycle(request: RunCycleRequest = None):
 
 
 @api_router.post("/reset")
-async def reset_system(request: ResetRequest = None):
+async def reset_system(request: ResetRequest = None,
+                      x_api_key: Optional[str] = Header(None, alias="X-API-Key")):
     """
     إعادة تهيئة النظام بالكامل أو مكون معين.
     
@@ -264,6 +303,11 @@ async def reset_system(request: ResetRequest = None):
     Returns:
         نتيجة إعادة التهيئة
     """
+    # ⚠️ SECURITY (جولة المجلس <1>): مسار تهيئة مدمر — مفتاح السيد إلزامي
+    # وقبل أي أثر جانبي (اعتراض المراجع: المصادقة تسبق جلب المنسق)
+    _require_master_key(api_key=request.api_key if request else None,
+                         x_api_key=x_api_key)
+    
     orch = get_orch()
     
     try:
@@ -352,7 +396,8 @@ async def get_system_history(limit: int = 100, level: str = None):
 
 
 @api_router.post("/event")
-async def send_event(request: EventRequest):
+async def send_event(request: EventRequest,
+                     x_api_key: Optional[str] = Header(None, alias="X-API-Key")):
     """
     إرسال حدث مخصص إلى الذكاء السيادي.
     
@@ -364,6 +409,10 @@ async def send_event(request: EventRequest):
     Returns:
         نتيجة معالجة الحدث
     """
+    # ⚠️ SECURITY (جولة المجلس <1>): مسار كتابة — مفتاح السيد إلزامي
+    # وقبل أي أثر جانبي (اعتراض المراجع: المصادقة تسبق جلب المنسق)
+    _require_master_key(api_key=request.api_key, x_api_key=x_api_key)
+    
     orch = get_orch()
     
     input_data = {
@@ -443,7 +492,8 @@ async def get_current_mode():
 
 
 @api_router.post("/mode/{mode}")
-async def set_operation_mode(mode: str):
+async def set_operation_mode(mode: str,
+                            x_api_key: Optional[str] = Header(None, alias="X-API-Key")):
     """
     تغيير وضع التشغيل.
     
@@ -453,6 +503,10 @@ async def set_operation_mode(mode: str):
     Returns:
         نتيجة تغيير الوضع
     """
+    # ⚠️ SECURITY (جولة المجلس <1>): تغيير وضع التشغيل — مفتاح السيد إلزامي
+    # وقبل أي أثر جانبي (اعتراض المراجع: المصادقة تسبق جلب المنسق)
+    _require_master_key(x_api_key=x_api_key)
+    
     orch = get_orch()
     
     valid_modes = ["normal", "safe", "recovery", "emergency", "debug", "silent"]
@@ -544,6 +598,24 @@ async def websocket_endpoint(websocket: WebSocket):
                 # معالجة: أمر من السيد
                 # ================================================
                 if msg_type == "sir_command":
+                    # ⚠️ SECURITY (جولة المجلس <1> — حكيم):
+                    # أمر السيد عبر WebSocket يتطلب مفتاح السيد (payload.master_key)
+                    # — قناة بلا مفتاح لا تُعامل كأوامر سيد.
+                    master_key = message.get("master_key") or payload.get("master_key")
+                    if not master_key or not hmac.compare_digest(
+                        str(master_key).encode("utf-8"),
+                        str(_SOVEREIGN_API_KEY).encode("utf-8"),
+                    ):
+                        await manager.send_message(client_id, {
+                            "type": "error",
+                            "error": "master key required — sir_command عبر WebSocket يتطلب master_key",
+                            "status": "error",
+                            "timestamp": time.time()
+                        })
+                        logger.warning(
+                            f"sir_command مرفوض بلا مفتاح سيد [{client_id}] — جولة المجلس <1>"
+                        )
+                        continue
                     command_text = payload.get("text", "")
                     
                     # فحص الأمان (R-608): حتى السيد تُفحص الأوامر الممنوعة تماماً
