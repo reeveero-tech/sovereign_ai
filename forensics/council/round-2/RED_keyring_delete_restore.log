@@ -1,0 +1,109 @@
+FF                                                                       [100%]
+=================================== FAILURES ===================================
+________________ test_history_guard_catches_delete_then_restore ________________
+
+tmp_path = PosixPath('/tmp/pytest-of-user/pytest-75/test_history_guard_catches_del0')
+
+    def test_history_guard_catches_delete_then_restore(tmp_path):
+        """مسبار عدائي (الجولة <2> — اعتراض المراجع أمين): حذف-ثم-استعادة يجب
+        ألا يمر.
+    
+        المقارنة ضد الحالة النهائية وحدها كانت تقبل تاريخًا احتوى حذفًا فعليًا
+        إذا استُعيدت الأسطر لاحقًا (كل اللقطات القديمة تبقى بادئات للنهائي).
+        العقد: الإلحاق فقط في كل خطوة زمنية — الحذف انتهاك دائم حتى لو استُعيد.
+        الإثبات: [a,b] ← [a] (حذف ملتزم) ← [a,b] (استعادة ملتزمة) — الحارس
+        يجب أن يكشف انتهاك الانتقال، لا أن يقبل التاريخ كله."""
+        import subprocess as _sp
+    
+        repo = tmp_path / "repo"
+        (repo / "data" / "keys").mkdir(parents=True)
+        hist = repo / "data" / "keys" / "HISTORY.jsonl"
+    
+        def _git(*args):
+            r = _sp.run(["git", *args], capture_output=True, text=True, cwd=str(repo))
+            assert r.returncode == 0, f"git {args} failed: {r.stderr}"
+    
+        _git("init", "-q")
+    
+        def _commit():
+            _git("add", "-A")
+            _git("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "c")
+    
+        # لقطة سليمة ثم حذف ملتزم ثم استعادة ملتزمة
+        hist.write_text('{"k": "a"}\n{"k": "b"}\n', encoding="utf-8")
+        _commit()
+        hist.write_text('{"k": "a"}\n', encoding="utf-8")
+        _commit()
+        hist.write_text('{"k": "a"}\n{"k": "b"}\n', encoding="utf-8")
+        _commit()
+    
+        current = _history_lines(hist.read_text(encoding="utf-8"))
+        violations = _history_git_violations(repo, current)
+>       assert any("DELETED" in v for v in violations), (
+            f"delete-then-restore must be caught as a permanent violation — "
+            f"append-only is required at EVERY step, not just vs the final "
+            f"state. Got: {violations}"
+        )
+E       AssertionError: delete-then-restore must be caught as a permanent violation — append-only is required at EVERY step, not just vs the final state. Got: []
+E       assert False
+E        +  where False = any(<generator object test_history_guard_catches_delete_then_restore.<locals>.<genexpr> at 0x7f4a97c4e400>)
+
+backend/tests/invariants/test_keyring_immutability.py:490: AssertionError
+________________ test_history_guard_catches_whole_file_deletion ________________
+
+tmp_path = PosixPath('/tmp/pytest-of-user/pytest-75/test_history_guard_catches_who0')
+
+    def test_history_guard_catches_whole_file_deletion(tmp_path):
+        """مسبار عدائي (الجولة <2> — اعتراض المراجع أمين): حذف الملف كاملًا ثم
+        إعادة إنشائه بالمحتوى نفسه يجب ألا يمر كأن شيئًا لم يكن.
+    
+        في المقارنة السابقة، لقطات الالتزامات التي حذفت الملف كانت تُتخطى بصمت
+        (فشل git show ← تخطٍّ) — فحذف الملف كاملًا ثم استعادته يمر. الحارس يجب
+        أن يسجل انتهاك حذف عند الانتقال من لقطة فيها الملف إلى لقطة بلا ملف."""
+        import subprocess as _sp
+    
+        repo = tmp_path / "repo"
+        (repo / "data" / "keys").mkdir(parents=True)
+        hist = repo / "data" / "keys" / "HISTORY.jsonl"
+    
+        def _git(*args):
+            r = _sp.run(["git", *args], capture_output=True, text=True, cwd=str(repo))
+            assert r.returncode == 0, f"git {args} failed: {r.stderr}"
+    
+        _git("init", "-q")
+    
+        def _commit():
+            _git("add", "-A")
+            _git("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "c")
+    
+        # إنشاء ← حذف كامل ملتزم ← إعادة إنشاء بنفس المحتوى
+        content = '{"k": "a"}\n{"k": "b"}\n'
+        hist.write_text(content, encoding="utf-8")
+        _commit()
+        hist.unlink()
+        _commit()
+        hist.write_text(content, encoding="utf-8")
+        _commit()
+    
+        current = _history_lines(hist.read_text(encoding="utf-8"))
+        violations = _history_git_violations(repo, current)
+>       assert any("DELETED" in v or "FILE DELETED" in v for v in violations), (
+            f"whole-file deletion must be caught — restoring identical content "
+            f"must not erase the violation from history. Got: {violations}"
+        )
+E       AssertionError: whole-file deletion must be caught — restoring identical content must not erase the violation from history. Got: []
+E       assert False
+E        +  where False = any(<generator object test_history_guard_catches_whole_file_deletion.<locals>.<genexpr> at 0x7f4a97eef100>)
+
+backend/tests/invariants/test_keyring_immutability.py:531: AssertionError
+=============================== warnings summary ===============================
+backend/config.py:312
+backend/config.py:312
+  /home/user/workspace/sovereign_ai/backend/config.py:312: UserWarning: ⚠️ CORS مفتوح للجميع — مقبول في التطوير فقط (D-034)
+    warnings.warn("⚠️ CORS مفتوح للجميع — مقبول في التطوير فقط (D-034)")
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED backend/tests/invariants/test_keyring_immutability.py::test_history_guard_catches_delete_then_restore
+FAILED backend/tests/invariants/test_keyring_immutability.py::test_history_guard_catches_whole_file_deletion
+2 failed, 2 warnings in 0.80s

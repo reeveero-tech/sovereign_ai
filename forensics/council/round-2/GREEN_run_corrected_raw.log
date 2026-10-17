@@ -1,0 +1,9 @@
+.................                                                        [100%]
+=============================== warnings summary ===============================
+backend/config.py:312
+backend/config.py:312
+  /tmp/redclone/backend/config.py:312: UserWarning: ⚠️ CORS مفتوح للجميع — مقبول في التطوير فقط (D-034)
+    warnings.warn("⚠️ CORS مفتوح للجميع — مقبول في التطوير فقط (D-034)")
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+17 passed, 2 warnings in 20.35s

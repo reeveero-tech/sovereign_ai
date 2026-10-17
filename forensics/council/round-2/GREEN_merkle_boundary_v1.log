@@ -1,0 +1,99 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+____________________ test_merkle_root_boundary_distinctness ____________________
+
+    def test_merkle_root_boundary_distinctness():
+        """الجولة <2> — مسبار تصادم البادئة (ادعاء مطلوب فحصه عدائيًا):
+    
+        هل compute_merkle_root يمنع تصادم البادئة/تقسيم الأسطر؟ البنية:
+        (1) كل سطر ورقة مستقلة (hash_leaf = sha256 للسطر كاملًا) — حدود
+            الأسطر مثبتة ببنية القائمة، لا بتقسيم داخل السطر.
+        (2) العقد الداخلية تدمج سلسلتي هَكس ثابتتي الطول (64 حرفًا لكل
+            منهما) — الدمج غير قابل للالتباس بطول ثابت.
+        (3) توقيع المراسي HMAC — غير معرض لهجوم length extension.
+    
+        الإثبات السلوكي: أي إعادة تقسيم لنفس المحتوى عبر حدود أسطر مختلفة
+        تعطي جذورًا مختلفة — لا يوجد تصادم بادئة بين قوائم مختلفة التقسيم.
+        وكل تغيير بايت في سطر يغير الجذر (مغطى بمسبارات العبث الأحادية)."""
+        from backend.sovereign.ledger.anchor import compute_merkle_root, hash_leaf
+    
+        # نفس المحتوى المتراكم بتقسيمات أسطر مختلفة — جذور مختلفة بالضرورة
+        a = compute_merkle_root(["ab", "c"])
+        b = compute_merkle_root(["a", "bc"])
+        c = compute_merkle_root(["abc"])
+        d = compute_merkle_root(["a", "b", "c"])
+        roots = [a, b, c, d]
+        assert len(set(roots)) == len(roots), (
+            f"different line splits must never collide: {roots}"
+        )
+    
+        # بادئة مشتركة بين قائمتين — الجذر يتغير حالًا (لا وراثة بادئة)
+        base = ["x1", "x2", "x3"]
+        extended = base + ["x4"]
+        assert compute_merkle_root(base) != compute_merkle_root(extended), (
+            "extending a list must change the root (no prefix-collision)"
+        )
+    
+        # إعادة ترتيب نفس الأسطر — جذر مختلف (ترتيب الأسطر ملزم)
+        assert compute_merkle_root(base) != compute_merkle_root(list(reversed(base))), (
+            "reordering lines must change the root"
+        )
+    
+        # ورقة مكررة (عدد فردي يكرر الأخير) — حقيقة رياضية موثقة لا اخفاء:
+        # root([1,2,3]) == root([1,2,3,3]) بالتصميم (قاعدة تكرار الأخير).
+        # التطابق الجذري غير قابل للاستغلال لأن توقيع v2 يغطي event_count
+        # والنطاق — بيانات التوقيع تختلف، فلا يمكن إعادة تشغيل مرساة عدد ٣
+        # على قائمة عدد ٤. الإثبات أدناه بدالة الإنتاج الفعلية (لا نص يدوي):
+        # compute_anchor_signature_data يفرّق بين العددين والنطاقين.
+        odd = compute_merkle_root(["1", "2", "3"])
+        even = compute_merkle_root(["1", "2", "3", "3"])
+        assert odd == even, (
+            "odd-duplication property: root([1,2,3]) must equal "
+            "root([1,2,3,3]) by the duplicate-last rule — if this changes, "
+            "the algorithm changed and this test must be revisited"
+        )
+        anchor_mgr = LedgerAnchor(ledger_path=Path("/nonexistent-ledger-for-sig-data"))
+        sig_data_3 = anchor_mgr.compute_anchor_signature_data(
+            0, 2, 3, odd, "probe-key"
+        )
+        sig_data_4 = anchor_mgr.compute_anchor_signature_data(
+            0, 3, 4, even, "probe-key"
+        )
+        assert sig_data_3 != sig_data_4, (
+            f"production signature data must distinguish the two colliding "
+            f"roots (event_count and range are covered): "
+            f"{sig_data_3!r} vs {sig_data_4!r}"
+        )
+        assert "3" in sig_data_3.split("|")[3] and "4" in sig_data_4.split("|")[3], (
+            "production signature data must embed event_count (v2 format)"
+        )
+        assert compute_merkle_root(["1", "2", "3"]) != compute_merkle_root(["1", "2", "4"]), (
+            "content change must change the root"
+        )
+    
+        # فصل نطاق الأوراق عن العقد (اعتراض المراجع أمين): سطر يحدث قيمته
+        # نص عقدة (سلسلة هَكس مركبة) لا يُنتج جذر عقدة — الأوراق والعقد في
+        # نطاقين متمايزين بطبيعة البنية (الورقة sha256(سطر)؛ العقدة تدمج
+        # سلسلتي هَكس 64 حرفًا — طول مختلف عن أي ورقة مفردة).
+        x, y = "a", "b"
+        node_text = hash_leaf(x) + hash_leaf(y)
+>       assert compute_merkle_root([x, y]) != compute_merkle_root([node_text]), (
+            "leaf and node domains must be distinct — a line whose content is "
+            "a node digest string must not reproduce a two-leaf root"
+        )
+E       AssertionError: leaf and node domains must be distinct — a line whose content is a node digest string must not reproduce a two-leaf root
+E       assert '62af5c3cb8da3e4f25061e829ebeea5c7513c54949115b1acc225930a90154da' != '62af5c3cb8da3e4f25061e829ebeea5c7513c54949115b1acc225930a90154da'
+E        +  where '62af5c3cb8da3e4f25061e829ebeea5c7513c54949115b1acc225930a90154da' = <function compute_merkle_root at 0x7fa96e6b7d70>(['a', 'b'])
+E        +  and   '62af5c3cb8da3e4f25061e829ebeea5c7513c54949115b1acc225930a90154da' = <function compute_merkle_root at 0x7fa96e6b7d70>(['ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb3e23e8160039594a33894f6564e1b1348bbd7a0088d42c4acb73eeaed59c009d'])
+
+backend/tests/invariants/test_no_unsigned_ledger_events.py:648: AssertionError
+=============================== warnings summary ===============================
+backend/config.py:312
+backend/config.py:312
+  /home/user/workspace/sovereign_ai/backend/config.py:312: UserWarning: ⚠️ CORS مفتوح للجميع — مقبول في التطوير فقط (D-034)
+    warnings.warn("⚠️ CORS مفتوح للجميع — مقبول في التطوير فقط (D-034)")
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED backend/tests/invariants/test_no_unsigned_ledger_events.py::test_merkle_root_boundary_distinctness
+1 failed, 2 warnings in 0.13s
