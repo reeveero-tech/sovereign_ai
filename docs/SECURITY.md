@@ -36,8 +36,8 @@
 - ✅ **D-034 (قرار المالك — منفذ 2026-10-17)**: الإنتاج يرفض الإقلاع عند
   `CORS_ORIGINS` بقيمة `*` أو `null` (فشل مغلق عبر `validate_config()` في
   config.py). التطوير: نجمة بتحذير فقط. الإثبات السلوكي:
-  tests/test_cors_production_fail_closed.py (7 مسارات رفض بتوكيد
-  الرسالة كاملة نصًا وغياب BOOT_OK + مساران سليمان) — RED→GREEN موثقة في forensics/D034_CORS_FAIL_CLOSED.md.
+  tests/test_cors_production_fail_closed.py (3 مسارات رفض محقونة +
+  مساران سليمان) — RED→GREEN موثقة في forensics/D034_CORS_FAIL_CLOSED.md.
 - **الحالة**: منفذ في الكود — قيد التوقيع النهائي للمراجع (لا يوصف
   «مغلقًا» قبل التوقيع). يتبقى ضبط قائمة المصادر الفعلية في كل نشر حي
   (تشغيلي، على المالك).
