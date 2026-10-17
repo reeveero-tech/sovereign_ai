@@ -1,0 +1,25 @@
+........                                                                 [100%]
+=============================== warnings summary ===============================
+backend/config.py:312
+backend/tests/invariants/test_all_entrypoints_respond.py::test_all_registered_routes_respond
+  /home/user/workspace/sovereign_ai/backend/config.py:312: UserWarning: ⚠️ CORS مفتوح للجميع — مقبول في التطوير فقط (D-034)
+    warnings.warn("⚠️ CORS مفتوح للجميع — مقبول في التطوير فقط (D-034)")
+
+../../../../usr/local/lib/python3.14/site-packages/ddtrace/internal/module.py:305
+  /usr/local/lib/python3.14/site-packages/ddtrace/internal/module.py:305: PendingDeprecationWarning: Please use `import python_multipart` instead.
+    self.loader.exec_module(module)
+
+../../.local/lib/python3.14/site-packages/starlette/testclient.py:40
+  /home/user/.local/lib/python3.14/site-packages/starlette/testclient.py:40: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.
+    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]
+
+backend/tests/invariants/test_all_entrypoints_respond.py: 80 warnings
+  /home/user/.local/lib/python3.14/site-packages/starlette/_utils.py:40: DeprecationWarning: 'asyncio.iscoroutinefunction' is deprecated and slated for removal in Python 3.16; use inspect.iscoroutinefunction() instead
+    return asyncio.iscoroutinefunction(obj) or (callable(obj) and asyncio.iscoroutinefunction(obj.__call__))
+
+backend/tests/invariants/test_all_entrypoints_respond.py: 60 warnings
+  /home/user/.local/lib/python3.14/site-packages/fastapi/routing.py:233: DeprecationWarning: 'asyncio.iscoroutinefunction' is deprecated and slated for removal in Python 3.16; use inspect.iscoroutinefunction() instead
+    is_coroutine = asyncio.iscoroutinefunction(dependant.call)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+8 passed, 144 warnings in 18.31s

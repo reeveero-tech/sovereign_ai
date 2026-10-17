@@ -1,0 +1,41 @@
+FF                                                                       [100%]
+=================================== FAILURES ===================================
+___________________________ test_merkle_v1_v2_differ ___________________________
+
+    def test_merkle_v1_v2_differ():
+        """الجولة <2> — قرار المالك R2-4 (D-036): v2 بفصل النطاق.
+    
+        compute_merkle_root_v2 يجب أن يخالف v1 في كل الحالات — وبخاصة الحالة
+        الخطرة (length extension / إعادة التفسير): جذر v1 لقائمة لا يجوز أن
+        يساوي جذر v2 لنفس القائمة، وجذر v1 لقائمة لا يجوز أن يُعاد إنتاجه
+        بجذر v2 لقائمة أخرى. RED قبل التنفيذ: الدالة غير موجودة أصلًا."""
+>       from backend.sovereign.ledger.anchor import (
+            compute_merkle_root, compute_merkle_root_v2,
+        )
+E       ImportError: cannot import name 'compute_merkle_root_v2' from 'backend.sovereign.ledger.anchor' (/home/user/workspace/sovereign_ai/backend/sovereign/ledger/anchor.py)
+
+backend/tests/invariants/test_no_unsigned_ledger_events.py:843: ImportError
+_______________________ test_merkle_v2_domain_separation _______________________
+
+    def test_merkle_v2_domain_separation():
+        """الجولة <2> — قرار المالك R2-4 (D-036): فصل نطاق الورقة عن العقدة.
+    
+        في v2: الورقة sha256(0x00||data) والعقدة sha256(0x01||left||right) —
+        البادئات تمنع خلط النطاقين بنيويًا. الإثبات: جذر ورقة مفردة لا يساوي
+        جذر أي عقدة، وسطر قيمته نص عقدة لا يُنتج جذر العقدة (عكس التباس v1
+        الموثق)."""
+>       from backend.sovereign.ledger.anchor import compute_merkle_root_v2
+E       ImportError: cannot import name 'compute_merkle_root_v2' from 'backend.sovereign.ledger.anchor' (/home/user/workspace/sovereign_ai/backend/sovereign/ledger/anchor.py)
+
+backend/tests/invariants/test_no_unsigned_ledger_events.py:876: ImportError
+=============================== warnings summary ===============================
+backend/config.py:312
+backend/config.py:312
+  /home/user/workspace/sovereign_ai/backend/config.py:312: UserWarning: ⚠️ CORS مفتوح للجميع — مقبول في التطوير فقط (D-034)
+    warnings.warn("⚠️ CORS مفتوح للجميع — مقبول في التطوير فقط (D-034)")
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED backend/tests/invariants/test_no_unsigned_ledger_events.py::test_merkle_v1_v2_differ
+FAILED backend/tests/invariants/test_no_unsigned_ledger_events.py::test_merkle_v2_domain_separation
+2 failed, 2 warnings in 0.16s

@@ -526,3 +526,22 @@
 | 88de47f | R-682 (Task 2.1b): 16 medium/low-risk return None sites — logging | غير متاح |
 | a33362c | R-682 (Task 2.1a): 9 high-risk except->return None sites — logging.exception | غير متاح |
 | 3961748 | R-682 (Task 0+1): resolve SHA contradiction + verify R-681 claims | غير متاح |
+
+---
+
+## [الجولة <2>] — 2026-10-17 — صحة الاختبارات الثابتة ومرساة Merkle
+
+### أُصلح
+- **حارس الوحدات اليتيمة** (backend/tests/invariants/test_no_orphan_modules.py): 7 آليات إخفاء مُثبتة بالتشغيل (RED→GREEN): إعفاء scripts/ الواسع، مرشح السلاسل، مطابقة اللاحقة القصيرة، حل الاستيراد النسبي عبر المطلق، لاحقة __init__.py، إعفاء مجلدات tests/ وarchive/، وقبول زوج الاستيراد المتبادل — استُبدلت بتحليل وصول BFS من الجذور (نقاط دخول + اختبارات pytest المجموعة + conftest في سلسلة أدلة فعلية) مع حل الحزم والتحميل الديناميكي الموثق.
+- **حارس HISTORY.jsonl** (test_keyring_immutability.py): مقارنة HEAD/HEAD~1 استُبدلت بانتقالات الأب/الابن عبر rev-list --full-history --parents (الحذف القديم، حذف-ثم-استعادة، حذف الملف كاملًا، إعادة الكتابة بنفس العدد، الحذف في فرع مع دمج — كلها كانت تمر). حد الجدّ a90b481 بقرار R2-2.
+- **الشرط الميت في test_no_active_lost_keys**: استُبدل بفحص المؤشر النشط الفعلي — RED مُثبت باستدعاء الحارس القديم نفسه من a90b481.
+- **أثر بيئة FastAPI**: starlette==0.38.6 مضاف لـ requirements.txt + test_fastapi_version_pinned يرفض الترقية الصامتة.
+
+### أُضيف
+- **compute_merkle_root_v2** (D-036): فصل نطاق الورقة/العقدة (0x00/0x01) — v1 يبقى حرفيًا للمراسي التاريخية، وكل مرساة جديدة عبر anchor_batch بجذر v2 (merkle_version=2) والتحقق يتفرع حسب الإصدار. اختبارا test_merkle_v1_v2_differ وtest_merkle_v2_domain_separation (RED مُشاهَد قبل التنفيذ).
+- **test_real_anchors_full_coverage**: فحص المراسي الحقيقية المتتبعة — تغطية [0,116909] بلا فجوات + مرساة v2 شاملة.
+- **22 اختبارًا جديدًا صافيًا** (فرق معرفات مُستخرج فعليًا مقابل a90b481 — القائمة الحرفية في EVIDENCE_INDEX.md): 9 مسبارات إخفاء لحارس اليتامى، 7 لحارس HISTORY والمؤشر النشط، 5 لليدجر/Merkle (منها اختبارا v2 واختبار تغطية المراسي الحقيقية)، واختبار تثبيت التبعيات.
+- forensics/council/round-2/ (تقارير RAW الثلاثة + PROCESSING + OWNER_REQUIRED + EVIDENCE_INDEX + 24 سجل تشغيل).
+
+### إعادة تنفيذ ذرية (أمر المالك — رفض الاستثناءات)
+- المحاولة الأولى (ستة التزامات) استُرجعت بأمر المالك واستُؤنف كل المحتوى في التزام ذري واحد: الكود + الاختبارات + التوثيق + تدقيق الحذوفات (139 سطرًا) + إثبات RED→GREEN حقيقي (forensics/council/round-2/RED_GREEN_PROOF.md: 16 failed قبل الإصلاح ثم 17 passed بعده) في نفس الالتزام.

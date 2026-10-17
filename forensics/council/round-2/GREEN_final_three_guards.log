@@ -1,0 +1,58 @@
+..............F......................                                    [100%]
+=================================== FAILURES ===================================
+________________________ test_keyring_history_immutable ________________________
+
+    def test_keyring_history_immutable():
+        """
+        HISTORY.jsonl (سجل المفاتيح) لا يمكن حذفه أو تعديله.
+    
+        (تصويب المراجع — الاعتراض 2: الفحص السابق كان وجودًا وصلاحية JSON فقط —
+        حذف سطر قديم مع بقاء البقية كان يمر. الفحص الجديد: مقارنة فعلية عبر
+        Git — أسطر الالتزام السابق كاملة تبقى في الملف الحالي بالترتيب،
+        والإضافة وحدها مشروعة.)
+        """
+        history_file = _REPO_ROOT / "data" / "keys" / "HISTORY.jsonl"
+        assert history_file.exists(), (
+            "data/keys/HISTORY.jsonl must exist (key history is append-only)"
+        )
+    
+        import subprocess as _sp
+    
+        current_lines = _history_lines(history_file.read_text(encoding="utf-8"))
+    
+        assert len(current_lines) > 0, "HISTORY.jsonl must have at least one entry"
+    
+        for i, line in enumerate(current_lines):
+            try:
+                entry = json.loads(line)
+            except json.JSONDecodeError as e:
+                pytest.fail(
+                    f"HISTORY.jsonl line {i+1} is corrupted (not valid JSON): {e}"
+                )
+            assert isinstance(entry, dict), (
+                f"HISTORY.jsonl line {i+1} must be a JSON object"
+            )
+    
+        # المقارنة الفعلية عبر Git (لقطة سابقة مقابل الحالية) — عبر دالة
+        # قابلة للاختبار على مستودعات مؤقتة أيضًا
+        all_violations = _history_git_violations(_REPO_ROOT, current_lines)
+    
+>       assert len(all_violations) == 0, (
+            f"HISTORY.jsonl is append-only — deletions/modifications of previous "
+            f"lines are forbidden: {all_violations}"
+        )
+E       AssertionError: HISTORY.jsonl is append-only — deletions/modifications of previous lines are forbidden: ['[05704efa→ff8f80ac] FILE DELETED — whole-file deletion is a permanent violation (append-only contract)']
+E       assert 1 == 0
+E        +  where 1 = len(['[05704efa→ff8f80ac] FILE DELETED — whole-file deletion is a permanent violation (append-only contract)'])
+
+backend/tests/invariants/test_keyring_immutability.py:194: AssertionError
+=============================== warnings summary ===============================
+backend/config.py:312
+backend/config.py:312
+  /home/user/workspace/sovereign_ai/backend/config.py:312: UserWarning: ⚠️ CORS مفتوح للجميع — مقبول في التطوير فقط (D-034)
+    warnings.warn("⚠️ CORS مفتوح للجميع — مقبول في التطوير فقط (D-034)")
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED backend/tests/invariants/test_keyring_immutability.py::test_keyring_history_immutable
+1 failed, 36 passed, 2 warnings in 59.20s

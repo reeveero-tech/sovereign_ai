@@ -1,0 +1,31 @@
+.F                                                                       [100%]
+=================================== FAILURES ===================================
+_______________ test_guard_catches_stray_double_underscore_init ________________
+
+    def test_guard_catches_stray_double_underscore_init():
+        """مسبار عدائي (الجولة <2> — اعتراض المراجع أمين): ملف غير مستورد اسمه
+        يحتوي __init_.py كلاحقة (مثل probe__init__.py) ليس ملف حزمة — يجب أن
+        يُكشف، لا أن يُعفى بمصفّي اللاحقة الواسع endswith(\"__init__.py\")."""
+        probe = _REPO_ROOT / "backend" / "_orphan_probe__init__.py"
+        probe.write_text("# stray orphan — name merely ends with __init__.py\n",
+                         encoding="utf-8")
+        try:
+            r = _run_orphan_guard()
+>           assert r.returncode != 0, (
+                "guard must FAIL while a stray file whose name ends with "
+                "__init__.py exists (it is not a package file)"
+            )
+E           AssertionError: guard must FAIL while a stray file whose name ends with __init__.py exists (it is not a package file)
+E           assert 0 != 0
+E            +  where 0 = CompletedProcess(args=['/usr/local/bin/python', '-m', 'pytest', 'backend/tests/invariants/test_no_orphan_modules.py::t...dout='.                                                                        [100%]\n1 passed in 0.83s\n', stderr='').returncode
+
+backend/tests/invariants/test_no_orphan_modules.py:417: AssertionError
+=============================== warnings summary ===============================
+backend/config.py:312
+  /home/user/workspace/sovereign_ai/backend/config.py:312: UserWarning: ⚠️ CORS مفتوح للجميع — مقبول في التطوير فقط (D-034)
+    warnings.warn("⚠️ CORS مفتوح للجميع — مقبول في التطوير فقط (D-034)")
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED backend/tests/invariants/test_no_orphan_modules.py::test_guard_catches_stray_double_underscore_init
+1 failed, 1 passed, 1 warning in 6.13s

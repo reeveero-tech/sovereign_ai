@@ -1,0 +1,86 @@
+.F                                                                       [100%]
+=================================== FAILURES ===================================
+_____________ test_history_guard_catches_branch_delete_with_merge ______________
+
+tmp_path = PosixPath('/tmp/pytest-of-user/pytest-102/test_history_guard_catches_bra0')
+
+    def test_history_guard_catches_branch_delete_with_merge(tmp_path):
+        """مسبار عدائي (الجولة <2> — اعتراض المراجع بصير): حذف في فرع جانبي مع
+        دمج --no-ff يجب ألا يختفي خلف تبسيط تاريخ المسار.
+    
+        السيناريو: الأساس [a,b] ← فرع جانبي يحذف b ثم يستعيد، الرئيسي يتقدم
+        بملف غير ذي صلة، ثم دمج --no-ff والمحتوى النهائي يطابق الأساس. الحارس
+        يجب أن يكشف انتهاك الحذف في الفرع رغم أن النتيجة النهائية سليمة —
+        العقد إلحاقي في كل خطوة، والحذف انتهاك دائم حتى لو استُعيد."""
+        import subprocess as _sp
+    
+        repo = tmp_path / "repo"
+        (repo / "data" / "keys").mkdir(parents=True)
+        hist = repo / "data" / "keys" / "HISTORY.jsonl"
+    
+        def _git(*args):
+            r = _sp.run(["git", *args], capture_output=True, text=True, cwd=str(repo))
+            assert r.returncode == 0, f"git {args} failed: {r.stderr}"
+    
+        _git("init", "-q")
+    
+        def _commit():
+            _git("add", "-A")
+            _git("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "c")
+    
+        hist.write_text('{"k": "a"}\n{"k": "b"}\n', encoding="utf-8")
+        _commit()
+        base_sha = _sp.run(["git", "rev-parse", "HEAD"], capture_output=True,
+                           text=True, cwd=str(repo)).stdout.strip()
+    
+        # فرع جانبي: حذف b ثم استعادته
+        _git("checkout", "-q", "-b", "side")
+        hist.write_text('{"k": "a"}\n', encoding="utf-8")
+        _commit()
+        hist.write_text('{"k": "a"}\n{"k": "b"}\n', encoding="utf-8")
+        _commit()
+    
+        # الرئيسي: تقدم بملف غير ذي صلة
+        _git("checkout", "-q", "master")
+        (repo / "unrelated.txt").write_text("1", encoding="utf-8")
+        _commit()
+    
+        # دمج --no-ff — المحتوى النهائي يطابق الأساس
+>       _git("merge", "--no-ff", "-q", "-m", "merge", "side")
+
+backend/tests/invariants/test_keyring_immutability.py:712: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+args = ('merge', '--no-ff', '-q', '-m', 'merge', 'side')
+
+    def _git(*args):
+        r = _sp.run(["git", *args], capture_output=True, text=True, cwd=str(repo))
+>       assert r.returncode == 0, f"git {args} failed: {r.stderr}"
+E       AssertionError: git ('merge', '--no-ff', '-q', '-m', 'merge', 'side') failed: Committer identity unknown
+E         
+E         *** Please tell me who you are.
+E         
+E         Run
+E         
+E           git config --global user.email "you@example.com"
+E           git config --global user.name "Your Name"
+E         
+E         to set your account's default identity.
+E         Omit --global to set the identity only in this repository.
+E         
+E         fatal: unable to auto-detect email address (got 'user@space-sandbox.(none)')
+E         
+E       assert 128 == 0
+E        +  where 128 = CompletedProcess(args=['git', 'merge', '--no-ff', '-q', '-m', 'merge', 'side'], returncode=128, stdout='', stderr='Com...identity only in this repository.\n\nfatal: unable to auto-detect email address (got \'user@space-sandbox.(none)\')\n').returncode
+
+backend/tests/invariants/test_keyring_immutability.py:686: AssertionError
+=============================== warnings summary ===============================
+backend/config.py:312
+backend/config.py:312
+  /home/user/workspace/sovereign_ai/backend/config.py:312: UserWarning: ⚠️ CORS مفتوح للجميع — مقبول في التطوير فقط (D-034)
+    warnings.warn("⚠️ CORS مفتوح للجميع — مقبول في التطوير فقط (D-034)")
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED backend/tests/invariants/test_keyring_immutability.py::test_history_guard_catches_branch_delete_with_merge
+1 failed, 1 passed, 2 warnings in 0.81s
