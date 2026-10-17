@@ -63,6 +63,37 @@ def compute_merkle_root(lines: List[str]) -> str:
     return level[0]
 
 
+def compute_merkle_root_v2(lines: List[str]) -> str:
+    """الجولة <2> — قرار المالك R2-4 (D-036): Merkle v2 بفصل النطاق.
+
+    الثغرة البنيوية المكتشفة في v1 (موثقة بالتشغيل): جذر الورقة المفردة
+    بلا فصل نطاق — root_v1([x,y]) == root_v1([h(x)+h(y)]) — سطر قيمته نص
+    عقدة يُعيد إنتاج جذر الزوج. v2 يفصل النطاقات بنيويًا:
+    - الورقة:  sha256(0x00 || data)
+    - العقدة: sha256(0x01 || left || right)
+    البادئات المختلفة تمنع خلط النطاقين (لا ورقة تُقرأ كعقدة ولا عكسه).
+
+    v1 يبقى كما هو حرفيًا للتحقق من المراسي التاريخية فقط — لا استبدال
+    قسري ولا إبطال لجذور تاريخية (قرار المالك D-036). كل مرساة جديدة
+    تُنشأ بـ anchor_batch تستخدم v2 (merkle_version=2 في السجل)."""
+    if not lines:
+        raise ValueError("cannot compute Merkle root of empty list")
+
+    def _leaf(data: str) -> str:
+        return hashlib.sha256(b"\x00" + data.encode("utf-8")).hexdigest()
+
+    level = [_leaf(line) for line in lines]
+    while len(level) > 1:
+        if len(level) % 2 == 1:
+            level.append(level[-1])
+        next_level = []
+        for i in range(0, len(level), 2):
+            combined = b"\x01" + level[i].encode("utf-8") + level[i + 1].encode("utf-8")
+            next_level.append(hashlib.sha256(combined).hexdigest())
+        level = next_level
+    return level[0]
+
+
 def verify_merkle_root(lines: List[str], expected_root: str) -> bool:
     """
     يتحقق أن قائمة أسطر تُنتج نفس Merkle root المتوقع.
@@ -159,7 +190,8 @@ class LedgerAnchor:
                 return None
 
             batch_lines = lines[batch_start : batch_end + 1]
-            merkle_root = compute_merkle_root(batch_lines)
+            # D-036 (قرار المالك R2-4): كل مرساة جديدة بجذر v2 المفصول النطاق
+            merkle_root = compute_merkle_root_v2(batch_lines)
 
             now = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
             anchor_id = hashlib.sha256(
@@ -229,6 +261,7 @@ class LedgerAnchor:
                 "batch_end": batch_end,
                 "event_count": len(batch_lines),
                 "merkle_root": f"sha256:{merkle_root}",
+                "merkle_version": 2,  # D-036: المراسي الجديدة v2 بفصل النطاق
                 "reason": reason,
                 "key_id": key_id,
                 "signature": signature,
@@ -363,9 +396,16 @@ class LedgerAnchor:
             batch_lines = lines[start : end + 1]
             expected_root = anchor["merkle_root"].replace("sha256:", "")
 
-            # 1) فحص الجذر (root_verified)
-            if not verify_merkle_root(batch_lines, expected_root):
+            # D-036 (قرار المالك R2-4): v2 للمراسي الجديدة، v1 للتاريخية
+            if anchor.get("merkle_version") == 2:
+                actual_root = compute_merkle_root_v2(batch_lines)
+                root_match = actual_root == expected_root
+            else:
                 actual_root = compute_merkle_root(batch_lines)
+                root_match = actual_root == expected_root
+
+            # 1) فحص الجذر (root_verified)
+            if not root_match:
                 result["message"] = (
                     f"Merkle root mismatch: expected {expected_root[:16]}..., "
                     f"got {actual_root[:16]}... — content was modified"

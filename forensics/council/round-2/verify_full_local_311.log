@@ -1,0 +1,47 @@
+✅ [بوابة الإصدار] Python 3.11 — مقبول (3.11.x)
+==========================================
+ R-682 Verification Script
+==========================================
+HEAD: d4d9983c112df7ab2b24e233af93efb6f95d5faa
+[info] Generated ephemeral data/key.secret (not committed)
+
+[1/2] Running test suite via tools/run_gate.py (actual command, sealed identity)...
+/tmp/verify311/backend/config.py:312: UserWarning: ⚠️ CORS مفتوح للجميع — مقبول في التطوير فقط (D-034)
+  warnings.warn("⚠️ CORS مفتوح للجميع — مقبول في التطوير فقط (D-034)")
+/tmp/verify311/backend/config.py:312: UserWarning: ⚠️ CORS مفتوح للجميع — مقبول في التطوير فقط (D-034)
+  warnings.warn("⚠️ CORS مفتوح للجميع — مقبول في التطوير فقط (D-034)")
+GATE OK: 525 passed, 1 deselected, 3 warnings in 292.48s (0:04:52)
+identity: {'head': 'd4d9983c112df7ab2b24e233af93efb6f95d5faa', 'content_fingerprint': '7af6f5d9dec414afa8aa8f98f3e1544a647c369dd9f53213868bd1e2244f4263'}
+
+[2/2] Verifying zero skips (DoD hard requirement)...
+✅ بوابة الاختبارات ناجحة: 525 passed, 0 skipped, 0 failed
+
+==========================================
+ [FULL MODE] CI + Clean Clone comparison
+==========================================
+
+[3/4] Fetching CI run for HEAD SHA=d4d9983...
+CI Run: 39067891884 (completed/success — اختيار صريح + فحص هوية workflow)
+CI:     sha=d4d9983c112d... tests=525 failed=0 skipped=0 unique_ids=525
+Local:  sha=d4d9983c112d... tests=525 failed=0 skipped=0 unique_ids=525
+✅ CI + Local MATCH (SHA + test counts + (normalized_classname,name) Counter + zero failures + zero skips)
+
+[4/4] Clean clone verification (git checkout pinned to SHA=d4d9983)...
+[info] Generated ephemeral data/key.secret in clone (not committed)
+  /tmp/verifyvenv/lib/python3.11/site-packages/starlette/testclient.py:40: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.
+    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+525 passed, 1 deselected, 3 warnings in 294.17s (0:04:54)
+✅ SHA embedded in clone JUnit: d4d9983c112df7ab2b24e233af93efb6f95d5faa
+Clone:  tests=525 failed=0 skipped=0 unique_ids=525
+Local:  tests=525 failed=0 skipped=0 unique_ids=525
+✅ Clean clone JUnit MATCHES Local (count + (normalized_classname,name) Counter + zero failures + zero skips)
+
+==========================================
+ VERIFICATION COMPLETE
+ HEAD: d4d9983c112df7ab2b24e233af93efb6f95d5faa
+ JUnit: forensics/pytest_results.xml (git_sha embedded)
+ Mode: --full
+==========================================
+VERIFY_EXIT=0

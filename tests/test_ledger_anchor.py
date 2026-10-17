@@ -25,6 +25,7 @@ for p in [str(_REPO_ROOT), str(_BACKEND_DIR)]:
 from backend.sovereign.ledger import (
     LedgerAnchor,
     compute_merkle_root,
+    compute_merkle_root_v2,
     verify_merkle_root,
     hash_leaf,
 )
@@ -149,7 +150,8 @@ def _make_keyring_with_sig(anchor, batch_start, batch_end, key_id, tmp_path=None
     # حساب التوقيع الصحيح (HMAC-SHA256 لبيانات v2)
     lines = anchor.read_ledger_lines()
     batch_lines = lines[batch_start : batch_end + 1]
-    merkle_root = compute_merkle_root(batch_lines)
+    # D-036 (الجولة <2>): كل مرساة جديدة عبر anchor_batch بجذر v2
+    merkle_root = compute_merkle_root_v2(batch_lines)
     sig_data = anchor.compute_anchor_signature_data(
         batch_start, batch_end, len(batch_lines), merkle_root, real_key_id
     )
@@ -169,7 +171,8 @@ def _make_sig_for_keyring(anchor, batch_start, batch_end, key_id, keyring):
     assert key_rec is not None, f"key {key_id} not in keyring"
     lines = anchor.read_ledger_lines()
     batch_lines = lines[batch_start : batch_end + 1]
-    merkle_root = compute_merkle_root(batch_lines)
+    # D-036 (الجولة <2>): كل مرساة جديدة عبر anchor_batch بجذر v2
+    merkle_root = compute_merkle_root_v2(batch_lines)
     sig_data = anchor.compute_anchor_signature_data(
         batch_start, batch_end, len(batch_lines), merkle_root, key_id
     )

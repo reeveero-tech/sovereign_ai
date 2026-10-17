@@ -48,6 +48,9 @@ key.secret
 # جولة المجلس <1> — استثناء موجه: سجلات أدلة المراجعين داخل round-1
 # (تقرير RAW_baseer.md يستشهد بها كأدلة تشغيل — يجب أن تبقى في المستودع)
 !forensics/council/round-1/*.log
+# جولة المجلس <2> — استثناء موجه بنفس النمط: سجلات أدلة المراجعين داخل round-2
+# (EVIDENCE_INDEX.md يستشهد بها كأدلة تشغيل — يجب أن تبقى في المستودع)
+!forensics/council/round-2/*.log
 logs/
 nohup.out
 
