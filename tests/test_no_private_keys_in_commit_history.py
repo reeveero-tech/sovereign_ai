@@ -10,10 +10,14 @@
 2. الحادثة المعروفة 05704ef مدرجة في قائمة مسموحة موثقة
    (KNOWmN_COMPROMISED) — لا لإخفائها بل لأن التاريخ لا يُعاد
    كتابته؛ بصمة المفتاح مثبتة في docs/SECURITY.md.
-3. اختبار سلوكي: الحارس يكشف مادة حقيقية مُحقونة في مستودع
+3. اختبار سلوكي: الحارس يكشف مادة اصطناعية مُحقونة في مستودع
    مؤقت (فشل محقون + مسار سليم + تأكيدات محددة)، والقائمة
    المسموحة لا تتعفن (كل إدخال فيها يجب أن يطابق كشفًا فعليًا
    وبصمة مطابقة للمادة المكتشفة).
+4. استثناء واحد موثق: هذا الملف نفسه مستثنى من الفحص —
+   fixtures الحارس اصطناعية بالتعريف (مادة PEM وقيمة base64
+   اصطناعيتان للتحقق الإيجابي). ممنوع وضع أي مادة حقيقية هنا؛
+   القيمة الاصطناعية أدناه لا تطابق أي سر معروف.
 """
 
 import hashlib
@@ -57,15 +61,29 @@ def _git(repo: Path, *args: str) -> str:
     return proc.stdout.decode("utf-8", errors="replace")
 
 
+GUARD_TEST_PATH = "tests/test_no_private_keys_in_commit_history.py"
+
+
 def _scan_commit(repo: Path, sha: str) -> dict:
     """يفحص سطور الإضافة في التزام واحد (وضع الدمج: فرق ضد كل أب).
 
     يعيد {"pem": [أسطر...], "secret_fields": [(الحقل، القيمة، البصمة)...]}
+
+    استثناء موثق: ملف الحارس نفسه لا يُفحص — fixtures اصطناعية بالتعريف.
     """
     out = _git(repo, "diff-tree", "--no-commit-id", "-r", "-m", "--root", "-p", sha)
     hits = {"pem": [], "secret_fields": []}
+    current_path = ""
     for line in out.splitlines():
-        if not line.startswith("+") or line.startswith("+++"):
+        if line.startswith("+++ b/"):
+            current_path = line[6:].strip()
+            continue
+        if line.startswith("+++ "):
+            current_path = ""
+            continue
+        if not line.startswith("+"):
+            continue
+        if current_path == GUARD_TEST_PATH:
             continue
         added = line[1:]
         if _PEM_PRIVATE.search(added):
@@ -81,12 +99,6 @@ def _scan_commit(repo: Path, sha: str) -> dict:
 def _is_clean(hits: dict) -> bool:
     return not hits["pem"] and not hits["secret_fields"]
 
-
-def _fingerprint_of_real_incident() -> str:
-    """بصمة المادة الخاصة المكتشفة فعليًا في التزام الحادثة (بلا قائمة مسموحة)."""
-    hits = _scan_commit(REPO_ROOT, "05704efa36bac3ebdcf59e81ea75f5a1df6df53b")
-    assert hits["secret_fields"], "التزام الحادثة 05704ef يجب أن يحتوي مادة خاصة"
-    return hits["secret_fields"][0][2]
 
 
 def _make_commit(repo: Path, filename: str, content: str) -> str:
@@ -114,7 +126,7 @@ def test_guard_detects_injected_private_keys(tmp_path):
     assert _is_clean(_scan_commit(repo, clean_sha)), "التزام سليم لا يجب أن يُعلَّم"
 
     pem = "-----BEGIN RSA PRIVATE KEY-----\nMIIBOgIBAAJBAK\n-----END RSA PRIVATE KEY-----\n"
-    bad_json = '{"private_key": "3QNn8Q2eIZIOxwKfvepoZ1m2vbn3LNz3ThEH4aRf_B0"}\n'
+    bad_json = '{"private_key": "SYNTHETIC_guard_fixture_key_1234567890abcdefABCDEF"}\n'
     dirty_sha = _make_commit(repo, "leak.txt", pem + bad_json)
 
     hits = _scan_commit(repo, dirty_sha)
@@ -123,9 +135,9 @@ def test_guard_detects_injected_private_keys(tmp_path):
     assert len(hits["secret_fields"]) == 1, "حقل private_key واحد يجب أن يُكشف"
     field, secret, fp = hits["secret_fields"][0]
     assert "private_key" in field, "الحقل المكتشف هو private_key نفسه"
-    assert secret == "3QNn8Q2eIZIOxwKfvepoZ1m2vbn3LNz3ThEH4aRf_B0", \
+    assert secret == "SYNTHETIC_guard_fixture_key_1234567890abcdefABCDEF", \
         "القيمة المكتشفة هي القيمة المحقونة نصًّا"
-    assert fp == hashlib.sha256(b"3QNn8Q2eIZIOxwKfvepoZ1m2vbn3LNz3ThEH4aRf_B0").hexdigest(), \
+    assert fp == hashlib.sha256(b"SYNTHETIC_guard_fixture_key_1234567890abcdefABCDEF").hexdigest(), \
         "بصمة المادة المكتشفة تُحسب من القيمة المحقونة"
 
 
