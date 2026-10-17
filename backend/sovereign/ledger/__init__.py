@@ -7,6 +7,7 @@
 from .anchor import (
     LedgerAnchor,
     compute_merkle_root,
+    compute_merkle_root_v2,
     verify_merkle_root,
     hash_leaf,
 )
@@ -14,6 +15,7 @@ from .anchor import (
 __all__ = [
     "LedgerAnchor",
     "compute_merkle_root",
+    "compute_merkle_root_v2",
     "verify_merkle_root",
     "hash_leaf",
 ]
