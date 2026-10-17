@@ -304,8 +304,12 @@ API_RELOAD = os.getenv("API_RELOAD", "false").lower() == "true" and IS_DEVELOPME
 API_WORKERS = int(os.getenv("API_WORKERS", "1"))
 
 CORS_ORIGINS = os.getenv("CORS_ORIGINS", "*").split(",")
-if CORS_ORIGINS == ["*"] and IS_PRODUCTION:
-    warnings.warn("⚠️ CORS مفتوح للجميع في بيئة الإنتاج. يُنصح بتقييده")
+# D-034 (قرار المالك 2026-10-17): في الإنتاج قائمة مصادر صريحة إلزامية —
+# لا "*" ولا "null" (منفردة أو داخل قائمة) ولا قائمة فارغة. الرفض
+# يُنفَّذ في validate_config() أدناه (فشل مغلق: RuntimeError عند الإقلاع).
+# التطوير: تحذير فقط — القيد للإنتاج حصرًا.
+if CORS_ORIGINS == ["*"] and not IS_PRODUCTION:
+    warnings.warn("⚠️ CORS مفتوح للجميع — مقبول في التطوير فقط (D-034)")
 
 # ============================================================
 # 10. إعدادات التجارب (Experiments)
@@ -365,6 +369,27 @@ def validate_config() -> List[str]:
     # التحقق من Drive
     if DRIVE_ENABLED and not DRIVE_FOLDER_ID:
         errors.append("⚠️ Drive مفعل ولكن DRIVE_FOLDER_ID غير معين")
+    
+    # التحقق من CORS في الإنتاج (D-034 — فشل مغلق)
+    # قرار المالك: «CORS_ORIGINS في الإنتاج يجب أن يكون قائمة صريحة.
+    # لا * ولا null. إذا كان ENV=production وCORS_ORIGINS="*" — التطبيق
+    # يرفض الإقلاع (fail-closed)». "null" أصل يُصدره المتصفح للطلبات
+    # غير المتجانسة ويُستخدم للتحايل على سياسات الأصل — يُرفض مثله.
+    # الفحص على مستوى عناصر القائمة بعد تجريد المسافات: النجمة أو null
+    # في أي موضع (منفردة أو داخل قائمة مختلطة) والقائمة الفارغة تُرفض.
+    if IS_PRODUCTION:
+        _origins = [o.strip() for o in CORS_ORIGINS]
+        if (
+            "*" in _origins
+            or "null" in _origins
+            or not any(_origins)
+        ):
+            errors.append(
+                "❌ CORS في الإنتاج (D-034): قائمة مصادر صريحة مطلوبة — "
+                "لا \"*\" ولا \"null\" (ولو داخل قائمة) ولا قائمة فارغة. "
+                "اضبط CORS_ORIGINS بقائمة صريحة "
+                "(مثال: CORS_ORIGINS=https://app.example.com)"
+            )
     
     return errors
 
