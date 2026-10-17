@@ -1,3 +1,5 @@
+هذا التقرير مُنتَج بأدوار مُنفصلة على نفس النموذج — ليس مراجعة مستقلة، بل مراجعة عدائية منظمة.
+
 # فهرس الأدلة — الجولة <2> (تشغيلات RED/GREEN الموثقة)
 
 > أُعيد بناء الفهرس من محتوى السجلات نفسها (بعد اعتراض حكيم) — كل سطر
@@ -85,3 +87,31 @@
 | CI على 1a9141f (39057505124) | **فشل — رفض زائف** | بوابة Issue #8 رفضت رغم أن العلامة في فرق الالتزام 4 مرات: عطل grep -q/SIGPIPE/pipefail (الإثبات: GREEN_ci_gate_sigpipe_fix.log) |
 | CI على 6ef6e89 (39057708298 — بعد إصلاح البوابة) | **أخضر — 525 passed, 1 deselected** | يغطي الترويسة النهائية بكل التزامات الجولة |
 | verify-full (39057964408) | **VERIFICATION COMPLETE — 525 passed, 0 skipped, 0 failed** (من clone نظيف على 6ef6e89) | المطابقة الثلاثية: محلي 525/0/0 + CI 525/0/0 + تحقق كامل 525/0/0 |
+
+## تحققات المراجعة النهائية (بعد اعتراض المراجع الأقوى — كلها بالتشغيل الفعلي)
+
+### فرق المعرفات الدقيق (a90b481 → الترويسة النهائية)
+
+الأساس a90b481: 503 اختبارات مجمعة. النهائي: 525. **+22 جديدًا، صفر محذوف**
+(--collect-only فعلي على الشجرتين):
+
+- test_dependency_pins.py::test_fastapi_version_pinned
+- keyring (7): test_active_pointer_red_green_on_real_guard، 5× test_history_guard_catches_* (old_committed_deletion، delete_then_restore، rewritten_same_count، whole_file_deletion، branch_delete_with_merge)، test_no_active_lost_keys_catches_bad_active_pointer
+- orphan (9): test_guard_catches_mutual_import_pair، test_guard_catches_stray_double_underscore_init، test_guard_catches_stray_named_like_backup، test_guard_catches_stray_script، test_guard_catches_unlisted_archive_file، test_guard_catches_unreferenced_backend_test_helper، test_guard_catches_unreferenced_test_helper، test_guard_does_not_mark_orphan_imported_via_nonrelative_import، test_guard_relative_import_resolves_only_relative
+- ledger/Merkle (5): test_anchor_signature_blocks_count_reinterpretation، test_merkle_root_boundary_distinctness، test_merkle_v1_v2_differ، test_merkle_v2_domain_separation، test_real_anchors_full_coverage
+
+### مسبار أسنان اختبار التثبيت (إفصاح: تحقق لاحق — الاختبار كُتب بعد إصلاح البيئة، RED هنا مسبار أسنان لا RED سابق للتنفيذ)
+
+- RED_fastapi_pin_teeth.log: مع fastapi==0.143.3 مثبتًا (المخالف للمثبت) — الاختبار يفشل فعليًا (يرفض الترقية الصامتة)
+- GREEN_fastapi_pin_teeth.log: بعد إعادة 0.115.0 — ينجح
+
+### مسبارات البوابة الخام (SIGPIPE)
+
+- RAW_gate_sigpipe_probe.log: PIPESTATUS الفعلي مع grep -q = «141 0» (git show قُتل بـSIGPIPE وgrep وجد التطابق — الرفض زائف قطعيًا)، وبلا -q = «0 0»
+- RAW_gate_negative_test.log: البوابة بعد الإصلاح ترفض ff8f80a (29 حذفًا بلا علامة) — القاعدة ما زالت ذات أسنان
+
+### تحققات العقد
+
+- headSha للتشغيلين النهائيين = d6823047491429388a12842837818be32426dde3 (الترويسة النهائية): CI 39058870673 أخضر (525/0/1d)، verify-full 39059261746 = VERIFICATION COMPLETE (525/0/0)
+- v1 بايت-مطابق: diff دالة compute_merkle_root بين a90b481 والترويسة = لا تغيير
+- مسارات التوقيع الإنتاجية: anchor_batch (anchor.py:194) يحسب جذر v2 ويسجل merkle_version=2؛ التحقق (401/404) يتفرع حسب إصدار المرساة. ملف المراسي الحقيقية المتتبع لم يُلمس هذه الجولة (آخر تغيير fb12943 قبل الجولة) — 6 مراسٍ كلها v1-Merkle تاريخية (حقل sig_data_v2 فيها هو صيغة بيانات التوقيع من R-641، لا Merkle v2 — لا خلط). أول مرساة جديدة عبر anchor_batch ستكون v2 (مثبت بالاختبارات)
