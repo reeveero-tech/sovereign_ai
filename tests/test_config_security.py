@@ -141,6 +141,9 @@ def test_production_with_0600_key_secret_loads():
     env.pop("SOVEREIGN_KEY", None)
     env["AI_ENVIRONMENT"] = "production"
     env["SOVEREIGN_DATA_ROOT"] = tmp_data
+    # D-034: الإنتاج بلا CORS_ORIGINS صريح يرفض الإقلاع — هذا الاختبار
+    # يعزل موضوعه (صلاحيات الملف) فتُضبط قائمة مصادر صريحة في بيئته.
+    env["CORS_ORIGINS"] = "https://app.example.com"
 
     result = _run_config(env)
     assert result.returncode == 0, (

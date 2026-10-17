@@ -45,7 +45,7 @@ uvicorn app:app --host 0.0.0.0 --port 8000
 | `CORE_MODEL_LOAD_ON_START` | true | لا يُستخدم فعلياً |
 | `MAX_USER_MESSAGES_PER_MINUTE` | 30 | ✅ حد `/chat` لكل IP مباشر؛ process-local (R-603) |
 | `MAX_CONCURRENT_USERS` | 100 | — |
-| `CORS_ORIGINS` | `*` | 🔴 خطر في الإنتاج |
+| `CORS_ORIGINS` | `*` | 🔴 يرفض الإقلاع في الإنتاج (D-034 — فشل مغلق) |
 
 ---
 
