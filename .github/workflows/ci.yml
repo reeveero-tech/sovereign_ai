@@ -50,10 +50,7 @@ jobs:
             echo "✅ لا حذوفات — لا يلزم تبرير"
             exit 0
           fi
-          # ملاحظة إصلاحية (الجولة <2>): grep -q يخرج عند أول تطابق فيُقتل git show
-          # بإشارة SIGPIPE، ومع set -o pipefail يُرفض التطابق الصحيح (رفض زائف).
-          # grep بلا -q يقرأ كل المخرج فلا يحدث SIGPIPE — نفس المنطق بلا العطل.
-          if git log -1 --format=%B "${SHA}" | grep "# DELETION-JUSTIFIED" >/dev/null || git show "${SHA}" | grep "# DELETION-JUSTIFIED" >/dev/null; then
+          if git log -1 --format=%B "${SHA}" | grep -q "# DELETION-JUSTIFIED" || git show "${SHA}" | grep -q "# DELETION-JUSTIFIED"; then
             echo "✅ الحذوفات مبررة بعلامة # DELETION-JUSTIFIED في نفس الالتزام"
             exit 0
           fi
