@@ -374,12 +374,22 @@ def validate_config() -> List[str]:
     # لا * ولا null. إذا كان ENV=production وCORS_ORIGINS="*" — التطبيق
     # يرفض الإقلاع (fail-closed)». "null" أصل يُصدره المتصفح للطلبات
     # غير المتجانسة ويُستخدم للتحايل على سياسات الأصل — يُرفض مثله.
-    if IS_PRODUCTION and (CORS_ORIGINS == ["*"] or "null" in CORS_ORIGINS):
-        errors.append(
-            "❌ CORS في الإنتاج (D-034): قائمة مصادر صريحة مطلوبة — "
-            "لا \"*\" ولا \"null\". اضبط CORS_ORIGINS بقائمة صريحة "
-            "(مثال: CORS_ORIGINS=https://app.example.com)"
-        )
+    # (اعتراض المراجع الأول على 2a52f02): الفحص على مستوى عناصر القائمة
+    # بعد تجريد المسافات — النجمة أو null داخل قائمة مختلطة تُرفض،
+    # والقائمة الفارغة/الفراغات ليست قائمة مصادر صريحة فتُرفض.
+    if IS_PRODUCTION:
+        _origins = [o.strip() for o in CORS_ORIGINS]
+        if (
+            "*" in _origins
+            or "null" in _origins
+            or not any(_origins)
+        ):
+            errors.append(
+                "❌ CORS في الإنتاج (D-034): قائمة مصادر صريحة مطلوبة — "
+                "لا \"*\" ولا \"null\" (ولو داخل قائمة) ولا قائمة فارغة. "
+                "اضبط CORS_ORIGINS بقائمة صريحة "
+                "(مثال: CORS_ORIGINS=https://app.example.com)"
+            )
     
     return errors
 
