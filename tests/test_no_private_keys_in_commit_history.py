@@ -80,7 +80,7 @@ _PEM_PRIVATE = re.compile(
 # نمط ٢: حقل مفتاح خاص (JSON أو بايثون) بقيمة base64/64url طويلة —
 # أسماء private_* بأي لاحقة + الحشو '=' الممكن
 _SECRET_FIELD = re.compile(
-    r"""["'](?:private_[a-z_]+|privateKey|secret_key|signing_key|master_key|seed)["']"""
+    r"""["'](?:private_[a-z0-9_]+|privateKey|secret_key|signing_key|master_key|seed)["']"""
     r"""\s*[:=]\s*["']([A-Za-z0-9+/_-]{32,}={0,2})["']"""
 )
 
@@ -230,15 +230,16 @@ def test_guard_ignores_short_and_public_values(tmp_path):
 
 
 def test_guard_covers_padded_and_backup_names(tmp_path):
-    """تغطية الأنماط الموسعة: حشو base64 '=' وأسماء private_* غير الشائعة."""
+    """تغطية الأنماط الموسعة: حشو base64 '=' وأسماء private_* غير الشائعة
+    (بما فيها اللاحقة الرقمية مثل private_backup2 — اعتراض المراجع)."""
     repo = tmp_path / "mini4"
     _init_repo(repo)
     secret = base64.b64encode(os.urandom(32)).decode("ascii")  # بحشو '='
-    bad = '{"private_backup": "' + secret + '"}\n'
+    bad = '{"private_backup2": "' + secret + '"}\n'
     sha = _make_commit(repo, "backup.json", bad)
     hits = _scan_commit(repo, sha)
     assert any(h[1] == "secret" and h[2] == hashlib.sha256(secret.encode()).hexdigest()
-               for h in hits), "حقل private_backup بقيمة بحشو '=' يجب أن يُكشف"
+               for h in hits), "حقل private_backup2 بقيمة بحشو '=' يجب أن يُكشف"
 
 
 # ------------------------------------------------------------ الحارس على الواقع
