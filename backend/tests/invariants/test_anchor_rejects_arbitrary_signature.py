@@ -81,10 +81,9 @@ class TestAnchorRejectsArbitrarySignature:
         )
 
         # مرساة صحيحة (v2)
-        # D-036 (الجولة <2>): التوقيع لمرساة جديدة عبر anchor_batch بجذر v2
-        from backend.sovereign.ledger.anchor import compute_merkle_root_v2
+        from backend.sovereign.ledger.anchor import compute_merkle_root
         batch_lines = lines[0:3]
-        merkle_root = compute_merkle_root_v2(batch_lines)
+        merkle_root = compute_merkle_root(batch_lines)
         event_count = len(batch_lines)
         sig_data = manager.compute_anchor_signature_data(
             0, 2, event_count, merkle_root, key_id
@@ -103,7 +102,6 @@ class TestAnchorRejectsArbitrarySignature:
             "batch_end": 2,
             "event_count": event_count,
             "merkle_root": f"sha256:{merkle_root}",
-            "merkle_version": 2,  # D-036: مرساة جديدة بجذر v2
             "reason": "TEST_GATE4",
             "key_id": key_id,
             "signature": signature,
