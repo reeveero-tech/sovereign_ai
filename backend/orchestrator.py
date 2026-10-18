@@ -197,11 +197,24 @@ class SovereignOrchestrator:
                 )
             path = quarantine_log_path()
             if not path.exists():
-                # الغياب = تعذر إثبات (لا يُقرأ فراغًا): آخر حالة معروفة إن
-                # أُثبتت، وإلا مجهول (منع الاستدعاء)
-                raise FileNotFoundError(str(path))
+                # R-692 (اعتراض المراجع ج5): ميّز البدء عن الاختفاء — الغياب
+                # قبل أي قراءة ناجحة = بدء مشروع (جذر جديد، القناة تنشئ
+                # السجل عند أول توثيق): لا عزل يُحمى فالمكونات تعمل. الغياب
+                # بعد قراءة ناجحة = اختفاء سجل سبق إثباته: آخر حالة معروفة
+                # تبقى مفروضة. ملاحظة جوهرية: بدءٌ بلا سجل لا يمنح إثباتًا —
+                # ظهور السجل لاحقًا غير المقروء حالة مجهولة (لا يُورث الفراغ)
+                if self._quarantine_proven:
+                    raise FileNotFoundError(str(path))
+                self._quarantine_cache = frozenset()
+                self._quarantine_last_known = frozenset()
+                # لا إثبات هنا (proven يبقى False): بدءٌ لا يورث حالته
+                self._quarantine_unknown = False
+                self._quarantine_cache_ts = time.time()
+                self._quarantine_dirty = False
+                return
             self._quarantine_cache = frozenset(quarantined_components())
             self._quarantine_last_known = self._quarantine_cache
+            # الإثبات من قراءة ناجحة لملف موجود فقط — لا من غياب
             self._quarantine_proven = True
             self._quarantine_unknown = False
         except OSError:
@@ -269,7 +282,9 @@ class SovereignOrchestrator:
         self._quarantine_last_known: frozenset = frozenset()
         self._quarantine_dirty: bool = True
         # R-691 (اعتراض المراجع ج4): تمييز «لا عزل أثبتته قراءة ناجحة» عن
-        # «تعذر إثبات الحالة» — البارد (لم يُثبت شيء) لا يتحول إذنًا صامتًا
+        # «تعذر إثبات الحالة» — البارد (لم يُثبت شيء) لا يتحول إذنًا صامتًا.
+        # R-692: الإثبات من قراءة ناجحة لملف موجود فقط — بدءٌ بلا سجل لا
+        # يمنح إثباتًا يُورث عند ظهور السجل غير المقروء
         self._quarantine_proven: bool = False
         self._quarantine_unknown: bool = False
         
@@ -308,7 +323,20 @@ class SovereignOrchestrator:
         self.sovereign = sovereign or self._load_sovereign()
         self.quantum = quantum or self._load_quantum()
         self.nexus = nexus or self._load_nexus()
-        
+
+        # R-692 (اعتراض المراجع ج5 — الاستدعاء غير المباشر): تأهيل كل مراجع
+        # المكونات بحاجز العزل عند المرجع — الاستدعاء عبر مكون آخر (كائن
+        # مشترك) يُمنع أيضًا: المعزول لا تُنفذ دواله من أي مسار
+        self.consciousness = self._gate_component_map(self.consciousness, "consciousness")
+        self.memory_core = self._gate_component_object(self.memory_core, "memory")
+        self.memory_dynamic = self._gate_component_object(self.memory_dynamic, "memory")
+        self.memory_store = self._gate_component_object(self.memory_store, "memory")
+        self.predictive = self._gate_component_map(self.predictive, "predictive")
+        self.simulation = self._gate_component_map(self.simulation, "simulation")
+        self.sovereign = self._gate_component_map(self.sovereign, "sovereign")
+        self.quantum = self._gate_component_object(self.quantum, "quantum")
+        self.nexus = self._gate_component_object(self.nexus, "nexus")
+
         # خلفيات التشغيل
         self._active = True
         self._background_processor: Optional[threading.Thread] = None
@@ -484,33 +512,82 @@ class SovereignOrchestrator:
         
         return components
     
+    def _gate_component_object(self, obj, component: str):
+        """R-692 (اعتراض المراجع ج5 — الاستدعاء غير المباشر): حاجز عند المرجع
+        نفسه — كل استدعاء على كائن مكوّن (من أي مستدعٍ: المنسق أو مكون آخر
+        عبر الكائن المشترك) يمر ببوابة عزل مكوّنه أولاً. المعزول يُعامل كغير
+        موجود: الدالة الحقيقية لا تُنفذ وتعاد القيمة الافتراضية الآمنة ({})
+        — لا موت ولا انهيار للمستدعي غير المعزول (يستمر في وظائفه غير
+        المعتمدة عليه)."""
+        if obj is None:
+            return obj
+        for name in list(dir(obj)):
+            if name.startswith("_"):
+                continue
+            attr = getattr(obj, name, None)
+            if not callable(attr) or isinstance(attr, type):
+                continue
+            if getattr(attr, "_component_gate", False):
+                continue  # ملفوف سابقًا (إعادة تحميل) — لا لف مزدوج
+            def gated(*a, _attr=attr, _name=name, _comp=component, **k):
+                if self._component_quarantined(_comp):
+                    logger.warning(
+                        "[R-692] استدعاء %s على مكوّن معزول (%s) — الدالة "
+                        "لم تُنفذ وأعيدت القيمة الافتراضية الآمنة (لا موت)",
+                        _name, _comp,
+                    )
+                    return {}
+                return _attr(*a, **k)
+            gated._component_gate = True
+            try:
+                setattr(obj, name, gated)
+            # R-692: كائن لا يقبل الإسناد (slots/ثابت) — بقية الكائنات تُؤهل
+            except (TypeError, AttributeError):
+                continue
+        return obj
+
+    def _gate_component_map(self, components: Optional[Dict[str, Any]], component: str):
+        """تأهيل كل كائنات خريطة المكوّن بحاجز العزل عند مرجعها."""
+        if not components:
+            return components
+        return {
+            key: self._gate_component_object(obj, component)
+            for key, obj in components.items()
+        }
+
     def _load_sovereign(self) -> Dict[str, Any]:
-        """تحميل مكونات السيادة"""
+        """تحميل مكونات السيادة — وكل طبقة تُؤهل بحاجز العزل عند مرجعها (R-692)"""
         components = {}
         try:
             from sovereign.will import get_sovereign_will
-            components["will"] = get_sovereign_will()
+            components["will"] = self._gate_component_object(get_sovereign_will(), "sovereign")
             self._update_component_health("sovereign_will", True)
         except Exception as e:
             self._update_component_health("sovereign_will", False, str(e))
         
         try:
             from sovereign.alignment import get_sovereign_alignment
-            components["alignment"] = get_sovereign_alignment()
+            components["alignment"] = self._gate_component_object(
+                get_sovereign_alignment(), "sovereign"
+            )
             self._update_component_health("sovereign_alignment", True)
         except Exception as e:
             self._update_component_health("sovereign_alignment", False, str(e))
         
         try:
             from sovereign.directives import get_sovereign_directives
-            components["directives"] = get_sovereign_directives()
+            components["directives"] = self._gate_component_object(
+                get_sovereign_directives(), "sovereign"
+            )
             self._update_component_health("sovereign_directives", True)
         except Exception as e:
             self._update_component_health("sovereign_directives", False, str(e))
         
         try:
             from sovereign.controller import get_sovereign_controller
-            components["controller"] = get_sovereign_controller()
+            components["controller"] = self._gate_component_object(
+                get_sovereign_controller(), "sovereign"
+            )
             self._update_component_health("sovereign_controller", True)
         except Exception as e:
             self._update_component_health("sovereign_controller", False, str(e))

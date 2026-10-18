@@ -745,7 +745,7 @@ async def chat(message: ChatMessage, background_tasks: BackgroundTasks):
         # R-614: محرك الردود السيادي — يبني الرد من حالة النظام الحية
         try:
             from sovereign_response import build_reply
-            reply = build_reply(intent_name, message.text, result)
+            reply = build_reply(intent_name, message.text, result, orchestrator=orchestrator)
         except Exception as e:
             logger.warning(f"sovereign_response failed, falling back: {e}")
             if source == "nexus_intent" and intent_name:

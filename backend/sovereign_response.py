@@ -31,89 +31,117 @@ def _safe(fn, default=None):
         return default
 
 
-def gather_evidence() -> Dict[str, Any]:
-    """لقطة من الحالة الحالية للنظام — أساس كل رد حقيقي."""
+def _gated(orchestrator, component: str) -> bool:
+    """R-692 (اعتراض المراجع ج5): بوابة عزل مسار الرد — المعزول (أو الحالة
+    المجهولة) لا يُستدعى من بناء الرد؛ الأداة الآمنة تعيد False فتُتخطى
+    الشهادة ويبقى الرد يُبنى (التطبيق حي)."""
+    if orchestrator is None:
+        return True  # لا منسق متاح (مسار قديم) — سلوك سابق
+    try:
+        return bool(orchestrator._use(component))
+    except Exception:
+        return False  # تعذر الفحص — منع (لا إذنًا صامتًا)
+
+
+def gather_evidence(orchestrator: Any = None) -> Dict[str, Any]:
+    """لقطة من الحالة الحالية للنظام — أساس كل رد حقيقي. R-692: كل مكوّن
+    يُجمع استشارته عبر بوابة عزله (المعزول/المجهول → الشهادة متخطاة، لا
+    استدعاء) — المنع قبل استعمال المرجع في مسار الرد أيضًا."""
     evidence: Dict[str, Any] = {"timestamp": time.time()}
 
     # الذاكرة
-    try:
-        from memory.core import get_core
-        core = get_core()
-        stats = _safe(core.get_statistics, {})
-        evidence["memory"] = {
-            "total_events": stats.get("total_events", 0),
-            "total_types": stats.get("total_types", 0),
-            "total_users": stats.get("total_users", 0),
-        }
-    except Exception:
+    if _gated(orchestrator, "memory"):
+        try:
+            from memory.core import get_core
+            core = get_core()
+            stats = _safe(core.get_statistics, {})
+            evidence["memory"] = {
+                "total_events": stats.get("total_events", 0),
+                "total_types": stats.get("total_types", 0),
+                "total_users": stats.get("total_users", 0),
+            }
+        except Exception:
+            evidence["memory"] = None
+    else:
         evidence["memory"] = None
 
-    # التنبؤ
-    try:
-        from predictive.predictive_engine import get_predictive_engine
-        engine = get_predictive_engine()
-        status = _safe(engine.get_prediction_status, {})
-        evidence["predictive"] = {
-            "active_predictions": status.get("active_predictions", 0),
-            "overall_risk": status.get("overall_risk", 0.5),
-            "overall_opportunity": status.get("overall_opportunity", 0.5),
-            "avg_accuracy": status.get("avg_accuracy", 0.5),
-        }
-    except Exception:
+    # التنبؤ (ومدير المخاطر من منظومته)
+    if _gated(orchestrator, "predictive"):
+        try:
+            from predictive.predictive_engine import get_predictive_engine
+            engine = get_predictive_engine()
+            status = _safe(engine.get_prediction_status, {})
+            evidence["predictive"] = {
+                "active_predictions": status.get("active_predictions", 0),
+                "overall_risk": status.get("overall_risk", 0.5),
+                "overall_opportunity": status.get("overall_opportunity", 0.5),
+                "avg_accuracy": status.get("avg_accuracy", 0.5),
+            }
+        except Exception:
+            evidence["predictive"] = None
+        try:
+            from predictive.predictive_risk_manager import get_predictive_risk_manager
+            risk = get_predictive_risk_manager()
+            rstatus = _safe(risk.get_risk_status, {})
+            evidence["risk"] = {
+                "active_risks": rstatus.get("active_risks", 0),
+                "high_priority_risks": rstatus.get("high_priority_risks", 0),
+                "overall_risk_level": rstatus.get("overall_risk_level", "low"),
+                "early_warnings": rstatus.get("early_warnings", 0),
+            }
+        except Exception:
+            evidence["risk"] = None
+    else:
         evidence["predictive"] = None
-
-    # المخاطر
-    try:
-        from predictive.predictive_risk_manager import get_predictive_risk_manager
-        risk = get_predictive_risk_manager()
-        rstatus = _safe(risk.get_risk_status, {})
-        evidence["risk"] = {
-            "active_risks": rstatus.get("active_risks", 0),
-            "high_priority_risks": rstatus.get("high_priority_risks", 0),
-            "overall_risk_level": rstatus.get("overall_risk_level", "low"),
-            "early_warnings": rstatus.get("early_warnings", 0),
-        }
-    except Exception:
         evidence["risk"] = None
 
     # المحاكاة
-    try:
-        from predictive.predictive_simulation import get_predictive_simulation
-        sim = get_predictive_simulation()
-        sstatus = _safe(sim.get_simulation_results, {})
-        agg = sstatus.get("aggregated_stats", {}) if sstatus else {}
-        evidence["simulation"] = {
-            "batch_id": sstatus.get("batch_id", ""),
-            "avg_success_rate": agg.get("avg_success_rate", 0),
-            "recommended_actions": len(sstatus.get("recommended_actions", [])),
-        }
-    except Exception:
+    if _gated(orchestrator, "simulation"):
+        try:
+            from predictive.predictive_simulation import get_predictive_simulation
+            sim = get_predictive_simulation()
+            sstatus = _safe(sim.get_simulation_results, {})
+            agg = sstatus.get("aggregated_stats", {}) if sstatus else {}
+            evidence["simulation"] = {
+                "batch_id": sstatus.get("batch_id", ""),
+                "avg_success_rate": agg.get("avg_success_rate", 0),
+                "recommended_actions": len(sstatus.get("recommended_actions", [])),
+            }
+        except Exception:
+            evidence["simulation"] = None
+    else:
         evidence["simulation"] = None
 
     # المتحكم السيادي
-    try:
-        from sovereign.controller import get_sovereign_controller
-        controller = get_sovereign_controller()
-        cstatus = _safe(controller.get_controller_status, {})
-        evidence["sovereign"] = {
-            "system_mode": cstatus.get("system_mode", "normal"),
-            "system_health": cstatus.get("system_health", 0.8),
-            "global_priority": cstatus.get("global_priority", 0.7),
-            "current_decision": cstatus.get("current_decision", {}),
-        }
-    except Exception:
+    if _gated(orchestrator, "sovereign"):
+        try:
+            from sovereign.controller import get_sovereign_controller
+            controller = get_sovereign_controller()
+            cstatus = _safe(controller.get_controller_status, {})
+            evidence["sovereign"] = {
+                "system_mode": cstatus.get("system_mode", "normal"),
+                "system_health": cstatus.get("system_health", 0.8),
+                "global_priority": cstatus.get("global_priority", 0.7),
+                "current_decision": cstatus.get("current_decision", {}),
+            }
+        except Exception:
+            evidence["sovereign"] = None
+    else:
         evidence["sovereign"] = None
 
     # الوعي
-    try:
-        from consciousness.field import get_consciousness_field
-        field = get_consciousness_field()
-        fstatus = _safe(field.get_consciousness_status, {})
-        evidence["consciousness"] = {
-            "coherence": fstatus.get("coherence", 0) if isinstance(fstatus, dict) else 0,
-            "active": bool(fstatus) if fstatus else False,
-        }
-    except Exception:
+    if _gated(orchestrator, "consciousness"):
+        try:
+            from consciousness.field import get_consciousness_field
+            field = get_consciousness_field()
+            fstatus = _safe(field.get_consciousness_status, {})
+            evidence["consciousness"] = {
+                "coherence": fstatus.get("coherence", 0) if isinstance(fstatus, dict) else 0,
+                "active": bool(fstatus) if fstatus else False,
+            }
+        except Exception:
+            evidence["consciousness"] = None
+    else:
         evidence["consciousness"] = None
 
     return evidence
@@ -143,14 +171,17 @@ def _risk_label(level) -> str:
     return str(level)
 
 
-def build_reply(intent_name: str, text: str, orchestrator_result: Any = None) -> str:
+def build_reply(
+    intent_name: str, text: str, orchestrator_result: Any = None,
+    orchestrator: Any = None,
+) -> str:
     """
     بناء رد حقيقي مبني على حالة النظام الحية.
     intent_name: النية المكتشفة (greet/help/status/analyze/forecast/alert/stop/...)
     text: نص السيد الأصلي
     orchestrator_result: نتيجة دورة المنسق (اختياري — تُستخدم إن وُجدت)
     """
-    ev = gather_evidence()
+    ev = gather_evidence(orchestrator)
     mem = ev.get("memory") or {}
     pred = ev.get("predictive") or {}
     risk = ev.get("risk") or {}

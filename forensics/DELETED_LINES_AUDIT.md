@@ -1107,3 +1107,31 @@ test_audit_consistency.py يطابق هذا الجدول مع git حرفيًا):
 | `backend/circuit_breaker.py` (−2) | **مُبرر # DELETION-JUSTIFIED:** إزالة اتحادين متبقيين من مسار الملف الموجود (القراءة تدمج داخليًا — الاتحاد كان يعيد العزل المنهي). |
 | `backend/tests/invariants/test_circuit_breaker.py` (−0) | إضافات فقط (5 اختبارات جديدة + تصويبان). |
 | `docs/CHANGELOG.md` (−1) و`forensics/R689/R690` (−3) | **مُبرر # DELETION-JUSTIFIED:** تحديث سطر «آخر تحديث» + تصويبات دقة التقرير التي طلبها المراجع (عبارة R-689 + حذف «الموقّع»). |
+
+
+## إضافة R-692 (2026-10-19) — إصلاحات اعتراضات المراجع ج5: الاستدعاء غير المباشر والبدء الابتدائي
+
+numstat لكل ملف مقابل الأب 1580189 (من git الفعلي؛ اختبار دائم
+test_audit_consistency.py يطابق هذا الجدول مع git حرفيًا):
+
+- `backend/app.py`: +1 / −1
+- `backend/orchestrator.py`: +87 / −10
+- `backend/sovereign_response.py`: +101 / −70
+- `backend/tests/invariants/test_audit_consistency.py`: +95 / −0
+- `backend/tests/invariants/test_circuit_breaker.py`: +230 / −0
+- `docs/CHANGELOG.md`: +12 / −1
+- `docs/PROJECT_STATE.md`: +10 / −0
+- `forensics/R692_ADVISOR_OBJECTIONS_ROUND5.md`: +81 / −0
+- `forensics/R692_evidence/full_suite_green_620.log`: +22 / −0
+- `forensics/R692_evidence/junit_1580189.xml`: +621 / −0
+- `forensics/R692_evidence/red_at_parent_1580189.log`: +604 / −0
+- `forensics/R692_evidence/verify_full_1580189.log`: +49 / −0
+- `forensics/DELETED_LINES_AUDIT.md`: +28 / −0
+
+الإجمالي: 1,941 إضافة / 82 حذفًا في 13 ملفًا.
+
+| المحذوف | المبرر |
+|---|---|
+| `backend/sovereign_response.py` (−70) | **مُبرر # DELETION-JUSTIFIED — اعتراض المراجع ج5:** إعادة كتابة gather_evidence ببوابات العزل لكل شهادة (المعزول/المجهول → متخطاة) — الاستدعاء بلا بوابات كان عيبًا كشفته حالات أول طلب؛ كل محذوف استُبدل بأقوى منه. |
+| `backend/orchestrator.py` (−10) | **مُبرر # DELETION-JUSTIFIED:** تعميم حاجز السيادي إلى حاجز كل مكوّن + تمييز البدء عن الاختفاء (الإثبات من قراءة ناجحة فقط) — استبدال أقوى. |
+| `backend/app.py` (−1) و`docs/CHANGELOG.md` (−1) | **مُبرر # DELETION-JUSTIFIED:** تمرير المنسق إلى build_reply (تأهيل مسار الرد) + تحديث سطر «آخر تحديث». |

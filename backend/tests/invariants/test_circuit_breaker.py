@@ -627,3 +627,233 @@ def test_file_deletion_after_proven_keeps_orchestrator_quarantine():
                 log.write_text("", encoding="utf-8")
         finally:
             pred_engine.compute_future_map = orig
+
+
+# ---------- R-692 (اعتراضات المراجع ج5): الاستدعاء غير المباشر + البدء الابتدائي ----------
+
+def test_sovereign_quarantine_blocks_all_layer_invocations():
+    """اعتراض المراجع ج5: الاستدعاء غير المباشر — طبقات السيادي (will/
+    alignment/directives/controller) تُستدعى داخل مكونات أخرى (المكدس أثبت:
+    predictive_engine/predictive_controller/sovereign controller/directives).
+    وصفها «مشتركة» لا يغير أنها تُنفذ رغم عزل مكونها. عزل sovereign وحده
+    يجب أن يمنع كل استدعاء عليها (بلا تصفية بالمستدعي) مع استمرار المكونات
+    غير المعزولة في وظائفها غير المعتمدة عليه — والدورة تكتمل."""
+    assert append_entry("quarantine", "عزل السيادي", component="sovereign") is True
+    with TestClient(app) as client:
+        orch = app.state.orchestrator
+        counters = {"layer": 0, "pred": 0, "cons": 0}
+        refs = orch.sovereign or {}
+        assert refs, "بلا طبقات سيادية — الاختبار لا يختبر شيئًا"
+        wrapped = []
+        # عدّ التنفيذ الفعلي للدالة الحقيقية (لف على الصف لا المثيل —
+        # حاجز R-692 على المثيل يجب أن يمنع الوصول إليها من أي مستدعٍ).
+        # بلا تصفية بالمستدعي — كل تنفيذ يُعد
+        for key in ("will", "alignment", "directives", "controller"):
+            layer = refs.get(key)
+            if layer is None:
+                continue
+            cls = type(layer)
+            for name in dir(layer):
+                if name.startswith("_"):
+                    continue
+                fn = getattr(cls, name, None)
+                if fn is None or not callable(fn) or isinstance(fn, type):
+                    continue
+                if isinstance(fn, (property, staticmethod, classmethod)):
+                    continue
+
+                def rec(self, *a, _fn=fn, **k):
+                    counters["layer"] += 1
+                    return _fn(self, *a, **k)
+
+                try:
+                    setattr(cls, name, rec)
+                    wrapped.append((cls, name, fn))
+                except (TypeError, AttributeError):
+                    continue
+        assert wrapped, "لا دوال قابلة للف — الاختبار لا يختبر شيئًا"
+        # المكونات غير المعزولة: عدّادات تنفيذها الفعلي
+        pred_engine = orch.predictive.get("engine")
+        cons_field = orch.consciousness.get("field")
+        orig_pred = pred_engine.compute_future_map
+        orig_cons = cons_field.get_consciousness_status
+
+        def rec_pred(*a, **k):
+            counters["pred"] += 1
+            return orig_pred(*a, **k)
+
+        def rec_cons(*a, **k):
+            counters["cons"] += 1
+            return orig_cons(*a, **k)
+
+        pred_engine.compute_future_map = rec_pred
+        cons_field.get_consciousness_status = rec_cons
+        try:
+            result = orch.run_cycle({"type": "chat", "text": "اختبار الاستدعاء غير المباشر"})
+            # المانع: صفر استدعاء على طبقات السيادي — من أي مستدعٍ كان
+            assert counters["layer"] == 0, (
+                f"طبقات السيادي المعزول استُدعيت {counters['layer']} مرة عبر "
+                "مسارات غير مباشرة — الحاجز عند المرجع مفقود"
+            )
+            # استمرار المكونات غير المعزولة في وظائفها غير المعتمدة عليه
+            assert counters["cons"] > 0, "الوعي لم يُستدع — الدورة لم تعمل"
+            assert counters["pred"] > 0, (
+                "التنبؤ لم يُستدع — المكون غير المعزول توقف كليًا (يجب أن "
+                "يستمر في وظائفه غير المعتمدة على السيادي)"
+            )
+            assert result.success is True, "الدورة يجب أن تكتمل"
+        finally:
+            for cls, name, orig in wrapped:
+                try:
+                    setattr(cls, name, orig)
+                except (TypeError, AttributeError):
+                    continue
+            pred_engine.compute_future_map = orig_pred
+            cons_field.get_consciousness_status = orig_cons
+
+
+def _run_chat_first_request_scenario(body: str, data_root):
+    """سيناريو أول طلب /chat فعلي في عملية جديدة معزولة البيئة — لا طلبات
+    تمهيدية (لا /health ولا /components) حتى لا ينشئ فحص القناة السجل ويخفي
+    مسار البدء (تنبيه المراجع ج5)."""
+    import json
+    import os
+    import subprocess
+    indented = "\n".join("    " + line for line in body.strip().splitlines())
+    script = (
+        "import sys, json, os\n"
+        f"sys.path.insert(0, {str(_REPO_ROOT)!r})\n"
+        f"sys.path.insert(0, {str(_BACKEND_DIR)!r})\n"
+        "os.environ['SOVEREIGN_DISABLE_BACKGROUND_THREADS'] = '1'\n"
+        "from fastapi.testclient import TestClient\n"
+        "from app import app\n"
+        "_R = {}\n"
+        "try:\n" + indented + "\n"
+        "except Exception as e:\n"
+        "    _R['unexpected_error'] = f'{type(e).__name__}: {e}'\n"
+        "print('SCENARIO_JSON:' + json.dumps(_R))\n"
+    )
+    compile(script, "<chat_scenario>", "exec")
+    env = dict(os.environ)
+    env["SOVEREIGN_DATA_ROOT"] = str(data_root)
+    result = subprocess.run(
+        [sys.executable, "-u", "-c", script],
+        capture_output=True, text=True, cwd=str(_REPO_ROOT), timeout=120, env=env,
+    )
+    payload = None
+    for line in result.stdout.splitlines():
+        if line.startswith("SCENARIO_JSON:"):
+            payload = json.loads(line[len("SCENARIO_JSON:"):])
+    return result.returncode, payload, result.stderr
+
+
+def _chat_counters_body(prepare: str) -> str:
+    """جسم سيناريو مشترك: عدّادات ملفوفة ثم أول طلب POST /chat فقط."""
+    return """
+from app import app as _app
+with TestClient(_app) as c:
+    orch = _app.state.orchestrator
+    _R['log_exists_before'] = __import__('backend.loyalty_log', fromlist=['x']).quarantine_log_path().exists()
+""" + prepare + """
+    pred = orch.predictive.get('engine')
+    cons = orch.consciousness.get('field')
+    counters = {'pred': 0, 'cons': 0}
+    _orig_pred = pred.compute_future_map
+    _orig_cons = cons.get_consciousness_status
+    def rp(*a, **k):
+        counters['pred'] += 1
+        return _orig_pred(*a, **k)
+    def rc(*a, **k):
+        counters['cons'] += 1
+        return _orig_cons(*a, **k)
+    pred.compute_future_map = rp
+    cons.get_consciousness_status = rc
+    r = c.post('/chat', json={'text': 'أول طلب محادثة'})
+    _R['status'] = r.status_code
+    _R['pred'] = counters['pred']
+    _R['cons'] = counters['cons']
+"""
+
+
+def test_first_chat_fresh_root_components_run(tmp_path):
+    """اعتراض المراجع ج5: غياب السجل الابتدائي ليس اختفاء سجل مثبت — جذر
+    جديد قابل للكتابة بلا سجل: أول طلب /chat فعلي يجب أن يشغّل المكونات
+    الطبيعية فعليًا (تنفيذ مثبت بعدّادات، لا مجرد نجاح الدورة)."""
+    rc, payload, err = _run_chat_first_request_scenario(
+        _chat_counters_body(""), tmp_path,
+    )
+    assert rc == 0 and payload is not None, f"السيناريو فشل: rc={rc} err={err[-300:]}"
+    assert "unexpected_error" not in payload, payload["unexpected_error"]
+    assert payload["log_exists_before"] is False, "السيناريو لم يبدأ بلا سجل"
+    assert payload["status"] == 200, f"المحادثة يجب أن تنجح — أعيد {payload['status']}"
+    assert payload["pred"] > 0, (
+        f"التنبؤ لم يُنفذ في جذر بلا سجل ({payload['pred']}) — البدء الابتدائي "
+        "عُامل كحالة مجهولة تمنع التنفيذ"
+    )
+    assert payload["cons"] > 0, "الوعي لم يُنفذ — البدء الابتدائي ممنوع"
+
+
+def test_first_chat_unreadable_cold_blocks(tmp_path):
+    """اعتراض المراجع ج5: سجل موجود غير مقروء قبل أول دورة (بارد) — الحالة
+    المجهولة لا تتحول إذنًا: المكون المعزول موثقًا لا يُستدع عبر أول طلب
+    /chat فعلي، والدورة تكتمل (التطبيق حي)."""
+    body = _chat_counters_body(
+        """
+    from backend.loyalty_log import append_entry, quarantine_log_path
+    assert append_entry('quarantine', 'عزل التنبؤ', component='predictive') is True
+    quarantine_log_path().chmod(0o000)
+"""
+    )
+    rc, payload, err = _run_chat_first_request_scenario(body, tmp_path)
+    assert rc == 0 and payload is not None, f"السيناريو فشل: rc={rc} err={err[-300:]}"
+    assert "unexpected_error" not in payload, payload["unexpected_error"]
+    assert payload["status"] == 200, f"التطبيق يجب أن يبقى حيًا — أعيد {payload['status']}"
+    # الحالة المجهولة إغلاق كامل (اتجاه آمن): لا إذن لأي مكوّن من الجهل —
+    # التطبيق حي والدورة تكتمل بمنطق المنسق الذاتي. المطلوب حرفيًا: المعزول
+    # الموثق لا يُستدع (لا يتحول الجهل إذنًا)
+    assert payload["pred"] == 0, (
+        f"الحالة المجهولة تحولت إذنًا عبر أول طلب — استُدعي التنبؤ "
+        f"{payload['pred']} مرة"
+    )
+    assert payload["cons"] == 0, (
+        f"الجهل منح إذنًا للوعي أيضًا ({payload['cons']}) — الإغلاق الكامل "
+        "هو الاتجاه الآمن الموثق"
+    )
+
+
+def test_first_chat_deletion_after_proven_keeps(tmp_path):
+    """اعتراض المراجع ج5: سجل اختفى بعد إثبات العزل — العزل المعروف لا
+    يُسقط عبر أول طلب /chat فعلي في عملية جديدة (غياب بعد إثبات ≠ بدء)."""
+    body = """
+from app import app as _app
+from fastapi.testclient import TestClient
+from backend.loyalty_log import append_entry, quarantine_log_path
+with TestClient(_app) as c:
+    orch = _app.state.orchestrator
+    pred = orch.predictive.get('engine')
+    counters = {'pred': 0}
+    _orig = pred.compute_future_map
+    def rp(*a, **k):
+        counters['pred'] += 1
+        return _orig(*a, **k)
+    pred.compute_future_map = rp
+    # ١) توثيق العزل ثم أول طلب (يثبت الحالة داخل المنسق — التنبؤ محجوب)
+    assert append_entry('quarantine', 'عزل التنبؤ', component='predictive') is True
+    r1 = c.post('/chat', json={'text': 'دورة الإثبات'})
+    _R['status1'] = r1.status_code
+    _R['pred1'] = counters['pred']
+    # ٢) حذف السجل (غياب بعد إثبات) ثم طلب ثانٍ
+    quarantine_log_path().unlink()
+    r2 = c.post('/chat', json={'text': 'دورة بعد الحذف'})
+    _R['status2'] = r2.status_code
+    _R['pred2_total'] = counters['pred']
+    _R['cons2'] = counters.setdefault('cons', 0)
+"""
+    rc, payload, err = _run_chat_first_request_scenario(body, tmp_path)
+    assert rc == 0 and payload is not None, f"السيناريو فشل: rc={rc} err={err[-300:]}"
+    assert "unexpected_error" not in payload, payload["unexpected_error"]
+    assert payload["status1"] == 200 and payload["status2"] == 200, payload
+    assert payload["pred1"] == 0, "العزل الموثق لم يحجب التنبؤ في الدورة الأولى"
+    assert payload["pred2_total"] == 0, (
+        f"حذف السجل أسقط العزل المثبت — استُدعي التنبؤ {payload['pred2_total']} مرة"
+    )
