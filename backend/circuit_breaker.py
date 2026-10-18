@@ -22,7 +22,7 @@ import os
 import re
 import sys
 import threading
-from typing import Optional, Set
+from typing import Optional
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
@@ -37,6 +37,22 @@ from backend.loyalty_log import quarantine_log_path, quarantined_components
 # مسار مكوّن فقط — لا شيء آخر يُحجب
 _COMPONENT_ROUTE = re.compile(r"^/components/([a-z][a-z0-9_]*)$")
 
+# R-688 (مسح نطاق التوجيع — اعتراض المراجع): مسارات الميزات التي تخاطب
+# مكوّنًا بالاسم (ليست عرض حالة فقط) — طلب موجه للمكوّن فعلًا. يرفضه المدخل
+# عند عزل مكوّنه، وبقية المسارات تعمل. حارس بنيوي يمنع تقادم الخريطة
+# (test_feature_route_map_has_no_stale_entries).
+_COMPONENT_PATH_MAP = {
+    "/nexus/recommendations/live": "nexus",
+    "/nexus/recommendations/pending": "nexus",
+    "/sovereign/command": "sovereign",
+    "/sovereign/reset": "sovereign",
+}
+
+# R-688 (اعتراض المراجع): حالة لا يمكن إثباتها — السجل موجود لكنه غير قابل
+# للقراءة. القرار: إغلاق على مسارات المكونات بخطأ محدد (لا سماح صامت ولا
+# إسقاط لعزل مثبت)، والمسارات غير المكوّنية والتطبيق كله يبقيان أحياء.
+_UNKNOWN = object()
+
 _CACHE_LOCK = threading.Lock()
 _CACHE: dict = {
     "path": None,
@@ -45,28 +61,47 @@ _CACHE: dict = {
 }
 
 
-def _current_quarantined() -> Set[str]:
-    """المكونات المعزولة الآن — بذاكرة ببصمة تغيّر الملف (لا قرص لكل طلب)."""
+def _current_quarantined():
+    """المكونات المعزولة الآن — أو _UNKNOWN إذا تعذر إثبات حالة السجل.
+
+    - لا ملف: لا عزل على القرص — لكن يبقى احتياط الذاكرة (أحداث فشل توثيقها
+      في هذه العملية) — لا سماح صامت لفشل الكتابة.
+    - ملف موجود مقروء: قراءة بذاكرة ببصمة تغيّر (لا قرص لكل طلب).
+    - ملف موجود غير مقروء: OSError ← _UNKNOWN (المتصل يغلق بخطأ محدد).
+    """
+    path = quarantine_log_path()
     try:
-        path = quarantine_log_path()
         stat = path.stat()
         stamp = (stat.st_mtime_ns, stat.st_size)
+    except (FileNotFoundError, NotADirectoryError):
+        # لا سجل على القرص أصلًا (أو موضعه مكسور) — مشروع: لم يُوثق عزل
+        # على القرص. يبقى احتياط الذاكرة (أحداث فشل توثيقها في هذه العملية).
+        components = quarantined_components(path)
+        with _CACHE_LOCK:
+            _CACHE.update(path=str(path), stamp=None, components=set(components))
+        return set(components)
     except OSError:
-        # السجل غير موجود بعد = لا عزل — بلا ذاكرة (غياب الملف ليس حالة)
-        return set()
+        # موجود لكن حالته مجهولة — لا سماح صامت (القرار عند المتصل: إغلاق)
+        return _UNKNOWN
     with _CACHE_LOCK:
-        if _CACHE["path"] == path and _CACHE["stamp"] == stamp:
+        if _CACHE["path"] == str(path) and _CACHE["stamp"] == stamp:
             return set(_CACHE["components"])
-    components = quarantined_components(path)
+    try:
+        components = quarantined_components(path)
+    except OSError:
+        return _UNKNOWN
     with _CACHE_LOCK:
-        _CACHE["path"] = path
-        _CACHE["stamp"] = stamp
-        _CACHE["components"] = set(components)
+        _CACHE.update(path=str(path), stamp=stamp, components=set(components))
     return components
 
 
 class CircuitBreakerMiddleware:
-    """مدخل التوجيه — ASGI middleware خالص (لا يعتمد ترتيب add_middleware)."""
+    """مدخل التوجيه — ASGI middleware خالص (لا يعتمد ترتيب add_middleware).
+
+    R-688 (اعتراض المراجع): فشل السجل لا يتحول سماحًا صامتًا — العزل المثبت
+    يُرفض (503 component_quarantined)، والحالة غير القابلة للإثبات تُغلق على
+    مسارات المكونات بخطأ محدد (503 quarantine_log_unreadable) والتطبيق حي.
+    """
 
     def __init__(self, app):
         self.app = app
@@ -75,10 +110,28 @@ class CircuitBreakerMiddleware:
         if scope["type"] == "http":
             path: Optional[str] = scope.get("path")
             if path:
-                match = _COMPONENT_ROUTE.match(path)
-                if match:
-                    component = match.group(1)
-                    if component in _current_quarantined():
+                component = _COMPONENT_PATH_MAP.get(path)
+                if component is None:
+                    match = _COMPONENT_ROUTE.match(path)
+                    component = match.group(1) if match else None
+                if component:
+                    quarantined = _current_quarantined()
+                    if quarantined is _UNKNOWN:
+                        response = JSONResponse(
+                            status_code=503,
+                            content={
+                                "error": "quarantine_log_unreadable",
+                                "component": component,
+                                "detail": (
+                                    "سجل العزل موجود لكنه غير قابل للقراءة — "
+                                    "حالة التوجيه غير قابلة للإثبات: إغلاق "
+                                    "آمن على مسار المكون وبقية التطبيق يعمل"
+                                ),
+                            },
+                        )
+                        await response(scope, receive, send)
+                        return
+                    if component in quarantined:
                         response = JSONResponse(
                             status_code=503,
                             content={

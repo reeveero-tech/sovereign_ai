@@ -23,11 +23,12 @@ LoyaltyContract (المرحلة ١) كانت في الذاكرة فقط — لا
 """
 
 import json
+import logging
 import os
 import sys
 import threading
 from pathlib import Path
-from typing import List, Optional, Set
+from typing import Dict, List, Optional, Set
 
 # جذر المستودع — لعمل الوحدة مستوردة من أي مسار (مثل سيناريوهات العزل)
 _MODULE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -35,8 +36,17 @@ _REPO_ROOT = os.path.dirname(_MODULE_DIR)
 if _REPO_ROOT not in sys.path:
     sys.path.insert(0, _REPO_ROOT)
 
+logger = logging.getLogger("backend.loyalty_log")
+
 # الكتابة متسلسلة عبر قفل واحد — لا سطر ممزق من تداخل خيوط
 _WRITE_LOCK = threading.Lock()
+
+# R-688 (اعتراض المراجع): احتياط في ذاكرة العملية للأحداث التي فشل توثيقها
+# على القرص — مفاتيحه مسارات السجل نفسها (عزل جذور الاختبارات عن بعضها).
+# الهدف: فشل التوثيق مرئي لا صامت — المدخل في نفس العملية يرى الحدث رغم فشل
+# القرص، وفشل الكتابة يعيد False ويطلق تحذيرًا مسموعًا (لا ابتلاع).
+_FALLBACK_LOCK = threading.Lock()
+_FALLBACK: Dict[str, List[dict]] = {}
 
 # الأحداث التي تقرر حالة التوجيه (مع مكوّن) — غيرها يُسجل ولا يوجه
 _QUARANTINE_KIND = "quarantine"
@@ -57,7 +67,9 @@ def append_entry(
     component: Optional[str] = None,
     data_root: Optional[os.PathLike] = None,
 ) -> bool:
-    """إلحاق حدث بالسجل — True عند النجاح، False عند فشل الكتابة (لا استثناء).
+    """إلحاق حدث بالسجل — True عند نجاح التوثيق على القرص، False عند فشله
+    (لا استثناء أبدًا). عند الفشل: الحدث لا يضيع صامتًا — يُحفظ في احتياط ذاكرة
+    العملية (يقرؤه مدخل التوجيه في نفس العملية) ويُطلق تحذير مسموع.
 
     component=None يعني حدث العقد العام (لا يعزل مكونات التوجيه).
     """
@@ -73,7 +85,16 @@ def append_entry(
                 f.write(line + "\n")
         return True
     except OSError:
-        # عزل الفشل: السجل لا يقتل النظام أبدًا (فلسفة R-686 — عزل لا موت)
+        # R-688 (اعتراض المراجع): فشل التوثيق لا يجوز أن يتحول سماحًا صامتًا —
+        # الحدث يبقى مرئيًا في ذاكرة هذه العملية + تحذير مسموع، والقرص يُعاد
+        # في الدورة التالية (عزل الفشل لا موت ولا صمت)
+        with _FALLBACK_LOCK:
+            _FALLBACK.setdefault(str(path), []).append(entry)
+        logger.warning(
+            "فشل توثيق حدث سجل العزل على القرص (%s) — محفوظ في احتياط الذاكرة "
+            "لهذه العملية: kind=%s component=%s",
+            path, entry["kind"], entry.get("component"),
+        )
         return False
 
 
@@ -103,10 +124,16 @@ def quarantined_components(
     """المكونات المعزولة الآن: آخر حدث لكل مكوّن يحدد حالته.
 
     عزل ← معزول، رفع لاحق ← مرفوع. الأحداث بلا مكوّن لا تُدخل في الحساب
-    (عزل العقد العام مسألة ولاء لا توجيه).
+    (عزل العقد العام مسألة ولاء لا توجيه). يُدمج احتياط الذاكرة (أحداث فشل
+    توثيقها على القرص في هذه العملية) مع ملف السجل — مرتبة زمنيًا.
+
+    يرفع OSError إذا كان السجل موجودًا لكنه غير قابل للقراءة — الحالة غير
+    القابلة للإثبات قرار المتصل (المدخل يغلق، لا يسكت).
     """
+    log_path = Path(path) if path is not None else quarantine_log_path()
+    entries = _merged_entries(log_path)
     components: Set[str] = set()
-    for entry in read_entries(path):
+    for entry in entries:
         component = entry.get("component")
         if component is None:
             continue
@@ -116,6 +143,27 @@ def quarantined_components(
         elif kind == _RELEASE_KIND:
             components.discard(str(component))
     return components
+
+
+def _merged_entries(log_path: Path) -> List[dict]:
+    """أحداث الملف (إن كان قابلًا للقراءة) + احتياط الذاكرة لمساره — مرتبة
+    زمنيًا. غياب الملف مشروع (لا عزل على القرص)؛ وجوده غير المقروء يُرفع
+    (OSError) لا يُصمت."""
+    with _FALLBACK_LOCK:
+        fallback = list(_FALLBACK.get(str(log_path), []))
+    file_entries = read_entries(log_path)  # يرفع OSError إذا موجود وغير مقروء
+    merged = file_entries + fallback
+    merged.sort(key=lambda e: e.get("time", 0))
+    return merged
+
+
+def clear_fallback(path: Optional[os.PathLike] = None) -> None:
+    """تفريغ احتياط الذاكرة (أداة اختبار — عزل الاختبارات عن بعضها)."""
+    with _FALLBACK_LOCK:
+        if path is None:
+            _FALLBACK.clear()
+        else:
+            _FALLBACK.pop(str(Path(path)), None)
 
 
 def _now() -> float:

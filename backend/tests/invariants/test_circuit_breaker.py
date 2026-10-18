@@ -39,11 +39,15 @@ from backend.loyalty_log import append_entry, quarantine_log_path  # noqa: E402
 def _restore_session_quarantine_log():
     """عزل الاختبارات عن بعضها: لقطة لسجل عزل الجلسة قبل الاختبار ← استعادة
     بعده (حذف إن لم يكن موجودًا / إعادة المحتوى الأصلي إن كان) — يعمل حتى
-    عند فشل الاختبار في منتصفه (finally)."""
+    عند فشل الاختبار في منتصفه (finally). يشمل تفريغ احتياط الذاكرة لمسار
+    الجلسة (أحداث فشل التوثيق) — لا تسريب بين الاختبارات (R-688)."""
     log = quarantine_log_path()
     existed = log.exists()
     original = log.read_text(encoding="utf-8") if existed else None
+    from backend.loyalty_log import clear_fallback
+    clear_fallback(log)
     yield
+    clear_fallback(log)
     if existed:
         log.write_text(original, encoding="utf-8")
     elif log.exists():
@@ -112,3 +116,125 @@ def test_no_quarantine_all_components_pass():
             assert resp.status_code == 200, (
                 f"بلا عزل يجب أن يمر {component} — أعيد {resp.status_code}"
             )
+
+
+# ---------- اعتراضات المراجع (R-688): لا سماح صامت عند فشل السجل ----------
+
+def test_quarantine_write_failure_is_not_silent_allow():
+    """اعتراض المراجع: فشل كتابة سجل العزل يجب ألا يتحول سماحًا صامتًا —
+    المكوّن المعزول يُرفض رغم فشل التوثيق على القرص (الحدث محفوظ في ذاكرة
+    العملية كاحتياط مرئي)، وبقية المكونات تستمر (الأمر نصًّا)."""
+    import stat as stat_mod
+    log = quarantine_log_path()
+    blocker = log.parent  # مجلد loyalty
+    blocker.mkdir(parents=True, exist_ok=True)
+    file_existed = log.exists()
+    restored_modes = []
+    # منع الكتابة في الحالتين: إنشاء ملف جديد (يحتاج كتابة المجلد) وإلحاق
+    # بملف موجود (يحتاج كتابة الملف نفسه) — الحجبان معًا للاستقلال عن الترتيب
+    blocker.chmod(0o500)
+    if file_existed:
+        restored_modes.append((log, log.stat().st_mode & 0o777))
+        log.chmod(0o444)
+    try:
+        ok = append_entry("quarantine", "خلل مع فشل توثيق", component="predictive")
+        assert ok is False, "الكتابة يجب أن تفشل هنا (المجلد/الملف للقراءة فقط) — وإلا فالاختبار لا يختبر شيئًا"
+        with TestClient(app) as client:
+            r1 = client.get("/components/predictive")
+            assert r1.status_code == 503, (
+                f"سماح صامت ممنوع: المكوّن المعزول يُرفض رغم فشل التوثيق — "
+                f"أعيد {r1.status_code}: {r1.text[:200]}"
+            )
+            assert r1.json()["error"] == "component_quarantined", r1.text[:200]
+            r2 = client.get("/components/memory")
+            assert r2.status_code == 200, (
+                f"بقية المكونات تستمر رغم فشل السجل — أعيد {r2.status_code}"
+            )
+    finally:
+        from backend.loyalty_log import clear_fallback
+        blocker.chmod(0o700)
+        for p, m in restored_modes:
+            p.chmod(m)
+        clear_fallback(log)
+
+
+def test_unreadable_log_fails_closed_not_silent_allow():
+    """اعتراض المراجع: سجل موجود لكنه غير قابل للقراءة = حالة لا يمكن إثباتها —
+    الإغلاق على مسارات المكونات بخطأ محدد (لا سماح صامت ولا إسقاط لعزل مثبت)،
+    والتطبيق حي (المسارات غير المكوّنية تعمل)."""
+    import stat as stat_mod
+    log = quarantine_log_path()
+    assert append_entry("quarantine", "عزل مثبت قبل التعطيل", component="quantum") is True
+    log.chmod(0)  # غير قابل للقراءة حتى لصاحبه — الحالة تصير غير قابلة للإثبات
+    try:
+        import backend.circuit_breaker as cb
+        with cb._CACHE_LOCK:  # اختبار المسار البارد: بلا ذاكرة سابقة
+            cb._CACHE.update(path=None, stamp=None, components=set())
+        with TestClient(app) as client:
+            r1 = client.get("/components/quantum")
+            assert r1.status_code == 503, (
+                f"لا سماح صامت عند سجل غير مقروء — أعيد {r1.status_code}"
+            )
+            assert r1.json()["error"] == "quarantine_log_unreadable", (
+                f"خطأ محدد مطلوب: {r1.text[:200]}"
+            )
+            r2 = client.get("/components/memory")
+            assert r2.status_code == 503 and r2.json()["error"] == "quarantine_log_unreadable", (
+                "حالة غير قابلة للإثبات = إغلاق على كل مسارات المكونات بخطأ محدد"
+            )
+            assert client.get("/health").status_code == 200, "التطبيق حي — الإغلاق على المسار لا العملية"
+    finally:
+        log.chmod(stat_mod.S_IRUSR | stat_mod.S_IWUSR | stat_mod.S_IRGRP | stat_mod.S_IROTH)
+        import backend.circuit_breaker as cb
+        with cb._CACHE_LOCK:
+            cb._CACHE.update(path=None, stamp=None, components=set())
+
+
+def test_component_routes_fully_covered_by_breaker():
+    """اعتراض المراجع (نطاق التوجيه): كل مسار مسجل يخاطب مكوّنًا باسمه
+    (/components/...) يجب أن يقع داخل تغطية المدخل — لا مسار مكوّن يهرب."""
+    from backend.circuit_breaker import _COMPONENT_ROUTE
+    comp_routes = [
+        getattr(r, "path", "") for r in app.routes
+        if getattr(r, "path", "").startswith("/components/")
+    ]
+    assert comp_routes, "لا مسارات مكونات — المسح نفسه معطوب"
+    for p in comp_routes:
+        assert _COMPONENT_ROUTE.match(p), (
+            f"مسار مكون خارج تغطية المدخل (سماح محتمل): {p}"
+        )
+
+
+def test_feature_routes_of_quarantined_component_rejected():
+    """R-688 (مسح نطاق التوجيه): مسارات الميزات التي تخاطب مكوّنًا بالاسم —
+    /nexus/recommendations/* (نكسس) و/sovereign/command (سيادي) — تُرفض
+    بأمان عندما يكون مكوّنها معزولًا (الطلب موجه للمكوّن فعلًا، لا عرض حالة
+    فقط)، وبقية المسارات غير المكوّنية تعمل."""
+    assert append_entry("quarantine", "عزل نكسس", component="nexus") is True
+    assert append_entry("quarantine", "عزل السيادي", component="sovereign") is True
+    with TestClient(app) as client:
+        r1 = client.get("/nexus/recommendations/pending")
+        assert r1.status_code == 503, (
+            f"مسار ميزة نكسس يجب أن يُرفض والمكوّن معزول — أعيد "
+            f"{r1.status_code}: {r1.text[:200]}"
+        )
+        assert r1.json()["error"] == "component_quarantined", r1.text[:200]
+        assert r1.json()["component"] == "nexus", r1.text[:200]
+        r2 = client.post("/sovereign/command", json={})
+        assert r2.status_code == 503, (
+            f"مسار أوامر السيادي يجب أن يُرفض والمكوّن معزول — أعيد {r2.status_code}"
+        )
+        assert r2.json()["error"] == "component_quarantined", r2.text[:200]
+        # بقية التطبيق: مسارات غير مكوّنية ومكونات غير معزولة
+        assert client.get("/health").status_code == 200
+        r3 = client.get("/components/memory")
+        assert r3.status_code == 200, "المكونات غير المعزولة تستمر"
+
+
+def test_feature_route_map_has_no_stale_entries():
+    """حارس خريطة مسارات المكونات: كل مسار في الخريطة مسجل فعلًا في
+    التطبيق (لا بقايا مسارات محذوفة تحجب بلا هدف)."""
+    from backend.circuit_breaker import _COMPONENT_PATH_MAP
+    registered = {getattr(r, "path", None) for r in app.routes}
+    for path in _COMPONENT_PATH_MAP:
+        assert path in registered, f"مسار في خريطة المدخل غير مسجل: {path}"

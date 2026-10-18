@@ -987,3 +987,26 @@ numstat لكل ملف مقابل الأب da83b56 (من git الفعلي — ل�
 | `backend/Mr.py` (−7 أسطر تواقيع دوال) | **مُبرر # DELETION-JUSTIFIED — أمر المالك الصريح 2026-10-18 (المرحلة ٢):** «مدخل يقرأ من سجل العزل» يتطلب أن يكتب العقد السجل بمكوّن — أسطر تواقيع `quarantine/report_fault/release_quarantine/_record_violation` عُدّلت لإضافة معامل `component=` **الاختياري** (سلوك المرحلة ١ محفوظ حرفيًا: كل اختبارات R-686 تمتد دون تعديل — التسلسلات المتوقعة كما هي). لا حذف منطق — إضافة معامل. |
 | `docs/CHANGELOG.md` (−1 سطر ترويسة) | **مُبرر # DELETION-JUSTIFIED:** تحديث سطر «آخر تحديث» من R-686 إلى R-687 — الممارسة المعيارية للملف نفسه (نمط R-686 المدوّن أعلاه). |
 | ملاحظة نزاهة (لا حذف في git): تصويب أرقام التوثيق 585←587 تم داخل الأسطر المضافة حديثًا في هذا الالتزام نفسه قبل الدفع (اختبارا مطابقة التدقيق أُضيفا بعد كتابة الأرقام الأولى) — التصويب داخل كتلة الإضافة لا يُنشئ حذوفات، وموثق هنا لا مخفي. |
+
+## إضافة R-688 (2026-10-18) — إصلاحات اعتراضات المراجع على R-687
+
+numstat لكل ملف مقابل الأب cc83a51 (من git الفعلي؛ اختبار دائم
+test_audit_consistency.py يطابق هذا الجدول مع git حرفيًا):
+
+- `OWNER_REQUIRED.md`: +16 / −0
+- `backend/circuit_breaker.py`: +69 / −16
+- `backend/loyalty_log.py`: +53 / −5
+- `backend/tests/invariants/test_audit_consistency.py`: +95 / −0
+- `backend/tests/invariants/test_circuit_breaker.py`: +127 / −1
+- `docs/CHANGELOG.md`: +13 / −1
+- `docs/PROJECT_STATE.md`: +13 / −0
+- `forensics/R688_ADVISOR_OBJECTIONS.md`: +119 / −0
+- `forensics/DELETED_LINES_AUDIT.md`: +23 / −0
+
+الإجمالي: 528 إضافة / 23 حذفًا في 9 ملفات.
+
+| المحذوف | المبرر |
+|---|---|
+| `backend/circuit_breaker.py` (−16) و`backend/loyalty_log.py` (−5) | **مُبرر # DELETION-JUSTIFIED — اعتراض المراجع الصريح:** إعادة هيكلة `_current_quarantined` والوسيط لمعالجة السماح الصامت (احتياط ذاكرة العملية) والإغلاق عند تعذر الإثبات (sentinel _UNKNOWN + 503 محدد) وخريطة مسارات الميزات — كل سطر محذوف استُبدل بأقوى منه، لا حذف ميزة ولا سلوك قائم ضاع (اختبارات R-687 كلها تمتد خضراء). |
+| `backend/tests/invariants/test_circuit_breaker.py` (−1) | **مُبرر # DELETION-JUSTIFIED:** سطر منطق مطابقة المسار في الوسيط استُبدل بالخريطة + المطابقة (توسيع تغطية اعتراض المراجع). |
+| `docs/CHANGELOG.md` (−1) | **مُبرر # DELETION-JUSTIFIED:** تحديث سطر «آخر تحديث» إلى R-688 — النمط المعياري للملف. |
