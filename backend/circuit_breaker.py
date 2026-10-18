@@ -149,7 +149,7 @@ def _current_quarantined(component: str):
         return _REASON_UNREADABLE
     with _CACHE_LOCK:
         if _CACHE["path"] == str(path) and _CACHE["stamp"] == stamp:
-            return set(_CACHE["components"]) | local_fallback
+            return set(_CACHE["components"])
     try:
         components = quarantined_components(path)  # يرفع OSError عند تعذر القراءة
     except OSError:
@@ -157,7 +157,7 @@ def _current_quarantined(component: str):
         return _REASON_UNREADABLE
     with _CACHE_LOCK:
         _CACHE.update(path=str(path), stamp=stamp, components=set(components))
-    return set(components) | local_fallback
+    return set(components)
 
 
 class CircuitBreakerMiddleware:

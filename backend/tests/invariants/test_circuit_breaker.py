@@ -489,3 +489,141 @@ def test_sovereign_quarantine_blocks_cycle_sovereign_layer():
             assert result.success is True, "الدورة يجب أن تكتمل"
         finally:
             controller.controller_cycle = orig
+
+
+# ---------- R-691 (اعتراض المراجع ج4): طبقة التقييم + الرفع الموثق + الفشل البارد ----------
+
+def test_sovereign_quarantine_blocks_evaluation_layer():
+    """اعتراض المراجع ج4: الحارس السالب «if not self.sovereign:» في
+    _evaluate_sovereign لم يكن يشمل العزل — عزل السيادي يجب أن يعيد طبقة
+    التقييم بالمسار الافتراضي (no_sovereign_layer: لا استدعاء لـwill/
+    alignment/directives/controller من مرحلتي التقييم والقرار) والدورة
+    تكتمل. ملاحظة معايير: كائنات الطبقات مشتركة — مكونات أخرى قد تستدعيها
+    داخليًا (يُمنع ذلك عند عزل تلك المكونات بحواجزها)؛ هذا الاختبار يثبت
+    مرحلتي التقييم والقرار تحديدًا كما طلبه المراجع."""
+    assert append_entry("quarantine", "عزل السيادي", component="sovereign") is True
+    with TestClient(app) as client:
+        orch = app.state.orchestrator
+        controller = (orch.sovereign or {}).get("controller")
+        cc_calls = {"n": 0}
+        assert controller is not None and hasattr(controller, "controller_cycle"), (
+            "بلا متحكم سيادي — الاختبار لا يختبر شيئًا"
+        )
+        orig_cc = controller.controller_cycle
+
+        def rec_cc(*a, **k):
+            cc_calls["n"] += 1
+            return orig_cc(*a, **k)
+
+        controller.controller_cycle = rec_cc
+        try:
+            result = orch.run_cycle({"type": "chat", "text": "اختبار طبقة التقييم"})
+            # مرحلة التقييم: الحارس السالب أشمل العزل — عاد بالمسار الافتراضي
+            eval_result = result.sovereign_eval
+            assert eval_result.get("decision", {}).get("reason") == (
+                "no_sovereign_layer"
+            ), f"طبقة التقييم لم تُغلق بالعزل: {eval_result}"
+            # مرحلة القرار: المتحكم السيادي لم يُستدع من المنسق
+            assert cc_calls["n"] == 0, (
+                f"المتحكم السيادي استُدعي من مرحلة القرار {cc_calls['n']} مرة"
+            )
+            assert result.success is True, "الدورة يجب أن تكتمل"
+        finally:
+            controller.controller_cycle = orig_cc
+
+
+def test_documented_release_clears_fallback_quarantine():
+    """اعتراض المراجع ج4: الرفع الموثق اللاحق يجب أن ينهي عزلًا سابقًا فشل
+    توثيقه (دون clear_fallback — ترتيب الأحداث الفعالة يحسم)."""
+    log = quarantine_log_path()
+    log.parent.mkdir(parents=True, exist_ok=True)
+    log.touch(exist_ok=True)  # الملف موجود قبل الحجب (chmod على ملف موجود)
+    log.chmod(0o444)  # القناة معطوبة: العزل يفشل توثيقه → الاحتياط
+    try:
+        ok = append_entry("quarantine", "عزل فاشل التوثيق", component="predictive")
+        assert ok is False, "التوثيق يجب أن يفشل هنا"
+    finally:
+        log.chmod(0o644)  # القناة أُصلحت
+    # رفع مأذون ينجح توثيقه (القناة سليمة) — لا clear_fallback في هذا الاختبار
+    ok_release = append_entry("release", "رفع موثق بعد إصلاح القناة", component="predictive")
+    assert ok_release is True, "التوثيق يجب أن ينجح هنا"
+    with TestClient(app) as client:
+        r = client.get("/components/predictive")
+        assert r.status_code == 200, (
+            f"الرفع الموثق لم ينهِ عزل الاحتياط السابق — أعيد {r.status_code}: "
+            f"{r.text[:200]}"
+        )
+
+
+def test_cold_read_failure_is_not_internal_allow():
+    """اعتراض المراجع ج4: فشل القراءة البارد (قبل أول قراءة ناجحة) لا يجوز أن
+    يتحول إذنًا داخليًا — الحالة المجهولة تمنع استدعاء المكونات في الدورة
+    (لا موت ولا إسقاط)، مع سجل يحتوي عزلًا موثقًا."""
+    assert append_entry("quarantine", "عزل التنبؤ", component="predictive") is True
+    log = quarantine_log_path()
+    with TestClient(app) as client:
+        orch = app.state.orchestrator
+        # محاكاة منسق بارد: لم تُثبت أي حالة بعد (لا قراءة ناجحة سابقة)
+        orch._quarantine_proven = False
+        orch._quarantine_last_known = frozenset()
+        orch._quarantine_cache = None
+        orch._quarantine_dirty = True
+        pred_calls = {"n": 0}
+        pred_engine = orch.predictive.get("engine")
+        orig = pred_engine.compute_future_map
+
+        def rec(*a, **k):
+            pred_calls["n"] += 1
+            return orig(*a, **k)
+
+        pred_engine.compute_future_map = rec
+        try:
+            log.chmod(0o000)  # تعطيل القراءة قبل أول دورة
+            try:
+                result = orch.run_cycle({"type": "chat", "text": "فشل بارد"})
+                assert pred_calls["n"] == 0, (
+                    f"الحالة المجهولة تحولت إذنًا — استُدعي التنبؤ "
+                    f"{pred_calls['n']} مرة"
+                )
+                assert result.success is True, "الدورة يجب أن تكتمل"
+            finally:
+                log.chmod(0o644)
+        finally:
+            pred_engine.compute_future_map = orig
+
+
+def test_file_deletion_after_proven_keeps_orchestrator_quarantine():
+    """اعتراض المراجع ج4: اختفاء الملف بعد إثبات العزل داخل المنسق — الغياب
+    لا يُقرأ فراغًا (تعذر إثبات، لا لا-عزل): آخر حالة معروفة تبقى مفروضة."""
+    assert append_entry("quarantine", "عزل التنبؤ", component="predictive") is True
+    log = quarantine_log_path()
+    with TestClient(app) as client:
+        orch = app.state.orchestrator
+        pred_calls = {"n": 0}
+        pred_engine = orch.predictive.get("engine")
+        orig = pred_engine.compute_future_map
+
+        def rec(*a, **k):
+            pred_calls["n"] += 1
+            return orig(*a, **k)
+
+        pred_engine.compute_future_map = rec
+        try:
+            # دورة أولى: القراءة ناجحة — العزل مثبت داخل المنسق
+            r1 = orch.run_cycle({"type": "chat", "text": "دورة الإثبات"})
+            assert pred_calls["n"] == 0
+            # حذف الملف (غياب = تعذر إثبات، لا فراغ)
+            log.unlink()
+            try:
+                r2 = orch.run_cycle({"type": "chat", "text": "دورة بعد الحذف"})
+                assert pred_calls["n"] == 0, (
+                    f"اختفاء الملف أسقط عزلًا مثبتًا داخل المنسق — استُدعي "
+                    f"{pred_calls['n']} مرة"
+                )
+                assert r2.success is True, "الدورة يجب أن تكتمل"
+            finally:
+                # استعادة السجل للاختبارات اللاحقة (المحتوى الأصلي محفوظ في الـfixture)
+                log.parent.mkdir(parents=True, exist_ok=True)
+                log.write_text("", encoding="utf-8")
+        finally:
+            pred_engine.compute_future_map = orig

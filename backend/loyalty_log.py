@@ -139,19 +139,31 @@ def quarantined_components(
     القابلة للإثبات قرار المتصل (المدخل يغلق، لا يسكت).
     """
     log_path = Path(path) if path is not None else quarantine_log_path()
-    # ١) حالة الملف — آخر حدث لكل مكوّن يحدد حالته
-    file_components: Set[str] = set()
+    # أحداث فعالة مرتبة زمنيًا: الملف (عزل+رفع نافذان) + عزل الاحتياط فقط
+    # (الرفع الفاشل التوثيق مستبعد من التنفيذ — R-690) — الترتيب زمني
+    # فيسمح الرفع الموثق اللاحق بإنهاء عزل سابق فشل توثيقه في الاحتياط
+    # (R-691 — اعتراض المراجع ج4)
+    events: List[tuple] = []
     for entry in read_entries(log_path):  # يرفع OSError إذا موجود وغير مقروء
-        component = entry.get("component")
+        events.append(
+            (entry.get("time", 0), entry.get("kind"), entry.get("component"))
+        )
+    with _FALLBACK_LOCK:
+        for entry in _FALLBACK.get(str(log_path), []):
+            if entry.get("kind") == _QUARANTINE_KIND:
+                events.append(
+                    (entry.get("time", 0), entry.get("kind"), entry.get("component"))
+                )
+    events.sort(key=lambda e: e[0])
+    components: Set[str] = set()
+    for _, kind, component in events:
         if component is None:
             continue
-        kind = entry.get("kind")
         if kind == _QUARANTINE_KIND:
-            file_components.add(str(component))
+            components.add(str(component))
         elif kind == _RELEASE_KIND:
-            file_components.discard(str(component))
-    # ٢) احتياط الذاكرة — العزل النافذ فقط (الرفع الفاشل غير منفذ)
-    return file_components | fallback_quarantined(log_path)
+            components.discard(str(component))
+    return components
 
 
 def _merged_entries(log_path: Path) -> List[dict]:

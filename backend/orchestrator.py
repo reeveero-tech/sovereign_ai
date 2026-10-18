@@ -176,29 +176,45 @@ class SovereignOrchestrator:
 
     def _refresh_quarantine_state(self) -> None:
         """قراءة حالة العزل من القناة المشتركة (ملف السجل — بلا استيراد Mr).
-        R-690 (اعتراض المراجع ج3): فشل القراءة يُبقي آخر حالة معروفة — لا
-        يُسقط عزلًا معروفًا ولا يوقف الدورة (المنع الصعب عند حد التوجيع)."""
+        R-690: فشل القراءة يُبقي آخر حالة معروفة. R-691 (اعتراض المراجع ج4):
+        الغياب ليس فراغًا (تعذر إثبات لا لا-عزل)، والفشل البارد (لم يُثبت
+        شيء بعد) حالة مجهولة تمنع الاستدعاء — لا تتحول إذنًا صامتًا."""
         try:
             # استيراد متأخر بنمط الملف (المكونات تُستورد داخل الدوال)
             try:
-                from backend.loyalty_log import quarantined_components
+                from backend.loyalty_log import (
+                    quarantined_components,
+                    quarantine_log_path,
+                )
             except ImportError:  # جذر المستودع ليس على المسار — أصلحه
                 import sys as _sys
                 _root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
                 if _root not in _sys.path:
                     _sys.path.insert(0, _root)
-                from backend.loyalty_log import quarantined_components
+                from backend.loyalty_log import (
+                    quarantined_components,
+                    quarantine_log_path,
+                )
+            path = quarantine_log_path()
+            if not path.exists():
+                # الغياب = تعذر إثبات (لا يُقرأ فراغًا): آخر حالة معروفة إن
+                # أُثبتت، وإلا مجهول (منع الاستدعاء)
+                raise FileNotFoundError(str(path))
             self._quarantine_cache = frozenset(quarantined_components())
             self._quarantine_last_known = self._quarantine_cache
+            self._quarantine_proven = True
+            self._quarantine_unknown = False
         except OSError:
-            # فشل القراءة: آخر حالة معروفة تبقى مفروضة (لا إسقاط لعزل معروف)
+            # تعذر الإثبات: آخر حالة معروفة إن أُثبتت؛ وإلا مجهول (بارد) —
+            # منع الاستدعاء حتى تُثبت الحالة، لا إذنًا صامتًا
             self._quarantine_cache = self._quarantine_last_known
+            self._quarantine_unknown = not self._quarantine_proven
         self._quarantine_cache_ts = time.time()
         self._quarantine_dirty = False
 
     def _component_quarantined(self, app_component: str) -> bool:
-        """هل مكوّن التطبيق معزول في سجل العزل؟ (قراءة عند بدء كل دورة +
-        ذاكرة TTL قصيرة داخلها؛ فشل القراءة يُبقي آخر حالة معروفة)."""
+        """هل مكوّن التطبيق معزول؟ (قراءة عند بدء كل دورة + TTL داخليها).
+        الحالة المجهولة (فشل بارد) = معزول — منع الاستدعاء، لا إذنًا."""
         now = time.time()
         if (
             self._quarantine_cache is None
@@ -206,6 +222,8 @@ class SovereignOrchestrator:
             or now - self._quarantine_cache_ts > self._QUARANTINE_TTL
         ):
             self._refresh_quarantine_state()
+        if self._quarantine_unknown:
+            return True  # مجهول = منع الاستدعاء (لا إذنًا صامتًا)
         return app_component in self._quarantine_cache
 
     def _use(self, attr_name: str) -> bool:
@@ -250,6 +268,10 @@ class SovereignOrchestrator:
         # آخر حالة معروفة تبقى مفروضة حتى قراءة ناجحة
         self._quarantine_last_known: frozenset = frozenset()
         self._quarantine_dirty: bool = True
+        # R-691 (اعتراض المراجع ج4): تمييز «لا عزل أثبتته قراءة ناجحة» عن
+        # «تعذر إثبات الحالة» — البارد (لم يُثبت شيء) لا يتحول إذنًا صامتًا
+        self._quarantine_proven: bool = False
+        self._quarantine_unknown: bool = False
         
         # العدادات والإحصائيات
         self._stats = {
@@ -1096,8 +1118,9 @@ class SovereignOrchestrator:
             "controller": {}
         }
         
-        if not self.sovereign:
-            # قرار افتراضي إن لم توجد سيادة
+        if not self._use("sovereign"):
+            # قرار افتراضي إن لم توجد سيادة — أو كانت معزولة (R-691: الحارس
+            # السالب يشمل العزل — طبقة التقييم كلها لا تُستدعى)
             sovereign_eval["decision"] = {
                 "action": "continue",
                 "confidence": 0.5,

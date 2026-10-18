@@ -1074,3 +1074,36 @@ test_audit_consistency.py يطابق هذا الجدول مع git حرفيًا):
 | `backend/tests/invariants/test_circuit_breaker.py` (−4) | **مُبرر # DELETION-JUSTIFIED:** تصويب اختبار الرفع الفاشل (حجب الكتابة فعليًا قبل الرفع — كان الاختبار لا يختبر شيئًا) + توسيع اختبار الدورة (عدّاد ذاكرة + success) — تصويب طلبته المراجعة. |
 | `backend/Mr.py` (−2) | **مُبرر # DELETION-JUSTIFIED:** توقيع report_fault من None إلى bool (نشر الفشل — طلب المراجعة). |
 | `docs/CHANGELOG.md` (−2) و`docs/PROJECT_STATE.md` (−1) و`forensics/R689_ADVISOR_OBJECTIONS_ROUND2.md` (−3) | **مُبرر # DELETION-JUSTIFIED:** تحديث سطر «آخر تحديث» + تصويح ترقيم R-689 (600/601 قبل اختباري التدقيق / 602/603 نهائية — طلب المراجعة). |
+
+
+## إضافة R-691 (2026-10-19) — إصلاحات اعتراضات المراجع ج4: طبقة التقييم والرفع الموثق والفشل البارد
+
+numstat لكل ملف مقابل الأب d3a06e0 (من git الفعلي؛ اختبار دائم
+test_audit_consistency.py يطابق هذا الجدول مع git حرفيًا):
+
+- `backend/circuit_breaker.py`: +2 / −2
+- `backend/loyalty_log.py`: +20 / −8
+- `backend/orchestrator.py`: +32 / −9
+- `backend/tests/invariants/test_audit_consistency.py`: +95 / −0
+- `backend/tests/invariants/test_circuit_breaker.py`: +138 / −0
+- `backend/tests/invariants/test_quarantine_log.py`: +26 / −0
+- `docs/CHANGELOG.md`: +11 / −1
+- `docs/PROJECT_STATE.md`: +11 / −0
+- `forensics/R689_ADVISOR_OBJECTIONS_ROUND2.md`: +5 / −2
+- `forensics/R690_ADVISOR_OBJECTIONS_ROUND3.md`: +1 / −1
+- `forensics/R691_ADVISOR_OBJECTIONS_ROUND4.md`: +97 / −0
+- `forensics/R691_evidence/full_suite_green_614.log`: +22 / −0
+- `forensics/R691_evidence/junit_d3a06e0.xml`: +614 / −0
+- `forensics/R691_evidence/red_at_parent_d3a06e0.log`: +787 / −0
+- `forensics/R691_evidence/verify_full_d3a06e0.log`: +49 / −0
+- `forensics/DELETED_LINES_AUDIT.md`: +33 / −0
+
+الإجمالي: 1,943 إضافة / 23 حذفًا في 16 ملفًا.
+
+| المحذوف | المبرر |
+|---|---|
+| `backend/orchestrator.py` (−9) | **مُبرر # DELETION-JUSTIFIED — اعتراض المراجع ج4:** تحويل الحارس السالب (يشمل العزل) + الحالة الثلاثية (proven/unknown/last_known) — كل محذوف استُبدل بأقوى منه. |
+| `backend/loyalty_log.py` (−8) | **مُبرر # DELETION-JUSTIFIED:** الدمج المرتب زمنيًا للأحداث الفعالة — الرفع الموثق اللاحق ينهي عزل الاحتياط السابق (استبدال أقوى). |
+| `backend/circuit_breaker.py` (−2) | **مُبرر # DELETION-JUSTIFIED:** إزالة اتحادين متبقيين من مسار الملف الموجود (القراءة تدمج داخليًا — الاتحاد كان يعيد العزل المنهي). |
+| `backend/tests/invariants/test_circuit_breaker.py` (−0) | إضافات فقط (5 اختبارات جديدة + تصويبان). |
+| `docs/CHANGELOG.md` (−1) و`forensics/R689/R690` (−3) | **مُبرر # DELETION-JUSTIFIED:** تحديث سطر «آخر تحديث» + تصويبات دقة التقرير التي طلبها المراجع (عبارة R-689 + حذف «الموقّع»). |

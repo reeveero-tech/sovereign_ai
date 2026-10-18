@@ -276,3 +276,29 @@ def test_report_fault_propagates_persistence_failure(tmp_path):
         "نجاحًا صامتًا)"
     )
     assert "quarantine_persistence_failed" in payload["kinds"], payload["kinds"]
+
+
+def test_documented_release_after_failed_quarantine(tmp_path):
+    """R-691 (اعتراض المراجع ج4): الرفع الموثق اللاحق ينهي عزلًا سابقًا فشل
+    توثيقه — ترتيب الأحداث الفعالة (الرفع الفاشل مستبعد من التنفيذ) يحسم."""
+    root = tmp_path / "ordered_root"
+    root.mkdir()
+    rc, payload, err = _run_contract_scenario(
+        "import os, stat\n"
+        "from backend.loyalty_log import append_entry, quarantined_components, quarantine_log_path\n"
+        "log = quarantine_log_path()\n"
+        "log.parent.mkdir(parents=True, exist_ok=True)\n"
+        "os.chmod(log.parent, 0o500)\n"
+        "_R['q1'] = append_entry('quarantine', 'عزل فاشل التوثيق', component='nexus')\n"
+        "os.chmod(log.parent, 0o700)\n"
+        "_R['r1'] = append_entry('release', 'رفع موثق لاحق', component='nexus')\n"
+        "_R['state'] = sorted(quarantined_components())\n",
+        root,
+    )
+    assert rc == 0 and payload is not None, f"السيناريو فشل: rc={rc} err={err[-200:]}"
+    assert "unexpected_error" not in payload, payload["unexpected_error"]
+    assert payload["q1"] is False, "العزل الأول يجب أن يفشل توثيقه"
+    assert payload["r1"] is True, "الرفع اللاحق يجب أن ينجح توثيقه"
+    assert "nexus" not in payload["state"], (
+        f"الرفع الموثق لم ينهِ عزل الاحتياط السابق: {payload['state']}"
+    )
