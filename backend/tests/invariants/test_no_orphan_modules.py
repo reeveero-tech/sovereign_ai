@@ -53,19 +53,10 @@ DYNAMIC_LOADED_MODULES = {
     ),
 }
 
-# الملفات المسموح أن تكون أرشيفية (مُدرجة في INVENTORY.py)
-ARCHIVED_FILES = {
-    "archive/root_strays/encryption.py",
-    "archive/root_strays/investigation.py",
-    "archive/root_strays/IDs.js",
-    "archive/root_strays/Fff.txt",
-    "archive/root_strays/attached_assets_create1_prompt.txt",
-    "archive/root_strays/attached_assets_create2_prompt.txt",
-    "archive/root_strays/dockerignore_duplicate",
-    "archive/root_strays/infrastructure_Dockerfile_empty",
-    "archive/root_strays/infrastructure_requirements_empty",
-    "archive/root_strays/INVENTORY.py",
-}
+# الملفات المسموح أن تكون أرشيفية (مُدرجة بالاسم)
+# فُرِغت بأمر المالك 2026-10-18: أرشيف root_strays حُذف بالكامل بعد
+# تسليم حزمة احتياطية (owner_archive_backup.zip) — لا ملفات أرشيفية متبقية.
+ARCHIVED_FILES: set = set()
 
 
 def _get_live_python_files() -> list:
@@ -287,27 +278,14 @@ def test_no_orphan_modules():
 
 
 def test_inventory_documented():
-    """كل ملف في archive/ يجب أن يكون موثقًا في INVENTORY.py."""
-    inventory_file = _REPO_ROOT / "archive" / "root_strays" / "INVENTORY.py"
-    assert inventory_file.exists(), (
-        "INVENTORY.py must exist to document archived files"
+    """حرس قرار الحذف (2026-10-18): أرشيف root_strays حُذف بأمر المالك
+    بعد تسليم حزمة احتياطية كاملة (owner_archive_backup.zip) وتأكيد
+    تحميلها — لا يُستعاد، ولا يوجد أرشيف غير موثق بعد اليوم."""
+    archive_dir = _REPO_ROOT / "archive" / "root_strays"
+    assert not archive_dir.exists(), (
+        "archive/root_strays حُذف بأمر المالك 2026-10-18 (حزمة احتياطية "
+        "كاملة بحوزته) — لا يُستعاد داخل المستودع"
     )
-
-    inventory_src = inventory_file.read_text(encoding="utf-8")
-
-    # كل ملف في archive/ يجب أن يكون مذكورًا في INVENTORY
-    archive_files = [
-        str(p.relative_to(_REPO_ROOT))
-        for p in (_REPO_ROOT / "archive").rglob("*")
-        if p.is_file() and p.suffix in (".py", ".js", ".txt", "")
-    ]
-    for af in archive_files:
-        if af.endswith("INVENTORY.py"):
-            continue
-        basename = Path(af).name
-        assert basename in inventory_src, (
-            f"Archived file {af!r} must be documented in INVENTORY.py"
-        )
 
 
 def test_guard_flags_stray_conftest_outside_root(tmp_path):
@@ -405,11 +383,12 @@ def test_guard_catches_stray_script():
 
 def test_guard_catches_stray_named_like_backup():
     """مسبار عدائي (الجولة <2>): ملف يتيم يحتوي emergency_backups في مساره
-    (خارج نطاق النسخ الاحتياطية المؤجل بأمر المالك) يجب ألا يُخفى.
+    (خارج نطاق شجرة guardian/data/emergency/) يجب ألا يُخفى.
 
     القاعدة السابقة استثنت أي مسار يحتوي السلسلة emergency_backups أينما
     وقعت — مصفٍّ واسع يخفي أي ملف يسمى نفسه بها. النطاق المشروع الوحيد
-    هو شجرة guardian/data/emergency/ (بند مؤجل بأمر المالك)."""
+    هو شجرة guardian/data/emergency/ (النسخ الاحتياطية داخلها حُذفت
+    بأمر المالك 2026-10-18 — الشجرة نفسها باقية)."""
     probe = _REPO_ROOT / "backend" / "_orphan_probe_emergency_backups_helper.py"
     probe.write_text("# stray orphan probe — name contains emergency_backups\n",
                     encoding="utf-8")
