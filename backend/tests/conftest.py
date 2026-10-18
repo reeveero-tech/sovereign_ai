@@ -68,6 +68,10 @@ if _BACKEND_DIR not in sys.path:
     sys.path.insert(0, _BACKEND_DIR)
 if _REPO_ROOT not in sys.path:
     sys.path.insert(0, _REPO_ROOT)
+# وحدة حارس data/keys الحقيقية (واقعة R-621) — في tests/ بجذر المستودع
+_TESTS_DIR = os.path.join(_REPO_ROOT, "tests")
+if _TESTS_DIR not in sys.path:
+    sys.path.insert(0, _TESTS_DIR)
 
 
 # R-682 (بند ٥): إنهاء منظم لخيوط الخلفية في نهاية جلسة pytest.
@@ -85,3 +89,33 @@ def _shutdown_background_threads():
             f"R-682: {remaining} خيط خلفي لم يتوقف بعد stop_all_and_join — "
             "خطر كتابة بعد إغلاق ملفات السجل"
         )
+
+
+# حارس data/keys الحقيقي (بند OWNER_REQUIRED ٥ — واقعة R-621 لا تتكرر):
+# نفس حارس tests/conftest.py — **منع الكتابة** عند تحميل هذا الملف (قبل أي
+# استيراد لملفات الاختبار): الملفان المحميان للقراءة فقط طوال الجلسة —
+# أي محاولة كتابة تُرفض بـ PermissionError صريح (يمنع أيضًا «اكتب ثم
+# استعد الأصل»)، والوضعان يُستعادان عند التصفية ثم **كشف أثر التغيير**
+# بمقارنة بصمة البايتات (محتوى keyring.json لا يُعرض أبدًا — بصمة فقط).
+# (التجربة الكاملة RED→GREEN بالتشغيل: forensics/R621_REAL_KEYS_GUARD.md)
+from _real_keys_guard import protect_real_keys, snapshot  # noqa: E402
+
+_PROTECTED_MODES = protect_real_keys(_REPO_ROOT)
+# البصمة عند التحميل — قبل أي استيراد لملفات الاختبار (كما في tests/conftest.py)
+_GUARD_SNAPSHOT = snapshot(_REPO_ROOT)
+
+
+def pytest_sessionfinish(session, exitstatus):
+    """استعادة الأوضاع بعمر الجلسة نفسها — تعمل مع --collect-only ومع
+    إخفاقات التجميع (fixtures لا تشغل هناك أصلًا)."""
+    from _real_keys_guard import restore_real_keys
+
+    restore_real_keys(_REPO_ROOT, _PROTECTED_MODES)
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _guard_real_keys_untouched():
+    from _real_keys_guard import assert_untouched
+
+    yield
+    assert_untouched(_REPO_ROOT, _GUARD_SNAPSHOT)
