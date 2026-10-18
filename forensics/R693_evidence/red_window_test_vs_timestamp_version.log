@@ -1,0 +1,93 @@
+F.                                                                       [100%]
+=================================== FAILURES ===================================
+___________________ test_read_window_release_not_reanimated ____________________
+
+tmp_path = PosixPath('/tmp/pytest-of-user/pytest-533/test_read_window_release_not_r0')
+
+    def test_read_window_release_not_reanimated(tmp_path):
+        """اعتراض المراجع ج8: عزل يدخل الاحتياط داخل نافذة قراءة ناجحة ثم يُرفع
+        توثيقيًا وتشمل القراءة الحدثين (الرفع يحسم العزل) — القراءة المتعذرة
+        التالية لا تُحييه (علامة الأحداث المشمولة بالقراءة، لا توقيت بدايتها)."""
+        body = """
+    from app import app as _app
+    from fastapi.testclient import TestClient
+    import time
+    import backend.loyalty_log as ll
+    with TestClient(_app) as c:
+        orch = _app.state.orchestrator
+        pred = orch.predictive.get('engine')
+        counters = {'n': 0}
+        _gate = pred.compute_future_map
+        _orig = _gate._orig
+        def counting(*a, **k):
+            counters['n'] += 1
+            return _orig(*a, **k)
+        _gate._orig = counting
+        # حدث تمهيدي ينشئ الملف (بلا قراءة) — ليصلك الحقن داخل نافذة القراءة
+        assert ll.append_entry('quarantine', 'عزل تمهيدي', component='quantum') is True
+        # حقن حتمي قبل حساب الحالة (عزل إلى الاحتياط + رفع موثق — القراءة الناجحة
+        # ستشمل الحدثين والرفع يحسم العزل) + تعطيل القراءة فورًا بعد الحالة
+        # المستهدفة — لا قراءة ناجحة أخرى (الدورة الخلفية تفشل قراءتها)
+        _injected = {'done': False}
+        def _wrap_state(fn):
+            def wrapped(path=None):
+                if not _injected['done']:
+                    _injected['done'] = True
+                    log = ll.quarantine_log_path()
+                    with ll._FALLBACK_LOCK:
+                        ll._FALLBACK.setdefault(str(log), []).append({
+                            'time': time.time(), 'kind': 'quarantine',
+                            'component': 'predictive',
+                            'detail': 'حقن داخل نافذة القراءة'})
+                    ll.append_entry('release', 'رفع موثق داخل النافذة', component='predictive')
+                    result = fn(path)
+                    ll.quarantine_log_path().chmod(0o000)
+                    return result
+                return fn(path)
+            return wrapped
+        if hasattr(ll, 'read_quarantine_state'):
+            ll.read_quarantine_state = _wrap_state(ll.read_quarantine_state)
+        ll.quarantined_components = _wrap_state(ll.quarantined_components)
+        # ١) طلب يقرأ بنجاح — القراءة تشمل الحدثين: الرفع الموثق يحسم العزل
+        r1 = c.post('/chat', json={'text': 'قراءة النافذة'})
+        _R['status1'] = r1.status_code
+        _R['pred1'] = counters['n']
+        # ٢) لا إحياء للعزل المحسوم في القراءة الناجحة
+        r2 = c.post('/chat', json={'text': 'قراءة متعذرة بعد الحسم'})
+        _R['status2'] = r2.status_code
+        _R['pred2_total'] = counters['n']
+        _R['cache2'] = sorted(orch._quarantine_cache or [])
+    """
+        rc, payload, err = _run_chat_first_request_scenario(body, tmp_path)
+        assert rc == 0 and payload is not None, f"السيناريو فشل: rc={rc} err={err[-300:]}"
+        assert "unexpected_error" not in payload, payload["unexpected_error"]
+        assert payload["status1"] == 200 and payload["status2"] == 200, payload
+        # ضابط موجب: القراءة الناجحة حسمت العزل بالرفع الموثق — التنبؤ حر ونُفذ
+        assert payload["pred1"] > 0, (
+            "القراءة الناجحة لم تحسم العزل بالرفع الموثق داخل النافذة — التنبؤ "
+            "لم يُنفذ في الطلب الأول"
+        )
+        # لا إحياء: تنفيذ جديد في القراءة المتعذرة (الطلب الثاني كامل الدورة+الرد)
+>       assert payload["pred2_total"] > payload["pred1"], (
+            f"القراءة المتعذرة أحيت عزلًا حسمته قراءة ناجحة (رفع موثق داخل "
+            f"النافذة) — تنفيذات جديدة: "
+            f"{payload['pred2_total'] - payload['pred1']}"
+        )
+E       AssertionError: القراءة المتعذرة أحيت عزلًا حسمته قراءة ناجحة (رفع موثق داخل النافذة) — تنفيذات جديدة: 0
+E       assert 73 > 73
+
+backend/tests/invariants/test_circuit_breaker.py:1111: AssertionError
+=============================== warnings summary ===============================
+backend/config.py:312
+  /tmp/tsver_r693/backend/config.py:312: UserWarning: ⚠️ CORS مفتوح للجميع — مقبول في التطوير فقط (D-034)
+    warnings.warn("⚠️ CORS مفتوح للجميع — مقبول في التطوير فقط (D-034)")
+
+../../home/user/workspace/venvs/venv311/lib/python3.11/site-packages/starlette/testclient.py:40
+  /home/user/workspace/venvs/venv311/lib/python3.11/site-packages/starlette/testclient.py:40: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.
+    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED backend/tests/invariants/test_circuit_breaker.py::test_read_window_release_not_reanimated
+1 failed, 1 passed, 2 warnings in 2.37s
+exit: 1

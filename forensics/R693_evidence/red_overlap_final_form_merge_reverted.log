@@ -1,0 +1,101 @@
+FF.                                                                      [100%]
+=================================== FAILURES ===================================
+_____________ test_disappearance_preserves_new_fallback_knowledge ______________
+
+tmp_path = PosixPath('/tmp/pytest-of-user/pytest-516/test_disappearance_preserves_n0')
+
+    def test_disappearance_preserves_new_fallback_knowledge(tmp_path):
+        """اعتراض المراجع ج7: حذف السجل بعد إثبات quantum وإضافة عزل predictive
+        فاشل التوثيق — الاختفاء لا يُسقط المعرفة الجديدة (الاحتياط) ولا القديمة
+        (آخر حالة معروفة): كلاهما يبقى محجوبًا عبر الطلب."""
+>       _run_overlap_scenario(
+            "log.unlink()  # حذف السجل دون قراءة ناجحة أخرى", tmp_path,
+        )
+
+backend/tests/invariants/test_circuit_breaker.py:1033: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+variant = 'log.unlink()  # حذف السجل دون قراءة ناجحة أخرى'
+tmp_path = PosixPath('/tmp/pytest-of-user/pytest-516/test_disappearance_preserves_n0')
+
+    def _run_overlap_scenario(variant: str, tmp_path):
+        body = _OVERLAP_SEQUENCE.replace("__VARIANT__", variant)
+        rc, payload, err = _run_chat_first_request_scenario(body, tmp_path)
+        assert rc == 0 and payload is not None, f"السيناريو فشل: rc={rc} err={err[-300:]}"
+        assert "unexpected_error" not in payload, payload["unexpected_error"]
+        assert payload["q2"] is False, "التوثيق الثاني يجب أن يفشل (الكتابة ممنوعة)"
+        assert "predictive" in payload["fallback"], (
+            f"العزل الفاشل التوثيق غير موجود في الاحتياط: {payload['fallback']}"
+        )
+        assert payload["status1"] == 200 and payload["status2"] == 200, payload
+        # ضابط موجب: التنبؤ حر في الطلب الأول (المعزول quantum فقط) — العدّاد
+        # يسجل تنفيذًا فعليًا، وإلا فالاختبار غير صالح
+        assert payload["pred1"] > 0, "التنبؤ الحر لم يُنفذ في الطلب الأول — العدّاد لا يقيس"
+        # المعرفة الجديدة لا تضيع: لا تنفيذ جديد بعد العزل الفاشل التوثيق
+        # (العدّاد تراكمي — المسموح كله من الطلب الأول قبل العزل)
+>       assert payload["pred2_total"] == payload["pred1"], (
+            f"المعرفة المحلية الجديدة (predictive في الاحتياط) ضاعت في مسار "
+            f"تعذر الإثبات — تنفيذات جديدة بعد العزل: "
+            f"{payload['pred2_total'] - payload['pred1']}"
+        )
+E       AssertionError: المعرفة المحلية الجديدة (predictive في الاحتياط) ضاعت في مسار تعذر الإثبات — تنفيذات جديدة بعد العزل: 126
+E       assert 252 == 126
+
+backend/tests/invariants/test_circuit_breaker.py:1016: AssertionError
+_______________ test_unreadable_preserves_new_fallback_knowledge _______________
+
+tmp_path = PosixPath('/tmp/pytest-of-user/pytest-516/test_unreadable_preserves_new_0')
+
+    def test_unreadable_preserves_new_fallback_knowledge(tmp_path):
+        """اعتراض المراجع ج7: نفس التداخل مع بقاء الملف غير مقروء (لا حذف) —
+        معالجة OSError نفسها يجب ألا تستعيد اللقطة القديمة وحدها وتُهدر المعرفة
+        المحلية الجديدة."""
+>       _run_overlap_scenario(
+            "log.chmod(0o000)  # موجود غير مقروء", tmp_path,
+        )
+
+backend/tests/invariants/test_circuit_breaker.py:1042: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+variant = 'log.chmod(0o000)  # موجود غير مقروء'
+tmp_path = PosixPath('/tmp/pytest-of-user/pytest-516/test_unreadable_preserves_new_0')
+
+    def _run_overlap_scenario(variant: str, tmp_path):
+        body = _OVERLAP_SEQUENCE.replace("__VARIANT__", variant)
+        rc, payload, err = _run_chat_first_request_scenario(body, tmp_path)
+        assert rc == 0 and payload is not None, f"السيناريو فشل: rc={rc} err={err[-300:]}"
+        assert "unexpected_error" not in payload, payload["unexpected_error"]
+        assert payload["q2"] is False, "التوثيق الثاني يجب أن يفشل (الكتابة ممنوعة)"
+        assert "predictive" in payload["fallback"], (
+            f"العزل الفاشل التوثيق غير موجود في الاحتياط: {payload['fallback']}"
+        )
+        assert payload["status1"] == 200 and payload["status2"] == 200, payload
+        # ضابط موجب: التنبؤ حر في الطلب الأول (المعزول quantum فقط) — العدّاد
+        # يسجل تنفيذًا فعليًا، وإلا فالاختبار غير صالح
+        assert payload["pred1"] > 0, "التنبؤ الحر لم يُنفذ في الطلب الأول — العدّاد لا يقيس"
+        # المعرفة الجديدة لا تضيع: لا تنفيذ جديد بعد العزل الفاشل التوثيق
+        # (العدّاد تراكمي — المسموح كله من الطلب الأول قبل العزل)
+>       assert payload["pred2_total"] == payload["pred1"], (
+            f"المعرفة المحلية الجديدة (predictive في الاحتياط) ضاعت في مسار "
+            f"تعذر الإثبات — تنفيذات جديدة بعد العزل: "
+            f"{payload['pred2_total'] - payload['pred1']}"
+        )
+E       AssertionError: المعرفة المحلية الجديدة (predictive في الاحتياط) ضاعت في مسار تعذر الإثبات — تنفيذات جديدة بعد العزل: 126
+E       assert 252 == 126
+
+backend/tests/invariants/test_circuit_breaker.py:1016: AssertionError
+=============================== warnings summary ===============================
+backend/config.py:312
+  /tmp/red_final_r693/backend/config.py:312: UserWarning: ⚠️ CORS مفتوح للجميع — مقبول في التطوير فقط (D-034)
+    warnings.warn("⚠️ CORS مفتوح للجميع — مقبول في التطوير فقط (D-034)")
+
+../../home/user/workspace/venvs/venv311/lib/python3.11/site-packages/starlette/testclient.py:40
+  /home/user/workspace/venvs/venv311/lib/python3.11/site-packages/starlette/testclient.py:40: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.
+    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED backend/tests/invariants/test_circuit_breaker.py::test_disappearance_preserves_new_fallback_knowledge
+FAILED backend/tests/invariants/test_circuit_breaker.py::test_unreadable_preserves_new_fallback_knowledge
+2 failed, 1 passed, 2 warnings in 3.39s
+exit: 1

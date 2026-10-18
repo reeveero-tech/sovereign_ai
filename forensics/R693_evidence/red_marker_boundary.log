@@ -1,0 +1,101 @@
+============================= test session starts ==============================
+platform linux -- Python 3.11.15, pytest-9.1.1, pluggy-1.7.0
+rootdir: /home/user/workspace/sovereign_ai
+configfile: pytest.ini
+plugins: anyio-4.15.1
+collected 1 item
+
+backend/tests/invariants/test_circuit_breaker.py F                       [100%]
+
+=================================== FAILURES ===================================
+_________________ test_marker_boundary_new_knowledge_not_lost __________________
+
+tmp_path = PosixPath('/tmp/pytest-of-user/pytest-529/test_marker_boundary_new_knowl0')
+
+    def test_marker_boundary_new_knowledge_not_lost(tmp_path):
+        """اعتراض المراجع ج9: العلامة ليست من القراءة نفسها — عزل فاشل التوثيق
+        يُحقن **بعد حساب الحالة وقبل أخذ العلامة المنفصلة**: العلامة الحالية
+        (لقطة مستقلة بعد الحالة) تعلّمه «مشمولًا» رغم أن الحالة لم تعالجه،
+        فيضيع عند تعذر القراءة التالية. الإصلاح: الحالة والعلامة معًا من عملية
+        واحدة (نسخة الاحتياط نفسها) — الحدث بعد النسخة يبقى غير مشمول.
+        الحقن هنا بعد الحالة + تعطيل القراءة فورًا (لا قراءة ناجحة أخرى
+        بعدها — الدورة الخلفية تفشل قراءتها)."""
+        body = """
+    from app import app as _app
+    from fastapi.testclient import TestClient
+    import time
+    import backend.loyalty_log as ll
+    with TestClient(_app) as c:
+        orch = _app.state.orchestrator
+        pred = orch.predictive.get('engine')
+        counters = {'n': 0}
+        _gate = pred.compute_future_map
+        _orig = _gate._orig
+        def counting(*a, **k):
+            counters['n'] += 1
+            return _orig(*a, **k)
+        _gate._orig = counting
+        # حدث تمهيدي ينشئ الملف (بلا قراءة)
+        assert ll.append_entry('quarantine', 'عزل تمهيدي', component='quantum') is True
+        _injected = {'done': False}
+        def _inject():
+            with ll._FALLBACK_LOCK:
+                ll._FALLBACK.setdefault(str(ll.quarantine_log_path()), []).append({
+                    'time': time.time(), 'kind': 'quarantine',
+                    'component': 'predictive',
+                    'detail': 'حقن بعد الحالة قبل العلامة'})
+        # لف مسار الحالة (مهما كان اسمه في النسخة): الحقن بعد اكتمال الحساب
+        def _wrap_state(fn):
+            def wrapped(path=None):
+                result = fn(path)
+                if not _injected['done']:
+                    _injected['done'] = True
+                    _inject()
+                    # لا قراءة ناجحة أخرى بعد الحالة المستهدفة — التعطيل فورًا
+                    ll.quarantine_log_path().chmod(0o000)
+                return result
+            return wrapped
+        if hasattr(ll, 'read_quarantine_state'):
+            ll.read_quarantine_state = _wrap_state(ll.read_quarantine_state)
+        ll.quarantined_components = _wrap_state(ll.quarantined_components)
+        r1 = c.post('/chat', json={'text': 'قراءة الحالة'})
+        _R['status1'] = r1.status_code
+        _R['pred1'] = counters['n']
+        from backend.loyalty_log import fallback_quarantined
+        _R['fallback_has_predictive'] = 'predictive' in fallback_quarantined()
+        # ٢) القراءة معطلة — المعرفة الجديدة يجب ألا تضيع
+        r2 = c.post('/chat', json={'text': 'قراءة متعذرة'})
+        _R['status2'] = r2.status_code
+        _R['pred2_total'] = counters['n']
+        _R['cache2'] = sorted(orch._quarantine_cache or [])
+    """
+        rc, payload, err = _run_chat_first_request_scenario(body, tmp_path)
+        assert rc == 0 and payload is not None, f"السيناريو فشل: rc={rc} err={err[-300:]}"
+        assert "unexpected_error" not in payload, payload["unexpected_error"]
+        assert payload["status1"] == 200 and payload["status2"] == 200, payload
+        # إثبات صريح: الحدث في الاحتياط
+        assert payload["fallback_has_predictive"] is True, "الحقن لم يصل إلى الاحتياط"
+        # ضابط موجب: الحالة المستهدفة لم تشمل الحدث — التنبؤ حر في الطلب الأول
+        assert payload["pred1"] > 0, "التنبؤ لم يُنفذ في الطلب الأول — العدّاد لا يقيس"
+        # المعرفة الجديدة لا تضيع: لا تنفيذ جديد بعد تعطل القراءة
+>       assert payload["pred2_total"] == payload["pred1"], (
+            f"الحدث المحقون بعد الحالة عُلّم «مشمولًا» بلا معالجة — ضاع عند "
+            f"تعذر القراءة: تنفيذات جديدة {payload['pred2_total'] - payload['pred1']}"
+        )
+E       AssertionError: الحدث المحقون بعد الحالة عُلّم «مشمولًا» بلا معالجة — ضاع عند تعذر القراءة: تنفيذات جديدة 126
+E       assert 252 == 126
+
+backend/tests/invariants/test_circuit_breaker.py:1181: AssertionError
+=============================== warnings summary ===============================
+backend/config.py:312
+  /home/user/workspace/sovereign_ai/backend/config.py:312: UserWarning: ⚠️ CORS مفتوح للجميع — مقبول في التطوير فقط (D-034)
+    warnings.warn("⚠️ CORS مفتوح للجميع — مقبول في التطوير فقط (D-034)")
+
+../venvs/venv311/lib/python3.11/site-packages/starlette/testclient.py:40
+  /home/user/workspace/venvs/venv311/lib/python3.11/site-packages/starlette/testclient.py:40: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.
+    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED backend/tests/invariants/test_circuit_breaker.py::test_marker_boundary_new_knowledge_not_lost
+======================== 1 failed, 2 warnings in 1.51s =========================

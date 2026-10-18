@@ -1,0 +1,100 @@
+============================= test session starts ==============================
+platform linux -- Python 3.11.15, pytest-9.1.1, pluggy-1.7.0
+rootdir: /home/user/workspace/sovereign_ai
+configfile: pytest.ini
+plugins: anyio-4.15.1
+collected 1 item
+
+backend/tests/invariants/test_circuit_breaker.py F                       [100%]
+
+=================================== FAILURES ===================================
+______________ test_source_order_release_witnessed_not_reanimated ______________
+
+tmp_path = PosixPath('/tmp/pytest-of-user/pytest-546/test_source_order_release_witn0')
+
+    def test_source_order_release_witnessed_not_reanimated(tmp_path):
+        """اعتراض المراجع ج10: نسخة الاحتياط تُؤخذ قبل قراءة الملف — عزل فاشل
+        التوثيق يدخل الاحتياط بين النسخة وقراءة الملف، ثم ينجح توثيق رفعه
+        وتشمل قراءة الملف الرفع: الحالة صحيحة (غير معزول) لكن العلامة لا تشمل
+        عزل الاحتياط — فعند تعذر القراءة التالي يُصنف «جديدًا» ويُعاد فرضه رغم
+        أن القراءة الناجحة شاهدت رفعه. الإصلاح: أحداث الملف أولًا ثم نسخة
+        الاحتياط — الحالة والعلامة من النسخة نفسها (عزل الاحتياط السابق لرفعٍ
+        شملته قراءة الملف يقع في النسخة فيُحسم معه)."""
+        body = """
+    from app import app as _app
+    from fastapi.testclient import TestClient
+    import backend.loyalty_log as ll
+    with TestClient(_app) as c:
+        orch = _app.state.orchestrator
+        pred = orch.predictive.get('engine')
+        counters = {'n': 0}
+        _gate = pred.compute_future_map
+        _orig = _gate._orig
+        def counting(*a, **k):
+            counters['n'] += 1
+            return _orig(*a, **k)
+        _gate._orig = counting
+        # حدث تمهيدي ينشئ الملف (بلا قراءة) — لتصل قراءة العملية إلى مسار الملف
+        assert ll.append_entry('quarantine', 'عزل تمهيدي', component='quantum') is True
+        _injected = {'done': False}
+        _orig_re = ll.read_entries
+        def re_injected(path):
+            if not _injected['done']:
+                _injected['done'] = True
+                log = ll.quarantine_log_path()
+                log.chmod(0o444)
+                # فشل توثيق العزل (False + الاحتياط) — بين نسخة الاحتياط وقراءة الملف
+                _R['q'] = ll.append_entry(
+                    'quarantine', 'عزل داخل نافذة المصدرين', component='predictive')
+                log.chmod(0o644)
+                # نجاح توثيق الرفع (True + الملف) — القراءة الفعلية ستشهده
+                _R['rel'] = ll.append_entry(
+                    'release', 'رفع موثق داخل النافذة', component='predictive')
+                result = _orig_re(path)
+                log.chmod(0o000)  # تعطيل القراءة فور الإرجاع — لا قراءة ناجحة أخرى
+                return result
+            return _orig_re(path)
+        ll.read_entries = re_injected
+        r1 = c.post('/chat', json={'text': 'قراءة تشهد الرفع'})
+        _R['status1'] = r1.status_code
+        _R['pred1'] = counters['n']
+        from backend.loyalty_log import fallback_quarantined
+        _R['fallback_has_predictive'] = 'predictive' in fallback_quarantined()
+        r2 = c.post('/chat', json={'text': 'قراءة متعذرة بعد الرفع المشهود'})
+        _R['status2'] = r2.status_code
+        _R['pred2_total'] = counters['n']
+        _R['cache2'] = sorted(orch._quarantine_cache or [])
+    """
+        rc, payload, err = _run_chat_first_request_scenario(body, tmp_path)
+        assert rc == 0 and payload is not None, f"السيناريو فشل: rc={rc} err={err[-300:]}"
+        assert "unexpected_error" not in payload, payload["unexpected_error"]
+        # إثبات الحقن كما طلب المراجع: False للعزل وTrue للرفع
+        assert payload["q"] is False, "توثيق العزل يجب أن يفشل (الكتابة ممنوعة)"
+        assert payload["rel"] is True, "توثيق الرفع يجب أن ينجح"
+        assert payload["fallback_has_predictive"] is True, "حدث العزل غير موجود في الاحتياط"
+        assert payload["status1"] == 200 and payload["status2"] == 200, payload
+        # ضابط موجب: الحالة المستهدفة شهدت الرفع — التنبؤ حر ونُفذ في الطلب الأول
+        assert payload["pred1"] > 0, "التنبؤ لم يُنفذ في الطلب الأول — العدّاد لا يقيس"
+        # استمرار التنفيذ المسموح بعد تعذر القراءة — الرفع المشهود لا يُحيى
+>       assert payload["pred2_total"] > payload["pred1"], (
+            f"الرفع الموثق الذي شاهدته القراءة الناجحة أُحيي عزله عند تعذر "
+            f"القراءة — تنفيذات جديدة: "
+            f"{payload['pred2_total'] - payload['pred1']}"
+        )
+E       AssertionError: الرفع الموثق الذي شاهدته القراءة الناجحة أُحيي عزله عند تعذر القراءة — تنفيذات جديدة: 0
+E       assert 73 > 73
+
+backend/tests/invariants/test_circuit_breaker.py:1262: AssertionError
+=============================== warnings summary ===============================
+backend/config.py:312
+  /home/user/workspace/sovereign_ai/backend/config.py:312: UserWarning: ⚠️ CORS مفتوح للجميع — مقبول في التطوير فقط (D-034)
+    warnings.warn("⚠️ CORS مفتوح للجميع — مقبول في التطوير فقط (D-034)")
+
+../venvs/venv311/lib/python3.11/site-packages/starlette/testclient.py:40
+  /home/user/workspace/venvs/venv311/lib/python3.11/site-packages/starlette/testclient.py:40: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.
+    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED backend/tests/invariants/test_circuit_breaker.py::test_source_order_release_witnessed_not_reanimated
+======================== 1 failed, 2 warnings in 1.47s =========================

@@ -183,8 +183,10 @@ class SovereignOrchestrator:
             # استيراد متأخر بنمط الملف (المكونات تُستورد داخل الدوال)
             try:
                 from backend.loyalty_log import (
-                    quarantined_components,
+                    fallback_quarantined,
+                    fallback_quarantined_uncovered,
                     quarantine_log_path,
+                    read_quarantine_state,
                 )
             except ImportError:  # جذر المستودع ليس على المسار — أصلحه
                 import sys as _sys
@@ -192,19 +194,30 @@ class SovereignOrchestrator:
                 if _root not in _sys.path:
                     _sys.path.insert(0, _root)
                 from backend.loyalty_log import (
-                    quarantined_components,
+                    fallback_quarantined,
+                    fallback_quarantined_uncovered,
                     quarantine_log_path,
+                    read_quarantine_state,
                 )
             path = quarantine_log_path()
             if not path.exists():
-                # R-692 (اعتراض المراجع ج5): ميّز البدء عن الاختفاء — الغياب
-                # قبل أي قراءة ناجحة = بدء مشروع (جذر جديد، القناة تنشئ
-                # السجل عند أول توثيق): لا عزل يُحمى فالمكونات تعمل. الغياب
-                # بعد قراءة ناجحة = اختفاء سجل سبق إثباته: آخر حالة معروفة
-                # تبقى مفروضة. ملاحظة جوهرية: بدءٌ بلا سجل لا يمنح إثباتًا —
-                # ظهور السجل لاحقًا غير المقروء حالة مجهولة (لا يُورث الفراغ)
-                if self._quarantine_proven:
+                # R-692/693 (اعتراضا المراجع ج5 وج6): الغياب ثلاث حالات لا
+                # واحدة — (أ) اختفاء بعد معرفة (قراءة ناجحة أو رصد وجود):
+                # آخر حالة معروفة/مجهولة تبقى (اختفاء الدليل ليس تصريحًا)؛
+                # (ب) معرفة عزل محلية في احتياط العملية رغم الغياب: المعروف
+                # يُحجب والبقية تستمر (سلوك R-688)؛ (ج) بدء نظيف فعليًا: لا
+                # ملف قط ولا معرفة محلية — المكونات تعمل
+                if self._quarantine_proven or self._quarantine_saw_file:
+                    # اختفاء بعد معرفة — الاستثناء أدناه يدمج المعرفة الجديدة
                     raise FileNotFoundError(str(path))
+                local_known = fallback_quarantined()
+                if local_known:
+                    self._quarantine_cache = frozenset(local_known)
+                    self._quarantine_last_known = frozenset(local_known)
+                    self._quarantine_unknown = False
+                    self._quarantine_cache_ts = time.time()
+                    self._quarantine_dirty = False
+                    return
                 self._quarantine_cache = frozenset()
                 self._quarantine_last_known = frozenset()
                 # لا إثبات هنا (proven يبقى False): بدءٌ لا يورث حالته
@@ -212,15 +225,28 @@ class SovereignOrchestrator:
                 self._quarantine_cache_ts = time.time()
                 self._quarantine_dirty = False
                 return
-            self._quarantine_cache = frozenset(quarantined_components())
+            # رصد الوجود (ولو تعذرت القراءة) — اختفاؤه لاحقًا ليس بدءًا
+            self._quarantine_saw_file = True
+            # R-693 (ج9): الحالة والعلامة معًا من عملية واحدة — نسخة الاحتياط
+            # نفسها: الحدث بعد النسخة يبقى غير مشمول (لا يُسقط)، والمشمول
+            # حُسم في الحالة نفسها
+            state, covered = read_quarantine_state()
+            self._quarantine_cache = frozenset(state)
             self._quarantine_last_known = self._quarantine_cache
-            # الإثبات من قراءة ناجحة لملف موجود فقط — لا من غياب
+            self._quarantine_read_fallback_sig = covered
             self._quarantine_proven = True
             self._quarantine_unknown = False
         except OSError:
             # تعذر الإثبات: آخر حالة معروفة إن أُثبتت؛ وإلا مجهول (بارد) —
-            # منع الاستدعاء حتى تُثبت الحالة، لا إذنًا صامتًا
-            self._quarantine_cache = self._quarantine_last_known
+            # منع الاستدعاء حتى تُثبت الحالة، لا إذنًا صامتًا. R-693 (ج7):
+            # المعرفة المحلية الجديدة (احتياط أحدث من آخر قراءة ناجحة) تُدمج
+            # — لا اللقطة وحدها؛ والأقدم حُسم في القراءة (لا إحياء لرفع موثق)
+            local_new = fallback_quarantined_uncovered(
+                self._quarantine_read_fallback_sig
+            )
+            self._quarantine_cache = frozenset(
+                self._quarantine_last_known | local_new
+            )
             self._quarantine_unknown = not self._quarantine_proven
         self._quarantine_cache_ts = time.time()
         self._quarantine_dirty = False
@@ -287,6 +313,13 @@ class SovereignOrchestrator:
         # يمنح إثباتًا يُورث عند ظهور السجل غير المقروء
         self._quarantine_proven: bool = False
         self._quarantine_unknown: bool = False
+        # R-693 (اعتراض المراجع ج6): رصد وجود السجل (ولو بلا قراءة ناجحة) —
+        # اختفاؤه لاحقًا ليس بدءًا مشروعًا بل اختفاء دليل
+        self._quarantine_saw_file: bool = False
+        # R-693 (اعتراض المراجع ج8): لقطة أحداث الاحتياط المشمولة بآخر قراءة
+        # ناجحة — ما لم تشمله هو المعرفة الجديدة فقط في مسارات تعذر الإثبات
+        # (المشمول حُسم فيها: رفع موثق لاحق يُحترم — لا إحياء)
+        self._quarantine_read_fallback_sig: tuple = ()
         
         # العدادات والإحصائيات
         self._stats = {
@@ -529,18 +562,24 @@ class SovereignOrchestrator:
                 continue
             if getattr(attr, "_component_gate", False):
                 continue  # ملفوف سابقًا (إعادة تحميل) — لا لف مزدوج
-            def gated(*a, _attr=attr, _name=name, _comp=component, **k):
-                if self._component_quarantined(_comp):
-                    logger.warning(
-                        "[R-692] استدعاء %s على مكوّن معزول (%s) — الدالة "
-                        "لم تُنفذ وأعيدت القيمة الافتراضية الآمنة (لا موت)",
-                        _name, _comp,
-                    )
-                    return {}
-                return _attr(*a, **k)
-            gated._component_gate = True
+            # R-693: الاستدعاء كسول عبر gated._orig — يسمح بلف عدّاد بين
+            # الحاجز والأصل (عدّ التنفيذ الفعلي) دون فك الحاجز. المصنع دالة
+            # مستقلة لكل اسم: كل حاجز يغلق على متغيره الخاص (لا متغير مشترك)
+            def _make_gate(attr, name, comp):
+                def gated(*a, **k):
+                    if self._component_quarantined(comp):
+                        logger.warning(
+                            "[R-692] استدعاء %s على مكوّن معزول (%s) — الدالة "
+                            "لم تُنفذ وأعيدت القيمة الافتراضية الآمنة (لا موت)",
+                            name, comp,
+                        )
+                        return {}
+                    return gated._orig(*a, **k)
+                gated._orig = attr
+                gated._component_gate = True
+                return gated
             try:
-                setattr(obj, name, gated)
+                setattr(obj, name, _make_gate(attr, name, component))
             # R-692: كائن لا يقبل الإسناد (slots/ثابت) — بقية الكائنات تُؤهل
             except (TypeError, AttributeError):
                 continue

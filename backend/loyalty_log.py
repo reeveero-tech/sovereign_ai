@@ -28,7 +28,7 @@ import os
 import sys
 import threading
 from pathlib import Path
-from typing import Dict, List, Optional, Set
+from typing import Dict, List, Optional, Set, Tuple
 
 # جذر المستودع — لعمل الوحدة مستوردة من أي مسار (مثل سيناريوهات العزل)
 _MODULE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -124,6 +124,54 @@ def read_entries(
     return entries
 
 
+def read_quarantine_state(
+    path: Optional[os.PathLike] = None,
+) -> Tuple[Set[str], tuple]:
+    """الحالة وعلامة أحداث الاحتياط المشمولة **معًا من عملية واحدة** —
+    R-693 (اعتراض المراجع ج9): العلامة من نسخة الاحتياط نفسها التي عولجت في
+    حساب الحالة؛ حدث يصل بعد النسخة يبقى غير مشمول (لا يُسقط عند تعذر
+    الإثبات لاحقًا)، والمشمول حُسم في الحالة نفسها (رفع موثق يُحترم)."""
+    log_path = Path(path) if path is not None else quarantine_log_path()
+    # R-693 (اعتراض المراجع ج10): أحداث الملف تُقرأ أولًا — ثم نسخة واحدة من
+    # الاحتياط تحت القفل: الحالة والعلامة من النسخة نفسها. بهذا يقع عزل
+    # الاحتياط السابق لرفعٍ شملته قراءة الملف في النسخة فتُحسم معه (لا
+    # يُعد معرفة جديدة لاحقًا فيُعاد فرضه)
+    file_events: List[tuple] = []
+    for entry in read_entries(log_path):  # يرفع OSError إذا موجود وغير مقروء
+        file_events.append(
+            (entry.get("time", 0), entry.get("kind"), entry.get("component"))
+        )
+    # نسخة واحدة من الاحتياط — منها تُحسب الحالة وتُؤخذ العلامة معًا
+    with _FALLBACK_LOCK:
+        fallback_copy = [dict(entry) for entry in _FALLBACK.get(str(log_path), [])]
+    fallback_sig = tuple(
+        (
+            entry.get("time", 0),
+            entry.get("kind"),
+            entry.get("component"),
+            entry.get("detail"),
+        )
+        for entry in fallback_copy
+    )
+    # أحداث فعالة مرتبة زمنيًا: الملف (عزل+رفع نافذان) + عزل نسخة الاحتياط
+    events: List[tuple] = list(file_events)
+    for entry in fallback_copy:
+        if entry.get("kind") == _QUARANTINE_KIND:
+            events.append(
+                (entry.get("time", 0), entry.get("kind"), entry.get("component"))
+            )
+    events.sort(key=lambda e: e[0])
+    components: Set[str] = set()
+    for _, kind, component in events:
+        if component is None:
+            continue
+        if kind == _QUARANTINE_KIND:
+            components.add(str(component))
+        elif kind == _RELEASE_KIND:
+            components.discard(str(component))
+    return components, fallback_sig
+
+
 def quarantined_components(
     path: Optional[os.PathLike] = None,
 ) -> Set[str]:
@@ -138,31 +186,8 @@ def quarantined_components(
     يرفع OSError إذا كان السجل موجودًا لكنه غير قابل للقراءة — الحالة غير
     القابلة للإثبات قرار المتصل (المدخل يغلق، لا يسكت).
     """
-    log_path = Path(path) if path is not None else quarantine_log_path()
-    # أحداث فعالة مرتبة زمنيًا: الملف (عزل+رفع نافذان) + عزل الاحتياط فقط
-    # (الرفع الفاشل التوثيق مستبعد من التنفيذ — R-690) — الترتيب زمني
-    # فيسمح الرفع الموثق اللاحق بإنهاء عزل سابق فشل توثيقه في الاحتياط
-    # (R-691 — اعتراض المراجع ج4)
-    events: List[tuple] = []
-    for entry in read_entries(log_path):  # يرفع OSError إذا موجود وغير مقروء
-        events.append(
-            (entry.get("time", 0), entry.get("kind"), entry.get("component"))
-        )
-    with _FALLBACK_LOCK:
-        for entry in _FALLBACK.get(str(log_path), []):
-            if entry.get("kind") == _QUARANTINE_KIND:
-                events.append(
-                    (entry.get("time", 0), entry.get("kind"), entry.get("component"))
-                )
-    events.sort(key=lambda e: e[0])
-    components: Set[str] = set()
-    for _, kind, component in events:
-        if component is None:
-            continue
-        if kind == _QUARANTINE_KIND:
-            components.add(str(component))
-        elif kind == _RELEASE_KIND:
-            components.discard(str(component))
+    # تفويض للعملية الواحدة (الحالة + العلامة) — نفس منطق الأحداث حرفيًا
+    components, _covered = read_quarantine_state(path)
     return components
 
 
@@ -193,6 +218,34 @@ def fallback_version() -> int:
     """نسخة الاحتياط — تتغير عند كل إلحاق/تفريغ (تدخل بصمة كاش المدخل)."""
     with _FALLBACK_LOCK:
         return _FALLBACK_VERSION
+
+
+def fallback_quarantined_uncovered(
+    snapshot: tuple, path: Optional[os.PathLike] = None
+) -> Set[str]:
+    """عزل الاحتياط **غير المشمول بلقطة آخر قراءة ناجحة** — المعرفة الجديدة
+    فقط: حدث لم تقرأه القراءة الناجحة التي أخذت اللقطة (فشل توثيقه بعدها
+    أو خلال نافذتها قبل قراءتها). المشمول حُسم فيها — لا يُعاد إحياؤه."""
+    log_path = Path(path) if path is not None else quarantine_log_path()
+    covered = set(snapshot)
+    with _FALLBACK_LOCK:
+        entries = list(_FALLBACK.get(str(log_path), []))
+    components: Set[str] = set()
+    for entry in entries:
+        sig = (
+            entry.get("time", 0),
+            entry.get("kind"),
+            entry.get("component"),
+            entry.get("detail"),
+        )
+        if sig in covered:
+            continue
+        if entry.get("kind") != _QUARANTINE_KIND:
+            continue
+        component = entry.get("component")
+        if component is not None:
+            components.add(str(component))
+    return components
 
 
 def fallback_quarantined(path: Optional[os.PathLike] = None) -> Set[str]:

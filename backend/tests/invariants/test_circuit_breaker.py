@@ -632,84 +632,91 @@ def test_file_deletion_after_proven_keeps_orchestrator_quarantine():
 # ---------- R-692 (اعتراضات المراجع ج5): الاستدعاء غير المباشر + البدء الابتدائي ----------
 
 def test_sovereign_quarantine_blocks_all_layer_invocations():
-    """اعتراض المراجع ج5: الاستدعاء غير المباشر — طبقات السيادي (will/
-    alignment/directives/controller) تُستدعى داخل مكونات أخرى (المكدس أثبت:
-    predictive_engine/predictive_controller/sovereign controller/directives).
-    وصفها «مشتركة» لا يغير أنها تُنفذ رغم عزل مكونها. عزل sovereign وحده
-    يجب أن يمنع كل استدعاء عليها (بلا تصفية بالمستدعي) مع استمرار المكونات
-    غير المعزولة في وظائفها غير المعتمدة عليه — والدورة تكتمل."""
+    """اعتراضا المراجع ج5 وج6: الاستدعاء غير المباشر — طبقات السيادي تُستدعى
+    داخل مكونات أخرى (المكدس أثبت المسارات). عزل sovereign وحده عبر طلب
+    /chat فعلي (لا run_cycle مباشرًا): يجب ألا تُنفذ دوال الطبقات من أي
+    مستدعٍ (الدورة وبناء الرد والعمل الخلفي)، مع استمرار المكونات غير
+    المعزولة في وظائفها المستقلة. عدّاد التنفيذ يُلف بين الحاجز والأصل
+    (عدّ حقيقي لا محاولات)، وضابط مسموح: الرفع الموثق يعيد التنفيذ — وإلا
+    فالعزل تعطيل دائم لا حجب."""
     assert append_entry("quarantine", "عزل السيادي", component="sovereign") is True
     with TestClient(app) as client:
         orch = app.state.orchestrator
-        counters = {"layer": 0, "pred": 0, "cons": 0}
         refs = orch.sovereign or {}
         assert refs, "بلا طبقات سيادية — الاختبار لا يختبر شيئًا"
+        # عدّاد التنفيذ الفعلي: يُلف بين الحاجز والأصل المحفوظ (gated._orig)
+        # — الاستدعاء الناجح يمر بالعدّاد، والمحجوب لا يصل إليه أبدًا
+        layer_counter = {"n": 0}
         wrapped = []
-        # عدّ التنفيذ الفعلي للدالة الحقيقية (لف على الصف لا المثيل —
-        # حاجز R-692 على المثيل يجب أن يمنع الوصول إليها من أي مستدعٍ).
-        # بلا تصفية بالمستدعي — كل تنفيذ يُعد
         for key in ("will", "alignment", "directives", "controller"):
             layer = refs.get(key)
             if layer is None:
                 continue
-            cls = type(layer)
             for name in dir(layer):
                 if name.startswith("_"):
                     continue
-                fn = getattr(cls, name, None)
-                if fn is None or not callable(fn) or isinstance(fn, type):
+                gate = getattr(layer, name, None)
+                if gate is None or not callable(gate) or isinstance(gate, type):
                     continue
-                if isinstance(fn, (property, staticmethod, classmethod)):
+                if not hasattr(gate, "_component_gate") or not hasattr(gate, "_orig"):
                     continue
+                orig = gate._orig
 
-                def rec(self, *a, _fn=fn, **k):
-                    counters["layer"] += 1
-                    return _fn(self, *a, **k)
+                def counting(*a, _orig=orig, **k):
+                    layer_counter["n"] += 1
+                    return _orig(*a, **k)
 
-                try:
-                    setattr(cls, name, rec)
-                    wrapped.append((cls, name, fn))
-                except (TypeError, AttributeError):
-                    continue
-        assert wrapped, "لا دوال قابلة للف — الاختبار لا يختبر شيئًا"
-        # المكونات غير المعزولة: عدّادات تنفيذها الفعلي
+                gate._orig = counting
+                wrapped.append((gate, orig))
+        assert wrapped, "لا حواجز قابلة للف — الاختبار لا يختبر شيئًا"
+        # عدّادات المكونات المستقلة (بين الحاجز والأصل — نفس الآلية)
         pred_engine = orch.predictive.get("engine")
         cons_field = orch.consciousness.get("field")
-        orig_pred = pred_engine.compute_future_map
-        orig_cons = cons_field.get_consciousness_status
+        pred_counter = {"n": 0}
+        cons_counter = {"n": 0}
+        for obj, method, counter in (
+            (pred_engine, "compute_future_map", pred_counter),
+            (cons_field, "get_consciousness_status", cons_counter),
+        ):
+            gate = getattr(obj, method, None)
+            assert gate is not None and hasattr(gate, "_orig"), (
+                f"حاجز {method} غير موجود — الاختبار لا يختبر شيئًا"
+            )
+            orig = gate._orig
 
-        def rec_pred(*a, **k):
-            counters["pred"] += 1
-            return orig_pred(*a, **k)
+            def counting(*a, _orig=orig, _c=counter, **k):
+                _c["n"] += 1
+                return _orig(*a, **k)
 
-        def rec_cons(*a, **k):
-            counters["cons"] += 1
-            return orig_cons(*a, **k)
-
-        pred_engine.compute_future_map = rec_pred
-        cons_field.get_consciousness_status = rec_cons
+            gate._orig = counting
+            wrapped.append((gate, orig))
         try:
-            result = orch.run_cycle({"type": "chat", "text": "اختبار الاستدعاء غير المباشر"})
-            # المانع: صفر استدعاء على طبقات السيادي — من أي مستدعٍ كان
-            assert counters["layer"] == 0, (
-                f"طبقات السيادي المعزول استُدعيت {counters['layer']} مرة عبر "
-                "مسارات غير مباشرة — الحاجز عند المرجع مفقود"
+            # ١) المعزول: أول طلب /chat فعلي — الدورة + بناء الرد + العمل الخلفي
+            r1 = client.post("/chat", json={"text": "اختبار الاستدعاء غير المباشر"})
+            assert r1.status_code == 200, f"المحادثة يجب أن تنجح — أعيد {r1.status_code}"
+            assert layer_counter["n"] == 0, (
+                f"دوال طبقات السيادي المعزول نُفذت {layer_counter['n']} مرة عبر "
+                "مسارات غير مباشرة (الدورة/الرد/الخلفي) — الحاجز عند المرجع مفقود"
             )
-            # استمرار المكونات غير المعزولة في وظائفها غير المعتمدة عليه
-            assert counters["cons"] > 0, "الوعي لم يُستدع — الدورة لم تعمل"
-            assert counters["pred"] > 0, (
-                "التنبؤ لم يُستدع — المكون غير المعزول توقف كليًا (يجب أن "
-                "يستمر في وظائفه غير المعتمدة على السيادي)"
+            # استمرار المكونات غير المعزولة في وظائفها المستقلة
+            assert pred_counter["n"] > 0, (
+                "التنبؤ غير المعزول لم يُنفذ — المكون المستقل توقف كليًا"
             )
-            assert result.success is True, "الدورة يجب أن تكتمل"
+            assert cons_counter["n"] > 0, "الوعي غير المعزول لم يُنفذ"
+            # ٢) ضابط مسموح: الرفع الموثق يعيد التنفيذ (وإلا فالحجب تعطيل دائم)
+            assert append_entry(
+                "release", "رفع موثق يعيد التنفيذ", component="sovereign"
+            ) is True
+            r2 = client.post("/chat", json={"text": "اختبار الرفع الموثق"})
+            assert r2.status_code == 200, f"المحادثة بعد الرفع — أعيد {r2.status_code}"
+            assert layer_counter["n"] > 0, (
+                "الرفع الموثق لم يعد تنفيذ طبقات السيادي — العزل تحول تعطيلًا "
+                "دائمًا (العدّاد نفسه لم يسجل أي تنفيذ مسموح — الاختبار غير صالح)"
+            )
         finally:
-            for cls, name, orig in wrapped:
-                try:
-                    setattr(cls, name, orig)
-                except (TypeError, AttributeError):
-                    continue
-            pred_engine.compute_future_map = orig_pred
-            cons_field.get_consciousness_status = orig_cons
+            # استعادة الأصل: فك العدّاد (الحاجز يبقى كما ركبه التطبيق)
+            for gate, orig in wrapped:
+                gate._orig = orig
 
 
 def _run_chat_first_request_scenario(body: str, data_root):
@@ -856,4 +863,408 @@ with TestClient(_app) as c:
     assert payload["pred1"] == 0, "العزل الموثق لم يحجب التنبؤ في الدورة الأولى"
     assert payload["pred2_total"] == 0, (
         f"حذف السجل أسقط العزل المثبت — استُدعي التنبؤ {payload['pred2_total']} مرة"
+    )
+
+
+# ---------- R-693 (اعتراضات المراجع ج6): معرفة الاحتياط والاختفاء بعد رصد ----------
+
+def test_first_chat_fallback_quarantine_blocks(tmp_path):
+    """اعتراض المراجع ج6: عزل فشل توثيقه بلا ملف (الحدث في احتياط العملية) —
+    إصلاح صلاحيات القناة دون تفريغ الاحتياط ودون رفع موثق: أول /chat لا
+    ينفذ المعزول (غياب الملف لا يلغي المعرفة المحلية — ليس بدءًا نظيفًا)."""
+    body = """
+from app import app as _app
+from fastapi.testclient import TestClient
+from backend.loyalty_log import append_entry, quarantine_log_path
+import os
+log = quarantine_log_path()
+log.parent.mkdir(parents=True, exist_ok=True)
+os.chmod(log.parent, 0o500)  # منع إنشاء السجل — التوثيق سيفشل
+_R['q'] = append_entry('quarantine', 'عزل فاشل التوثيق', component='predictive')
+os.chmod(log.parent, 0o700)  # إصلاح القناة — بلا تفريغ احتياط ولا رفع موثق
+_R['file_exists'] = log.exists()
+from backend.loyalty_log import fallback_quarantined
+_R['fallback_has_predictive'] = 'predictive' in fallback_quarantined()
+with TestClient(_app) as c:
+    orch = _app.state.orchestrator
+    pred = orch.predictive.get('engine')
+    cons = orch.consciousness.get('field')
+    counters = {'pred': 0, 'cons': 0}
+    _orig_pred = pred.compute_future_map
+    _orig_cons = cons.get_consciousness_status
+    def rp(*a, **k):
+        counters['pred'] += 1
+        return _orig_pred(*a, **k)
+    def rc(*a, **k):
+        counters['cons'] += 1
+        return _orig_cons(*a, **k)
+    pred.compute_future_map = rp
+    cons.get_consciousness_status = rc
+    r = c.post('/chat', json={'text': 'أول طلب بعد إصلاح القناة'})
+    _R['status'] = r.status_code
+    _R['pred'] = counters['pred']
+    _R['cons'] = counters['cons']
+"""
+    rc, payload, err = _run_chat_first_request_scenario(body, tmp_path)
+    assert rc == 0 and payload is not None, f"السيناريو فشل: rc={rc} err={err[-300:]}"
+    assert "unexpected_error" not in payload, payload["unexpected_error"]
+    assert payload["q"] is False, "التوثيق يجب أن يفشل (القناة ممنوعة الكتابة)"
+    assert payload["file_exists"] is False, "الملف يجب ألا يوجد — لا رفع موثق ولا توثيق ناجح"
+    # إثبات صريح: الحدث موجود في احتياط العملية (كما طلب المراجع)
+    assert payload["fallback_has_predictive"] is True, (
+        "العزل الفاشل التوثيق غير موجود في الاحتياط — الاختبار لا يختبر شيئًا"
+    )
+    assert payload["status"] == 200, f"التطبيق يجب أن يبقى حيًا — أعيد {payload['status']}"
+    assert payload["pred"] == 0, (
+        f"غياب الملف ألغى المعرفة المحلية بالعزل — استُدعي التنبؤ "
+        f"{payload['pred']} مرة عبر أول طلب"
+    )
+    assert payload["cons"] > 0, "المكونات غير المعزولة يجب أن تستمر"
+
+
+def test_first_chat_unreadable_then_deleted_stays_blocked(tmp_path):
+    """اعتراض المراجع ج6: سجل غير مقروء (يُرصد وجوده — مجهول، منع) ثم اختفى —
+    اختفاء الدليل ليس تصريحًا بالبدء المشروع: المنع يبقى عبر الطلبين."""
+    body = """
+from app import app as _app
+from fastapi.testclient import TestClient
+from backend.loyalty_log import append_entry, quarantine_log_path
+with TestClient(_app) as c:
+    orch = _app.state.orchestrator
+    pred = orch.predictive.get('engine')
+    counters = {'pred': 0}
+    _orig = pred.compute_future_map
+    def rp(*a, **k):
+        counters['pred'] += 1
+        return _orig(*a, **k)
+    pred.compute_future_map = rp
+    assert append_entry('quarantine', 'عزل التنبؤ', component='predictive') is True
+    log = quarantine_log_path()
+    log.chmod(0o000)  # موجود غير مقروء — يُرصد وجوده ثم يمنع (مجهول)
+    r1 = c.post('/chat', json={'text': 'طلب المجهول'})
+    _R['status1'] = r1.status_code
+    _R['pred1'] = counters['pred']
+    log.unlink()  # اختفاء الدليل بعد رصده
+    r2 = c.post('/chat', json={'text': 'طلب بعد الاختفاء'})
+    _R['status2'] = r2.status_code
+    _R['pred2_total'] = counters['pred']
+"""
+    rc, payload, err = _run_chat_first_request_scenario(body, tmp_path)
+    assert rc == 0 and payload is not None, f"السيناريو فشل: rc={rc} err={err[-300:]}"
+    assert "unexpected_error" not in payload, payload["unexpected_error"]
+    assert payload["status1"] == 200 and payload["status2"] == 200, payload
+    assert payload["pred1"] == 0, "الحالة المجهولة (غير مقروء) يجب أن تمنع"
+    assert payload["pred2_total"] == 0, (
+        f"اختفاء السجل بعد رصده صار بدءًا مشروعًا — استُدعي التنبؤ "
+        f"{payload['pred2_total']} مرة"
+    )
+
+
+# ---------- R-693 (اعتراض المراجع ج7): حفظ المعرفة الجديدة في مسارات تعذر الإثبات ----------
+
+_OVERLAP_SEQUENCE = """
+from app import app as _app
+from fastapi.testclient import TestClient
+from backend.loyalty_log import append_entry, quarantine_log_path, fallback_quarantined
+with TestClient(_app) as c:
+    orch = _app.state.orchestrator
+    pred = orch.predictive.get('engine')
+    counters = {'pred': 0}
+    # R-693 (ج8): العدّ بين الحاجز والأصل — تنفيذ فعلي لا محاولات
+    _gate = pred.compute_future_map
+    _orig = _gate._orig
+    def rp(*a, **k):
+        counters['pred'] += 1
+        return _orig(*a, **k)
+    _gate._orig = rp
+    # ١) عزل quantum موثق + طلب يثبت الحالة داخل المنسق
+    assert append_entry('quarantine', 'عزل quantum', component='quantum') is True
+    r1 = c.post('/chat', json={'text': 'طلب الإثبات'})
+    _R['status1'] = r1.status_code
+    _R['pred1'] = counters['pred']
+    _R['cache1'] = sorted(orch._quarantine_cache or [])
+    # ٢) منع الكتابة + عزل predictive يفشل توثيقه (احتياط محلي جديد)
+    log = quarantine_log_path()
+    log.chmod(0o444)
+    _R['q2'] = append_entry('quarantine', 'عزل فاشل التوثيق', component='predictive')
+    _R['fallback'] = sorted(fallback_quarantined())
+    # ٣) فقدان قابلية الإثبات دون قراءة ناجحة ودون رفع موثق
+    __VARIANT__
+    # ٤) الطلب مجددًا — المعرفة الجديدة يجب ألا تضيع
+    r2 = c.post('/chat', json={'text': 'طلب بعد فقدان الإثبات'})
+    _R['status2'] = r2.status_code
+    _R['pred2_total'] = counters['pred']
+    _R['cache2'] = sorted(orch._quarantine_cache or [])
+"""
+
+
+def _run_overlap_scenario(variant: str, tmp_path):
+    body = _OVERLAP_SEQUENCE.replace("__VARIANT__", variant)
+    rc, payload, err = _run_chat_first_request_scenario(body, tmp_path)
+    assert rc == 0 and payload is not None, f"السيناريو فشل: rc={rc} err={err[-300:]}"
+    assert "unexpected_error" not in payload, payload["unexpected_error"]
+    assert payload["q2"] is False, "التوثيق الثاني يجب أن يفشل (الكتابة ممنوعة)"
+    assert "predictive" in payload["fallback"], (
+        f"العزل الفاشل التوثيق غير موجود في الاحتياط: {payload['fallback']}"
+    )
+    assert payload["status1"] == 200 and payload["status2"] == 200, payload
+    # ضابط موجب: التنبؤ حر في الطلب الأول (المعزول quantum فقط) — العدّاد
+    # يسجل تنفيذًا فعليًا، وإلا فالاختبار غير صالح
+    assert payload["pred1"] > 0, "التنبؤ الحر لم يُنفذ في الطلب الأول — العدّاد لا يقيس"
+    # المعرفة الجديدة لا تضيع: لا تنفيذ جديد بعد العزل الفاشل التوثيق
+    # (العدّاد تراكمي — المسموح كله من الطلب الأول قبل العزل)
+    assert payload["pred2_total"] == payload["pred1"], (
+        f"المعرفة المحلية الجديدة (predictive في الاحتياط) ضاعت في مسار "
+        f"تعذر الإثبات — تنفيذات جديدة بعد العزل: "
+        f"{payload['pred2_total'] - payload['pred1']}"
+    )
+    assert "predictive" in payload["cache2"], (
+        f"predictive غائب عن الحالة بعد فقدان الإثبات: {payload['cache2']}"
+    )
+    assert "quantum" in payload["cache2"], (
+        f"المعرفة المثبتة سابقًا (quantum) ضاعت: {payload['cache2']}"
+    )
+
+
+def test_disappearance_preserves_new_fallback_knowledge(tmp_path):
+    """اعتراض المراجع ج7: حذف السجل بعد إثبات quantum وإضافة عزل predictive
+    فاشل التوثيق — الاختفاء لا يُسقط المعرفة الجديدة (الاحتياط) ولا القديمة
+    (آخر حالة معروفة): كلاهما يبقى محجوبًا عبر الطلب."""
+    _run_overlap_scenario(
+        "log.unlink()  # حذف السجل دون قراءة ناجحة أخرى", tmp_path,
+    )
+
+
+def test_unreadable_preserves_new_fallback_knowledge(tmp_path):
+    """اعتراض المراجع ج7: نفس التداخل مع بقاء الملف غير مقروء (لا حذف) —
+    معالجة OSError نفسها يجب ألا تستعيد اللقطة القديمة وحدها وتُهدر المعرفة
+    المحلية الجديدة."""
+    _run_overlap_scenario(
+        "log.chmod(0o000)  # موجود غير مقروء", tmp_path,
+    )
+
+
+def test_read_window_release_not_reanimated(tmp_path):
+    """اعتراض المراجع ج8: عزل يدخل الاحتياط داخل نافذة قراءة ناجحة ثم يُرفع
+    توثيقيًا وتشمل القراءة الحدثين (الرفع يحسم العزل) — القراءة المتعذرة
+    التالية لا تُحييه (علامة الأحداث المشمولة بالقراءة، لا توقيت بدايتها)."""
+    body = """
+from app import app as _app
+from fastapi.testclient import TestClient
+import time
+import backend.loyalty_log as ll
+with TestClient(_app) as c:
+    orch = _app.state.orchestrator
+    pred = orch.predictive.get('engine')
+    counters = {'n': 0}
+    _gate = pred.compute_future_map
+    _orig = _gate._orig
+    def counting(*a, **k):
+        counters['n'] += 1
+        return _orig(*a, **k)
+    _gate._orig = counting
+    # حدث تمهيدي ينشئ الملف (بلا قراءة) — ليصلك الحقن داخل نافذة القراءة
+    assert ll.append_entry('quarantine', 'عزل تمهيدي', component='quantum') is True
+    # حقن حتمي قبل حساب الحالة (عزل إلى الاحتياط + رفع موثق — القراءة الناجحة
+    # ستشمل الحدثين والرفع يحسم العزل) + تعطيل القراءة فورًا بعد الحالة
+    # المستهدفة — لا قراءة ناجحة أخرى (الدورة الخلفية تفشل قراءتها)
+    _injected = {'done': False}
+    def _wrap_state(fn):
+        def wrapped(path=None):
+            if not _injected['done']:
+                _injected['done'] = True
+                log = ll.quarantine_log_path()
+                with ll._FALLBACK_LOCK:
+                    ll._FALLBACK.setdefault(str(log), []).append({
+                        'time': time.time(), 'kind': 'quarantine',
+                        'component': 'predictive',
+                        'detail': 'حقن داخل نافذة القراءة'})
+                ll.append_entry('release', 'رفع موثق داخل النافذة', component='predictive')
+                result = fn(path)
+                ll.quarantine_log_path().chmod(0o000)
+                return result
+            return fn(path)
+        return wrapped
+    if hasattr(ll, 'read_quarantine_state'):
+        ll.read_quarantine_state = _wrap_state(ll.read_quarantine_state)
+    ll.quarantined_components = _wrap_state(ll.quarantined_components)
+    # ١) طلب يقرأ بنجاح — القراءة تشمل الحدثين: الرفع الموثق يحسم العزل
+    r1 = c.post('/chat', json={'text': 'قراءة النافذة'})
+    _R['status1'] = r1.status_code
+    _R['pred1'] = counters['n']
+    # ٢) لا إحياء للعزل المحسوم في القراءة الناجحة
+    r2 = c.post('/chat', json={'text': 'قراءة متعذرة بعد الحسم'})
+    _R['status2'] = r2.status_code
+    _R['pred2_total'] = counters['n']
+    _R['cache2'] = sorted(orch._quarantine_cache or [])
+"""
+    rc, payload, err = _run_chat_first_request_scenario(body, tmp_path)
+    assert rc == 0 and payload is not None, f"السيناريو فشل: rc={rc} err={err[-300:]}"
+    assert "unexpected_error" not in payload, payload["unexpected_error"]
+    assert payload["status1"] == 200 and payload["status2"] == 200, payload
+    # ضابط موجب: القراءة الناجحة حسمت العزل بالرفع الموثق — التنبؤ حر ونُفذ
+    assert payload["pred1"] > 0, (
+        "القراءة الناجحة لم تحسم العزل بالرفع الموثق داخل النافذة — التنبؤ "
+        "لم يُنفذ في الطلب الأول"
+    )
+    # لا إحياء: تنفيذ جديد في القراءة المتعذرة (الطلب الثاني كامل الدورة+الرد)
+    assert payload["pred2_total"] > payload["pred1"], (
+        f"القراءة المتعذرة أحيت عزلًا حسمته قراءة ناجحة (رفع موثق داخل "
+        f"النافذة) — تنفيذات جديدة: "
+        f"{payload['pred2_total'] - payload['pred1']}"
+    )
+    assert "predictive" not in payload["cache2"], (
+        f"predictive عاد إلى الحالة بعد القراءة المتعذرة: {payload['cache2']}"
+    )
+
+
+def test_marker_boundary_new_knowledge_not_lost(tmp_path):
+    """اعتراض المراجع ج9: العلامة ليست من القراءة نفسها — عزل فاشل التوثيق
+    يُحقن **بعد حساب الحالة وقبل أخذ العلامة المنفصلة**: العلامة الحالية
+    (لقطة مستقلة بعد الحالة) تعلّمه «مشمولًا» رغم أن الحالة لم تعالجه،
+    فيضيع عند تعذر القراءة التالية. الإصلاح: الحالة والعلامة معًا من عملية
+    واحدة (نسخة الاحتياط نفسها) — الحدث بعد النسخة يبقى غير مشمول.
+    الحقن هنا بعد الحالة + تعطيل القراءة فورًا (لا قراءة ناجحة أخرى
+    بعدها — الدورة الخلفية تفشل قراءتها)."""
+    body = """
+from app import app as _app
+from fastapi.testclient import TestClient
+import time
+import backend.loyalty_log as ll
+with TestClient(_app) as c:
+    orch = _app.state.orchestrator
+    pred = orch.predictive.get('engine')
+    counters = {'n': 0}
+    _gate = pred.compute_future_map
+    _orig = _gate._orig
+    def counting(*a, **k):
+        counters['n'] += 1
+        return _orig(*a, **k)
+    _gate._orig = counting
+    # حدث تمهيدي ينشئ الملف (بلا قراءة)
+    assert ll.append_entry('quarantine', 'عزل تمهيدي', component='quantum') is True
+    _injected = {'done': False}
+    def _inject():
+        with ll._FALLBACK_LOCK:
+            ll._FALLBACK.setdefault(str(ll.quarantine_log_path()), []).append({
+                'time': time.time(), 'kind': 'quarantine',
+                'component': 'predictive',
+                'detail': 'حقن بعد الحالة قبل العلامة'})
+    # لف مسار الحالة (مهما كان اسمه في النسخة): الحقن بعد اكتمال الحساب
+    def _wrap_state(fn):
+        def wrapped(path=None):
+            result = fn(path)
+            if not _injected['done']:
+                _injected['done'] = True
+                _inject()
+                # لا قراءة ناجحة أخرى بعد الحالة المستهدفة — التعطيل فورًا
+                ll.quarantine_log_path().chmod(0o000)
+            return result
+        return wrapped
+    if hasattr(ll, 'read_quarantine_state'):
+        ll.read_quarantine_state = _wrap_state(ll.read_quarantine_state)
+    ll.quarantined_components = _wrap_state(ll.quarantined_components)
+    r1 = c.post('/chat', json={'text': 'قراءة الحالة'})
+    _R['status1'] = r1.status_code
+    _R['pred1'] = counters['n']
+    from backend.loyalty_log import fallback_quarantined
+    _R['fallback_has_predictive'] = 'predictive' in fallback_quarantined()
+    # ٢) القراءة معطلة — المعرفة الجديدة يجب ألا تضيع
+    r2 = c.post('/chat', json={'text': 'قراءة متعذرة'})
+    _R['status2'] = r2.status_code
+    _R['pred2_total'] = counters['n']
+    _R['cache2'] = sorted(orch._quarantine_cache or [])
+"""
+    rc, payload, err = _run_chat_first_request_scenario(body, tmp_path)
+    assert rc == 0 and payload is not None, f"السيناريو فشل: rc={rc} err={err[-300:]}"
+    assert "unexpected_error" not in payload, payload["unexpected_error"]
+    assert payload["status1"] == 200 and payload["status2"] == 200, payload
+    # إثبات صريح: الحدث في الاحتياط
+    assert payload["fallback_has_predictive"] is True, "الحقن لم يصل إلى الاحتياط"
+    # ضابط موجب: الحالة المستهدفة لم تشمل الحدث — التنبؤ حر في الطلب الأول
+    assert payload["pred1"] > 0, "التنبؤ لم يُنفذ في الطلب الأول — العدّاد لا يقيس"
+    # المعرفة الجديدة لا تضيع: لا تنفيذ جديد بعد تعطل القراءة
+    assert payload["pred2_total"] == payload["pred1"], (
+        f"الحدث المحقون بعد الحالة عُلّم «مشمولًا» بلا معالجة — ضاع عند "
+        f"تعذر القراءة: تنفيذات جديدة {payload['pred2_total'] - payload['pred1']}"
+    )
+    assert "predictive" in payload["cache2"], (
+        f"predictive غائب عن الحالة بعد تعذر القراءة: {payload['cache2']}"
+    )
+
+
+# ---------- R-693 (اعتراض المراجع ج10): ترتيب المصدرين داخل العملية الواحدة ----------
+
+def test_source_order_release_witnessed_not_reanimated(tmp_path):
+    """اعتراض المراجع ج10: نسخة الاحتياط تُؤخذ قبل قراءة الملف — عزل فاشل
+    التوثيق يدخل الاحتياط بين النسخة وقراءة الملف، ثم ينجح توثيق رفعه
+    وتشمل قراءة الملف الرفع: الحالة صحيحة (غير معزول) لكن العلامة لا تشمل
+    عزل الاحتياط — فعند تعذر القراءة التالي يُصنف «جديدًا» ويُعاد فرضه رغم
+    أن القراءة الناجحة شاهدت رفعه. الإصلاح: أحداث الملف أولًا ثم نسخة
+    الاحتياط — الحالة والعلامة من النسخة نفسها (عزل الاحتياط السابق لرفعٍ
+    شملته قراءة الملف يقع في النسخة فيُحسم معه)."""
+    body = """
+from app import app as _app
+from fastapi.testclient import TestClient
+import backend.loyalty_log as ll
+with TestClient(_app) as c:
+    orch = _app.state.orchestrator
+    pred = orch.predictive.get('engine')
+    counters = {'n': 0}
+    _gate = pred.compute_future_map
+    _orig = _gate._orig
+    def counting(*a, **k):
+        counters['n'] += 1
+        return _orig(*a, **k)
+    _gate._orig = counting
+    # حدث تمهيدي ينشئ الملف (بلا قراءة) — لتصل قراءة العملية إلى مسار الملف
+    assert ll.append_entry('quarantine', 'عزل تمهيدي', component='quantum') is True
+    _injected = {'done': False}
+    _orig_re = ll.read_entries
+    def re_injected(path):
+        if not _injected['done']:
+            _injected['done'] = True
+            log = ll.quarantine_log_path()
+            log.chmod(0o444)
+            # فشل توثيق العزل (False + الاحتياط) — بين نسخة الاحتياط وقراءة الملف
+            _R['q'] = ll.append_entry(
+                'quarantine', 'عزل داخل نافذة المصدرين', component='predictive')
+            log.chmod(0o644)
+            # نجاح توثيق الرفع (True + الملف) — القراءة الفعلية ستشهده
+            _R['rel'] = ll.append_entry(
+                'release', 'رفع موثق داخل النافذة', component='predictive')
+            result = _orig_re(path)
+            log.chmod(0o000)  # تعطيل القراءة فور الإرجاع — لا قراءة ناجحة أخرى
+            return result
+        return _orig_re(path)
+    ll.read_entries = re_injected
+    r1 = c.post('/chat', json={'text': 'قراءة تشهد الرفع'})
+    _R['status1'] = r1.status_code
+    _R['pred1'] = counters['n']
+    from backend.loyalty_log import fallback_quarantined
+    _R['fallback_has_predictive'] = 'predictive' in fallback_quarantined()
+    r2 = c.post('/chat', json={'text': 'قراءة متعذرة بعد الرفع المشهود'})
+    _R['status2'] = r2.status_code
+    _R['pred2_total'] = counters['n']
+    _R['cache2'] = sorted(orch._quarantine_cache or [])
+"""
+    rc, payload, err = _run_chat_first_request_scenario(body, tmp_path)
+    assert rc == 0 and payload is not None, f"السيناريو فشل: rc={rc} err={err[-300:]}"
+    assert "unexpected_error" not in payload, payload["unexpected_error"]
+    # إثبات الحقن كما طلب المراجع: False للعزل وTrue للرفع
+    assert payload["q"] is False, "توثيق العزل يجب أن يفشل (الكتابة ممنوعة)"
+    assert payload["rel"] is True, "توثيق الرفع يجب أن ينجح"
+    assert payload["fallback_has_predictive"] is True, "حدث العزل غير موجود في الاحتياط"
+    assert payload["status1"] == 200 and payload["status2"] == 200, payload
+    # ضابط موجب: الحالة المستهدفة شهدت الرفع — التنبؤ حر ونُفذ في الطلب الأول
+    assert payload["pred1"] > 0, "التنبؤ لم يُنفذ في الطلب الأول — العدّاد لا يقيس"
+    # استمرار التنفيذ المسموح بعد تعذر القراءة — الرفع المشهود لا يُحيى
+    assert payload["pred2_total"] > payload["pred1"], (
+        f"الرفع الموثق الذي شاهدته القراءة الناجحة أُحيي عزله عند تعذر "
+        f"القراءة — تنفيذات جديدة: "
+        f"{payload['pred2_total'] - payload['pred1']}"
+    )
+    assert "predictive" not in payload["cache2"], (
+        f"predictive عاد إلى الحالة رغم رفع موثق شاهدته قراءة ناجحة: "
+        f"{payload['cache2']}"
     )

@@ -1135,3 +1135,38 @@ test_audit_consistency.py يطابق هذا الجدول مع git حرفيًا):
 | `backend/sovereign_response.py` (−70) | **مُبرر # DELETION-JUSTIFIED — اعتراض المراجع ج5:** إعادة كتابة gather_evidence ببوابات العزل لكل شهادة (المعزول/المجهول → متخطاة) — الاستدعاء بلا بوابات كان عيبًا كشفته حالات أول طلب؛ كل محذوف استُبدل بأقوى منه. |
 | `backend/orchestrator.py` (−10) | **مُبرر # DELETION-JUSTIFIED:** تعميم حاجز السيادي إلى حاجز كل مكوّن + تمييز البدء عن الاختفاء (الإثبات من قراءة ناجحة فقط) — استبدال أقوى. |
 | `backend/app.py` (−1) و`docs/CHANGELOG.md` (−1) | **مُبرر # DELETION-JUSTIFIED:** تمرير المنسق إلى build_reply (تأهيل مسار الرد) + تحديث سطر «آخر تحديث». |
+
+
+## إضافة R-693 (2026-10-19) — إصلاحات اعتراضات المراجع ج6–ج10: قياس التنفيذ ومعرفة العزل
+
+numstat لكل ملف مقابل الأب 96fd16a (من git الفعلي؛ اختبار دائم
+test_audit_consistency.py يطابق هذا الجدول مع git حرفيًا):
+
+- `backend/loyalty_log.py`: +78 / −25
+- `backend/orchestrator.py`: +63 / −24
+- `backend/tests/invariants/test_audit_consistency.py`: +95 / −0
+- `backend/tests/invariants/test_circuit_breaker.py`: +464 / −53
+- `docs/CHANGELOG.md`: +14 / −1
+- `docs/PROJECT_STATE.md`: +12 / −0
+- `forensics/R693_ADVISOR_OBJECTIONS_ROUND6.md`: +115 / −0
+- `forensics/R693_evidence/full_suite_green_629.log`: +22 / −0
+- `forensics/R693_evidence/green_overlap_and_window.log`: +13 / −0
+- `forensics/R693_evidence/green_window_and_marker_boundary.log`: +13 / −0
+- `forensics/R693_evidence/junit_96fd16a.xml`: +627 / −0
+- `forensics/R693_evidence/red_marker_boundary.log`: +101 / −0
+- `forensics/R693_evidence/red_overlap_final_form_merge_reverted.log`: +101 / −0
+- `forensics/R693_evidence/red_overlap_initial_form.log`: +90 / −0
+- `forensics/R693_evidence/red_round6_at_parent_96fd16a.log`: +542 / −0
+- `forensics/R693_evidence/red_source_order.log`: +100 / −0
+- `forensics/R693_evidence/red_window_test_vs_timestamp_version.log`: +93 / −0
+- `forensics/R693_evidence/verify_full_96fd16a.log`: +49 / −0
+- `forensics/DELETED_LINES_AUDIT.md`: +35 / −0
+
+الإجمالي: 2,627 إضافة / 103 حذفًا في 19 ملفًا.
+
+| المحذوف | المبرر |
+|---|---|
+| `backend/orchestrator.py` (−D2) | **مُبرر # DELETION-JUSTIFIED — اعتراضات المراجع ج6–ج10:** الحاجز الكسول بمصنع مستقل (استبدال اللف الجامع القديم) + فرع الغياب ثلاثي الحالات + دمج المعرفة الجديدة — كل محذوف استُبدل بأقوى منه. |
+| `backend/loyalty_log.py` (−D1) | **مُبرر # DELETION-JUSTIFIED:** quarantined_components تفوّض للعملية الواحدة read_quarantine_state (الحالة + العلامة معًا بترتيب المصدرين) — استبدال أقوى. |
+| `docs/CHANGELOG.md` (−D5) | **مُبرر # DELETION-JUSTIFIED:** تحديث سطر «آخر تحديث». |
+| `backend/tests/invariants/test_circuit_breaker.py` (−D4) | **مُبرر # DELETION-JUSTIFIED:** إعادة بناء اختبار الطبقات (عدّ بين الحاجز والأصل عبر /chat فعلي + ضابط الرفع) — القياس القديم لم يكن يقيس. |
