@@ -1040,3 +1040,37 @@ test_audit_consistency.py يطابق هذا الجدول مع git حرفيًا):
 | `backend/Mr.py` (−8) | **مُبرر # DELETION-JUSTIFIED:** توقيع `_record_violation`/`quarantine` من None إلى bool (فشل التوثيف صريح معلن — اعتراض المراجع) — استبدال أقوى لا حذف سلوك. |
 | `OWNER_REQUIRED.md` (−7) و`docs/CHANGELOG.md` (−1) | **مُبرر # DELETION-JUSTIFIED:** تحديث بند ١٤ (المنع داخل الدورة صار مُنفذًا — قرار المالك المتبقي سلوكي) وتحديث سطر «آخر تحديث» — النمط المعياري للملفين. |
 | `backend/tests/invariants/test_circuit_breaker.py` (−1) | **مُبرر # DELETION-JUSTIFIED (تصويب مدخل R-688):** سطر توثيق الـfixture (استُبدل بتوسيعه ليشمل تصفير كاش المدخل وفحص القناة) — تصويح صريح لمبرر جولة سابقة وصفه خطأً بأنه «سطر منطق الوسيط». |
+
+
+## إضافة R-690 (2026-10-19) — إصلاحات اعتراضات المراجع ج3: دلالة الحالة الفعالة وحد التنفيذ الكامل
+
+numstat لكل ملف مقابل الأب bc11f2a (من git الفعلي؛ اختبار دائم
+test_audit_consistency.py يطابق هذا الجدول مع git حرفيًا):
+
+- `backend/Mr.py`: +4 / −2
+- `backend/circuit_breaker.py`: +20 / −24
+- `backend/loyalty_log.py`: +18 / −15
+- `backend/orchestrator.py`: +39 / −24
+- `backend/tests/invariants/test_audit_consistency.py`: +95 / −0
+- `backend/tests/invariants/test_circuit_breaker.py`: +147 / −4
+- `backend/tests/invariants/test_quarantine_log.py`: +25 / −0
+- `docs/CHANGELOG.md`: +14 / −2
+- `docs/PROJECT_STATE.md`: +14 / −1
+- `forensics/R689_ADVISOR_OBJECTIONS_ROUND2.md`: +5 / −3
+- `forensics/R690_ADVISOR_OBJECTIONS_ROUND3.md`: +98 / −0
+- `forensics/R690_evidence/full_suite_green_607.log`: +22 / −0
+- `forensics/R690_evidence/junit_bc11f2a.xml`: +607 / −0
+- `forensics/R690_evidence/red_at_parent_bc11f2a.log`: +753 / −0
+- `forensics/R690_evidence/verify_full_bc11f2a.log`: +49 / −0
+- `forensics/DELETED_LINES_AUDIT.md`: +34 / −0
+
+الإجمالي: 1,944 إضافة / 75 حذفًا في 16 ملفًا.
+
+| المحذوف | المبرر |
+|---|---|
+| `backend/circuit_breaker.py` (−24) | **مُبرر # DELETION-JUSTIFIED — اعتراض المراجع ج3:** إعادة هيكلة `_current_quarantined` — القراءة أولًا عند وجود الملف (الاحتياط لا يُسقط عزلًا مثبتًا) والاحتياط مرجع فقط عند الغياب — كل سطر محذوف استُبدل بأقوى منه، ولا ميزة ضاعت (كل اختبارات R-687/688/689 خضراء). |
+| `backend/orchestrator.py` (−24) | **مُبرر # DELETION-JUSTIFIED:** إعادة هيكلة `_component_quarantined` (آخر حالة معروفة عند فشل القراءة — لا تصفير) + تحويل مواقع السيادي الثلاثة إلى حواجز عزل — كل محذوف استُبدل بأقوى منه. |
+| `backend/loyalty_log.py` (−15) | **مُبرر # DELETION-JUSTIFIED:** دلالة الحالة الفعالة — `quarantined_components`/`fallback_quarantined` تعالجان العزل النافذ فقط من الاحتياط (الرفع الفاشل غير منفذ) — استبدال أقوى. |
+| `backend/tests/invariants/test_circuit_breaker.py` (−4) | **مُبرر # DELETION-JUSTIFIED:** تصويب اختبار الرفع الفاشل (حجب الكتابة فعليًا قبل الرفع — كان الاختبار لا يختبر شيئًا) + توسيع اختبار الدورة (عدّاد ذاكرة + success) — تصويب طلبته المراجعة. |
+| `backend/Mr.py` (−2) | **مُبرر # DELETION-JUSTIFIED:** توقيع report_fault من None إلى bool (نشر الفشل — طلب المراجعة). |
+| `docs/CHANGELOG.md` (−2) و`docs/PROJECT_STATE.md` (−1) و`forensics/R689_ADVISOR_OBJECTIONS_ROUND2.md` (−3) | **مُبرر # DELETION-JUSTIFIED:** تحديث سطر «آخر تحديث» + تصويح ترقيم R-689 (600/601 قبل اختباري التدقيق / 602/603 نهائية — طلب المراجعة). |

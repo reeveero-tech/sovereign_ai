@@ -335,14 +335,16 @@ class LoyaltyContract:
             return False
         return True
 
-    def report_fault(self, source: str, detail: str, component: Optional[str] = None) -> None:
+    def report_fault(self, source: str, detail: str, component: Optional[str] = None) -> bool:
         """
         نقطة دخول اكتشاف الأخطاء: أي مسار كشف (داخلي أو لاحقًا من الحارس)
         يبلّغ عن خلل هنا ← استجابة موحدة: عزل + حدث مسجل — لا موت أبدًا.
         (بديل مسارات الموت القديمة: كان الخلل يقتل العملية؛ الآن يعزلها.)
         component (R-687): بلاغ بمكوّن تحديدًا — يُوثق في سجل العزل للتوجيه.
+        R-690: ينشر فشل التوثيق — يعيد False عند فشل توثيق العزل (كما
+        quarantine) فلا يعلن نجاحًا كاذبًا لمتصل يعتمد على قيمة الإرجاع.
         """
-        self.quarantine(f"[{source}] {detail}", component)
+        return self.quarantine(f"[{source}] {detail}", component)
 
     def release_quarantine(self, master_code: str, decision: str, component: Optional[str] = None) -> bool:
         """

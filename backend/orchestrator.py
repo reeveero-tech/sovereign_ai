@@ -167,34 +167,45 @@ class SovereignOrchestrator:
         "simulation": ("simulation",),
         "quantum": ("quantum",),
         "nexus": ("nexus",),
+        # R-690 (تتبع فعلي): المتحكم السيادي يُستدعى داخل الدورة
+        # (controller_cycle في _make_decision وget_controller_status في
+        # _evaluate_sovereign) — عزله يمنع استدعاءه
+        "sovereign": ("sovereign",),
     }
     _QUARANTINE_TTL = 1.0  # ثوانٍ — نافذة الاتساق بين توثيق العزل والتخطي
 
+    def _refresh_quarantine_state(self) -> None:
+        """قراءة حالة العزل من القناة المشتركة (ملف السجل — بلا استيراد Mr).
+        R-690 (اعتراض المراجع ج3): فشل القراءة يُبقي آخر حالة معروفة — لا
+        يُسقط عزلًا معروفًا ولا يوقف الدورة (المنع الصعب عند حد التوجيع)."""
+        try:
+            # استيراد متأخر بنمط الملف (المكونات تُستورد داخل الدوال)
+            try:
+                from backend.loyalty_log import quarantined_components
+            except ImportError:  # جذر المستودع ليس على المسار — أصلحه
+                import sys as _sys
+                _root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+                if _root not in _sys.path:
+                    _sys.path.insert(0, _root)
+                from backend.loyalty_log import quarantined_components
+            self._quarantine_cache = frozenset(quarantined_components())
+            self._quarantine_last_known = self._quarantine_cache
+        except OSError:
+            # فشل القراءة: آخر حالة معروفة تبقى مفروضة (لا إسقاط لعزل معروف)
+            self._quarantine_cache = self._quarantine_last_known
+        self._quarantine_cache_ts = time.time()
+        self._quarantine_dirty = False
+
     def _component_quarantined(self, app_component: str) -> bool:
-        """هل مكوّن التطبيق معزول في سجل العزل؟ (قراءة بذاكرة TTL قصيرة —
-        القناة المشتركة عبر الملف؛ فشل القراءة لا يوقف الدورة: المنع الصلب
-        عند حد التوجيع، والتخطي هنا أفضل جهد موثق)."""
+        """هل مكوّن التطبيق معزول في سجل العزل؟ (قراءة عند بدء كل دورة +
+        ذاكرة TTL قصيرة داخلها؛ فشل القراءة يُبقي آخر حالة معروفة)."""
         now = time.time()
         if (
             self._quarantine_cache is None
+            or self._quarantine_dirty
             or now - self._quarantine_cache_ts > self._QUARANTINE_TTL
         ):
-            try:
-                # استيراد متأخر بنمط الملف (المكونات تُستورد داخل الدوال)
-                try:
-                    from backend.loyalty_log import quarantined_components
-                except ImportError:  # جذر المستودع ليس على المسار — أصلحه
-                    import sys as _sys
-                    _root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-                    if _root not in _sys.path:
-                        _sys.path.insert(0, _root)
-                    from backend.loyalty_log import quarantined_components
-                self._quarantine_cache = frozenset(quarantined_components())
-            except OSError:
-                # قناة معطوبة: الدورة تستمر (المنع الصلب عند حد التوجيع) —
-                # موثق في التقرير الجنائي، لا موت ولا صمت
-                self._quarantine_cache = frozenset()
-            self._quarantine_cache_ts = now
+            self._refresh_quarantine_state()
         return app_component in self._quarantine_cache
 
     def _use(self, attr_name: str) -> bool:
@@ -235,6 +246,10 @@ class SovereignOrchestrator:
         # للدورة (قراءة قناة الحالة المشتركة: ملف سجل العزل — بلا استيراد Mr)
         self._quarantine_cache: Optional[frozenset] = None
         self._quarantine_cache_ts: float = 0.0
+        # R-690 (اعتراض المراجع ج3): فشل قراءة السجل لا يُسقط عزلًا معروفًا —
+        # آخر حالة معروفة تبقى مفروضة حتى قراءة ناجحة
+        self._quarantine_last_known: frozenset = frozenset()
+        self._quarantine_dirty: bool = True
         
         # العدادات والإحصائيات
         self._stats = {
@@ -710,10 +725,10 @@ class SovereignOrchestrator:
         self._stats["total_cycles"] += 1
         self._stats["last_cycle_id"] = cycle_id
         
-        # R-689 (حد التنفيذ): قراءة جديدة لحالة العزل عند بدء كل دورة —
+        # R-689/R-690 (حد التنفيذ): قراءة جديدة لحالة العزل عند بدء كل دورة —
         # العزل الموثق يسري من أول دورة بعد توثيقه (بلا نافذة TTL)، وقراءة
-        # واحدة متسقة داخل الدورة الواحدة
-        self._quarantine_cache = None
+        # واحدة متسقة داخل الدورة الواحدة؛ فشل القراءة يُبقي آخر حالة معروفة
+        self._quarantine_dirty = True
         
         self._log("info", f"🔄 بدء دورة المعالجة {cycle_id}", {"priority": priority})
         
@@ -1143,7 +1158,7 @@ class SovereignOrchestrator:
         }
         
         # محاولة الحصول على قرار من متحكم السيادة
-        controller = self.sovereign.get("controller") if self.sovereign else None
+        controller = self.sovereign.get("controller") if self._use("sovereign") else None
         if controller:
             controller_decision = self._safe_call(controller, "controller_cycle", default=None)
             if controller_decision:
@@ -1447,7 +1462,7 @@ class SovereignOrchestrator:
                     self._safe_call(component, "reset")
         
         # السيادة
-        if self.sovereign:
+        if self._use("sovereign"):
             for name, component in self.sovereign.items():
                 if hasattr(component, "reset"):
                     self._safe_call(component, "reset")

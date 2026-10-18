@@ -1,0 +1,49 @@
+porcelain at start: [0 lines]
+Python 3.11.15 (main, Mar 10 2026, 18:16:52) [Clang 21.1.4 ]
+✅ [بوابة الإصدار] Python 3.11 — مقبول (3.11.x)
+==========================================
+ R-682 Verification Script
+==========================================
+HEAD: bc11f2a7c5b0ae5eb08f78b19c3ddb8b7cf5f6db
+[info] Generated ephemeral data/key.secret (not committed)
+
+[1/2] Running test suite via tools/run_gate.py (actual command, sealed identity)...
+/tmp/verify_exec3/backend/config.py:312: UserWarning: ⚠️ CORS مفتوح للجميع — مقبول في التطوير فقط (D-034)
+  warnings.warn("⚠️ CORS مفتوح للجميع — مقبول في التطوير فقط (D-034)")
+/tmp/verify_exec3/backend/config.py:312: UserWarning: ⚠️ CORS مفتوح للجميع — مقبول في التطوير فقط (D-034)
+  warnings.warn("⚠️ CORS مفتوح للجميع — مقبول في التطوير فقط (D-034)")
+GATE OK: 602 passed, 1 deselected, 3 warnings in 171.21s (0:02:51)
+identity: {'head': 'bc11f2a7c5b0ae5eb08f78b19c3ddb8b7cf5f6db', 'content_fingerprint': '990638b04b836e503bb857802412abe54d76fbe1e07cbdac8e43778cbe5bfbe9'}
+
+[2/2] Verifying zero skips (DoD hard requirement)...
+✅ بوابة الاختبارات ناجحة: 602 passed, 0 skipped, 0 failed
+
+==========================================
+ [FULL MODE] CI + Clean Clone comparison
+==========================================
+
+[3/4] Fetching CI run for HEAD SHA=bc11f2a...
+CI Run: 39166186462 (completed/success — اختيار صريح + فحص هوية workflow)
+CI:     sha=bc11f2a7c5b0... tests=602 failed=0 skipped=0 unique_ids=602
+Local:  sha=bc11f2a7c5b0... tests=602 failed=0 skipped=0 unique_ids=602
+✅ CI + Local MATCH (SHA + test counts + (normalized_classname,name) Counter + zero failures + zero skips)
+
+[4/4] Clean clone verification (git checkout pinned to SHA=bc11f2a)...
+[info] Generated ephemeral data/key.secret in clone (not committed)
+  /home/user/workspace/venvs/venv311/lib/python3.11/site-packages/starlette/testclient.py:40: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.
+    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+602 passed, 1 deselected, 3 warnings in 173.54s (0:02:53)
+✅ SHA embedded in clone JUnit: bc11f2a7c5b0ae5eb08f78b19c3ddb8b7cf5f6db
+Clone:  tests=602 failed=0 skipped=0 unique_ids=602
+Local:  tests=602 failed=0 skipped=0 unique_ids=602
+✅ Clean clone JUnit MATCHES Local (count + (normalized_classname,name) Counter + zero failures + zero skips)
+
+==========================================
+ VERIFICATION COMPLETE
+ HEAD: bc11f2a7c5b0ae5eb08f78b19c3ddb8b7cf5f6db
+ JUnit: forensics/pytest_results.xml (git_sha embedded)
+ Mode: --full
+==========================================
+VERIFY_FULL_EXIT: 0

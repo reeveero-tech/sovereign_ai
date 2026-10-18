@@ -407,3 +407,98 @@ def test_audit_r689_total_matches():
     assert int(m.group(3)) == len(numstat), (
         f"عدد الملفات المعلن {m.group(3)} ≠ git {len(numstat)}"
     )
+
+
+# ---------- R-690: نفس القاعدة لجولة اعتراضات المراجع ج3 ----------
+
+def _r690_commit_range():
+    """مدخل R-690 مثبت على التزام R-690 وأبيه (bc11f2a) — لا بآخر التزامين."""
+    proc = subprocess.run(
+        ["git", "log", "--format=%H %P", "--grep=^R-690", "-1", "--no-merges"],
+        capture_output=True, text=True, cwd=str(_REPO_ROOT), check=True,
+    )
+    parts = proc.stdout.strip().split()
+    assert len(parts) >= 2, (
+        "التزام R-690 غير موجود في تاريخ git — مدخل التدقيق بلا مرجع"
+    )
+    return parts[0], parts[1]
+
+
+def _r690_git_numstat():
+    r690, parent = _r690_commit_range()
+    proc = subprocess.run(
+        ["git", "diff", "--numstat", f"{parent}..{r690}"],
+        capture_output=True, text=True, cwd=str(_REPO_ROOT), check=True,
+    )
+    result = {}
+    for line in proc.stdout.strip().splitlines():
+        a, d, name = line.split("\t")
+        result[name] = (int(a), int(d))
+    return result
+
+
+def _r690_audit_rows():
+    """صفوف مدخل R-690 فقط — القسم ينتهي عند أول عنوان ## لاحق."""
+    src = _AUDIT.read_text(encoding="utf-8")
+    start = src.index("## إضافة R-690")
+    lines = src[start:].splitlines()
+    end_idx = len(lines)
+    for i, line in enumerate(lines[1:], start=1):
+        if line.startswith("## "):
+            end_idx = i
+            break
+    rows = {}
+    for line in lines[:end_idx]:
+        m = _ROW.match(line)
+        if m:
+            rows[m.group(1)] = (int(m.group(2)), int(m.group(3)))
+    return rows
+
+
+def test_audit_r690_matches_git_numstat():
+    numstat = _r690_git_numstat()
+    audit = _r690_audit_rows()
+    assert audit, "مدخل R-690 في جدول التدقيق غير موجود أو صفر الصفوف"
+    assert numstat, "git diff لالتزام R-690 أعاد صفوفًا فارغة"
+
+    mismatches = []
+    for name, declared in sorted(audit.items()):
+        actual = numstat.get(name)
+        if actual is None:
+            mismatches.append(f"{name}: موجود في التدقيق وليس في git")
+        elif actual != declared:
+            mismatches.append(
+                f"{name}: التدقيق يقول {declared} وgit يقول {actual}"
+            )
+    missing = [n for n in numstat if n not in audit]
+    if missing:
+        mismatches.append(
+            "ملفات في git بلا صف في التدقيق: " + ", ".join(sorted(missing))
+        )
+    assert not mismatches, (
+        "مدخل التدقيق R-690 لا يطابق git — القاعدة: أرقام من numstat "
+        "الفعلي:\n  " + "\n  ".join(mismatches)
+    )
+
+
+def test_audit_r690_total_matches():
+    """الإجمالي المعلن في مدخل R-690 يطابق مجموع git حرفيًا."""
+    src = _AUDIT.read_text(encoding="utf-8")
+    start = src.index("## إضافة R-690")
+    section = src[start:]
+    m = re.search(
+        r"الإجمالي: ([\d,]+) إضافة / ([\d,]+) حذفًا في (\d+) ملف", section
+    )
+    assert m, "سطر الإجمالي غير موجود في مدخل R-690"
+    numstat = _r690_git_numstat()
+    total_a = sum(v[0] for v in numstat.values())
+    total_d = sum(v[1] for v in numstat.values())
+    assert int(m.group(1).replace(",", "")) == total_a, (
+        f"إجمالي الإضافات المعلن {m.group(1)} ≠ git {total_a}"
+    )
+    assert int(m.group(2).replace(",", "")) == total_d, (
+        f"إجمالي الحذوفات المعلن {m.group(2)} ≠ git {total_d}"
+    )
+    assert int(m.group(3)) == len(numstat), (
+        f"عدد الملفات المعلن {m.group(3)} ≠ git {len(numstat)}"
+    )

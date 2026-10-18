@@ -307,18 +307,128 @@ def test_log_deletion_keeps_proven_quarantine():
 def test_quarantined_component_not_invoked_inside_cycle():
     """اعتراض المراجع (حد التنفيذ الداخلي): /chat يستدعي orchestrator.run_cycle
     فعليًا والدورة تستدعي مكونات حية — عزل المكوّن يجب أن يمنع استدعاءه داخل
-    الدورة بينما تستمر بقية المكونات (تخطٍّ موثق في نتيجة الدورة)."""
+    الدورة بينما تستمر بقية المكونات (تخطٍّ موثق في نتيجة الدورة).
+    R-690 (تصويب المراجع): عدّادات للتنبؤ والوعي والذاكرة معًا + نجاح الدورة
+    صراحةً — الادعاء كله مُثبت لا مفترض."""
     assert append_entry("quarantine", "عزل التنبؤ", component="predictive") is True
     with TestClient(app) as client:
         orch = app.state.orchestrator
         assert orch is not None
         pred_calls = {"n": 0}
         cons_calls = {"n": 0}
+        mem_calls = {"n": 0}
         pred_engine = orch.predictive.get("engine")
         cons_field = orch.consciousness.get("field")
+        mem_core = orch.memory_core
         assert pred_engine is not None and cons_field is not None, (
             "المنسق بلا مكونات — الاختبار لا يختبر شيئًا"
         )
+        orig_pred = pred_engine.compute_future_map
+        orig_cons = cons_field.get_consciousness_status
+        orig_mem = mem_core.append_event
+
+        def rec_pred(*a, **k):
+            pred_calls["n"] += 1
+            return orig_pred(*a, **k)
+
+        def rec_cons(*a, **k):
+            cons_calls["n"] += 1
+            return orig_cons(*a, **k)
+
+        def rec_mem(*a, **k):
+            mem_calls["n"] += 1
+            return orig_mem(*a, **k)
+
+        pred_engine.compute_future_map = rec_pred
+        cons_field.get_consciousness_status = rec_cons
+        mem_core.append_event = rec_mem
+        try:
+            result = orch.run_cycle({"type": "chat", "text": "اختبار عزل"})
+            # المكوّن المعزول لم يُستدع إطلاقًا
+            assert pred_calls["n"] == 0, (
+                f"التنبؤ المعزول استُدعي {pred_calls['n']} مرة داخل الدورة — "
+                "المنع عند حد التنفيذ مفقود"
+            )
+            # بقية المكونات استمرت فعلًا (وعي + ذاكرة)
+            assert cons_calls["n"] > 0, "الوعي لم يُستدع — الدورة لم تعمل"
+            assert mem_calls["n"] > 0, "الذاكرة لم تُستدع — الدورة لم تعمل"
+            # الدورة نفسها أكملت بنجاح صراحةً (لا مجرد نتيجة غير معدومة)
+            assert result is not None and result.success is True, (
+                f"الدورة لم تكتمل بنجاح — success={getattr(result, 'success', '?')}"
+            )
+        finally:
+            pred_engine.compute_future_map = orig_pred
+            cons_field.get_consciousness_status = orig_cons
+            mem_core.append_event = orig_mem
+
+
+# ---------- R-690 (اعتراض المراجع ج3): الرفع الفاشل + الاحتياط والعزل المثبت ----------
+
+def test_failed_release_does_not_open_gate():
+    """اعتراض المراجع ج3: رفعٌ فاشل التوثيق (ذهب للاحتياط) يجب ألا يفتح
+    التوجيه — العزل المثبت على القرص يبقى محجوبًا (الرفع غير الموثق غير
+    منفذ — اتجاه آمن)."""
+    # ١) عزل موثق على القرص
+    assert append_entry("quarantine", "عزل مثبت", component="predictive") is True
+    log = quarantine_log_path()
+    with TestClient(app) as client:
+        assert client.get("/components/predictive").status_code == 503
+        log.chmod(0o444)  # منع الكتابة — الرفع سيفتش توثيقه ويذهب للاحتياط
+        try:
+            # ٢) رفع يفشل توثيقه (يذهب للاحتياط — لا يفتح شيئًا)
+            ok = append_entry("release", "رفع فاشل التوثيق", component="predictive")
+            assert ok is False, "التوثيق يجب أن يفشل هنا (الملف للقراءة فقط)"
+            # ٣) الطلب مجددًا — يجب أن يبقى محجوبًا
+            r = client.get("/components/predictive")
+            assert r.status_code == 503, (
+                f"رفع فاشل التوثيق فتح التوجيع — ممنوع. أعيد {r.status_code}"
+            )
+            assert r.json()["error"] == "component_quarantined", r.text[:200]
+        finally:
+            log.chmod(0o644)
+            from backend.loyalty_log import clear_fallback
+            clear_fallback(log)
+
+
+def test_unreadable_log_with_fallback_keeps_proven():
+    """اعتراض المراجع ج3: وجود احتياط لمكوّن لا يُسقط عزلًا مثبتًا على القرص —
+    سجل موجود غير مقروء = حالة غير قابلة للإثبات = إغلاق بخطأ محدد، مهما
+    كان في الاحتياط."""
+    # ١) إثبات عزل quantum على القرص + تسخين
+    assert append_entry("quarantine", "عزل مثبت", component="quantum") is True
+    with TestClient(app) as client:
+        assert client.get("/components/quantum").status_code == 503
+        log = quarantine_log_path()
+        log.chmod(0o444)  # منع الكتابة (الإلحاق سيفشل → الاحتياط)
+        try:
+            ok = append_entry("quarantine", "عزل فاشل التوثيق", component="predictive")
+            assert ok is False, "الإلحاق يجب أن يفشل هنا"
+            log.chmod(0o000)  # منع القراءة أيضًا — الحالة غير قابلة للإثبات
+            try:
+                r = client.get("/components/quantum")
+                assert r.status_code == 503, (
+                    f"الاحتياط أسقط عزلًا مثبتًا على القرص — ممنوع. "
+                    f"أعيد {r.status_code}"
+                )
+                assert r.json()["error"] == "quarantine_log_unreadable", r.text[:200]
+            finally:
+                log.chmod(0o644)
+        finally:
+            from backend.loyalty_log import clear_fallback
+            clear_fallback(log)
+
+
+def test_cycle_keeps_known_quarantine_on_read_failure():
+    """اعتراض المراجع ج3: فشل قراءة السجل لا يُسقط عزلًا معروفًا داخل الدورة —
+    آخر حالة معروفة تبقى مفروضة، والبقية تعمل، والدورة تكتمل."""
+    assert append_entry("quarantine", "عزل التنبؤ", component="predictive") is True
+    log = quarantine_log_path()
+    with TestClient(app) as client:
+        orch = app.state.orchestrator
+        pred_calls = {"n": 0}
+        cons_calls = {"n": 0}
+        pred_engine = orch.predictive.get("engine")
+        cons_field = orch.consciousness.get("field")
         orig_pred = pred_engine.compute_future_map
         orig_cons = cons_field.get_consciousness_status
 
@@ -333,16 +443,49 @@ def test_quarantined_component_not_invoked_inside_cycle():
         pred_engine.compute_future_map = rec_pred
         cons_field.get_consciousness_status = rec_cons
         try:
-            result = orch.run_cycle({"type": "chat", "text": "اختبار عزل"})
-            # المكوّن المعزول لم يُستدع إطلاقًا
-            assert pred_calls["n"] == 0, (
-                f"التنبؤ المعزول استُدعي {pred_calls['n']} مرة داخل الدورة — "
-                "المنع عند حد التنفيذ مفقود"
-            )
-            # بقية المكونات استمرت فعلًا
-            assert cons_calls["n"] > 0, "الوعي لم يُستدع — الدورة لم تعمل"
-            # الدورة نفسها أكملت (لا موت ولا فشل)
-            assert result is not None
+            # دورة أولى: العزل مفروض (قراءة ناجحة)
+            r1 = orch.run_cycle({"type": "chat", "text": "دورة أولى"})
+            assert pred_calls["n"] == 0 and cons_calls["n"] > 0
+            # عطّل قراءة السجل — آخر حالة معروفة يجب أن تبقى مفروضة
+            log.chmod(0o000)
+            try:
+                r2 = orch.run_cycle({"type": "chat", "text": "دورة ثانية"})
+                assert pred_calls["n"] == 0, (
+                    f"فشل القراءة أسقط عزلًا معروفًا — استُدعي "
+                    f"{pred_calls['n']} مرة"
+                )
+                assert cons_calls["n"] > 0, "بقية المكونات توقفت"
+                assert r2.success is True, "الدورة يجب أن تكتمل"
+            finally:
+                log.chmod(0o644)
         finally:
             pred_engine.compute_future_map = orig_pred
             cons_field.get_consciousness_status = orig_cons
+
+
+def test_sovereign_quarantine_blocks_cycle_sovereign_layer():
+    """اعتراض المراجع ج3 (تتبع self.sovereign): المتحكم السيادي يُستدعى فعلًا
+    داخل الدورة (controller_cycle في _make_decision وget_controller_status في
+    _evaluate_sovereign) — عزل «sovereign» يجب أن يمنع استدعاءه والبقية
+    تعمل والدورة تكتمل."""
+    assert append_entry("quarantine", "عزل السيادي", component="sovereign") is True
+    with TestClient(app) as client:
+        orch = app.state.orchestrator
+        controller = (orch.sovereign or {}).get("controller")
+        assert controller is not None, "بلا متحكم سيادي — الاختبار لا يختبر شيئًا"
+        calls = {"n": 0}
+        orig = controller.controller_cycle
+
+        def rec(*a, **k):
+            calls["n"] += 1
+            return orig(*a, **k)
+
+        controller.controller_cycle = rec
+        try:
+            result = orch.run_cycle({"type": "chat", "text": "اختبار السيادي"})
+            assert calls["n"] == 0, (
+                f"المتحكم السيادي المعزول استُدعي {calls['n']} مرة داخل الدورة"
+            )
+            assert result.success is True, "الدورة يجب أن تكتمل"
+        finally:
+            controller.controller_cycle = orig

@@ -251,3 +251,28 @@ def test_quarantine_persistence_failure_is_explicit(tmp_path):
     )
     # الحالة داخل العقد معزولة فعلًا (الولاء قائم — الفشل في الإنفاذ فقط)
     assert payload["status"]["quarantined"] is True
+
+
+def test_report_fault_propagates_persistence_failure(tmp_path):
+    """R-690 (اعتراض المراجع ج3): report_fault ينشر فشل التوثيق — يعيد False
+    (لا None) عندما يفشل توثيق العزل، فلا يعلن نجاحًا كاذبًا لمتصلٍ يعتمد
+    على قيمة الإرجاع."""
+    root = tmp_path / "persist_root2"
+    root.mkdir()
+    loyalty_dir = root / "loyalty"
+    loyalty_dir.mkdir()
+    os.chmod(loyalty_dir, 0o500)
+    rc, payload, err = _run_contract_scenario(
+        "c = Mr.get_contract()\n"
+        "_R['ok'] = c.report_fault('supervisor', 'خلل مع فشل توثيق', component='nexus')\n"
+        "_R['kinds'] = [v['kind'] for v in c.get_violations()]\n",
+        root,
+    )
+    os.chmod(loyalty_dir, 0o700)
+    assert rc == 0 and payload is not None, f"السيناريو فشل: rc={rc} err={err[-200:]}"
+    assert "unexpected_error" not in payload, payload["unexpected_error"]
+    assert payload["ok"] is False, (
+        f"report_fault لم ينشر فشل التوثيق — أعاد {payload['ok']!r} (None يعدل "
+        "نجاحًا صامتًا)"
+    )
+    assert "quarantine_persistence_failed" in payload["kinds"], payload["kinds"]

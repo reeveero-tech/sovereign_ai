@@ -127,28 +127,31 @@ def read_entries(
 def quarantined_components(
     path: Optional[os.PathLike] = None,
 ) -> Set[str]:
-    """المكونات المعزولة الآن: آخر حدث لكل مكوّن يحدد حالته.
+    """المكونات المعزولة الآن — دمج مصدري الإثبات:
 
-    عزل ← معزول، رفع لاحق ← مرفوع. الأحداث بلا مكوّن لا تُدخل في الحساب
-    (عزل العقد العام مسألة ولاء لا توجيه). يُدمج احتياط الذاكرة (أحداث فشل
-    توثيقها على القرص في هذه العملية) مع ملف السجل — مرتبة زمنيًا.
+    ١) الملف: آخر حدث لكل مكوّن يحدد حالته (عزل ← معزول، رفع ← مرفوع).
+    ٢) احتياط الذاكرة (أحداث فشل توثيقها في هذه العملية): **العزل فقط نافذ** —
+       الرفع الفاشل التوثيق غير منفذ (R-690 — اعتراض المراجع ج3: فشل
+       التوثيق لا يفتح بوابة؛ اتجاه آمن، والرفع الموثق وحده يرفع).
 
+    الأحداث بلا مكوّن لا تدخل في الحساب (عزل العقد العام مسألة ولاء لا توجيه).
     يرفع OSError إذا كان السجل موجودًا لكنه غير قابل للقراءة — الحالة غير
     القابلة للإثبات قرار المتصل (المدخل يغلق، لا يسكت).
     """
     log_path = Path(path) if path is not None else quarantine_log_path()
-    entries = _merged_entries(log_path)
-    components: Set[str] = set()
-    for entry in entries:
+    # ١) حالة الملف — آخر حدث لكل مكوّن يحدد حالته
+    file_components: Set[str] = set()
+    for entry in read_entries(log_path):  # يرفع OSError إذا موجود وغير مقروء
         component = entry.get("component")
         if component is None:
             continue
         kind = entry.get("kind")
         if kind == _QUARANTINE_KIND:
-            components.add(str(component))
+            file_components.add(str(component))
         elif kind == _RELEASE_KIND:
-            components.discard(str(component))
-    return components
+            file_components.discard(str(component))
+    # ٢) احتياط الذاكرة — العزل النافذ فقط (الرفع الفاشل غير منفذ)
+    return file_components | fallback_quarantined(log_path)
 
 
 def _merged_entries(log_path: Path) -> List[dict]:
@@ -182,7 +185,10 @@ def fallback_version() -> int:
 
 def fallback_quarantined(path: Optional[os.PathLike] = None) -> Set[str]:
     """المكونات المعزولة من احتياط الذاكرة فقط (بلا قراءة الملف) — أدق
-    مصدر متاح في هذه العملية للأحداث التي فشل توثيقها على القرص."""
+    مصدر متاح في هذه العملية للأحداث التي فشل توثيقها على القرص.
+    R-690: **العزل فقط نافذ** — أحداث الرفع الفاشلة التوثيق تُتجاهل هنا
+    (الرفع غير الموثق لا يُنفذ: لا يفتح بوابة) لكنها تبقى مرئية كسجل
+    انتهاكات (اقرأها المتصل إن احتاج الإثبات)."""
     log_path = Path(path) if path is not None else quarantine_log_path()
     with _FALLBACK_LOCK:
         entries = list(_FALLBACK.get(str(log_path), []))
@@ -191,11 +197,8 @@ def fallback_quarantined(path: Optional[os.PathLike] = None) -> Set[str]:
         component = entry.get("component")
         if component is None:
             continue
-        kind = entry.get("kind")
-        if kind == _QUARANTINE_KIND:
+        if entry.get("kind") == _QUARANTINE_KIND:
             components.add(str(component))
-        elif kind == _RELEASE_KIND:
-            components.discard(str(component))
     return components
 
 

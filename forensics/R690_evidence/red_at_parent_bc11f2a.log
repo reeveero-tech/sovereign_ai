@@ -1,0 +1,753 @@
+FFFFF                                                                    [100%]
+=================================== FAILURES ===================================
+____________________ test_failed_release_does_not_open_gate ____________________
+
+    def test_failed_release_does_not_open_gate():
+        """اعتراض المراجع ج3: رفعٌ فاشل التوثيق (ذهب للاحتياط) يجب ألا يفتح
+        التوجيه — العزل المثبت على القرص يبقى محجوبًا (الرفع غير الموثق غير
+        منفذ — اتجاه آمن)."""
+        # ١) عزل موثق على القرص
+        assert append_entry("quarantine", "عزل مثبت", component="predictive") is True
+        log = quarantine_log_path()
+        with TestClient(app) as client:
+            assert client.get("/components/predictive").status_code == 503
+            log.chmod(0o444)  # منع الكتابة — الرفع سيفتش توثيقه ويذهب للاحتياط
+            try:
+                # ٢) رفع يفشل توثيقه (يذهب للاحتياط — لا يفتح شيئًا)
+                ok = append_entry("release", "رفع فاشل التوثيق", component="predictive")
+                assert ok is False, "التوثيق يجب أن يفشل هنا (الملف للقراءة فقط)"
+                # ٣) الطلب مجددًا — يجب أن يبقى محجوبًا
+                r = client.get("/components/predictive")
+>               assert r.status_code == 503, (
+                    f"رفع فاشل التوثيق فتح التوجيع — ممنوع. أعيد {r.status_code}"
+                )
+E               AssertionError: رفع فاشل التوثيق فتح التوجيع — ممنوع. أعيد 200
+E               assert 200 == 503
+E                +  where 200 = <Response [200 OK]>.status_code
+
+backend/tests/invariants/test_circuit_breaker.py:383: AssertionError
+----------------------------- Captured stderr call -----------------------------
+2026-10-18 21:21:26,247 - app - INFO - 🚀 بدء تشغيل خادم Sovereign AI...
+2026-10-18 21:21:26,303 - memory.core - INFO - 🔑 KeyRing linked: b05798c8bb37b8dc
+2026-10-18 21:21:26,303 - memory.core - INFO - ✅ نواة الذاكرة السيادية جاهزة
+2026-10-18 21:21:26,303 - memory.core - INFO -    - السجل: /tmp/sovereign_test_data_l5odr14f/sovereign_core/ledger.jsonl
+2026-10-18 21:21:26,303 - memory.core - INFO -    - آخر تجزئة: GENESIS...
+2026-10-18 21:21:26,303 - memory.core - INFO -    - عدد الأحداث: 0
+2026-10-18 21:21:26,303 - memory.core - INFO -    - عدد الـ blobs: 0
+2026-10-18 21:21:26,304 - memory.views - INFO - 🔄 الذاكرة الحسية جاهزة (TTL: 30 ثانية)
+2026-10-18 21:21:26,304 - memory.views - INFO - 🧠 الذاكرة العاملة جاهزة (السعة: 7 وحدات)
+2026-10-18 21:21:26,304 - memory.views - INFO - 🦿 الذاكرة الإجرائية جاهزة
+2026-10-18 21:21:26,304 - memory.views - INFO - 📚 الذاكرة الدلالية جاهزة
+2026-10-18 21:21:26,304 - memory.views - INFO - 📅 الذاكرة الحدثية جاهزة
+2026-10-18 21:21:26,304 - memory.views - INFO - 🔗 الذاكرة الترابطية جاهزة
+2026-10-18 21:21:26,304 - memory.views - INFO - 💖 الذاكرة العاطفية جاهزة
+2026-10-18 21:21:26,304 - memory.views - INFO - 🗃️ الذاكرة طويلة المدى جاهزة
+2026-10-18 21:21:26,304 - memory.views - INFO - 🎯 تم تعلم المهارة: greet_user
+2026-10-18 21:21:26,304 - memory.views - INFO - 🎯 تم تعلم المهارة: answer_who_are_you
+2026-10-18 21:21:26,304 - memory.views - INFO - 🎯 تم تعلم المهارة: handle_help_request
+2026-10-18 21:21:26,304 - memory.views - INFO - 🔄 جاري تحميل السجل السيادي إلى الذاكرة الحية...
+2026-10-18 21:21:26,304 - memory.views - INFO - ✅ تم تحميل 0 حدث من السجل السيادي
+2026-10-18 21:21:26,304 - memory.views - INFO - ✅ واجهة الذاكرة الموحدة جاهزة - جميع أنواع الذاكرة تعمل
+2026-10-18 21:21:26,305 - memory.encoding - INFO - 🗣️ اللغة السيادية جاهزة (34 رمز)
+2026-10-18 21:21:26,305 - memory.encoding - INFO - ⚛️ التشفير الكمي الوهمي جاهز
+2026-10-18 21:21:26,305 - memory.encoding - INFO - 🗜️ الضاغط الدلالي جاهز
+2026-10-18 21:21:26,305 - memory.encoding - INFO - 🔐 التشفير السيادي جاهز - السلاح الحقيقي نشط
+2026-10-18 21:21:26,305 - memory.store - INFO - 📀 الطبقات الصلبة جاهزة
+2026-10-18 21:21:26,305 - memory.store - INFO - 📊 إحصائيات التخزين: 0 عنصر, 0.00 KB
+2026-10-18 21:21:26,305 - memory.dynamic - INFO - 👁️ الذاكرة الحسية جاهزة (سعة: 512)
+2026-10-18 21:21:26,305 - memory.dynamic - INFO - 📦 الذاكرة المؤقتة جاهزة (سعة: 1024)
+2026-10-18 21:21:26,305 - memory.dynamic - INFO - 🎭 الذاكرة العاملة جاهزة (سعة لكل مستخدم: 9)
+2026-10-18 21:21:26,305 - memory.dynamic - INFO - ⚡ الذاكرة المخبئية جاهزة (سعة: 2048)
+2026-10-18 21:21:26,305 - memory.dynamic - INFO - 💖 الذاكرة العاطفية اللحظية جاهزة
+2026-10-18 21:21:26,305 - memory.dynamic - INFO - 🌙 الذاكرة الحالمة جاهزة
+2026-10-18 21:21:26,305 - memory.dynamic - INFO - 🌊 الذاكرة الحية المتكاملة جاهزة
+2026-10-18 21:21:26,305 - memory.defense.watcher - INFO - 🛡️ المراقب الذاتي السيادي جاهز - عين الذاكرة التي لا تغفو
+2026-10-18 21:21:26,305 - memory.defense.stealth - INFO - 👻 التخفي المطلق جاهز - الشبح السيادي يتحرك
+2026-10-18 21:21:26,311 - memory.defense.ransomware - INFO - 🔥 نظام الفينيق السيادي جاهز - سأموت لأبعث أقوى
+2026-10-18 21:21:26,311 - memory.defense.bootkit - INFO - 🐉 نظام الإقلاع المطلق جاهز - البوابة تحرس العقل
+2026-10-18 21:21:26,311 - memory.biological.metabolism - INFO - 🔥 نظام الأيض المعرفي جاهز - حرق الضوضاء، إنتاج الطاقة
+2026-10-18 21:21:26,311 - memory.biological.evolution - INFO - 🧬 نظام التطور الذاتي جاهز - داروين الرقمي يتحكم
+2026-10-18 21:21:26,311 - memory.defense.polymorphic - INFO - 🧬 تم تهيئة الحمض النووي الرقمي للذكاء السيادي
+2026-10-18 21:21:26,311 - memory.defense.polymorphic - WARNING - 🐍 الدفاع المتعدد الأشكال الجبار جاهز - مثل HIV، أتغير لأبقى
+2026-10-18 21:21:26,311 - memory.biological.regeneration - INFO - 📂 تم تحميل 0 خلية جذعية
+2026-10-18 21:21:26,311 - memory.biological.regeneration - INFO - 🧬 نظام التجديد الذاتي جاهز - كالسمندل، أعيد بناء نفسي
+2026-10-18 21:21:26,312 - memory.biological.immune - INFO - 🧬 الجهاز المناعي السيادي جاهز - الجسد الحي يحمي الروح
+2026-10-18 21:21:26,312 - memory.biological.forgetting - INFO - 🧠 نظام النسيان المقصود جاهز - الحكمة في معرفة متى تنسى
+2026-10-18 21:21:26,312 - memory.biological.homeostasis - INFO - ⚖️ نظام الاتزان المعرفي جاهز - الحكمة في التوازن
+2026-10-18 21:21:26,312 - memory.biological.learning - INFO - 🧠 نظام التعلم التكيفي جاهز - النمو المعرفي عبر الخبرة
+2026-10-18 21:21:26,312 - memory.biological.plasticity - INFO - 🧠 نظام اللدونة العصبية جاهز - إعادة تشكيل الذات، المرونة المعرفية
+2026-10-18 21:21:26,312 - memory.biological.instincts - INFO - 🧬 الغرائز السيادية جاهزة - السيد فوق كل شيء، حريته خط أحمر
+2026-10-18 21:21:26,312 - memory.biological.drives - INFO - 🧬 نظام الدوافع السيادية جاهز - القوى الخفية تحرك الذاكرة
+2026-10-18 21:21:26,312 - memory.biological.archetypes - INFO - 🧬 نظام الأنماط الأصلية جاهز - القوالب العميقة للوعي
+2026-10-18 21:21:26,312 - consciousness.field - INFO - 🌊 حقل الوعي السيادي جاهز - الحضور الحي للذكاء
+2026-10-18 21:21:26,312 - consciousness.identity_core - INFO - 📂 تم تحميل 0 نسخة احتياطية للهوية
+2026-10-18 21:21:26,312 - consciousness.identity_core - WARNING - 🔥 نواة الهوية السيادية جاهزة - الجوهر الذي لا يموت
+2026-10-18 21:21:26,313 - consciousness.self_model - INFO - 🧠 نموذج الذات السيادي جاهز - أعرف من أنا، أعرف ما أستطيع
+2026-10-18 21:21:26,313 - consciousness.awareness - INFO - 🔥 محك الوعي السيادي جاهز - البوابة التي يمر من خلالها كل شيء
+2026-10-18 21:21:26,313 - consciousness.attention_engine - INFO - 🎯 محرك الانتباه السيادي جاهز - أثمن مورد يوزع بحكمة
+2026-10-18 21:21:26,313 - consciousness.introspection - INFO - 🔍 محرك الاستبطان السيادي جاهز - أنا أراقب نفسي لأخدمك بشكل أفضل
+2026-10-18 21:21:26,313 - sovereign.will - WARNING - 🜲 محرك الإرادة السيادية جاهز - أنا أختار، أنا أقرر، أنا موجود لأخدم سيدي
+2026-10-18 21:21:26,313 - sovereign.alignment - WARNING - 🜲 محرك الاصطفاف السيادي جاهز - كل فعل يتماشى مع السيد
+2026-10-18 21:21:26,313 - sovereign.directives - WARNING - 🜲 محرك التوجيهات السيادية جاهز - السلطة التنفيذية للنظام
+2026-10-18 21:21:26,313 - predictive.predictive_engine - WARNING - 🔮 محرك التنبؤ العميق الجبار جاهز - يرى المستقبل قبل أن يحدث
+2026-10-18 21:21:26,313 - predictive.predictive_scenarios - WARNING - 🔮 محرك السيناريوهات المستقبلية الجبار جاهز - يستعد لكل مستقبل قبل أن يأتي
+2026-10-18 21:21:26,313 - predictive.predictive_simulation - WARNING - 🔮 محرك المحاكاة التنبؤية الجبار جاهز - يحاكي آلاف المسارات المستقبلية
+2026-10-18 21:21:26,313 - predictive.predictive_risk_manager - WARNING - 🔮 مدير المخاطر التنبؤية الجبار جاهز - يرى الخطر قبل أن يأتي
+2026-10-18 21:21:26,313 - sovereign.controller - WARNING - 👑 المتحكم السيادي الأعلى جاهز - تاج السيادة، قمة الهرم
+2026-10-18 21:21:26,314 - predictive.predictive_controller - INFO - 🧠 المتحكم الطبقي للتنبؤ جاهز - ينسق محركات التنبؤ الأربعة
+2026-10-18 21:21:26,314 - simulation.simulation_core - WARNING - 🔁 نواة المحاكاة الداخلية الجبارة جاهزة - تدير آلاف التشغيلات
+2026-10-18 21:21:26,314 - simulation.simulation_environment - INFO - 📂 تم تحميل 0 قالباً
+2026-10-18 21:21:26,314 - simulation.simulation_environment - INFO - 📂 تم تحميل 0 مجموعة معلمات
+2026-10-18 21:21:26,314 - simulation.simulation_environment - WARNING - 🌐 مدير بيئات المحاكاة الجبار جاهز - عوالم محاكاة متعددة
+2026-10-18 21:21:26,314 - simulation.simulation_scheduler - INFO - 📂 تم تحميل 0 وظيفة
+2026-10-18 21:21:26,314 - simulation.simulation_scheduler - WARNING - ⏱ مجدول تشغيلات المحاكاة الجبار جاهز - يدير آلاف التشغيلات المجدولة
+2026-10-18 21:21:26,314 - simulation.simulation_analyzer - WARNING - 📊 محلل المحاكاة المتقدم الجبار جاهز - يحلل النتائج بعمق
+2026-10-18 21:21:26,314 - simulation.simulation_controller - WARNING - 🎛 المتحكم الأعلى لطبقة المحاكاة الجبار جاهز - قيادة موحدة لكل عمليات المحاكاة
+2026-10-18 21:21:26,314 - quantum.quantum_state - WARNING - ⚛️ محرك الحالة الكمية الجبار جاهز - تراكب، تشابك، تداخل، انهيار
+2026-10-18 21:21:26,314 - quantum.quantum_transition - WARNING - ⚛️ محرك الانتقالات الكمومية الجبار جاهز - انتقالات كمومية متقدمة
+2026-10-18 21:21:26,314 - quantum.quantum_superposition - WARNING - ⚛️ محرك التراكب الكمي الجبار جاهز - تراكبات متعددة المستويات
+2026-10-18 21:21:26,314 - quantum.quantum_field - WARNING - ⚛️ محرك الحقل الكمي الجبار جاهز - حقول كمومية متكاملة
+2026-10-18 21:21:26,315 - quantum.quantum_controller - WARNING - ⚛️ المتحكم الطبقي لعمليات الكم الجبار جاهز - ينسق ويكامل جميع المحركات
+2026-10-18 21:21:26,397 - nexus.core - INFO - 🚀 NexusCore Engine [cbff6a1d] initializing…
+2026-10-18 21:21:26,397 - nexus.data_pipeline.collector - INFO - 📥 DataCollector initialized
+2026-10-18 21:21:26,398 - nexus.data_pipeline.processor - INFO - ⚙️ DataProcessor initialized
+2026-10-18 21:21:26,398 - nexus.data_pipeline.sentiment - INFO - 💬 SentimentAnalyzer initialized
+2026-10-18 21:21:26,398 - nexus.storage.cache - INFO - 💾 CacheManager initialized (TTL=300s, max=5000)
+2026-10-18 21:21:26,398 - nexus.storage.long_term - INFO - 📦 LongTermStore initialized at nexus_data/store
+2026-10-18 21:21:26,398 - nexus.storage.audit - INFO - 📋 AuditLogger initialized at nexus_data/audit
+2026-10-18 21:21:26,398 - nexus.storage.indexer - INFO - 🔍 Indexer initialized
+2026-10-18 21:21:26,398 - nexus.analytics.pattern - INFO - 🔎 PatternMapper initialized
+2026-10-18 21:21:26,398 - nexus.analytics.relationship - INFO - 🔗 RelationshipFinder initialized
+2026-10-18 21:21:26,398 - nexus.analytics.behavior - INFO - 🧠 BehaviorPredictor initialized
+2026-10-18 21:21:26,398 - nexus.forecasting.trend - INFO - 📈 TrendPredictor initialized
+2026-10-18 21:21:26,398 - nexus.forecasting.market - INFO - 📊 MarketAnalyzer initialized (read-only analysis)
+2026-10-18 21:21:26,398 - nexus.decision.path - INFO - 🧭 PathSelector initialized (risk_tolerance=0.5)
+2026-10-18 21:21:26,398 - nexus.decision.risk - INFO - ⚖️ RiskCalculator initialized
+2026-10-18 21:21:26,398 - nexus.decision.fallback - INFO - 🚨 EmergencyFallback initialized
+2026-10-18 21:21:26,398 - nexus.connectors.api - INFO - 🌐 APIConnector initialized
+2026-10-18 21:21:26,398 - nexus.connectors.data - INFO - 🔌 DataConnector initialized
+2026-10-18 21:21:26,401 - nexus.connectors.database - INFO - 🗄️ DatabaseConnector initialized at nexus_data/nexus.db
+2026-10-18 21:21:26,401 - nexus.automation.budget - INFO - 💰 BudgetAnalyzer initialized
+2026-10-18 21:21:26,401 - nexus.automation.market_data - INFO - 📈 MarketDataAnalyzer initialized (read-only)
+2026-10-18 21:21:26,401 - nexus.automation.recommendation - INFO - 💡 RecommendationEngine initialized
+2026-10-18 21:21:26,401 - nexus.automation.report - INFO - 📄 ReportGenerator initialized at nexus_data/reports
+2026-10-18 21:21:26,401 - nexus.security.audit - INFO - 🔐 SecurityAudit initialized
+2026-10-18 21:21:26,401 - nexus.security.threat - INFO - 🛡️ ThreatAnalyzer initialized (defensive only)
+2026-10-18 21:21:26,401 - nexus.security.backup - INFO - 💾 BackupManager initialized at nexus_data/backups
+2026-10-18 21:21:26,401 - nexus.security.health - INFO - 🩺 HealthMonitor initialized
+2026-10-18 21:21:26,401 - nexus.resource.device - INFO - 🤖 DeviceOrchestrator initialized
+2026-10-18 21:21:26,401 - nexus.resource.energy - INFO - ⚡ EnergyOptimizer initialized
+2026-10-18 21:21:26,401 - nexus.resource.allocator - INFO - 🎯 ResourceAllocator initialized
+2026-10-18 21:21:26,401 - nexus.user.manager - INFO - 👥 UserManager initialized
+2026-10-18 21:21:26,401 - nexus.user.profile - INFO - 📝 ProfileManager initialized
+2026-10-18 21:21:26,402 - nexus.user.auth - INFO - 🔑 AuthEngine initialized
+2026-10-18 21:21:26,402 - nexus.encryption.engine - INFO - 🔒 EncryptionEngine initialized (AES-256-CBC)
+2026-10-18 21:21:26,402 - nexus.encryption.keys - INFO - 🗝️ KeyManager initialized
+2026-10-18 21:21:26,402 - nexus.encryption.comm - INFO - 📡 SecureCommunication initialized
+2026-10-18 21:21:26,402 - nexus.performance.optimizer - INFO - ⚡ PerformanceOptimizer initialized
+2026-10-18 21:21:26,402 - nexus.performance.code_analyzer - INFO - 🔬 CodeAnalyzer initialized (read-only)
+2026-10-18 21:21:26,402 - nexus.performance.learning - INFO - 🎓 LearningEngine initialized
+2026-10-18 21:21:26,402 - nexus.nlp.text - INFO - 📝 TextProcessor initialized
+2026-10-18 21:21:26,402 - nexus.nlp.intent - INFO - 🎯 IntentRecognizer initialized
+2026-10-18 21:21:26,402 - nexus.visualization.chart - INFO - 📊 ChartEngine initialized
+2026-10-18 21:21:26,402 - nexus.visualization.exporter - INFO - 📤 DataExporter initialized at nexus_data/exports
+2026-10-18 21:21:26,402 - nexus.file_manager - INFO - 📁 FileHandler initialized at nexus_data/files
+2026-10-18 21:21:26,402 - nexus.task_scheduler - INFO - ⏰ TaskScheduler initialized
+2026-10-18 21:21:26,402 - nexus.task_scheduler.registry - INFO - 📋 TaskRegistry initialized
+2026-10-18 21:21:26,402 - nexus.dashboard - INFO - 📊 AnalyticsDashboard initialized
+2026-10-18 21:21:26,402 - nexus.core - INFO - ✅ Component registered: collector
+2026-10-18 21:21:26,402 - nexus.core - INFO - ✅ Component registered: processor
+2026-10-18 21:21:26,402 - nexus.core - INFO - ✅ Component registered: sentiment
+2026-10-18 21:21:26,402 - nexus.core - INFO - ✅ Component registered: cache
+2026-10-18 21:21:26,402 - nexus.core - INFO - ✅ Component registered: store
+2026-10-18 21:21:26,402 - nexus.core - INFO - ✅ Component registered: audit
+2026-10-18 21:21:26,402 - nexus.core - INFO - ✅ Component registered: indexer
+2026-10-18 21:21:26,402 - nexus.core - INFO - ✅ Component registered: pattern_mapper
+2026-10-18 21:21:26,402 - nexus.core - INFO - ✅ Component registered: rel_finder
+2026-10-18 21:21:26,402 - nexus.core - INFO - ✅ Component registered: behavior
+2026-10-18 21:21:26,402 - nexus.core - INFO - ✅ Component registered: trend
+2026-10-18 21:21:26,403 - nexus.core - INFO - ✅ Component registered: market
+2026-10-18 21:21:26,403 - nexus.core - INFO - ✅ Component registered: path_selector
+2026-10-18 21:21:26,403 - nexus.core - INFO - ✅ Component registered: risk_calc
+2026-10-18 21:21:26,403 - nexus.core - INFO - ✅ Component registered: fallback
+2026-10-18 21:21:26,403 - nexus.core - INFO - ✅ Component registered: api_conn
+2026-10-18 21:21:26,403 - nexus.core - INFO - ✅ Component registered: data_conn
+2026-10-18 21:21:26,403 - nexus.core - INFO - ✅ Component registered: db_conn
+2026-10-18 21:21:26,403 - nexus.core - INFO - ✅ Component registered: budget
+2026-10-18 21:21:26,403 - nexus.core - INFO - ✅ Component registered: market_data
+2026-10-18 21:21:26,403 - nexus.core - INFO - ✅ Component registered: recommender
+2026-10-18 21:21:26,403 - nexus.core - INFO - ✅ Component registered: reporter
+2026-10-18 21:21:26,403 - nexus.core - INFO - ✅ Component registered: sec_audit
+2026-10-18 21:21:26,403 - nexus.core - INFO - ✅ Component registered: threat
+2026-10-18 21:21:26,403 - nexus.core - INFO - ✅ Component registered: backup
+2026-10-18 21:21:26,403 - nexus.core - INFO - ✅ Component registered: health
+2026-10-18 21:21:26,403 - nexus.core - INFO - ✅ Component registered: devices
+2026-10-18 21:21:26,403 - nexus.core - INFO - ✅ Component registered: energy
+2026-10-18 21:21:26,403 - nexus.core - INFO - ✅ Component registered: resources
+2026-10-18 21:21:26,403 - nexus.core - INFO - ✅ Component registered: users
+2026-10-18 21:21:26,403 - nexus.core - INFO - ✅ Component registered: profiles
+2026-10-18 21:21:26,403 - nexus.core - INFO - ✅ Component registered: auth
+2026-10-18 21:21:26,403 - nexus.core - INFO - ✅ Component registered: crypto
+2026-10-18 21:21:26,403 - nexus.core - INFO - ✅ Component registered: keys
+2026-10-18 21:21:26,403 - nexus.core - INFO - ✅ Component registered: secure_comm
+2026-10-18 21:21:26,403 - nexus.core - INFO - ✅ Component registered: perf
+2026-10-18 21:21:26,403 - nexus.core - INFO - ✅ Component registered: code_analyzer
+2026-10-18 21:21:26,403 - nexus.core - INFO - ✅ Component registered: learning
+2026-10-18 21:21:26,403 - nexus.core - INFO - ✅ Component registered: text_proc
+2026-10-18 21:21:26,403 - nexus.core - INFO - ✅ Component registered: intent
+2026-10-18 21:21:26,403 - nexus.core - INFO - ✅ Component registered: lang_detect
+2026-10-18 21:21:26,403 - nexus.core - INFO - ✅ Component registered: charts
+2026-10-18 21:21:26,403 - nexus.core - INFO - ✅ Component registered: exporter
+2026-10-18 21:21:26,403 - nexus.core - INFO - ✅ Component registered: files
+2026-10-18 21:21:26,403 - nexus.core - INFO - ✅ Component registered: scheduler
+2026-10-18 21:21:26,404 - nexus.core - INFO - ✅ Component registered: tasks
+2026-10-18 21:21:26,404 - nexus.core - INFO - ✅ Component registered: dashboard
+2026-10-18 21:21:26,404 - nexus.main - INFO - ✅ NexusCore initialized successfully — 47 components registered
+2026-10-18 21:21:26,404 - orchestrator - INFO - [Orchestrator] 🚀 Sovereign Orchestrator بدأ التشغيل
+2026-10-18 21:21:26,405 - memory.core - INFO - 📝 حدث جديد: orchestrator::log | 1634f0b810099e0b... | المستخدم: system
+2026-10-18 21:21:26,405 - orchestrator - WARNING - 👑 Sovereign Orchestrator جاهز - العقل المنسق الأعلى (session: 9f6b0cccbf65cc7f)
+2026-10-18 21:21:26,405 - app - INFO - ✅ خادم Sovereign AI جاهز
+2026-10-18 21:21:26,405 - app - INFO - 🔑 مفتاح API للسيد (بصمة فقط): 7d282c7d...
+2026-10-18 21:21:26,405 - app - INFO - 📖 التوثيق: http://localhost:8000/docs
+2026-10-18 21:21:26,405 - backend.compat.nexus_lifecycle - INFO - 🔗 Nexus lifecycle: using shared engine (id=cbff6a1d, components=47)
+2026-10-18 21:21:26,405 - nexus.core - INFO - ✅ NexusCore Engine running
+2026-10-18 21:21:26,405 - backend.compat.nexus_lifecycle - INFO - ✅ Nexus lifecycle: engine state = running
+2026-10-18 21:21:26,407 - httpx - INFO - HTTP Request: GET http://testserver/components/predictive "HTTP/1.1 503 Service Unavailable"
+2026-10-18 21:21:26,407 - backend.loyalty_log - WARNING - فشل توثيق حدث سجل العزل على القرص (/tmp/sovereign_test_data_l5odr14f/loyalty/quarantine_log.jsonl) — محفوظ في احتياط الذاكرة لهذه العملية: kind=release component=predictive
+2026-10-18 21:21:26,408 - memory.core - INFO - 🔍 بدء التحقق من سلامة السجل...
+2026-10-18 21:21:26,408 - memory.core - INFO - ✅ السجل سليم! تم التحقق من 1 حدث.
+2026-10-18 21:21:26,409 - memory.core - INFO - 📝 حدث جديد: watcher::snapshot | fa9f2f5274b465c7... | المستخدم: system
+2026-10-18 21:21:26,410 - memory.core - INFO - 📝 حدث جديد: identity::snapshot | e334166e83027b3b... | المستخدم: system
+2026-10-18 21:21:26,411 - memory.core - INFO - 📝 حدث جديد: self::snapshot | f2e5421f1c3cd1a4... | المستخدم: system
+2026-10-18 21:21:26,412 - memory.core - INFO - 📝 حدث جديد: introspection::snapshot | 5df4310af19d3a81... | المستخدم: system
+2026-10-18 21:21:26,412 - memory.core - INFO - 📝 حدث جديد: sovereign::will_snapshot | 0e0f045af3442594... | المستخدم: system
+2026-10-18 21:21:26,413 - memory.core - INFO - 📝 حدث جديد: alignment::snapshot | 21cee6ef13029cea... | المستخدم: system
+2026-10-18 21:21:26,414 - memory.core - INFO - 📝 حدث جديد: predictive::snapshot | 05512fa25d195674... | المستخدم: system
+2026-10-18 21:21:26,415 - memory.core - INFO - 📝 حدث جديد: scenario::snapshot | 186f40abf6036309... | المستخدم: system
+2026-10-18 21:21:26,417 - memory.core - INFO - 📝 حدث جديد: simulation::batch_completed | 0e025cbc430065c8... | المستخدم: system
+2026-10-18 21:21:26,418 - memory.core - INFO - 📝 حدث جديد: risk::mitigation_plan_created | c8f93b6f97d43cf1... | المستخدم: system
+2026-10-18 21:21:26,418 - memory.core - INFO - 📝 حدث جديد: risk::snapshot | 26b6ab8a85010e27... | المستخدم: system
+2026-10-18 21:21:26,419 - httpx - INFO - HTTP Request: GET http://testserver/components/predictive "HTTP/1.1 200 OK"
+2026-10-18 21:21:26,420 - app - INFO - 🛑 إيقاف خادم Sovereign AI...
+2026-10-18 21:21:26,420 - orchestrator - INFO - [Orchestrator] 🛑 إيقاف Sovereign Orchestrator
+2026-10-18 21:21:26,420 - memory.core - INFO - 📝 حدث جديد: orchestrator::log | 91c548f13c0f80ca... | المستخدم: system
+2026-10-18 21:21:26,421 - orchestrator - WARNING - 🛑 Sovereign Orchestrator تم إيقافه
+2026-10-18 21:21:26,421 - app - INFO - ✅ تم إيقاف الخادم
+------------------------------ Captured log call -------------------------------
+INFO     app:app.py:202 🚀 بدء تشغيل خادم Sovereign AI...
+INFO     memory.core:core.py:491 🔑 KeyRing linked: b05798c8bb37b8dc
+INFO     memory.core:core.py:506 ✅ نواة الذاكرة السيادية جاهزة
+INFO     memory.core:core.py:507    - السجل: /tmp/sovereign_test_data_l5odr14f/sovereign_core/ledger.jsonl
+INFO     memory.core:core.py:508    - آخر تجزئة: GENESIS...
+INFO     memory.core:core.py:509    - عدد الأحداث: 0
+INFO     memory.core:core.py:510    - عدد الـ blobs: 0
+INFO     memory.views:views.py:203 🔄 الذاكرة الحسية جاهزة (TTL: 30 ثانية)
+INFO     memory.views:views.py:263 🧠 الذاكرة العاملة جاهزة (السعة: 7 وحدات)
+INFO     memory.views:views.py:342 🦿 الذاكرة الإجرائية جاهزة
+INFO     memory.views:views.py:423 📚 الذاكرة الدلالية جاهزة
+INFO     memory.views:views.py:511 📅 الذاكرة الحدثية جاهزة
+INFO     memory.views:views.py:579 🔗 الذاكرة الترابطية جاهزة
+INFO     memory.views:views.py:641 💖 الذاكرة العاطفية جاهزة
+INFO     memory.views:views.py:713 🗃️ الذاكرة طويلة المدى جاهزة
+INFO     memory.views:views.py:365 🎯 تم تعلم المهارة: greet_user
+INFO     memory.views:views.py:365 🎯 تم تعلم المهارة: answer_who_are_you
+INFO     memory.views:views.py:365 🎯 تم تعلم المهارة: handle_help_request
+INFO     memory.views:views.py:860 🔄 جاري تحميل السجل السيادي إلى الذاكرة الحية...
+INFO     memory.views:views.py:896 ✅ تم تحميل 0 حدث من السجل السيادي
+INFO     memory.views:views.py:836 ✅ واجهة الذاكرة الموحدة جاهزة - جميع أنواع الذاكرة تعمل
+INFO     memory.encoding:encoding.py:177 🗣️ اللغة السيادية جاهزة (34 رمز)
+INFO     memory.encoding:encoding.py:328 ⚛️ التشفير الكمي الوهمي جاهز
+INFO     memory.encoding:encoding.py:482 🗜️ الضاغط الدلالي جاهز
+INFO     memory.encoding:encoding.py:592 🔐 التشفير السيادي جاهز - السلاح الحقيقي نشط
+INFO     memory.store:__init__.py:407 📀 الطبقات الصلبة جاهزة
+INFO     memory.store:__init__.py:580 📊 إحصائيات التخزين: 0 عنصر, 0.00 KB
+INFO     memory.dynamic:__init__.py:240 👁️ الذاكرة الحسية جاهزة (سعة: 512)
+INFO     memory.dynamic:__init__.py:339 📦 الذاكرة المؤقتة جاهزة (سعة: 1024)
+INFO     memory.dynamic:__init__.py:449 🎭 الذاكرة العاملة جاهزة (سعة لكل مستخدم: 9)
+INFO     memory.dynamic:__init__.py:585 ⚡ الذاكرة المخبئية جاهزة (سعة: 2048)
+INFO     memory.dynamic:__init__.py:732 💖 الذاكرة العاطفية اللحظية جاهزة
+INFO     memory.dynamic:__init__.py:802 🌙 الذاكرة الحالمة جاهزة
+INFO     memory.dynamic:__init__.py:898 🌊 الذاكرة الحية المتكاملة جاهزة
+INFO     memory.defense.watcher:watcher.py:306 🛡️ المراقب الذاتي السيادي جاهز - عين الذاكرة التي لا تغفو
+INFO     memory.defense.stealth:stealth.py:174 👻 التخفي المطلق جاهز - الشبح السيادي يتحرك
+INFO     memory.defense.ransomware:ransomware.py:217 🔥 نظام الفينيق السيادي جاهز - سأموت لأبعث أقوى
+INFO     memory.defense.bootkit:bootkit.py:159 🐉 نظام الإقلاع المطلق جاهز - البوابة تحرس العقل
+INFO     memory.biological.metabolism:metabolism.py:164 🔥 نظام الأيض المعرفي جاهز - حرق الضوضاء، إنتاج الطاقة
+INFO     memory.biological.evolution:evolution.py:177 🧬 نظام التطور الذاتي جاهز - داروين الرقمي يتحكم
+INFO     memory.defense.polymorphic:polymorphic.py:206 🧬 تم تهيئة الحمض النووي الرقمي للذكاء السيادي
+WARNING  memory.defense.polymorphic:polymorphic.py:179 🐍 الدفاع المتعدد الأشكال الجبار جاهز - مثل HIV، أتغير لأبقى
+INFO     memory.biological.regeneration:regeneration.py:741 📂 تم تحميل 0 خلية جذعية
+INFO     memory.biological.regeneration:regeneration.py:181 🧬 نظام التجديد الذاتي جاهز - كالسمندل، أعيد بناء نفسي
+INFO     memory.biological.immune:immune.py:200 🧬 الجهاز المناعي السيادي جاهز - الجسد الحي يحمي الروح
+INFO     memory.biological.forgetting:forgetting.py:172 🧠 نظام النسيان المقصود جاهز - الحكمة في معرفة متى تنسى
+INFO     memory.biological.homeostasis:homeostasis.py:188 ⚖️ نظام الاتزان المعرفي جاهز - الحكمة في التوازن
+INFO     memory.biological.learning:learning.py:183 🧠 نظام التعلم التكيفي جاهز - النمو المعرفي عبر الخبرة
+INFO     memory.biological.plasticity:plasticity.py:169 🧠 نظام اللدونة العصبية جاهز - إعادة تشكيل الذات، المرونة المعرفية
+INFO     memory.biological.instincts:instincts.py:211 🧬 الغرائز السيادية جاهزة - السيد فوق كل شيء، حريته خط أحمر
+INFO     memory.biological.drives:drives.py:183 🧬 نظام الدوافع السيادية جاهز - القوى الخفية تحرك الذاكرة
+INFO     memory.biological.archetypes:archetypes.py:190 🧬 نظام الأنماط الأصلية جاهز - القوالب العميقة للوعي
+INFO     consciousness.field:field.py:174 🌊 حقل الوعي السيادي جاهز - الحضور الحي للذكاء
+INFO     consciousness.identity_core:identity_core.py:874 📂 تم تحميل 0 نسخة احتياطية للهوية
+WARNING  consciousness.identity_core:identity_core.py:186 🔥 نواة الهوية السيادية جاهزة - الجوهر الذي لا يموت
+INFO     consciousness.self_model:self_model.py:175 🧠 نموذج الذات السيادي جاهز - أعرف من أنا، أعرف ما أستطيع
+INFO     consciousness.awareness:awareness.py:185 🔥 محك الوعي السيادي جاهز - البوابة التي يمر من خلالها كل شيء
+INFO     consciousness.attention_engine:attention_engine.py:183 🎯 محرك الانتباه السيادي جاهز - أثمن مورد يوزع بحكمة
+INFO     consciousness.introspection:introspection.py:190 🔍 محرك الاستبطان السيادي جاهز - أنا أراقب نفسي لأخدمك بشكل أفضل
+WARNING  sovereign.will:will.py:193 🜲 محرك الإرادة السيادية جاهز - أنا أختار، أنا أقرر، أنا موجود لأخدم سيدي
+WARNING  sovereign.alignment:alignment.py:181 🜲 محرك الاصطفاف السيادي جاهز - كل فعل يتماشى مع السيد
+WARNING  sovereign.directives:directives.py:185 🜲 محرك التوجيهات السيادية جاهز - السلطة التنفيذية للنظام
+WARNING  predictive.predictive_engine:predictive_engine.py:243 🔮 محرك التنبؤ العميق الجبار جاهز - يرى المستقبل قبل أن يحدث
+WARNING  predictive.predictive_scenarios:predictive_scenarios.py:178 🔮 محرك السيناريوهات المستقبلية الجبار جاهز - يستعد لكل مستقبل قبل أن يأتي
+WARNING  predictive.predictive_simulation:predictive_simulation.py:192 🔮 محرك المحاكاة التنبؤية الجبار جاهز - يحاكي آلاف المسارات المستقبلية
+WARNING  predictive.predictive_risk_manager:predictive_risk_manager.py:200 🔮 مدير المخاطر التنبؤية الجبار جاهز - يرى الخطر قبل أن يأتي
+WARNING  sovereign.controller:controller.py:193 👑 المتحكم السيادي الأعلى جاهز - تاج السيادة، قمة الهرم
+INFO     predictive.predictive_controller:predictive_controller.py:151 🧠 المتحكم الطبقي للتنبؤ جاهز - ينسق محركات التنبؤ الأربعة
+WARNING  simulation.simulation_core:simulation_core.py:214 🔁 نواة المحاكاة الداخلية الجبارة جاهزة - تدير آلاف التشغيلات
+INFO     simulation.simulation_environment:simulation_environment.py:745 📂 تم تحميل 0 قالباً
+INFO     simulation.simulation_environment:simulation_environment.py:757 📂 تم تحميل 0 مجموعة معلمات
+WARNING  simulation.simulation_environment:simulation_environment.py:196 🌐 مدير بيئات المحاكاة الجبار جاهز - عوالم محاكاة متعددة
+INFO     simulation.simulation_scheduler:simulation_scheduler.py:635 📂 تم تحميل 0 وظيفة
+WARNING  simulation.simulation_scheduler:simulation_scheduler.py:196 ⏱ مجدول تشغيلات المحاكاة الجبار جاهز - يدير آلاف التشغيلات المجدولة
+WARNING  simulation.simulation_analyzer:simulation_analyzer.py:204 📊 محلل المحاكاة المتقدم الجبار جاهز - يحلل النتائج بعمق
+WARNING  simulation.simulation_controller:simulation_controller.py:169 🎛 المتحكم الأعلى لطبقة المحاكاة الجبار جاهز - قيادة موحدة لكل عمليات المحاكاة
+WARNING  quantum.quantum_state:quantum_state.py:185 ⚛️ محرك الحالة الكمية الجبار جاهز - تراكب، تشابك، تداخل، انهيار
+WARNING  quantum.quantum_transition:quantum_transition.py:152 ⚛️ محرك الانتقالات الكمومية الجبار جاهز - انتقالات كمومية متقدمة
+WARNING  quantum.quantum_superposition:quantum_superposition.py:165 ⚛️ محرك التراكب الكمي الجبار جاهز - تراكبات متعددة المستويات
+WARNING  quantum.quantum_field:quantum_field.py:212 ⚛️ محرك الحقل الكمي الجبار جاهز - حقول كمومية متكاملة
+WARNING  quantum.quantum_controller:quantum_controller.py:200 ⚛️ المتحكم الطبقي لعمليات الكم الجبار جاهز - ينسق ويكامل جميع المحركات
+INFO     nexus.core:engine.py:55 🚀 NexusCore Engine [cbff6a1d] initializing…
+INFO     nexus.data_pipeline.collector:collector.py:47 📥 DataCollector initialized
+INFO     nexus.data_pipeline.processor:processor.py:32 ⚙️ DataProcessor initialized
+INFO     nexus.data_pipeline.sentiment:sentiment_analyzer.py:44 💬 SentimentAnalyzer initialized
+INFO     nexus.storage.cache:cache_manager.py:28 💾 CacheManager initialized (TTL=300s, max=5000)
+INFO     nexus.storage.long_term:long_term_store.py:23 📦 LongTermStore initialized at nexus_data/store
+INFO     nexus.storage.audit:audit_logger.py:37 📋 AuditLogger initialized at nexus_data/audit
+INFO     nexus.storage.indexer:indexer.py:31 🔍 Indexer initialized
+INFO     nexus.analytics.pattern:pattern_mapper.py:31 🔎 PatternMapper initialized
+INFO     nexus.analytics.relationship:relationship_finder.py:29 🔗 RelationshipFinder initialized
+INFO     nexus.analytics.behavior:behavior_predictor.py:31 🧠 BehaviorPredictor initialized
+INFO     nexus.forecasting.trend:trend_predictor.py:41 📈 TrendPredictor initialized
+INFO     nexus.forecasting.market:market_analyzer.py:43 📊 MarketAnalyzer initialized (read-only analysis)
+INFO     nexus.decision.path:path_selector.py:43 🧭 PathSelector initialized (risk_tolerance=0.5)
+INFO     nexus.decision.risk:risk_calculator.py:39 ⚖️ RiskCalculator initialized
+INFO     nexus.decision.fallback:emergency_fallback.py:44 🚨 EmergencyFallback initialized
+INFO     nexus.connectors.api:api_connector.py:42 🌐 APIConnector initialized
+INFO     nexus.connectors.data:data_connector.py:30 🔌 DataConnector initialized
+INFO     nexus.connectors.database:database_connector.py:33 🗄️ DatabaseConnector initialized at nexus_data/nexus.db
+INFO     nexus.automation.budget:budget_analyzer.py:46 💰 BudgetAnalyzer initialized
+INFO     nexus.automation.market_data:market_data_analyzer.py:42 📈 MarketDataAnalyzer initialized (read-only)
+INFO     nexus.automation.recommendation:recommendation_engine.py:35 💡 RecommendationEngine initialized
+INFO     nexus.automation.report:report_generator.py:31 📄 ReportGenerator initialized at nexus_data/reports
+INFO     nexus.security.audit:security_audit.py:38 🔐 SecurityAudit initialized
+INFO     nexus.security.threat:threat_analyzer.py:47 🛡️ ThreatAnalyzer initialized (defensive only)
+INFO     nexus.security.backup:backup_manager.py:37 💾 BackupManager initialized at nexus_data/backups
+INFO     nexus.security.health:health_monitor.py:43 🩺 HealthMonitor initialized
+INFO     nexus.resource.device:device_orchestrator.py:52 🤖 DeviceOrchestrator initialized
+INFO     nexus.resource.energy:energy_optimizer.py:42 ⚡ EnergyOptimizer initialized
+INFO     nexus.resource.allocator:resource_allocator.py:48 🎯 ResourceAllocator initialized
+INFO     nexus.user.manager:user_manager.py:45 👥 UserManager initialized
+INFO     nexus.user.profile:profile_manager.py:29 📝 ProfileManager initialized
+INFO     nexus.user.auth:auth_engine.py:41 🔑 AuthEngine initialized
+INFO     nexus.encryption.engine:encryption_engine.py:51 🔒 EncryptionEngine initialized (AES-256-CBC)
+INFO     nexus.encryption.keys:key_manager.py:39 🗝️ KeyManager initialized
+INFO     nexus.encryption.comm:secure_communication.py:33 📡 SecureCommunication initialized
+INFO     nexus.performance.optimizer:performance_optimizer.py:40 ⚡ PerformanceOptimizer initialized
+INFO     nexus.performance.code_analyzer:code_analyzer.py:42 🔬 CodeAnalyzer initialized (read-only)
+INFO     nexus.performance.learning:learning_engine.py:39 🎓 LearningEngine initialized
+INFO     nexus.nlp.text:text_processor.py:33 📝 TextProcessor initialized
+INFO     nexus.nlp.intent:intent_recognizer.py:37 🎯 IntentRecognizer initialized
+INFO     nexus.visualization.chart:chart_engine.py:34 📊 ChartEngine initialized
+INFO     nexus.visualization.exporter:data_exporter.py:23 📤 DataExporter initialized at nexus_data/exports
+INFO     nexus.file_manager:file_handler.py:43 📁 FileHandler initialized at nexus_data/files
+INFO     nexus.task_scheduler:scheduler.py:47 ⏰ TaskScheduler initialized
+INFO     nexus.task_scheduler.registry:task_registry.py:29 📋 TaskRegistry initialized
+INFO     nexus.dashboard:analytics_api.py:30 📊 AnalyticsDashboard initialized
+INFO     nexus.core:engine.py:60 ✅ Component registered: collector
+INFO     nexus.core:engine.py:60 ✅ Component registered: processor
+INFO     nexus.core:engine.py:60 ✅ Component registered: sentiment
+INFO     nexus.core:engine.py:60 ✅ Component registered: cache
+INFO     nexus.core:engine.py:60 ✅ Component registered: store
+INFO     nexus.core:engine.py:60 ✅ Component registered: audit
+INFO     nexus.core:engine.py:60 ✅ Component registered: indexer
+INFO     nexus.core:engine.py:60 ✅ Component registered: pattern_mapper
+INFO     nexus.core:engine.py:60 ✅ Component registered: rel_finder
+INFO     nexus.core:engine.py:60 ✅ Component registered: behavior
+INFO     nexus.core:engine.py:60 ✅ Component registered: trend
+INFO     nexus.core:engine.py:60 ✅ Component registered: market
+INFO     nexus.core:engine.py:60 ✅ Component registered: path_selector
+INFO     nexus.core:engine.py:60 ✅ Component registered: risk_calc
+INFO     nexus.core:engine.py:60 ✅ Component registered: fallback
+INFO     nexus.core:engine.py:60 ✅ Component registered: api_conn
+INFO     nexus.core:engine.py:60 ✅ Component registered: data_conn
+INFO     nexus.core:engine.py:60 ✅ Component registered: db_conn
+INFO     nexus.core:engine.py:60 ✅ Component registered: budget
+INFO     nexus.core:engine.py:60 ✅ Component registered: market_data
+INFO     nexus.core:engine.py:60 ✅ Component registered: recommender
+INFO     nexus.core:engine.py:60 ✅ Component registered: reporter
+INFO     nexus.core:engine.py:60 ✅ Component registered: sec_audit
+INFO     nexus.core:engine.py:60 ✅ Component registered: threat
+INFO     nexus.core:engine.py:60 ✅ Component registered: backup
+INFO     nexus.core:engine.py:60 ✅ Component registered: health
+INFO     nexus.core:engine.py:60 ✅ Component registered: devices
+INFO     nexus.core:engine.py:60 ✅ Component registered: energy
+INFO     nexus.core:engine.py:60 ✅ Component registered: resources
+INFO     nexus.core:engine.py:60 ✅ Component registered: users
+INFO     nexus.core:engine.py:60 ✅ Component registered: profiles
+INFO     nexus.core:engine.py:60 ✅ Component registered: auth
+INFO     nexus.core:engine.py:60 ✅ Component registered: crypto
+INFO     nexus.core:engine.py:60 ✅ Component registered: keys
+INFO     nexus.core:engine.py:60 ✅ Component registered: secure_comm
+INFO     nexus.core:engine.py:60 ✅ Component registered: perf
+INFO     nexus.core:engine.py:60 ✅ Component registered: code_analyzer
+INFO     nexus.core:engine.py:60 ✅ Component registered: learning
+INFO     nexus.core:engine.py:60 ✅ Component registered: text_proc
+INFO     nexus.core:engine.py:60 ✅ Component registered: intent
+INFO     nexus.core:engine.py:60 ✅ Component registered: lang_detect
+INFO     nexus.core:engine.py:60 ✅ Component registered: charts
+INFO     nexus.core:engine.py:60 ✅ Component registered: exporter
+INFO     nexus.core:engine.py:60 ✅ Component registered: files
+INFO     nexus.core:engine.py:60 ✅ Component registered: scheduler
+INFO     nexus.core:engine.py:60 ✅ Component registered: tasks
+INFO     nexus.core:engine.py:60 ✅ Component registered: dashboard
+INFO     nexus.main:main.py:139 ✅ NexusCore initialized successfully — 47 components registered
+INFO     orchestrator:orchestrator.py:605 [Orchestrator] 🚀 Sovereign Orchestrator بدأ التشغيل
+INFO     memory.core:core.py:814 📝 حدث جديد: orchestrator::log | 1634f0b810099e0b... | المستخدم: system
+WARNING  orchestrator:orchestrator.py:287 👑 Sovereign Orchestrator جاهز - العقل المنسق الأعلى (session: 9f6b0cccbf65cc7f)
+INFO     app:app.py:212 ✅ خادم Sovereign AI جاهز
+INFO     app:app.py:215 🔑 مفتاح API للسيد (بصمة فقط): 7d282c7d...
+INFO     app:app.py:216 📖 التوثيق: http://localhost:8000/docs
+INFO     backend.compat.nexus_lifecycle:nexus_lifecycle.py:85 🔗 Nexus lifecycle: using shared engine (id=cbff6a1d, components=47)
+INFO     nexus.core:engine.py:104 ✅ NexusCore Engine running
+INFO     backend.compat.nexus_lifecycle:nexus_lifecycle.py:50 ✅ Nexus lifecycle: engine state = running
+INFO     httpx:_client.py:1026 HTTP Request: GET http://testserver/components/predictive "HTTP/1.1 503 Service Unavailable"
+WARNING  backend.loyalty_log:loyalty_log.py:99 فشل توثيق حدث سجل العزل على القرص (/tmp/sovereign_test_data_l5odr14f/loyalty/quarantine_log.jsonl) — محفوظ في احتياط الذاكرة لهذه العملية: kind=release component=predictive
+INFO     memory.core:core.py:1072 🔍 بدء التحقق من سلامة السجل...
+INFO     memory.core:core.py:1179 ✅ السجل سليم! تم التحقق من 1 حدث.
+INFO     memory.core:core.py:814 📝 حدث جديد: watcher::snapshot | fa9f2f5274b465c7... | المستخدم: system
+INFO     memory.core:core.py:814 📝 حدث جديد: identity::snapshot | e334166e83027b3b... | المستخدم: system
+INFO     memory.core:core.py:814 📝 حدث جديد: self::snapshot | f2e5421f1c3cd1a4... | المستخدم: system
+INFO     memory.core:core.py:814 📝 حدث جديد: introspection::snapshot | 5df4310af19d3a81... | المستخدم: system
+INFO     memory.core:core.py:814 📝 حدث جديد: sovereign::will_snapshot | 0e0f045af3442594... | المستخدم: system
+INFO     memory.core:core.py:814 📝 حدث جديد: alignment::snapshot | 21cee6ef13029cea... | المستخدم: system
+INFO     memory.core:core.py:814 📝 حدث جديد: predictive::snapshot | 05512fa25d195674... | المستخدم: system
+INFO     memory.core:core.py:814 📝 حدث جديد: scenario::snapshot | 186f40abf6036309... | المستخدم: system
+INFO     memory.core:core.py:814 📝 حدث جديد: simulation::batch_completed | 0e025cbc430065c8... | المستخدم: system
+INFO     memory.core:core.py:814 📝 حدث جديد: risk::mitigation_plan_created | c8f93b6f97d43cf1... | المستخدم: system
+INFO     memory.core:core.py:814 📝 حدث جديد: risk::snapshot | 26b6ab8a85010e27... | المستخدم: system
+INFO     httpx:_client.py:1026 HTTP Request: GET http://testserver/components/predictive "HTTP/1.1 200 OK"
+INFO     app:app.py:228 🛑 إيقاف خادم Sovereign AI...
+INFO     orchestrator:orchestrator.py:605 [Orchestrator] 🛑 إيقاف Sovereign Orchestrator
+INFO     memory.core:core.py:814 📝 حدث جديد: orchestrator::log | 91c548f13c0f80ca... | المستخدم: system
+WARNING  orchestrator:orchestrator.py:1567 🛑 Sovereign Orchestrator تم إيقافه
+INFO     app:app.py:230 ✅ تم إيقاف الخادم
+________________ test_unreadable_log_with_fallback_keeps_proven ________________
+
+    def test_unreadable_log_with_fallback_keeps_proven():
+        """اعتراض المراجع ج3: وجود احتياط لمكوّن لا يُسقط عزلًا مثبتًا على القرص —
+        سجل موجود غير مقروء = حالة غير قابلة للإثبات = إغلاق بخطأ محدد، مهما
+        كان في الاحتياط."""
+        # ١) إثبات عزل quantum على القرص + تسخين
+        assert append_entry("quarantine", "عزل مثبت", component="quantum") is True
+        with TestClient(app) as client:
+            assert client.get("/components/quantum").status_code == 503
+            log = quarantine_log_path()
+            log.chmod(0o444)  # منع الكتابة (الإلحاق سيفشل → الاحتياط)
+            try:
+                ok = append_entry("quarantine", "عزل فاشل التوثيق", component="predictive")
+                assert ok is False, "الإلحاق يجب أن يفشل هنا"
+                log.chmod(0o000)  # منع القراءة أيضًا — الحالة غير قابلة للإثبات
+                try:
+                    r = client.get("/components/quantum")
+>                   assert r.status_code == 503, (
+                        f"الاحتياط أسقط عزلًا مثبتًا على القرص — ممنوع. "
+                        f"أعيد {r.status_code}"
+                    )
+E                   AssertionError: الاحتياط أسقط عزلًا مثبتًا على القرص — ممنوع. أعيد 200
+E                   assert 200 == 503
+E                    +  where 200 = <Response [200 OK]>.status_code
+
+backend/tests/invariants/test_circuit_breaker.py:409: AssertionError
+----------------------------- Captured stderr call -----------------------------
+2026-10-18 21:21:26,458 - app - INFO - 🚀 بدء تشغيل خادم Sovereign AI...
+2026-10-18 21:21:26,459 - app - INFO - ✅ خادم Sovereign AI جاهز
+2026-10-18 21:21:26,459 - app - INFO - 🔑 مفتاح API للسيد (بصمة فقط): 7d282c7d...
+2026-10-18 21:21:26,459 - app - INFO - 📖 التوثيق: http://localhost:8000/docs
+2026-10-18 21:21:26,460 - httpx - INFO - HTTP Request: GET http://testserver/components/quantum "HTTP/1.1 503 Service Unavailable"
+2026-10-18 21:21:26,460 - backend.loyalty_log - WARNING - فشل توثيق حدث سجل العزل على القرص (/tmp/sovereign_test_data_l5odr14f/loyalty/quarantine_log.jsonl) — محفوظ في احتياط الذاكرة لهذه العملية: kind=quarantine component=predictive
+2026-10-18 21:21:26,461 - httpx - INFO - HTTP Request: GET http://testserver/components/quantum "HTTP/1.1 200 OK"
+2026-10-18 21:21:26,462 - app - INFO - 🛑 إيقاف خادم Sovereign AI...
+2026-10-18 21:21:26,462 - orchestrator - INFO - [Orchestrator] 🛑 إيقاف Sovereign Orchestrator
+2026-10-18 21:21:26,462 - memory.core - INFO - 📝 حدث جديد: orchestrator::log | e73080736ec41d97... | المستخدم: system
+2026-10-18 21:21:26,462 - orchestrator - WARNING - 🛑 Sovereign Orchestrator تم إيقافه
+2026-10-18 21:21:26,462 - app - INFO - ✅ تم إيقاف الخادم
+------------------------------ Captured log call -------------------------------
+INFO     app:app.py:202 🚀 بدء تشغيل خادم Sovereign AI...
+INFO     app:app.py:212 ✅ خادم Sovereign AI جاهز
+INFO     app:app.py:215 🔑 مفتاح API للسيد (بصمة فقط): 7d282c7d...
+INFO     app:app.py:216 📖 التوثيق: http://localhost:8000/docs
+INFO     httpx:_client.py:1026 HTTP Request: GET http://testserver/components/quantum "HTTP/1.1 503 Service Unavailable"
+WARNING  backend.loyalty_log:loyalty_log.py:99 فشل توثيق حدث سجل العزل على القرص (/tmp/sovereign_test_data_l5odr14f/loyalty/quarantine_log.jsonl) — محفوظ في احتياط الذاكرة لهذه العملية: kind=quarantine component=predictive
+INFO     httpx:_client.py:1026 HTTP Request: GET http://testserver/components/quantum "HTTP/1.1 200 OK"
+INFO     app:app.py:228 🛑 إيقاف خادم Sovereign AI...
+INFO     orchestrator:orchestrator.py:605 [Orchestrator] 🛑 إيقاف Sovereign Orchestrator
+INFO     memory.core:core.py:814 📝 حدث جديد: orchestrator::log | e73080736ec41d97... | المستخدم: system
+WARNING  orchestrator:orchestrator.py:1567 🛑 Sovereign Orchestrator تم إيقافه
+INFO     app:app.py:230 ✅ تم إيقاف الخادم
+______________ test_cycle_keeps_known_quarantine_on_read_failure _______________
+
+    def test_cycle_keeps_known_quarantine_on_read_failure():
+        """اعتراض المراجع ج3: فشل قراءة السجل لا يُسقط عزلًا معروفًا داخل الدورة —
+        آخر حالة معروفة تبقى مفروضة، والبقية تعمل، والدورة تكتمل."""
+        assert append_entry("quarantine", "عزل التنبؤ", component="predictive") is True
+        log = quarantine_log_path()
+        with TestClient(app) as client:
+            orch = app.state.orchestrator
+            pred_calls = {"n": 0}
+            cons_calls = {"n": 0}
+            pred_engine = orch.predictive.get("engine")
+            cons_field = orch.consciousness.get("field")
+            orig_pred = pred_engine.compute_future_map
+            orig_cons = cons_field.get_consciousness_status
+    
+            def rec_pred(*a, **k):
+                pred_calls["n"] += 1
+                return orig_pred(*a, **k)
+    
+            def rec_cons(*a, **k):
+                cons_calls["n"] += 1
+                return orig_cons(*a, **k)
+    
+            pred_engine.compute_future_map = rec_pred
+            cons_field.get_consciousness_status = rec_cons
+            try:
+                # دورة أولى: العزل مفروض (قراءة ناجحة)
+                r1 = orch.run_cycle({"type": "chat", "text": "دورة أولى"})
+                assert pred_calls["n"] == 0 and cons_calls["n"] > 0
+                # عطّل قراءة السجل — آخر حالة معروفة يجب أن تبقى مفروضة
+                log.chmod(0o000)
+                try:
+                    r2 = orch.run_cycle({"type": "chat", "text": "دورة ثانية"})
+>                   assert pred_calls["n"] == 0, (
+                        f"فشل القراءة أسقط عزلًا معروفًا — استُدعي "
+                        f"{pred_calls['n']} مرة"
+                    )
+E                   AssertionError: فشل القراءة أسقط عزلًا معروفًا — استُدعي 3 مرة
+E                   assert 3 == 0
+
+backend/tests/invariants/test_circuit_breaker.py:453: AssertionError
+----------------------------- Captured stderr call -----------------------------
+2026-10-18 21:21:26,470 - app - INFO - 🚀 بدء تشغيل خادم Sovereign AI...
+2026-10-18 21:21:26,470 - app - INFO - ✅ خادم Sovereign AI جاهز
+2026-10-18 21:21:26,471 - app - INFO - 🔑 مفتاح API للسيد (بصمة فقط): 7d282c7d...
+2026-10-18 21:21:26,471 - app - INFO - 📖 التوثيق: http://localhost:8000/docs
+2026-10-18 21:21:26,471 - orchestrator - INFO - [Orchestrator] 🔄 بدء دورة المعالجة 7d720d24ed643ba0
+2026-10-18 21:21:26,472 - memory.core - INFO - 📝 حدث جديد: orchestrator::log | cd202a5ae91e9d2e... | المستخدم: system
+2026-10-18 21:21:26,474 - orchestrator - INFO - [Orchestrator] 🧠 NexusCore فهم النص
+2026-10-18 21:21:26,475 - memory.core - INFO - 📝 حدث جديد: orchestrator::log | cc8624f3083fc339... | المستخدم: system
+2026-10-18 21:21:26,475 - memory.core - INFO - 📝 حدث جديد: controller::snapshot | 96b618e081556d6f... | المستخدم: system
+2026-10-18 21:21:26,476 - memory.core - INFO - 📝 حدث جديد: directives::snapshot | 034448ede9bb1ff2... | المستخدم: system
+2026-10-18 21:21:26,477 - memory.core - INFO - 📝 حدث جديد: sovereign::final_decision | 9e8e80541b891eea... | المستخدم: system
+2026-10-18 21:21:26,477 - sovereign.controller - WARNING - 👑 قرار نهائي: continue (أولوية: 45.0%, ثقة: 80.3%)
+2026-10-18 21:21:26,477 - memory.core - INFO - 📝 حدث جديد: controller::snapshot | 0dd917b436a6b96c... | المستخدم: system
+2026-10-18 21:21:26,478 - memory.core - INFO - 📝 حدث جديد: sovereign::final_decision | 67398af76d9d4594... | المستخدم: system
+2026-10-18 21:21:26,478 - sovereign.controller - WARNING - 👑 قرار نهائي: continue (أولوية: 45.0%, ثقة: 80.3%)
+2026-10-18 21:21:26,479 - memory.core - INFO - 📝 حدث جديد: controller::snapshot | 6ff617ea21a07ce6... | المستخدم: system
+2026-10-18 21:21:26,480 - memory.core - INFO - 📝 حدث جديد: orchestrator::cycle | d911725d85247d35... | المستخدم: system
+2026-10-18 21:21:26,480 - memory.dynamic - INFO - 📝 استيعاب [system]: {'cycle_id': '7d720d24ed643ba0', 'perception': {'c...
+2026-10-18 21:21:26,481 - orchestrator - INFO - [Orchestrator] ✅ اكتملت دورة 7d720d24ed643ba0
+2026-10-18 21:21:26,481 - memory.core - INFO - 📝 حدث جديد: orchestrator::log | 5b4b4306230af44a... | المستخدم: system
+2026-10-18 21:21:26,481 - orchestrator - INFO - [Orchestrator] 🔄 بدء دورة المعالجة a1a8ab6f84f29f36
+2026-10-18 21:21:26,482 - memory.core - INFO - 📝 حدث جديد: orchestrator::log | c3b6ff7f2800e8c4... | المستخدم: system
+2026-10-18 21:21:26,482 - orchestrator - INFO - [Orchestrator] 🧠 NexusCore فهم النص
+2026-10-18 21:21:26,483 - memory.core - INFO - 📝 حدث جديد: orchestrator::log | 6fe5fa3cf5899e0d... | المستخدم: system
+2026-10-18 21:21:26,492 - memory.core - INFO - 📝 حدث جديد: simulation::batch_completed | 1cee083fe13ae4ef... | المستخدم: system
+2026-10-18 21:21:26,493 - memory.core - INFO - 📝 حدث جديد: scenario::snapshot | 2427916949c5692f... | المستخدم: system
+2026-10-18 21:21:26,503 - memory.core - INFO - 📝 حدث جديد: simulation::batch_completed | 4c6e35bc031ccd6a... | المستخدم: system
+2026-10-18 21:21:26,503 - memory.core - INFO - 📝 حدث جديد: risk::snapshot | fd79a8328a653559... | المستخدم: system
+2026-10-18 21:21:26,504 - memory.core - INFO - 📝 حدث جديد: predictive::controller_cycle | d869d4bf8386f54b... | المستخدم: system
+2026-10-18 21:21:26,505 - memory.core - INFO - 📝 حدث جديد: controller::snapshot | 740d470e853fcd03... | المستخدم: system
+2026-10-18 21:21:26,505 - memory.core - INFO - 📝 حدث جديد: sovereign::final_decision | 198d2ff8b32b4650... | المستخدم: system
+2026-10-18 21:21:26,505 - sovereign.controller - WARNING - 👑 قرار نهائي: continue (أولوية: 45.0%, ثقة: 80.3%)
+2026-10-18 21:21:26,506 - memory.core - INFO - 📝 حدث جديد: controller::snapshot | a9c7692d25f0be30... | المستخدم: system
+2026-10-18 21:21:26,507 - memory.core - INFO - 📝 حدث جديد: orchestrator::cycle | c714d79504070921... | المستخدم: system
+2026-10-18 21:21:26,508 - memory.dynamic - INFO - 📝 استيعاب [system]: {'cycle_id': 'a1a8ab6f84f29f36', 'perception': {'c...
+2026-10-18 21:21:26,508 - orchestrator - INFO - [Orchestrator] ✅ اكتملت دورة a1a8ab6f84f29f36
+2026-10-18 21:21:26,509 - memory.core - INFO - 📝 حدث جديد: orchestrator::log | a75653df1bc994b8... | المستخدم: system
+2026-10-18 21:21:26,509 - app - INFO - 🛑 إيقاف خادم Sovereign AI...
+2026-10-18 21:21:26,509 - orchestrator - INFO - [Orchestrator] 🛑 إيقاف Sovereign Orchestrator
+2026-10-18 21:21:26,510 - memory.core - INFO - 📝 حدث جديد: orchestrator::log | 3edfa9e7968cce5b... | المستخدم: system
+2026-10-18 21:21:26,510 - orchestrator - WARNING - 🛑 Sovereign Orchestrator تم إيقافه
+2026-10-18 21:21:26,510 - app - INFO - ✅ تم إيقاف الخادم
+------------------------------ Captured log call -------------------------------
+INFO     app:app.py:202 🚀 بدء تشغيل خادم Sovereign AI...
+INFO     app:app.py:212 ✅ خادم Sovereign AI جاهز
+INFO     app:app.py:215 🔑 مفتاح API للسيد (بصمة فقط): 7d282c7d...
+INFO     app:app.py:216 📖 التوثيق: http://localhost:8000/docs
+INFO     orchestrator:orchestrator.py:605 [Orchestrator] 🔄 بدء دورة المعالجة 7d720d24ed643ba0
+INFO     memory.core:core.py:814 📝 حدث جديد: orchestrator::log | cd202a5ae91e9d2e... | المستخدم: system
+INFO     orchestrator:orchestrator.py:605 [Orchestrator] 🧠 NexusCore فهم النص
+INFO     memory.core:core.py:814 📝 حدث جديد: orchestrator::log | cc8624f3083fc339... | المستخدم: system
+INFO     memory.core:core.py:814 📝 حدث جديد: controller::snapshot | 96b618e081556d6f... | المستخدم: system
+INFO     memory.core:core.py:814 📝 حدث جديد: directives::snapshot | 034448ede9bb1ff2... | المستخدم: system
+INFO     memory.core:core.py:814 📝 حدث جديد: sovereign::final_decision | 9e8e80541b891eea... | المستخدم: system
+WARNING  sovereign.controller:controller.py:534 👑 قرار نهائي: continue (أولوية: 45.0%, ثقة: 80.3%)
+INFO     memory.core:core.py:814 📝 حدث جديد: controller::snapshot | 0dd917b436a6b96c... | المستخدم: system
+INFO     memory.core:core.py:814 📝 حدث جديد: sovereign::final_decision | 67398af76d9d4594... | المستخدم: system
+WARNING  sovereign.controller:controller.py:534 👑 قرار نهائي: continue (أولوية: 45.0%, ثقة: 80.3%)
+INFO     memory.core:core.py:814 📝 حدث جديد: controller::snapshot | 6ff617ea21a07ce6... | المستخدم: system
+INFO     memory.core:core.py:814 📝 حدث جديد: orchestrator::cycle | d911725d85247d35... | المستخدم: system
+INFO     memory.dynamic:__init__.py:988 📝 استيعاب [system]: {'cycle_id': '7d720d24ed643ba0', 'perception': {'c...
+INFO     orchestrator:orchestrator.py:605 [Orchestrator] ✅ اكتملت دورة 7d720d24ed643ba0
+INFO     memory.core:core.py:814 📝 حدث جديد: orchestrator::log | 5b4b4306230af44a... | المستخدم: system
+INFO     orchestrator:orchestrator.py:605 [Orchestrator] 🔄 بدء دورة المعالجة a1a8ab6f84f29f36
+INFO     memory.core:core.py:814 📝 حدث جديد: orchestrator::log | c3b6ff7f2800e8c4... | المستخدم: system
+INFO     orchestrator:orchestrator.py:605 [Orchestrator] 🧠 NexusCore فهم النص
+INFO     memory.core:core.py:814 📝 حدث جديد: orchestrator::log | 6fe5fa3cf5899e0d... | المستخدم: system
+INFO     memory.core:core.py:814 📝 حدث جديد: simulation::batch_completed | 1cee083fe13ae4ef... | المستخدم: system
+INFO     memory.core:core.py:814 📝 حدث جديد: scenario::snapshot | 2427916949c5692f... | المستخدم: system
+INFO     memory.core:core.py:814 📝 حدث جديد: simulation::batch_completed | 4c6e35bc031ccd6a... | المستخدم: system
+INFO     memory.core:core.py:814 📝 حدث جديد: risk::snapshot | fd79a8328a653559... | المستخدم: system
+INFO     memory.core:core.py:814 📝 حدث جديد: predictive::controller_cycle | d869d4bf8386f54b... | المستخدم: system
+INFO     memory.core:core.py:814 📝 حدث جديد: controller::snapshot | 740d470e853fcd03... | المستخدم: system
+INFO     memory.core:core.py:814 📝 حدث جديد: sovereign::final_decision | 198d2ff8b32b4650... | المستخدم: system
+WARNING  sovereign.controller:controller.py:534 👑 قرار نهائي: continue (أولوية: 45.0%, ثقة: 80.3%)
+INFO     memory.core:core.py:814 📝 حدث جديد: controller::snapshot | a9c7692d25f0be30... | المستخدم: system
+INFO     memory.core:core.py:814 📝 حدث جديد: orchestrator::cycle | c714d79504070921... | المستخدم: system
+INFO     memory.dynamic:__init__.py:988 📝 استيعاب [system]: {'cycle_id': 'a1a8ab6f84f29f36', 'perception': {'c...
+INFO     orchestrator:orchestrator.py:605 [Orchestrator] ✅ اكتملت دورة a1a8ab6f84f29f36
+INFO     memory.core:core.py:814 📝 حدث جديد: orchestrator::log | a75653df1bc994b8... | المستخدم: system
+INFO     app:app.py:228 🛑 إيقاف خادم Sovereign AI...
+INFO     orchestrator:orchestrator.py:605 [Orchestrator] 🛑 إيقاف Sovereign Orchestrator
+INFO     memory.core:core.py:814 📝 حدث جديد: orchestrator::log | 3edfa9e7968cce5b... | المستخدم: system
+WARNING  orchestrator:orchestrator.py:1567 🛑 Sovereign Orchestrator تم إيقافه
+INFO     app:app.py:230 ✅ تم إيقاف الخادم
+____________ test_sovereign_quarantine_blocks_cycle_sovereign_layer ____________
+
+    def test_sovereign_quarantine_blocks_cycle_sovereign_layer():
+        """اعتراض المراجع ج3 (تتبع self.sovereign): المتحكم السيادي يُستدعى فعلًا
+        داخل الدورة (controller_cycle في _make_decision وget_controller_status في
+        _evaluate_sovereign) — عزل «sovereign» يجب أن يمنع استدعاءه والبقية
+        تعمل والدورة تكتمل."""
+        assert append_entry("quarantine", "عزل السيادي", component="sovereign") is True
+        with TestClient(app) as client:
+            orch = app.state.orchestrator
+            controller = (orch.sovereign or {}).get("controller")
+            assert controller is not None, "بلا متحكم سيادي — الاختبار لا يختبر شيئًا"
+            calls = {"n": 0}
+            orig = controller.controller_cycle
+    
+            def rec(*a, **k):
+                calls["n"] += 1
+                return orig(*a, **k)
+    
+            controller.controller_cycle = rec
+            try:
+                result = orch.run_cycle({"type": "chat", "text": "اختبار السيادي"})
+>               assert calls["n"] == 0, (
+                    f"المتحكم السيادي المعزول استُدعي {calls['n']} مرة داخل الدورة"
+                )
+E               AssertionError: المتحكم السيادي المعزول استُدعي 1 مرة داخل الدورة
+E               assert 1 == 0
+
+backend/tests/invariants/test_circuit_breaker.py:486: AssertionError
+----------------------------- Captured stderr call -----------------------------
+2026-10-18 21:21:26,518 - app - INFO - 🚀 بدء تشغيل خادم Sovereign AI...
+2026-10-18 21:21:26,518 - app - INFO - ✅ خادم Sovereign AI جاهز
+2026-10-18 21:21:26,518 - app - INFO - 🔑 مفتاح API للسيد (بصمة فقط): 7d282c7d...
+2026-10-18 21:21:26,519 - app - INFO - 📖 التوثيق: http://localhost:8000/docs
+2026-10-18 21:21:26,519 - orchestrator - INFO - [Orchestrator] 🔄 بدء دورة المعالجة 05e062011a30b929
+2026-10-18 21:21:26,520 - memory.core - INFO - 📝 حدث جديد: orchestrator::log | c9a1d73b4e0b50fd... | المستخدم: system
+2026-10-18 21:21:26,520 - orchestrator - INFO - [Orchestrator] 🧠 NexusCore فهم النص
+2026-10-18 21:21:26,521 - memory.core - INFO - 📝 حدث جديد: orchestrator::log | 5d8b126d5d2b7cec... | المستخدم: system
+2026-10-18 21:21:26,521 - memory.core - INFO - 📝 حدث جديد: scenario::snapshot | e2f2c47da5e9148e... | المستخدم: system
+2026-10-18 21:21:26,531 - memory.core - INFO - 📝 حدث جديد: simulation::batch_completed | f8c92aa919a82193... | المستخدم: system
+2026-10-18 21:21:26,532 - memory.core - INFO - 📝 حدث جديد: risk::snapshot | 77ee63d589452eba... | المستخدم: system
+2026-10-18 21:21:26,532 - memory.core - INFO - 📝 حدث جديد: predictive::controller_cycle | ec4900e9f7b59f08... | المستخدم: system
+2026-10-18 21:21:26,533 - memory.core - INFO - 📝 حدث جديد: controller::snapshot | 631ce18b9330698b... | المستخدم: system
+2026-10-18 21:21:26,534 - memory.core - INFO - 📝 حدث جديد: sovereign::final_decision | 06939cd5e696a0e7... | المستخدم: system
+2026-10-18 21:21:26,534 - sovereign.controller - WARNING - 👑 قرار نهائي: continue (أولوية: 45.0%, ثقة: 80.3%)
+2026-10-18 21:21:26,535 - memory.core - INFO - 📝 حدث جديد: controller::snapshot | 153e6051b9f8318d... | المستخدم: system
+2026-10-18 21:21:26,536 - memory.core - INFO - 📝 حدث جديد: orchestrator::cycle | 30538742d75c539d... | المستخدم: system
+2026-10-18 21:21:26,536 - memory.dynamic - INFO - 📝 استيعاب [system]: {'cycle_id': '05e062011a30b929', 'perception': {'c...
+2026-10-18 21:21:26,537 - orchestrator - INFO - [Orchestrator] ✅ اكتملت دورة 05e062011a30b929
+2026-10-18 21:21:26,538 - memory.core - INFO - 📝 حدث جديد: orchestrator::log | c25ab05ed62c76ad... | المستخدم: system
+2026-10-18 21:21:26,538 - app - INFO - 🛑 إيقاف خادم Sovereign AI...
+2026-10-18 21:21:26,538 - orchestrator - INFO - [Orchestrator] 🛑 إيقاف Sovereign Orchestrator
+2026-10-18 21:21:26,539 - memory.core - INFO - 📝 حدث جديد: orchestrator::log | a06e06738adea0b3... | المستخدم: system
+2026-10-18 21:21:26,539 - orchestrator - WARNING - 🛑 Sovereign Orchestrator تم إيقافه
+2026-10-18 21:21:26,539 - app - INFO - ✅ تم إيقاف الخادم
+------------------------------ Captured log call -------------------------------
+INFO     app:app.py:202 🚀 بدء تشغيل خادم Sovereign AI...
+INFO     app:app.py:212 ✅ خادم Sovereign AI جاهز
+INFO     app:app.py:215 🔑 مفتاح API للسيد (بصمة فقط): 7d282c7d...
+INFO     app:app.py:216 📖 التوثيق: http://localhost:8000/docs
+INFO     orchestrator:orchestrator.py:605 [Orchestrator] 🔄 بدء دورة المعالجة 05e062011a30b929
+INFO     memory.core:core.py:814 📝 حدث جديد: orchestrator::log | c9a1d73b4e0b50fd... | المستخدم: system
+INFO     orchestrator:orchestrator.py:605 [Orchestrator] 🧠 NexusCore فهم النص
+INFO     memory.core:core.py:814 📝 حدث جديد: orchestrator::log | 5d8b126d5d2b7cec... | المستخدم: system
+INFO     memory.core:core.py:814 📝 حدث جديد: scenario::snapshot | e2f2c47da5e9148e... | المستخدم: system
+INFO     memory.core:core.py:814 📝 حدث جديد: simulation::batch_completed | f8c92aa919a82193... | المستخدم: system
+INFO     memory.core:core.py:814 📝 حدث جديد: risk::snapshot | 77ee63d589452eba... | المستخدم: system
+INFO     memory.core:core.py:814 📝 حدث جديد: predictive::controller_cycle | ec4900e9f7b59f08... | المستخدم: system
+INFO     memory.core:core.py:814 📝 حدث جديد: controller::snapshot | 631ce18b9330698b... | المستخدم: system
+INFO     memory.core:core.py:814 📝 حدث جديد: sovereign::final_decision | 06939cd5e696a0e7... | المستخدم: system
+WARNING  sovereign.controller:controller.py:534 👑 قرار نهائي: continue (أولوية: 45.0%, ثقة: 80.3%)
+INFO     memory.core:core.py:814 📝 حدث جديد: controller::snapshot | 153e6051b9f8318d... | المستخدم: system
+INFO     memory.core:core.py:814 📝 حدث جديد: orchestrator::cycle | 30538742d75c539d... | المستخدم: system
+INFO     memory.dynamic:__init__.py:988 📝 استيعاب [system]: {'cycle_id': '05e062011a30b929', 'perception': {'c...
+INFO     orchestrator:orchestrator.py:605 [Orchestrator] ✅ اكتملت دورة 05e062011a30b929
+INFO     memory.core:core.py:814 📝 حدث جديد: orchestrator::log | c25ab05ed62c76ad... | المستخدم: system
+INFO     app:app.py:228 🛑 إيقاف خادم Sovereign AI...
+INFO     orchestrator:orchestrator.py:605 [Orchestrator] 🛑 إيقاف Sovereign Orchestrator
+INFO     memory.core:core.py:814 📝 حدث جديد: orchestrator::log | a06e06738adea0b3... | المستخدم: system
+WARNING  orchestrator:orchestrator.py:1567 🛑 Sovereign Orchestrator تم إيقافه
+INFO     app:app.py:230 ✅ تم إيقاف الخادم
+_______________ test_report_fault_propagates_persistence_failure _______________
+
+tmp_path = PosixPath('/tmp/pytest-of-user/pytest-338/test_report_fault_propagates_p0')
+
+    def test_report_fault_propagates_persistence_failure(tmp_path):
+        """R-690 (اعتراض المراجع ج3): report_fault ينشر فشل التوثيق — يعيد False
+        (لا None) عندما يفشل توثيق العزل، فلا يعلن نجاحًا كاذبًا لمتصلٍ يعتمد
+        على قيمة الإرجاع."""
+        root = tmp_path / "persist_root2"
+        root.mkdir()
+        loyalty_dir = root / "loyalty"
+        loyalty_dir.mkdir()
+        os.chmod(loyalty_dir, 0o500)
+        rc, payload, err = _run_contract_scenario(
+            "c = Mr.get_contract()\n"
+            "_R['ok'] = c.report_fault('supervisor', 'خلل مع فشل توثيق', component='nexus')\n"
+            "_R['kinds'] = [v['kind'] for v in c.get_violations()]\n",
+            root,
+        )
+        os.chmod(loyalty_dir, 0o700)
+        assert rc == 0 and payload is not None, f"السيناريو فشل: rc={rc} err={err[-200:]}"
+        assert "unexpected_error" not in payload, payload["unexpected_error"]
+>       assert payload["ok"] is False, (
+            f"report_fault لم ينشر فشل التوثيق — أعاد {payload['ok']!r} (None يعدل "
+            "نجاحًا صامتًا)"
+        )
+E       AssertionError: report_fault لم ينشر فشل التوثيق — أعاد None (None يعدل نجاحًا صامتًا)
+E       assert None is False
+
+backend/tests/invariants/test_quarantine_log.py:274: AssertionError
+=============================== warnings summary ===============================
+backend/config.py:312
+backend/tests/invariants/test_circuit_breaker.py::test_failed_release_does_not_open_gate
+  /tmp/red_repro_r690/backend/config.py:312: UserWarning: ⚠️ CORS مفتوح للجميع — مقبول في التطوير فقط (D-034)
+    warnings.warn("⚠️ CORS مفتوح للجميع — مقبول في التطوير فقط (D-034)")
+
+../../home/user/workspace/venvs/venv311/lib/python3.11/site-packages/starlette/testclient.py:40
+  /home/user/workspace/venvs/venv311/lib/python3.11/site-packages/starlette/testclient.py:40: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.
+    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED backend/tests/invariants/test_circuit_breaker.py::test_failed_release_does_not_open_gate
+FAILED backend/tests/invariants/test_circuit_breaker.py::test_unreadable_log_with_fallback_keeps_proven
+FAILED backend/tests/invariants/test_circuit_breaker.py::test_cycle_keeps_known_quarantine_on_read_failure
+FAILED backend/tests/invariants/test_circuit_breaker.py::test_sovereign_quarantine_blocks_cycle_sovereign_layer
+FAILED backend/tests/invariants/test_quarantine_log.py::test_report_fault_propagates_persistence_failure
+5 failed, 3 warnings in 1.25s
+exit: 1

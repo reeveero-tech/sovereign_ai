@@ -109,28 +109,19 @@ _CACHE: dict = {
 def _current_quarantined(component: str):
     """حالة العزل للمكوّن المطلوب — أو سلسلة سبب إن تعذر إثبات الحالة.
 
-    ترتيب القرار (اعتراضات المراجع R-688/R-689):
-    ١) الاحتياط المحلي أولًا — إن كان لهذه العملية أحداث فشل توثيقها (كاتب
-       فاشل): معرفتها المحلية هي المرجع (ملف إن أمكن + احتياط) وبقية المكونات
-       تستمر — لا سماح صامت لفشل الكتابة ولا إغلاق قناة (R-688 نصًّا).
-    ٢) الملف موجود: القراءة أولًا — قراءة ببصمة (mtime+size+نسخة الاحتياط —
-       الكاش الدافئ لا يخدم حالة قديمة بعد إلحاق فشل توثيقه)؛ غير المقروء
-       unreadable؛ والحالة المثبتة عند اختفاء الملف تُحفظ (سجل append-only
-       لا يختفي مشروعًا — تحذير مسموع، والحذف المقصود مساره سطر رفع).
-    ٣) الملف غائب بلا إثبات سابق: فحص صحة قناة الكتابة (TTL) — معطوبة
-       unwritable (إغلاق يغطي فشل كاتب منفصل: الاختبار الفاصل عبر العمليات)؛
-       سليمة = لا عزل موثق (مشروع — أول طلب ينشئ الملف بالفحص نفسه).
+    ترتيب القرار (اعتراضات المراجع R-688/R-689/R-690):
+    ١) الملف غائب: لا حالة مثبتة على القرص تحميها — إن وُجد إثبات سابق
+       (كاش دافئ) تُحفظ الحالة المثبتة (سجل append-only لا يُحذف مشروعًا)؛
+       وإلا فالاحتياط المحلي (إن وُجد) مرجع هذه العملية (R-688: بقية
+       المكونات تستمر)؛ وإلا ففحص صحة قناة الكتابة يحسم (فشل كاتب منفصل
+       عبر العمليات ← unwritable).
+    ٢) الملف موجود: القراءة أولًا — فشلها = unreadable (إغلاق) مهما كان
+       الاحتياط: وجود احتياط لمكوّن لا يُسقط عزلًا مثبتًا على القرص
+       (R-690 — اعتراض المراجع ج3)؛ وبعد قراءة ناجحة يُدمج احتياط العملية
+       (العزل النافذ فقط — الرفع الفاشل غير منفذ في loyalty_log).
     """
     path = quarantine_log_path()
-    # ١) الاحتياط المحلي أولًا — لا سماح صامت لفشل الكتابة في هذه العملية
     local_fallback = fallback_quarantined(path)
-    if local_fallback:
-        # هذه العملية كاتب فاشل — معرفتها المحلية مرجع (R-688: البقية تستمر)
-        try:
-            components = quarantined_components(path)
-        except OSError:
-            components = set()
-        return set(components) | local_fallback
     try:
         stat = path.stat()
         stamp = (stat.st_mtime_ns, stat.st_size, fallback_version())
@@ -142,8 +133,12 @@ def _current_quarantined(component: str):
                     "سجل العزل اختفى بعد إثبات حالة سابقة (%s) — الحالة "
                     "المثبتة محفوظة (سجل append-only لا يُحذف مشروعًا)", path,
                 )
-                return set(_CACHE["components"])
-        # ٣) غائب بلا إثبات سابق — صحة القناة تحسم (فشل كاتب منفصل)
+                return set(_CACHE["components"]) | local_fallback
+        # لا ملف ولا إثبات سابق — لا حالة مثبتة على القرص تحميها:
+        # الاحتياط المحلي مرجع هذه العملية (R-688)
+        if local_fallback:
+            return set(local_fallback)
+        # بلا معرفة محلية — صحة القناة تحسم (فشل كاتب منفصل)
         if not _channel_writable():
             return _REASON_UNWRITABLE
         with _CACHE_LOCK:
@@ -154,14 +149,15 @@ def _current_quarantined(component: str):
         return _REASON_UNREADABLE
     with _CACHE_LOCK:
         if _CACHE["path"] == str(path) and _CACHE["stamp"] == stamp:
-            return set(_CACHE["components"])
+            return set(_CACHE["components"]) | local_fallback
     try:
-        components = quarantined_components(path)
+        components = quarantined_components(path)  # يرفع OSError عند تعذر القراءة
     except OSError:
+        # ملف موجود غير مقروء = إغلاق مهما كان الاحتياط — لا إسقاط لعزل مثبت
         return _REASON_UNREADABLE
     with _CACHE_LOCK:
         _CACHE.update(path=str(path), stamp=stamp, components=set(components))
-    return set(components)
+    return set(components) | local_fallback
 
 
 class CircuitBreakerMiddleware:
