@@ -100,6 +100,40 @@ def _shutdown_background_threads():
             "خطر كتابة بعد إغلاق ملفات السجل"
         )
 
+# حارس data/keys الحقيقي (بند OWNER_REQUIRED ٥ — واقعة R-621 لا تتكرر):
+# **منع الكتابة** — عند تحميل هذا الملف (قبل أي استيراد لملفات الاختبار):
+# الملفان المحميان (HISTORY.jsonl + keyring.json الحقيقيان) يصيران للقراءة
+# فقط طوال الجلسة — أي محاولة كتابة (اختبارًا أو عند الاستيراد) تُرفض
+# بـ PermissionError صريح يسمي الملف، وهذا يمنع أيضًا نمط «اكتب ثم استعد
+# الأصل» الذي تفلت منه مقارنة الحالة النهائية. الوضعان يُستعادان عند
+# التصفية، ثم **كشف أثر التغيير**: بصمة البايتات عند البدء تُقارن عند
+# النهاية — أي تغيير متبقٍ يفشل الجلسة صراحة (محتوى keyring.json لا يُعرض
+# أبدًا — بصمة SHA-256 فقط). (التجربة الكاملة RED→GREEN بالتشغيل:
+# forensics/R621_REAL_KEYS_GUARD.md)
+from _real_keys_guard import protect_real_keys, snapshot  # noqa: E402
+
+_PROTECTED_MODES = protect_real_keys(_ROOT)
+# البصمة عند التحميل — قبل أي استيراد لملفات الاختبار: التلوث وقت التجميع
+# (استيراد ملف اختبار) يُقارن بأصلٍ قبله، لا بأصلٍ بعده
+_GUARD_SNAPSHOT = snapshot(_ROOT)
+
+
+def pytest_sessionfinish(session, exitstatus):
+    """استعادة الأوضاع بعمر الجلسة نفسها — تعمل مع --collect-only ومع
+    إخفاقات التجميع (fixtures لا تشغل هناك أصلًا)."""
+    from _real_keys_guard import restore_real_keys
+
+    restore_real_keys(_ROOT, _PROTECTED_MODES)
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _guard_real_keys_untouched():
+    from _real_keys_guard import assert_untouched
+
+    yield
+    assert_untouched(_ROOT, _GUARD_SNAPSHOT)
+
+
 # R-682: حراسة نظافة مفاتيح سجل الجلسة — كل حدث في سجل الجذر المشترك يحمل
 # key_id يجب أن يكون في keyring الجلسة. تمنع تلوث السجل المشترك بأحداث
 # بمفاتيح معزولة (السبب الجذري لرفض R-626 المتبقي في تحقق السلامة).
