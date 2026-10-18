@@ -1,0 +1,32 @@
+# نسخة منقحة من سجل المحاولة الأولى الفاشلة (2026-10-18)
+# الاستبدال الوحيد: روابط Azure الموقعة → [SIGNED_URL_REDACTED] (اعتماد تنزيل مؤقت)
+# النتيجة الأصلية محفوظة كما هي: فشل تنزيل artifact + VERIFY_FULL_EXIT: 1
+
+Python 3.11.15 (main, Mar 10 2026, 18:16:52) [Clang 21.1.4 ]
+✅ [بوابة الإصدار] Python 3.11 — مقبول (3.11.x)
+==========================================
+ R-682 Verification Script
+==========================================
+HEAD: da83b56ab297375175c2f938f05b0fb86bf1ca89
+[info] Generated ephemeral data/key.secret (not committed)
+
+[1/2] Running test suite via tools/run_gate.py (actual command, sealed identity)...
+/tmp/verify_exec/backend/config.py:312: UserWarning: ⚠️ CORS مفتوح للجميع — مقبول في التطوير فقط (D-034)
+  warnings.warn("⚠️ CORS مفتوح للجميع — مقبول في التطوير فقط (D-034)")
+/tmp/verify_exec/backend/config.py:312: UserWarning: ⚠️ CORS مفتوح للجميع — مقبول في التطوير فقط (D-034)
+  warnings.warn("⚠️ CORS مفتوح للجميع — مقبول في التطوير فقط (D-034)")
+GATE OK: 569 passed, 1 deselected, 3 warnings in 169.85s (0:02:49)
+identity: {'head': 'da83b56ab297375175c2f938f05b0fb86bf1ca89', 'content_fingerprint': '16edb362233b997f85b333c9d9e7330dd136ba4bd72e9d0bdd109ef65934db14'}
+
+[2/2] Verifying zero skips (DoD hard requirement)...
+✅ بوابة الاختبارات ناجحة: 569 passed, 0 skipped, 0 failed
+
+==========================================
+ [FULL MODE] CI + Clean Clone comparison
+==========================================
+
+[3/4] Fetching CI run for HEAD SHA=da83b56...
+CI Run: 39108647505 (completed/success — اختيار صريح + فحص هوية workflow)
+Get "[SIGNED_URL_REDACTED]": Forbidden
+❌ Failed to download artifact 12128923738
+VERIFY_FULL_EXIT: 1

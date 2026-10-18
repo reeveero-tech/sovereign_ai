@@ -1,0 +1,3 @@
+artifact_id: 12128923738 (junit-with-sha-da83b56.zip)
+unsigned_url: https://api.github.com/repos/reeveero-tech/sovereign_ai/actions/artifacts/12128923738/zip
+note: signed SAS redirect URL removed (temporary download credential)

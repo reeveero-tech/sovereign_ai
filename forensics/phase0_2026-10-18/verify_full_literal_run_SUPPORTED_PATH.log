@@ -1,0 +1,49 @@
+Python 3.11.15 (main, Mar 10 2026, 18:16:52) [Clang 21.1.4 ]
+✅ [بوابة الإصدار] Python 3.11 — مقبول (3.11.x)
+==========================================
+ R-682 Verification Script
+==========================================
+HEAD: da83b56ab297375175c2f938f05b0fb86bf1ca89
+[info] Generated ephemeral data/key.secret (not committed)
+
+[1/2] Running test suite via tools/run_gate.py (actual command, sealed identity)...
+/tmp/verify_exec/backend/config.py:312: UserWarning: ⚠️ CORS مفتوح للجميع — مقبول في التطوير فقط (D-034)
+  warnings.warn("⚠️ CORS مفتوح للجميع — مقبول في التطوير فقط (D-034)")
+/tmp/verify_exec/backend/config.py:312: UserWarning: ⚠️ CORS مفتوح للجميع — مقبول في التطوير فقط (D-034)
+  warnings.warn("⚠️ CORS مفتوح للجميع — مقبول في التطوير فقط (D-034)")
+GATE OK: 569 passed, 1 deselected, 3 warnings in 166.40s (0:02:46)
+identity: {'head': 'da83b56ab297375175c2f938f05b0fb86bf1ca89', 'content_fingerprint': '16edb362233b997f85b333c9d9e7330dd136ba4bd72e9d0bdd109ef65934db14'}
+
+[2/2] Verifying zero skips (DoD hard requirement)...
+✅ بوابة الاختبارات ناجحة: 569 passed, 0 skipped, 0 failed
+
+==========================================
+ [FULL MODE] CI + Clean Clone comparison
+==========================================
+
+[3/4] Fetching CI run for HEAD SHA=da83b56...
+CI Run: 39108647505 (completed/success — اختيار صريح + فحص هوية workflow)
+CI:     sha=da83b56ab297... tests=569 failed=0 skipped=0 unique_ids=569
+Local:  sha=da83b56ab297... tests=569 failed=0 skipped=0 unique_ids=569
+✅ CI + Local MATCH (SHA + test counts + (normalized_classname,name) Counter + zero failures + zero skips)
+
+[4/4] Clean clone verification (git checkout pinned to SHA=da83b56)...
+[info] Generated ephemeral data/key.secret in clone (not committed)
+  /home/user/workspace/venvs/venv311/lib/python3.11/site-packages/starlette/testclient.py:40: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.
+    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+569 passed, 1 deselected, 3 warnings in 165.90s (0:02:45)
+✅ SHA embedded in clone JUnit: da83b56ab297375175c2f938f05b0fb86bf1ca89
+Clone:  tests=569 failed=0 skipped=0 unique_ids=569
+Local:  tests=569 failed=0 skipped=0 unique_ids=569
+✅ Clean clone JUnit MATCHES Local (count + (normalized_classname,name) Counter + zero failures + zero skips)
+
+==========================================
+ VERIFICATION COMPLETE
+ HEAD: da83b56ab297375175c2f938f05b0fb86bf1ca89
+ JUnit: forensics/pytest_results.xml (git_sha embedded)
+ Mode: --full
+==========================================
+VERIFY_FULL_EXIT: 0
+outer exit: 0

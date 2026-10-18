@@ -941,3 +941,49 @@ numstat لكل ملف مقابل الأب 41936cc (من git الفعلي — ل�
 | `tests/test_loyalty_engine.py` (−163، +113 — حُوّل لا حُذف) | **مُبرر # DELETION-JUSTIFIED — أمر المالك نفسه:** اختبارات النواة القديمة بمسارات موتها حُوّلت إلى مكافئها المعقّم (جدول موثق في ترويسة الملف). |
 | تعليق حارس اليتامى (+1/−1) | تحديث وصف Mr.py — لم يعد مربوطًا بجسر (سُحب في R-685). |
 | ترويسة CHANGELOG (+11/−1) | تحديث «آخر تحديث» إلى R-686 + مدخل كامل — موثق هنا بأمر هذا المدخل. |
+
+## إضافة R-687 (2026-10-18) — الحارس المعزول ومدخل التوجيه (أمر المالك — المرحلة ٢)
+
+numstat لكل ملف مقابل الأب da83b56 (من git الفعلي — لا صافي طول؛
+اختبار دائم test_audit_consistency.py يطابق هذا الجدول مع git حرفيًا):
+
+- `.gitignore`: +4 / −0
+- `backend/Mr.py`: +38 / −7
+- `backend/app.py`: +10 / −0
+- `backend/circuit_breaker.py`: +100 / −0
+- `backend/loyalty_log.py`: +123 / −0
+- `backend/supervisor_daemon.py`: +132 / −0
+- `backend/tests/invariants/test_audit_consistency.py`: +98 / −0
+- `backend/tests/invariants/test_circuit_breaker.py`: +114 / −0
+- `backend/tests/invariants/test_no_orphan_modules.py`: +1 / −0
+- `backend/tests/invariants/test_quarantine_log.py`: +216 / −0
+- `docs/CHANGELOG.md`: +14 / −1
+- `docs/PROJECT_STATE.md`: +13 / −0
+- `forensics/R687_SUPERVISOR_CIRCUIT_BREAKER.md`: +117 / −0
+- `forensics/phase0_2026-10-18/PHASE0_REPORT.md`: +123 / −0
+- `forensics/phase0_2026-10-18/artifact_reference_sanitized.txt`: +3 / −0
+- `forensics/phase0_2026-10-18/ci_artifact_pytest_results.xml`: +574 / −0
+- `forensics/phase0_2026-10-18/clone4_junit.xml`: +574 / −0
+- `forensics/phase0_2026-10-18/clone4_run.log`: +21 / −0
+- `forensics/phase0_2026-10-18/clone_junit.xml`: +1 / −0
+- `forensics/phase0_2026-10-18/compare_ci_vs_local.log`: +13 / −0
+- `forensics/phase0_2026-10-18/gate_junit_supported_path_run.xml`: +574 / −0
+- `forensics/phase0_2026-10-18/gate_junit_verify_exec.xml`: +574 / −0
+- `forensics/phase0_2026-10-18/local_junit.xml`: +574 / −0
+- `forensics/phase0_2026-10-18/phase0_collect_only.log`: +583 / −0
+- `forensics/phase0_2026-10-18/phase0_literal_run.log`: +21 / −0
+- `forensics/phase0_2026-10-18/pytest311b.log`: +21 / −0
+- `forensics/phase0_2026-10-18/pytest_clone.log`: +21 / −0
+- `forensics/phase0_2026-10-18/pytest_full.log`: +6 / −0
+- `forensics/phase0_2026-10-18/verify_full_first_attempt_REDACTED.log`: +32 / −0
+- `forensics/phase0_2026-10-18/verify_full_literal_run_SUPPORTED_PATH.log`: +49 / −0
+- `tests/test_supervisor_isolated.py`: +227 / −0
+- `forensics/DELETED_LINES_AUDIT.md`: +46 / −0
+
+الإجمالي: 5,017 إضافة / 8 حذفًا في 32 ملفًا.
+
+| المحذوف | المبرر |
+|---|---|
+| `backend/Mr.py` (−7 أسطر تواقيع دوال) | **مُبرر # DELETION-JUSTIFIED — أمر المالك الصريح 2026-10-18 (المرحلة ٢):** «مدخل يقرأ من سجل العزل» يتطلب أن يكتب العقد السجل بمكوّن — أسطر تواقيع `quarantine/report_fault/release_quarantine/_record_violation` عُدّلت لإضافة معامل `component=` **الاختياري** (سلوك المرحلة ١ محفوظ حرفيًا: كل اختبارات R-686 تمتد دون تعديل — التسلسلات المتوقعة كما هي). لا حذف منطق — إضافة معامل. |
+| `docs/CHANGELOG.md` (−1 سطر ترويسة) | **مُبرر # DELETION-JUSTIFIED:** تحديث سطر «آخر تحديث» من R-686 إلى R-687 — الممارسة المعيارية للملف نفسه (نمط R-686 المدوّن أعلاه). |
+| ملاحظة نزاهة (لا حذف في git): تصويب أرقام التوثيق 585←587 تم داخل الأسطر المضافة حديثًا في هذا الالتزام نفسه قبل الدفع (اختبارا مطابقة التدقيق أُضيفا بعد كتابة الأرقام الأولى) — التصويب داخل كتلة الإضافة لا يُنشئ حذوفات، وموثق هنا لا مخفي. |

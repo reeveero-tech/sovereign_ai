@@ -29,10 +29,20 @@
 
 import hashlib
 import os
+import sys
 import threading
 import time
 from enum import Enum
 from typing import Any, Dict, List, Optional
+
+# جذر المستودع على مسار الاستيراد — لعمل السيناريوهات المعزولة من أي cwd
+_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if _REPO_ROOT not in sys.path:
+    sys.path.insert(0, _REPO_ROOT)
+
+# المرحلة ٢ (R-687): التسجيل الدائم عبر طبقة السجل المشتركة — الكود الحي
+# لا يستورد Mr (قيد R-686 محفوظ) والقراءة منفصلة في backend/circuit_breaker.py
+from backend.loyalty_log import append_entry as _append_log_entry
 
 # ============================================================
 # حالات العقد
@@ -252,9 +262,11 @@ class LoyaltyContract:
 
     # ---------- العزل بدل الموت ----------
 
-    def quarantine(self, reason: str) -> None:
-        """عزل صريح لخلل جسيم — حالة قابلة للفحص، العملية حية دائمًا."""
-        self._record_violation("quarantine", reason)
+    def quarantine(self, reason: str, component: Optional[str] = None) -> None:
+        """عزل صريح لخلل جسيم — العملية حية دائمًا. component (R-687): عزل
+        مكوّن تحديدًا في سجل العزل الدائم (يقرؤه مدخل التوجيه) — بلا مكوّن
+        يبقى عزلًا عامًا للعقد كما كان تمامًا."""
+        self._record_violation("quarantine", reason, component)
         self._quarantine_now(reason)
 
     def _quarantine_now(self, reason: str) -> None:
@@ -309,24 +321,29 @@ class LoyaltyContract:
             return False
         return True
 
-    def report_fault(self, source: str, detail: str) -> None:
+    def report_fault(self, source: str, detail: str, component: Optional[str] = None) -> None:
         """
         نقطة دخول اكتشاف الأخطاء: أي مسار كشف (داخلي أو لاحقًا من الحارس)
         يبلّغ عن خلل هنا ← استجابة موحدة: عزل + حدث مسجل — لا موت أبدًا.
         (بديل مسارات الموت القديمة: كان الخلل يقتل العملية؛ الآن يعزلها.)
+        component (R-687): بلاغ بمكوّن تحديدًا — يُوثق في سجل العزل للتوجيه.
         """
-        self.quarantine(f"[{source}] {detail}")
+        self.quarantine(f"[{source}] {detail}", component)
 
-    def release_quarantine(self, master_code: str, decision: str) -> bool:
+    def release_quarantine(self, master_code: str, decision: str, component: Optional[str] = None) -> bool:
         """
         رفع العزل يتطلب تفويض السيد نفسه — محاولة غير مصرح بها تُسجل
         انتهاكًا وتُرفض، والعزل يبقى. تكرار المحاولات غير المصرح بها
         (٣ محاولات) يعزل العقد فورًا إن لم يكن معزولًا (كشف ← استجابة).
+        component (R-687 — المرحلة ٢): رفع عزل مكوّن تحديدًا — سطر رفع
+        في سجل العزل الدائم للمكوّن تحديدًا وحالة العقد العامة لا تتغير
+        (الرفع المكوّني قرار توجيه؛ رفع العقد العام يبقى بالمسار نفسه).
         """
         if not self.verify_master(master_code):
             self._record_violation(
                 "unauthorized_release",
                 "محاولة رفع عزل بلا تفويض السيد — رُفضت وسُجلت",
+                component,
             )
             if (
                 self._count_violations("unauthorized_release") >= 3
@@ -334,6 +351,15 @@ class LoyaltyContract:
             ):
                 self.quarantine("تكرار محاولات رفع غير مصرح بها (٣+)")
             return False
+        # المرحلة ٢ (R-687): رفع مكوّن تحديدًا — سطر رفع في السجل للمكوّن
+        # تحديدًا، وحالة العقد العامة لا تتغير (الرفع المكوّني قرار توجيه)
+        if component is not None:
+            self._record_violation(
+                "release",
+                "رفع عزل المكوّن — القرار: " + decision,
+                component,
+            )
+            return True
         if self._state != LoyaltyState.QUARANTINED:
             return False
         new_state = (
@@ -353,10 +379,15 @@ class LoyaltyContract:
     def _count_violations(self, kind: str) -> int:
         return sum(1 for v in self._violations if v["kind"] == kind)
 
-    def _record_violation(self, kind: str, detail: str) -> None:
+    def _record_violation(self, kind: str, detail: str, component: Optional[str] = None) -> None:
         self._violations.append(
             {"kind": kind, "detail": detail, "time": time.time()}
         )
+        if component is not None:
+            self._violations[-1]["component"] = component
+        # المرحلة ٢ (R-687): توثيق دائم append-only في سجل العزل — فشل
+        # الكتابة معزول عن التشغيل (السجل يعيد False ولا يرفع شيئًا أبدًا)
+        _append_log_entry(kind, detail, component)
 
 
 # ============================================================

@@ -72,6 +72,10 @@ nohup.out
 !forensics/gate5_green.log
 !forensics/gate5_true_red.log
 
+# R-687: استثناء — أدلة المرحلة صفر 2026-10-18 (سجلات تشغيل حرفية + JUnit؛
+# أمر المالك: «أدرج هذه الأدلة داخل مجلد forensics/ حتى لا تضيع» — يجب أن تكون متتبعة)
+!forensics/phase0_2026-10-18/*.log
+
 # R-661: استثناء — تقرير تلوث الختم (توثيقي — ليس سر)
 !data/identity/SEAL_POLLUTION_REPORT.json
 

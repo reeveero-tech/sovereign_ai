@@ -1,0 +1,13 @@
+=== comparison 1: CI artifact vs gate JUnit (first attempt artifacts) ===
+A: sha=da83b56ab297... tests=569 failed=0 skipped=0 unique_ids=569
+B: sha=da83b56ab297... tests=569 failed=0 skipped=0 unique_ids=569
+MATCH (SHA + counts + (normalized_classname,name) Counter + zero failures + zero skips)
+python_exit: 0
+
+=== comparison 2: clone4 vs gate JUnit (first attempt artifacts) ===
+A: sha=da83b56ab297... tests=569 failed=0 skipped=0 unique_ids=569
+B: sha=da83b56ab297... tests=569 failed=0 skipped=0 unique_ids=569
+MATCH (SHA + counts + (normalized_classname,name) Counter + zero failures + zero skips)
+python_exit: 0
+
+note: python_exit is PIPESTATUS[0] of python3 (not tee)
