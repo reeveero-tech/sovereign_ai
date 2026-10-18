@@ -1166,7 +1166,22 @@ test_audit_consistency.py يطابق هذا الجدول مع git حرفيًا):
 
 | المحذوف | المبرر |
 |---|---|
-| `backend/orchestrator.py` (−D2) | **مُبرر # DELETION-JUSTIFIED — اعتراضات المراجع ج6–ج10:** الحاجز الكسول بمصنع مستقل (استبدال اللف الجامع القديم) + فرع الغياب ثلاثي الحالات + دمج المعرفة الجديدة — كل محذوف استُبدل بأقوى منه. |
-| `backend/loyalty_log.py` (−D1) | **مُبرر # DELETION-JUSTIFIED:** quarantined_components تفوّض للعملية الواحدة read_quarantine_state (الحالة + العلامة معًا بترتيب المصدرين) — استبدال أقوى. |
-| `docs/CHANGELOG.md` (−D5) | **مُبرر # DELETION-JUSTIFIED:** تحديث سطر «آخر تحديث». |
-| `backend/tests/invariants/test_circuit_breaker.py` (−D4) | **مُبرر # DELETION-JUSTIFIED:** إعادة بناء اختبار الطبقات (عدّ بين الحاجز والأصل عبر /chat فعلي + ضابط الرفع) — القياس القديم لم يكن يقيس. |
+| `backend/orchestrator.py` (−24) | **مُبرر # DELETION-JUSTIFIED — اعتراضات المراجع ج6–ج10:** الحاجز الكسول بمصنع مستقل (استبدال اللف الجامع القديم) + فرع الغياب ثلاثي الحالات + دمج المعرفة الجديدة — كل محذوف استُبدل بأقوى منه. |
+| `backend/loyalty_log.py` (−25) | **مُبرر # DELETION-JUSTIFIED:** quarantined_components تفوّض للعملية الواحدة read_quarantine_state (الحالة + العلامة معًا بترتيب المصدرين) — استبدال أقوى. |
+| `docs/CHANGELOG.md` (−1) | **مُبرر # DELETION-JUSTIFIED:** تحديث سطر «آخر تحديث». |
+| `backend/tests/invariants/test_circuit_breaker.py` (−53) | **مُبرر # DELETION-JUSTIFIED:** إعادة بناء اختبار الطبقات (عدّ بين الحاجز والأصل عبر /chat فعلي + ضابط الرفع) — القياس القديم لم يكن يقيس. |
+
+
+## إضافة أدلة تسليم R-693 (تصحيحات المراجع ج11) — أدلة SHA الحالي داخل المستودع
+
+التزام أدلة فقط فوق d183e95 (لا تغيير وظيفيًا) — بناءً على طلب المراجع ج11:
+حفظ JUnit الحالي (631) وسجل التحقق النهائي داخل forensics/ بدل بقائهما في /tmp،
+مع بيان SHA الإنتاج وميّزِهما صراحةً من أدلة الأب (junit_96fd16a.xml = تسليم
+R-692 بـ622؛ وسجل 629 يسبق اختباري التدقيق):
+
+- `forensics/DELETED_LINES_AUDIT.md`: +19/ −4
+- `forensics/R693_ADVISOR_OBJECTIONS_ROUND6.md`: +5/ −0
+- `forensics/R693_evidence/full_suite_green_631.log`: +22/ −0
+- `forensics/R693_evidence/junit_d183e95.xml`: +636/ −0
+- `forensics/R693_evidence/verify_full_d183e95.log`: +48/ −0
+الإجمالي: 730 إضافة / 4 حذفًا في 5 ملفًا.
