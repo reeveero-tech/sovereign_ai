@@ -48,6 +48,10 @@ _WRITE_LOCK = threading.Lock()
 _FALLBACK_LOCK = threading.Lock()
 _FALLBACK: Dict[str, List[dict]] = {}
 
+# R-689 (اعتراض المراجع ج2): عداد نسخ للاحتياط — بصمة كاش المدخل تشمله
+# حتى لا يخدم الكاش الدافئ حالة قديمة بعد إلحاق فشل توثيقه (ذهب للاحتياط)
+_FALLBACK_VERSION = 0
+
 # الأحداث التي تقرر حالة التوجيه (مع مكوّن) — غيرها يُسجل ولا يوجه
 _QUARANTINE_KIND = "quarantine"
 _RELEASE_KIND = "release"
@@ -88,8 +92,10 @@ def append_entry(
         # R-688 (اعتراض المراجع): فشل التوثيق لا يجوز أن يتحول سماحًا صامتًا —
         # الحدث يبقى مرئيًا في ذاكرة هذه العملية + تحذير مسموع، والقرص يُعاد
         # في الدورة التالية (عزل الفشل لا موت ولا صمت)
+        global _FALLBACK_VERSION
         with _FALLBACK_LOCK:
             _FALLBACK.setdefault(str(path), []).append(entry)
+            _FALLBACK_VERSION += 1
         logger.warning(
             "فشل توثيق حدث سجل العزل على القرص (%s) — محفوظ في احتياط الذاكرة "
             "لهذه العملية: kind=%s component=%s",
@@ -159,11 +165,38 @@ def _merged_entries(log_path: Path) -> List[dict]:
 
 def clear_fallback(path: Optional[os.PathLike] = None) -> None:
     """تفريغ احتياط الذاكرة (أداة اختبار — عزل الاختبارات عن بعضها)."""
+    global _FALLBACK_VERSION
     with _FALLBACK_LOCK:
         if path is None:
             _FALLBACK.clear()
         else:
             _FALLBACK.pop(str(Path(path)), None)
+        _FALLBACK_VERSION += 1
+
+
+def fallback_version() -> int:
+    """نسخة الاحتياط — تتغير عند كل إلحاق/تفريغ (تدخل بصمة كاش المدخل)."""
+    with _FALLBACK_LOCK:
+        return _FALLBACK_VERSION
+
+
+def fallback_quarantined(path: Optional[os.PathLike] = None) -> Set[str]:
+    """المكونات المعزولة من احتياط الذاكرة فقط (بلا قراءة الملف) — أدق
+    مصدر متاح في هذه العملية للأحداث التي فشل توثيقها على القرص."""
+    log_path = Path(path) if path is not None else quarantine_log_path()
+    with _FALLBACK_LOCK:
+        entries = list(_FALLBACK.get(str(log_path), []))
+    components: Set[str] = set()
+    for entry in entries:
+        component = entry.get("component")
+        if component is None:
+            continue
+        kind = entry.get("kind")
+        if kind == _QUARANTINE_KIND:
+            components.add(str(component))
+        elif kind == _RELEASE_KIND:
+            components.discard(str(component))
+    return components
 
 
 def _now() -> float:

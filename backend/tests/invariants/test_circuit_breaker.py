@@ -40,14 +40,24 @@ def _restore_session_quarantine_log():
     """عزل الاختبارات عن بعضها: لقطة لسجل عزل الجلسة قبل الاختبار ← استعادة
     بعده (حذف إن لم يكن موجودًا / إعادة المحتوى الأصلي إن كان) — يعمل حتى
     عند فشل الاختبار في منتصفه (finally). يشمل تفريغ احتياط الذاكرة لمسار
-    الجلسة (أحداث فشل التوثيق) — لا تسريب بين الاختبارات (R-688)."""
+    الجلسة وتصفير كاش المدخل وفحص القناة (لا تسريب حالة بين الاختبارات —
+    R-689)."""
     log = quarantine_log_path()
     existed = log.exists()
     original = log.read_text(encoding="utf-8") if existed else None
     from backend.loyalty_log import clear_fallback
     clear_fallback(log)
+    import backend.circuit_breaker as _cb
+    with _cb._CACHE_LOCK:
+        _cb._CACHE.update(path=None, stamp=None, components=set())
+    with _cb._PROBE_LOCK:
+        _cb._PROBE.update(ts=0.0, ok=True)
     yield
     clear_fallback(log)
+    with _cb._CACHE_LOCK:
+        _cb._CACHE.update(path=None, stamp=None, components=set())
+    with _cb._PROBE_LOCK:
+        _cb._PROBE.update(ts=0.0, ok=True)
     if existed:
         log.write_text(original, encoding="utf-8")
     elif log.exists():
@@ -238,3 +248,101 @@ def test_feature_route_map_has_no_stale_entries():
     registered = {getattr(r, "path", None) for r in app.routes}
     for path in _COMPONENT_PATH_MAP:
         assert path in registered, f"مسار في خريطة المدخل غير مسجل: {path}"
+
+
+# ---------- R-689 (اعتراض المراجع ج2): الكاش الدافئ والاختفاء والاستدعاء الداخلي ----------
+
+def test_warm_cache_consults_fallback():
+    """اعتراض المراجع: كاش دافئ + إلحاق فشل توثيقه (ذهب للاحتياط) — الطلب
+    اللاحق يجب ألا يُخدم من الكاش القديم بلا استشارة الاحتياط (بصمة الكاش
+    تشمل نسخة الاحتياط)."""
+    import stat as stat_mod
+    log = quarantine_log_path()
+    log.parent.mkdir(parents=True, exist_ok=True)
+    # ١) سجل مقروء + طلب — تسخين الكاش (بلا عزل: الكاش فارغ)
+    with TestClient(app) as client:
+        assert client.get("/components/predictive").status_code == 200
+    # ٢) منع الإلحاق ثم عزل يفشل توثيقه → الاحتياط
+    log.chmod(0o444)
+    try:
+        ok = append_entry("quarantine", "عزل بعد التسخين", component="predictive")
+        assert ok is False, "يجب أن يفشل التوثيق هنا (الملف للقراءة فقط)"
+        # ٣) الطلب مجددًا — الكاش الدافئ يجب ألا يحجب رؤية الاحتياط
+        with TestClient(app) as client:
+            r = client.get("/components/predictive")
+            assert r.status_code == 503, (
+                f"الكاش الدافئ خدم الحالة القديمة وتجاهل الاحتياط — سماح "
+                f"صامت. أعيد {r.status_code}"
+            )
+            assert r.json()["error"] == "component_quarantined", r1_json(r)
+    finally:
+        log.chmod(0o644)
+        from backend.loyalty_log import clear_fallback
+        clear_fallback(log)
+
+
+def r1_json(r):
+    return r.text[:200]
+
+
+def test_log_deletion_keeps_proven_quarantine():
+    """اعتراض المراجع: اختفاء السجل بعد قراءة عزل مثبت — لا يُستبدل بحالة
+    فارغة (سجل append-only لا يختفي مشروعًا؛ الحالة المثبتة تُحفظ وتحذير
+    يُسجل، والحذف المقصود مسار الترميم الرسمي: سطر رفع)."""
+    assert append_entry("quarantine", "عزل مثبت", component="quantum") is True
+    with TestClient(app) as client:
+        assert client.get("/components/quantum").status_code == 503  # إثبات + تسخين
+        log = quarantine_log_path()
+        original = log.read_text(encoding="utf-8")
+        log.unlink()  # اختفاء السجل بعد الإثبات
+        try:
+            r = client.get("/components/quantum")
+            assert r.status_code == 503, (
+                f"اختفاء السجل أسقط عزلًا مثبتًا — سماح صامت. أعيد {r.status_code}"
+            )
+        finally:
+            log.write_text(original, encoding="utf-8")  # استعادة للاختبارات اللاحقة
+
+
+def test_quarantined_component_not_invoked_inside_cycle():
+    """اعتراض المراجع (حد التنفيذ الداخلي): /chat يستدعي orchestrator.run_cycle
+    فعليًا والدورة تستدعي مكونات حية — عزل المكوّن يجب أن يمنع استدعاءه داخل
+    الدورة بينما تستمر بقية المكونات (تخطٍّ موثق في نتيجة الدورة)."""
+    assert append_entry("quarantine", "عزل التنبؤ", component="predictive") is True
+    with TestClient(app) as client:
+        orch = app.state.orchestrator
+        assert orch is not None
+        pred_calls = {"n": 0}
+        cons_calls = {"n": 0}
+        pred_engine = orch.predictive.get("engine")
+        cons_field = orch.consciousness.get("field")
+        assert pred_engine is not None and cons_field is not None, (
+            "المنسق بلا مكونات — الاختبار لا يختبر شيئًا"
+        )
+        orig_pred = pred_engine.compute_future_map
+        orig_cons = cons_field.get_consciousness_status
+
+        def rec_pred(*a, **k):
+            pred_calls["n"] += 1
+            return orig_pred(*a, **k)
+
+        def rec_cons(*a, **k):
+            cons_calls["n"] += 1
+            return orig_cons(*a, **k)
+
+        pred_engine.compute_future_map = rec_pred
+        cons_field.get_consciousness_status = rec_cons
+        try:
+            result = orch.run_cycle({"type": "chat", "text": "اختبار عزل"})
+            # المكوّن المعزول لم يُستدع إطلاقًا
+            assert pred_calls["n"] == 0, (
+                f"التنبؤ المعزول استُدعي {pred_calls['n']} مرة داخل الدورة — "
+                "المنع عند حد التنفيذ مفقود"
+            )
+            # بقية المكونات استمرت فعلًا
+            assert cons_calls["n"] > 0, "الوعي لم يُستدع — الدورة لم تعمل"
+            # الدورة نفسها أكملت (لا موت ولا فشل)
+            assert result is not None
+        finally:
+            pred_engine.compute_future_map = orig_pred
+            cons_field.get_consciousness_status = orig_cons

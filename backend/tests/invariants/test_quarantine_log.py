@@ -214,3 +214,40 @@ def test_component_release_requires_master(tmp_path):
         )
     finally:
         sys.path.remove(str(_REPO_ROOT))
+
+
+def test_quarantine_persistence_failure_is_explicit(tmp_path):
+    """R-689 (اعتراض المراجع ج2): فشل توثيق عزل مكوّن = فشل صريح لعملية
+    العزل — العقد يعيد False (لا يعلن نجاحًا كاذبًا) ويسجل انتهاكًا مرئيًا
+    quarantine_persistence_failed، والحالة داخل العقد معزولة فعلًا (الولاء)،
+    لكن عدم قابلية الإنفاذ في التوجيه مصرح به لا صامت."""
+    root = tmp_path / "persist_root"
+    root.mkdir()
+    # كسر القناة قبل السيناريو: مجلد loyalty للقراءة فقط
+    loyalty_dir = root / "loyalty"
+    loyalty_dir.mkdir()
+    os.chmod(loyalty_dir, 0o500)
+    rc, payload, err = _run_contract_scenario(
+        "c = Mr.get_contract()\n"
+        "_R['ok1'] = c.quarantine('عزل عام بلا مكوّن')\n"
+        "_R['ok2'] = c.quarantine('عزل مكوّن معطلة قناة توثيقه', component='predictive')\n"
+        "_R['events'] = [(v['kind'], v['detail']) for v in c.get_violations()]\n"
+        "_R['status'] = c.get_status()\n",
+        root,
+    )
+    os.chmod(loyalty_dir, 0o700)  # استعادة للتنظيف
+    assert rc == 0 and payload is not None, f"السيناريو فشل: rc={rc} err={err[-200:]}"
+    assert "unexpected_error" not in payload, payload["unexpected_error"]
+    # العزل العام (مسألة ولاء داخلية) — لكن التوثيف فشل: صريح أيضًا
+    assert payload["ok1"] is False, "فشل توثيق العزل العام يجب أن يُصرح به (False)"
+    # عزل المكوّن: فشل صريح — لا نجاح كاذب
+    assert payload["ok2"] is False, (
+        "العقد أعلن نجاح عزل غير موثق — إعلان نجاح كاذب ممنوع"
+    )
+    # انتهاك المرئية مسجل
+    kinds = [e[0] for e in payload["events"]]
+    assert "quarantine_persistence_failed" in kinds, (
+        f"فشل التوثيف غير مرئي في الانتهاكات: {payload['events']}"
+    )
+    # الحالة داخل العقد معزولة فعلًا (الولاء قائم — الفشل في الإنفاذ فقط)
+    assert payload["status"]["quarantined"] is True

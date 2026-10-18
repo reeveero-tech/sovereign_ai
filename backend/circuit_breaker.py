@@ -32,7 +32,16 @@ _REPO_ROOT = os.path.dirname(_MODULE_DIR)
 if _REPO_ROOT not in sys.path:
     sys.path.insert(0, _REPO_ROOT)
 
-from backend.loyalty_log import quarantine_log_path, quarantined_components
+import logging
+
+logger = logging.getLogger("backend.circuit_breaker")
+
+from backend.loyalty_log import (
+    fallback_quarantined,
+    fallback_version,
+    quarantine_log_path,
+    quarantined_components,
+)
 
 # مسار مكوّن فقط — لا شيء آخر يُحجب
 _COMPONENT_ROUTE = re.compile(r"^/components/([a-z][a-z0-9_]*)$")
@@ -48,51 +57,111 @@ _COMPONENT_PATH_MAP = {
     "/sovereign/reset": "sovereign",
 }
 
-# R-688 (اعتراض المراجع): حالة لا يمكن إثباتها — السجل موجود لكنه غير قابل
-# للقراءة. القرار: إغلاق على مسارات المكونات بخطأ محدد (لا سماح صامت ولا
-# إسقاط لعزل مثبت)، والمسارات غير المكوّنية والتطبيق كله يبقيان أحياء.
-_UNKNOWN = object()
+# R-689 (اعتراض المراجع ج2): أسباب الحالة غير القابلة للإثبات — تُعاد كسلسلة
+# سبب بدل مجموعة، والوسيط يردّ 503 بخطأ محدد حرفيًا حرف السبب:
+#   "unreadable" — سجل موجود لا يمكن قراءته
+#   "unwritable" — قناة الكتابة معطوبة (لا يمكن توثيق عزل جديد ولا ائتمان
+#                  اكتمال الحالة) — الإغلاق على مسارات المكونات فقط
+_REASON_UNREADABLE = "unreadable"
+_REASON_UNWRITABLE = "unwritable"
+
+# فحص صحة قناة الكتابة — TTL قصير (قابل للضبط بيئيًا للاختبارات)
+_PROBE_TTL = float(os.getenv("SOVEREIGN_BREAKER_PROBE_TTL", "2.0"))
+_PROBE_LOCK = threading.Lock()
+_PROBE = {"ts": 0.0, "ok": True}
+
+
+def _channel_writable() -> bool:
+    """صحة قناة الكتابة من هذه العملية: فتح للإلحاق بلا كتابة يكشف صلاحية
+    الكتابة على الملف/المجلد — بذاكرة TTL (لا فحص لكل طلب)."""
+    import time as _time
+    now = _time.monotonic()
+    with _PROBE_LOCK:
+        if now - _PROBE["ts"] < _PROBE_TTL:
+            return _PROBE["ok"]
+        _PROBE["ts"] = now
+    ok = _probe_appendable(quarantine_log_path())
+    with _PROBE_LOCK:
+        _PROBE["ok"] = ok
+    return ok
+
+
+def _probe_appendable(path) -> bool:
+    """فحص قابلية الكتابة — ينشئ أدلة الملف أولًا (مثل append_entry تمامًا):
+    غياب الدليل ليس قناة معطوبة بل قناة لم تُستخدم بعد؛ الفشل الحقيقي في
+    الإنشاء/الفتح هو المعطوب."""
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with open(path, "a", encoding="utf-8"):
+            pass
+        return True
+    except OSError:
+        return False
 
 _CACHE_LOCK = threading.Lock()
 _CACHE: dict = {
     "path": None,
-    "stamp": None,   # (mtime, size) — بصمة تغيّر السجل
+    "stamp": None,   # (mtime, size, نسخة الاحتياط) — بصمة تغيّر الحالة
     "components": set(),
 }
 
 
-def _current_quarantined():
-    """المكونات المعزولة الآن — أو _UNKNOWN إذا تعذر إثبات حالة السجل.
+def _current_quarantined(component: str):
+    """حالة العزل للمكوّن المطلوب — أو سلسلة سبب إن تعذر إثبات الحالة.
 
-    - لا ملف: لا عزل على القرص — لكن يبقى احتياط الذاكرة (أحداث فشل توثيقها
-      في هذه العملية) — لا سماح صامت لفشل الكتابة.
-    - ملف موجود مقروء: قراءة بذاكرة ببصمة تغيّر (لا قرص لكل طلب).
-    - ملف موجود غير مقروء: OSError ← _UNKNOWN (المتصل يغلق بخطأ محدد).
+    ترتيب القرار (اعتراضات المراجع R-688/R-689):
+    ١) الاحتياط المحلي أولًا — إن كان لهذه العملية أحداث فشل توثيقها (كاتب
+       فاشل): معرفتها المحلية هي المرجع (ملف إن أمكن + احتياط) وبقية المكونات
+       تستمر — لا سماح صامت لفشل الكتابة ولا إغلاق قناة (R-688 نصًّا).
+    ٢) الملف موجود: القراءة أولًا — قراءة ببصمة (mtime+size+نسخة الاحتياط —
+       الكاش الدافئ لا يخدم حالة قديمة بعد إلحاق فشل توثيقه)؛ غير المقروء
+       unreadable؛ والحالة المثبتة عند اختفاء الملف تُحفظ (سجل append-only
+       لا يختفي مشروعًا — تحذير مسموع، والحذف المقصود مساره سطر رفع).
+    ٣) الملف غائب بلا إثبات سابق: فحص صحة قناة الكتابة (TTL) — معطوبة
+       unwritable (إغلاق يغطي فشل كاتب منفصل: الاختبار الفاصل عبر العمليات)؛
+       سليمة = لا عزل موثق (مشروع — أول طلب ينشئ الملف بالفحص نفسه).
     """
     path = quarantine_log_path()
+    # ١) الاحتياط المحلي أولًا — لا سماح صامت لفشل الكتابة في هذه العملية
+    local_fallback = fallback_quarantined(path)
+    if local_fallback:
+        # هذه العملية كاتب فاشل — معرفتها المحلية مرجع (R-688: البقية تستمر)
+        try:
+            components = quarantined_components(path)
+        except OSError:
+            components = set()
+        return set(components) | local_fallback
     try:
         stat = path.stat()
-        stamp = (stat.st_mtime_ns, stat.st_size)
+        stamp = (stat.st_mtime_ns, stat.st_size, fallback_version())
     except (FileNotFoundError, NotADirectoryError):
-        # لا سجل على القرص أصلًا (أو موضعه مكسور) — مشروع: لم يُوثق عزل
-        # على القرص. يبقى احتياط الذاكرة (أحداث فشل توثيقها في هذه العملية).
-        components = quarantined_components(path)
+        # اختفاء بعد إثبات: الحالة المثبتة لا تُسقط صمتًا
         with _CACHE_LOCK:
-            _CACHE.update(path=str(path), stamp=None, components=set(components))
-        return set(components)
+            if _CACHE["path"] == str(path) and _CACHE["stamp"] is not None:
+                logger.warning(
+                    "سجل العزل اختفى بعد إثبات حالة سابقة (%s) — الحالة "
+                    "المثبتة محفوظة (سجل append-only لا يُحذف مشروعًا)", path,
+                )
+                return set(_CACHE["components"])
+        # ٣) غائب بلا إثبات سابق — صحة القناة تحسم (فشل كاتب منفصل)
+        if not _channel_writable():
+            return _REASON_UNWRITABLE
+        with _CACHE_LOCK:
+            _CACHE.update(path=str(path), stamp=None, components=set())
+        return set()
     except OSError:
-        # موجود لكن حالته مجهولة — لا سماح صامت (القرار عند المتصل: إغلاق)
-        return _UNKNOWN
+        # موجود لكن حالته مجهولة — لا سماح صامت
+        return _REASON_UNREADABLE
     with _CACHE_LOCK:
         if _CACHE["path"] == str(path) and _CACHE["stamp"] == stamp:
             return set(_CACHE["components"])
     try:
         components = quarantined_components(path)
     except OSError:
-        return _UNKNOWN
+        return _REASON_UNREADABLE
     with _CACHE_LOCK:
         _CACHE.update(path=str(path), stamp=stamp, components=set(components))
-    return components
+    return set(components)
 
 
 class CircuitBreakerMiddleware:
@@ -115,17 +184,19 @@ class CircuitBreakerMiddleware:
                     match = _COMPONENT_ROUTE.match(path)
                     component = match.group(1) if match else None
                 if component:
-                    quarantined = _current_quarantined()
-                    if quarantined is _UNKNOWN:
+                    quarantined = _current_quarantined(component)
+                    if isinstance(quarantined, str):
+                        # حالة غير قابلة للإثبات — إغلاق بخطأ محدد حرفيًا
+                        # (لا سماح صامت ولا إسقاط لعزل مثبت، والتطبيق حي)
                         response = JSONResponse(
                             status_code=503,
                             content={
-                                "error": "quarantine_log_unreadable",
+                                "error": f"quarantine_log_{quarantined}",
                                 "component": component,
                                 "detail": (
-                                    "سجل العزل موجود لكنه غير قابل للقراءة — "
-                                    "حالة التوجيه غير قابلة للإثبات: إغلاق "
-                                    "آمن على مسار المكون وبقية التطبيق يعمل"
+                                    "قناة سجل العزل غير قابلة للإثبات "
+                                    f"({quarantined}) — إغلاق آمن على مسار "
+                                    "المكون وبقية التطبيق يعمل"
                                 ),
                             },
                         )

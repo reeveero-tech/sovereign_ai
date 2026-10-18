@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import os
 import secrets
 import threading
 import runtime.threads as threads
@@ -154,6 +155,58 @@ class SovereignOrchestrator:
     5. آمن - وضع الحماية (sandbox) للتجارب
     """
     
+    # ---------- عزل المكونات داخل الدورة (R-689 — حد التنفيذ) ----------
+
+    # خريطة مكوّن التطبيق (أسماء مسارات /components/ وسجل العزل) → مراجع
+    # المنسق الداخلية التي تُستدعى في مراحل الدورة. المكوّن المعزول يُتخطى
+    # استدعاؤه داخل الدورة (بقية المكونات تستمر — نص أمر المرحلة ٢).
+    _QUARANTINE_GATES = {
+        "consciousness": ("consciousness",),
+        "memory": ("memory_core", "memory_dynamic", "memory_store"),
+        "predictive": ("predictive",),
+        "simulation": ("simulation",),
+        "quantum": ("quantum",),
+        "nexus": ("nexus",),
+    }
+    _QUARANTINE_TTL = 1.0  # ثوانٍ — نافذة الاتساق بين توثيق العزل والتخطي
+
+    def _component_quarantined(self, app_component: str) -> bool:
+        """هل مكوّن التطبيق معزول في سجل العزل؟ (قراءة بذاكرة TTL قصيرة —
+        القناة المشتركة عبر الملف؛ فشل القراءة لا يوقف الدورة: المنع الصلب
+        عند حد التوجيع، والتخطي هنا أفضل جهد موثق)."""
+        now = time.time()
+        if (
+            self._quarantine_cache is None
+            or now - self._quarantine_cache_ts > self._QUARANTINE_TTL
+        ):
+            try:
+                # استيراد متأخر بنمط الملف (المكونات تُستورد داخل الدوال)
+                try:
+                    from backend.loyalty_log import quarantined_components
+                except ImportError:  # جذر المستودع ليس على المسار — أصلحه
+                    import sys as _sys
+                    _root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+                    if _root not in _sys.path:
+                        _sys.path.insert(0, _root)
+                    from backend.loyalty_log import quarantined_components
+                self._quarantine_cache = frozenset(quarantined_components())
+            except OSError:
+                # قناة معطوبة: الدورة تستمر (المنع الصلب عند حد التوجيع) —
+                # موثق في التقرير الجنائي، لا موت ولا صمت
+                self._quarantine_cache = frozenset()
+            self._quarantine_cache_ts = now
+        return app_component in self._quarantine_cache
+
+    def _use(self, attr_name: str) -> bool:
+        """هل نستخدم هذا المرجع الداخلي في هذه الدورة؟ (موجود + مكوّنه غير
+        معزول — R-689: حد المنع قبل استدعاء المكوّن المعزول)."""
+        if not getattr(self, attr_name, None):
+            return False
+        for app_component, attrs in self._QUARANTINE_GATES.items():
+            if attr_name in attrs and self._component_quarantined(app_component):
+                return False
+        return True
+
     def __init__(
         self,
         # المكونات الأساسية (يتم حقنها أو تحميلها تلقائياً)
@@ -177,6 +230,11 @@ class SovereignOrchestrator:
         self._session_id: str = hashlib.sha256(f"{time.time()}{secrets.token_hex(16)}".encode()).hexdigest()[:16]
         self._cache: Dict[str, tuple] = {}  # key -> (value, expiry)
         self._cache_lock = threading.RLock()
+
+        # R-689 (اعتراض المراجع ج2 — حد التنفيذ الداخلي): ذاكرة عزل المكونات
+        # للدورة (قراءة قناة الحالة المشتركة: ملف سجل العزل — بلا استيراد Mr)
+        self._quarantine_cache: Optional[frozenset] = None
+        self._quarantine_cache_ts: float = 0.0
         
         # العدادات والإحصائيات
         self._stats = {
@@ -547,7 +605,7 @@ class SovereignOrchestrator:
             logger.info(f"[Orchestrator] {message}")
         
         # تسجيل في core إن وجد
-        if self.memory_core and hasattr(self.memory_core, "append_event"):
+        if self._use("memory_core") and hasattr(self.memory_core, "append_event"):
             try:
                 self.memory_core.append_event("orchestrator::log", entry)
             # TOLERATED: known-safe fallback — non-fatal diagnostic path (R-680)
@@ -651,6 +709,11 @@ class SovereignOrchestrator:
         
         self._stats["total_cycles"] += 1
         self._stats["last_cycle_id"] = cycle_id
+        
+        # R-689 (حد التنفيذ): قراءة جديدة لحالة العزل عند بدء كل دورة —
+        # العزل الموثق يسري من أول دورة بعد توثيقه (بلا نافذة TTL)، وقراءة
+        # واحدة متسقة داخل الدورة الواحدة
+        self._quarantine_cache = None
         
         self._log("info", f"🔄 بدء دورة المعالجة {cycle_id}", {"priority": priority})
         
@@ -770,7 +833,7 @@ class SovereignOrchestrator:
         }
         
         # ===== الوعي =====
-        if self.consciousness:
+        if self._use("consciousness"):
             # حقل الوعي
             consciousness_field = self.consciousness.get("field")
             if consciousness_field:
@@ -809,17 +872,17 @@ class SovereignOrchestrator:
         
         # ===== الذاكرة =====
         # السجل السيادي
-        if self.memory_core:
+        if self._use("memory_core"):
             core_status = self._safe_call(self.memory_core, "get_statistics", default={})
             perception["memory"]["core"] = core_status
         
         # الذاكرة الحية
-        if self.memory_dynamic:
+        if self._use("memory_dynamic"):
             dynamic_status = self._safe_call(self.memory_dynamic, "statistics", default={})
             perception["memory"]["dynamic"] = dynamic_status
         
         # التخزين
-        if self.memory_store:
+        if self._use("memory_store"):
             store_status = self._safe_call(self.memory_store, "get_statistics", default={})
             perception["memory"]["store"] = store_status
         
@@ -844,7 +907,7 @@ class SovereignOrchestrator:
                 perception["biological"]["archetypes"] = archetypes_status
         
         # ===== الكم =====
-        if self.quantum:
+        if self._use("quantum"):
             quantum_status = self._safe_call(self.quantum, "get_controller_status", default={})
             perception["quantum"] = quantum_status
         
@@ -852,7 +915,7 @@ class SovereignOrchestrator:
         # R-612: فهم النص عبر NexusCore (S-7) — الذكاء السيادي
         # يقرأ ما يقوله السيد فعلياً: اللغة، المشاعر، النية، الكلمات
         # ========================================================
-        if self.nexus:
+        if self._use("nexus"):
             text = ""
             if isinstance(input_data, dict):
                 text = input_data.get("text", "") or ""
@@ -951,7 +1014,7 @@ class SovereignOrchestrator:
         }
         
         # ===== التنبؤات =====
-        if self.predictive:
+        if self._use("predictive"):
             predictive_engine = self.predictive.get("engine")
             if predictive_engine:
                 # خريطة المستقبل
@@ -978,7 +1041,7 @@ class SovereignOrchestrator:
                     future_analysis["scenarios"] = controller_snap.get("scenarios", [])
         
         # ===== المحاكاة =====
-        if self.simulation:
+        if self._use("simulation"):
             sim_controller = self.simulation.get("controller")
             if sim_controller:
                 sim_status = self._safe_call(sim_controller, "get_controller_status", default={})
@@ -1183,7 +1246,7 @@ class SovereignOrchestrator:
         # تنفيذ الإجراء حسب النوع
         if action == "activate_defense":
             # تفعيل الدفاعات
-            if self.memory_core:
+            if self._use("memory_core"):
                 self._safe_call(self.memory_core, "append_event", "orchestrator::defense_activated", 
                                {"action": action, "cycle_id": cycle_id})
             execution_result["status"] = "executed"
@@ -1232,12 +1295,12 @@ class SovereignOrchestrator:
         }
         
         # تخزين في السجل السيادي
-        if self.memory_core and hasattr(self.memory_core, "append_event"):
+        if self._use("memory_core") and hasattr(self.memory_core, "append_event"):
             self._safe_call(self.memory_core, "append_event", "orchestrator::cycle", record)
             memory_update["status"] = "stored_in_core"
         
         # تخزين في الذاكرة الحية
-        if self.memory_dynamic and hasattr(self.memory_dynamic, "ingest"):
+        if self._use("memory_dynamic") and hasattr(self.memory_dynamic, "ingest"):
             self._safe_call(self.memory_dynamic, "ingest", "system", str(record), intensity=0.5)
             memory_update["status"] = "stored_in_dynamic"
         
@@ -1266,7 +1329,7 @@ class SovereignOrchestrator:
         # R-612: تخزين الدورة في NexusCore (S-7) — الذاكرة الطويلة
         # + سجل التدقيق الموقّع
         # ========================================================
-        if self.nexus:
+        if self._use("nexus"):
             store = self.nexus.get_component("store")
             if store:
                 self._safe_call(store, "save", "cycles", cycle_id, record,
@@ -1351,19 +1414,19 @@ class SovereignOrchestrator:
         
         # إعادة تعيين المكونات
         # الوعي
-        if self.consciousness:
+        if self._use("consciousness"):
             for name, component in self.consciousness.items():
                 if hasattr(component, "reset"):
                     self._safe_call(component, "reset")
         
         # الذاكرة
-        if self.memory_core and hasattr(self.memory_core, "reset"):
+        if self._use("memory_core") and hasattr(self.memory_core, "reset"):
             self._safe_call(self.memory_core, "reset")
         
-        if self.memory_dynamic and hasattr(self.memory_dynamic, "reset"):
+        if self._use("memory_dynamic") and hasattr(self.memory_dynamic, "reset"):
             self._safe_call(self.memory_dynamic, "reset")
         
-        if self.memory_store and hasattr(self.memory_store, "reset"):
+        if self._use("memory_store") and hasattr(self.memory_store, "reset"):
             self._safe_call(self.memory_store, "reset")
         
         # المكونات البيولوجية
@@ -1373,12 +1436,12 @@ class SovereignOrchestrator:
                     self._safe_call(component, "reset")
         
         # التنبؤ والمحاكاة
-        if self.predictive:
+        if self._use("predictive"):
             for name, component in self.predictive.items():
                 if hasattr(component, "reset"):
                     self._safe_call(component, "reset")
         
-        if self.simulation:
+        if self._use("simulation"):
             for name, component in self.simulation.items():
                 if hasattr(component, "reset"):
                     self._safe_call(component, "reset")
@@ -1390,7 +1453,7 @@ class SovereignOrchestrator:
                     self._safe_call(component, "reset")
         
         # الكم
-        if self.quantum and hasattr(self.quantum, "reset"):
+        if self._use("quantum") and hasattr(self.quantum, "reset"):
             self._safe_call(self.quantum, "reset")
         
         # تسجيل

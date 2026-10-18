@@ -1010,3 +1010,33 @@ test_audit_consistency.py يطابق هذا الجدول مع git حرفيًا):
 | `backend/circuit_breaker.py` (−16) و`backend/loyalty_log.py` (−5) | **مُبرر # DELETION-JUSTIFIED — اعتراض المراجع الصريح:** إعادة هيكلة `_current_quarantined` والوسيط لمعالجة السماح الصامت (احتياط ذاكرة العملية) والإغلاق عند تعذر الإثبات (sentinel _UNKNOWN + 503 محدد) وخريطة مسارات الميزات — كل سطر محذوف استُبدل بأقوى منه، لا حذف ميزة ولا سلوك قائم ضاع (اختبارات R-687 كلها تمتد خضراء). |
 | `backend/tests/invariants/test_circuit_breaker.py` (−1) | **مُبرر # DELETION-JUSTIFIED:** سطر منطق مطابقة المسار في الوسيط استُبدل بالخريطة + المطابقة (توسيع تغطية اعتراض المراجع). |
 | `docs/CHANGELOG.md` (−1) | **مُبرر # DELETION-JUSTIFIED:** تحديث سطر «آخر تحديث» إلى R-688 — النمط المعياري للملف. |
+
+## إضافة R-689 (2026-10-19) — إصلاحات اعتراضات المراجع ج2: إنفاذ عبر العمليات + حد التنفيذ
+
+numstat لكل ملف مقابل الأب fa77b1e (من git الفعلي؛ اختبار دائم
+test_audit_consistency.py يطابق هذا الجدول مع git حرفيًا):
+
+- `.gitignore`: +3 / −0
+- `OWNER_REQUIRED.md`: +9 / −7
+- `backend/Mr.py`: +35 / −8
+- `backend/circuit_breaker.py`: +100 / −29
+- `backend/loyalty_log.py`: +33 / −0
+- `backend/orchestrator.py`: +83 / −20
+- `backend/tests/invariants/test_audit_consistency.py`: +95 / −0
+- `backend/tests/invariants/test_circuit_breaker.py`: +109 / −1
+- `backend/tests/invariants/test_quarantine_log.py`: +37 / −0
+- `docs/CHANGELOG.md`: +13 / −1
+- `docs/PROJECT_STATE.md`: +12 / −0
+- `forensics/R689_ADVISOR_OBJECTIONS_ROUND2.md`: +112 / −0
+- `tests/test_breaker_cross_process.py`: +179 / −0
+- `forensics/DELETED_LINES_AUDIT.md`: +30 / −0
+
+الإجمالي: 850 إضافة / 66 حذفًا في 14 ملفًا.
+
+| المحذوف | المبرر |
+|---|---|
+| `backend/circuit_breaker.py` (−29) | **مُبرر # DELETION-JUSTIFIED — اعتراض المراجع ج2:** إعادة هيكلة `_current_quarantined` لقنوات الإنفاذ الثلاث (فحص صحة القناة عبر العمليات + أولوية الاحتياط المحلي + حفظ الحالة المثبتة عند الاختفاء + أسباب صريحة unreadable/unwritable بدل sentinel) — كل سطر محذوف استُبدل بأقوى منه، ولا ميزة قائمة ضاعت (اختبارات R-687/R-688 كلها خضراء). |
+| `backend/orchestrator.py` (−20) | **مُبرر # DELETION-JUSTIFIED — حد التنفيذ (اعتراض المراجع):** تحويل 20 حاجز استدعاء `if self.X:` إلى `if self._use("X"):` — كل سطر حاجز استُبدل بحاجز يشمل العزل (منع استدعاء المكوّن المعزول داخل الدورة)؛ لا حذف ميزة. |
+| `backend/Mr.py` (−8) | **مُبرر # DELETION-JUSTIFIED:** توقيع `_record_violation`/`quarantine` من None إلى bool (فشل التوثيف صريح معلن — اعتراض المراجع) — استبدال أقوى لا حذف سلوك. |
+| `OWNER_REQUIRED.md` (−7) و`docs/CHANGELOG.md` (−1) | **مُبرر # DELETION-JUSTIFIED:** تحديث بند ١٤ (المنع داخل الدورة صار مُنفذًا — قرار المالك المتبقي سلوكي) وتحديث سطر «آخر تحديث» — النمط المعياري للملفين. |
+| `backend/tests/invariants/test_circuit_breaker.py` (−1) | **مُبرر # DELETION-JUSTIFIED (تصويب مدخل R-688):** سطر توثيق الـfixture (استُبدل بتوسيعه ليشمل تصفير كاش المدخل وفحص القناة) — تصويح صريح لمبرر جولة سابقة وصفه خطأً بأنه «سطر منطق الوسيط». |

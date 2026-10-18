@@ -262,12 +262,26 @@ class LoyaltyContract:
 
     # ---------- العزل بدل الموت ----------
 
-    def quarantine(self, reason: str, component: Optional[str] = None) -> None:
+    def quarantine(self, reason: str, component: Optional[str] = None) -> bool:
         """عزل صريح لخلل جسيم — العملية حية دائمًا. component (R-687): عزل
         مكوّن تحديدًا في سجل العزل الدائم (يقرؤه مدخل التوجيه) — بلا مكوّن
-        يبقى عزلًا عامًا للعقد كما كان تمامًا."""
-        self._record_violation("quarantine", reason, component)
+        يبقى عزلًا عامًا للعقد كما كان تمامًا.
+        R-689 (اعتراض المراجع ج2): فشل توثيق العزل = فشل صريح معلن — يعيد
+        False (لا يعلن نجاحًا كاذبًا) ويسجل انتهاكًا مرئيًا
+        quarantine_persistence_failed؛ الحالة داخل العقد معزولة فعلًا (مسألة
+        الولاء) لكن عدم قابلية الإنفاذ في التوجيه مصرح به لا صامت.
+        """
+        persisted = self._record_violation("quarantine", reason, component)
         self._quarantine_now(reason)
+        if not persisted:
+            self._record_violation(
+                "quarantine_persistence_failed",
+                "فشل توثيق العزل على القرص — غير قابل للإنفاذ في التوجيه "
+                "حتى يُوثق (أصلح قناة السجل وأعد العزل)",
+                component,
+            )
+            return False
+        return True
 
     def _quarantine_now(self, reason: str) -> None:
         """ضبط العزل داخليًا (الكتابات الداخلية تتجاوز حارس __setattr__)."""
@@ -351,14 +365,24 @@ class LoyaltyContract:
             ):
                 self.quarantine("تكرار محاولات رفع غير مصرح بها (٣+)")
             return False
-        # المرحلة ٢ (R-687): رفع مكوّن تحديدًا — سطر رفع في السجل للمكوّن
-        # تحديدًا، وحالة العقد العامة لا تتغير (الرفع المكوّني قرار توجيه)
+        # المرحلة ٢ (R-687): رفع مكوّن تحديدًا — سطر رفع في السجل للمكوّن،
+        # وحالة العقد العامة لا تتغير (الرفع المكوّني قرار توجيه) — وفشل
+        # توثيقه فشل صريح (R-689): يعيد False والمكوّن يبقى معزولًا في
+        # التوجيع (اتجاه آمن: الرفع غير الموثق لا يُنفذ)
         if component is not None:
-            self._record_violation(
+            persisted = self._record_violation(
                 "release",
                 "رفع عزل المكوّن — القرار: " + decision,
                 component,
             )
+            if not persisted:
+                self._record_violation(
+                    "release_persistence_failed",
+                    "فشل توثيق الرفع على القرص — الرفع غير منفذ في التوجيه "
+                    "والمكوّن يبقى معزولًا (اتجاه آمن)",
+                    component,
+                )
+                return False
             return True
         if self._state != LoyaltyState.QUARANTINED:
             return False
@@ -379,7 +403,10 @@ class LoyaltyContract:
     def _count_violations(self, kind: str) -> int:
         return sum(1 for v in self._violations if v["kind"] == kind)
 
-    def _record_violation(self, kind: str, detail: str, component: Optional[str] = None) -> None:
+    def _record_violation(self, kind: str, detail: str, component: Optional[str] = None) -> bool:
+        """تسجيل انتهاك — يعيد نجاح التوثيق الدائم (True/False)؛ فشل التوثيق
+        لا يرفع استثناءً أبدًا (عزل لا موت) لكنه يُعاد للمتصل ليفشل صراحة.
+        """
         self._violations.append(
             {"kind": kind, "detail": detail, "time": time.time()}
         )
@@ -387,7 +414,7 @@ class LoyaltyContract:
             self._violations[-1]["component"] = component
         # المرحلة ٢ (R-687): توثيق دائم append-only في سجل العزل — فشل
         # الكتابة معزول عن التشغيل (السجل يعيد False ولا يرفع شيئًا أبدًا)
-        _append_log_entry(kind, detail, component)
+        return _append_log_entry(kind, detail, component)
 
 
 # ============================================================
