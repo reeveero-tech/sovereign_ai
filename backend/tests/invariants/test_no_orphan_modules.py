@@ -27,7 +27,7 @@ KNOWN_ENTRY_POINTS = {
     "main.py",                       # نقطة تشغيل رئيسية
     "backend/app.py",               # تطبيق FastAPI (يُستورد من main و start.sh)
     "backend/config.py",            # إعدادات (يُستورد من app)
-    "backend/Mr.py",                # محرك الولاء (يُستورد من اختبارات)
+    "backend/Mr.py",                # عقد الولاء المعقّم (R-686) — غير مربوط بالنظام الحي (أمر المالك: المرحلة ١)
     "nexus/main.py",               # نقطة تشغيل nexus
     "start.sh",                     # سكربت تشغيل (ليس .py)
 }
