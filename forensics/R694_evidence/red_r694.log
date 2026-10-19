@@ -1,0 +1,274 @@
+FFFFFFF                                                                  [100%]
+=================================== FAILURES ===================================
+____________________ test_project_map_generated_accurately _____________________
+
+tmp_path = PosixPath('/tmp/pytest-of-user/pytest-628/test_project_map_generated_acc0')
+
+    def test_project_map_generated_accurately(tmp_path):
+        """(أ) الخريطة تُولَّد بدقة: تطابق الحسابات المستقلة حرفيًا،
+        والمستبعدات التشغيلية مستبعدة، وملفات البيانات داخل النطاق."""
+        _make_tree(tmp_path)
+        expected = {
+            "README.md": _sha_bytes(b"# t\n"),
+            "data/runtime.log": _sha_bytes(b"log\n"),
+            "src/app.py": _sha_bytes(b"print('x')\n"),
+            "src/config.json": _sha_bytes(b'{"a": 1}\n'),
+        }
+>       got = build_project_map(tmp_path)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+backend/tests/invariants/test_awareness.py:61: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+repo_root = PosixPath('/tmp/pytest-of-user/pytest-628/test_project_map_generated_acc0')
+exclude_paths = None
+
+    def build_project_map(
+        repo_root: str | os.PathLike,
+        *,
+        exclude_paths: List[str | os.PathLike] | None = None,
+    ) -> Dict[str, str]:
+        """خريطة الشجرة الحية: {المسار النسبي posix: sha256}.
+    
+        exclude_paths: مسارات داخل الجذر تُستبعد (الحارس يستثني مخرجاته: مخزن
+        الخريطة وسجل المراقبة). تعذر قراءة ملف داخل النطاق يرفع OSError —
+        لا خريطة ناجحة ناقصة.
+        """
+>       raise NotImplementedError  # R-694 RED
+        ^^^^^^^^^^^^^^^^^^^^^^^^^
+E       NotImplementedError
+
+backend/awareness.py:73: NotImplementedError
+_________ test_overall_fingerprint_matches_independent_expected_value __________
+
+tmp_path = PosixPath('/tmp/pytest-of-user/pytest-628/test_overall_fingerprint_match0')
+
+    def test_overall_fingerprint_matches_independent_expected_value(tmp_path):
+        """البصمة الكلية بقيمة متوقعة مستقلة (الصيغة القانونية الموثقة:
+        SHA256 لسطور «المسار:الهاش» مفروزة بالمسار) — وتغيير المحتوى يغيرها."""
+        _make_tree(tmp_path)
+>       got_map = build_project_map(tmp_path)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+backend/tests/invariants/test_awareness.py:73: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+repo_root = PosixPath('/tmp/pytest-of-user/pytest-628/test_overall_fingerprint_match0')
+exclude_paths = None
+
+    def build_project_map(
+        repo_root: str | os.PathLike,
+        *,
+        exclude_paths: List[str | os.PathLike] | None = None,
+    ) -> Dict[str, str]:
+        """خريطة الشجرة الحية: {المسار النسبي posix: sha256}.
+    
+        exclude_paths: مسارات داخل الجذر تُستبعد (الحارس يستثني مخرجاته: مخزن
+        الخريطة وسجل المراقبة). تعذر قراءة ملف داخل النطاق يرفع OSError —
+        لا خريطة ناجحة ناقصة.
+        """
+>       raise NotImplementedError  # R-694 RED
+        ^^^^^^^^^^^^^^^^^^^^^^^^^
+E       NotImplementedError
+
+backend/awareness.py:73: NotImplementedError
+_______________________ test_file_modification_detected ________________________
+
+tmp_path = PosixPath('/tmp/pytest-of-user/pytest-628/test_file_modification_detecte0')
+
+    def test_file_modification_detected(tmp_path):
+        """(ب) تعديل ملف يُكتشف — والإضافة والحذف أيضًا (فروق مفروزة)."""
+        _make_tree(tmp_path)
+>       first = build_project_map(tmp_path)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+backend/tests/invariants/test_awareness.py:90: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+repo_root = PosixPath('/tmp/pytest-of-user/pytest-628/test_file_modification_detecte0')
+exclude_paths = None
+
+    def build_project_map(
+        repo_root: str | os.PathLike,
+        *,
+        exclude_paths: List[str | os.PathLike] | None = None,
+    ) -> Dict[str, str]:
+        """خريطة الشجرة الحية: {المسار النسبي posix: sha256}.
+    
+        exclude_paths: مسارات داخل الجذر تُستبعد (الحارس يستثني مخرجاته: مخزن
+        الخريطة وسجل المراقبة). تعذر قراءة ملف داخل النطاق يرفع OSError —
+        لا خريطة ناجحة ناقصة.
+        """
+>       raise NotImplementedError  # R-694 RED
+        ^^^^^^^^^^^^^^^^^^^^^^^^^
+E       NotImplementedError
+
+backend/awareness.py:73: NotImplementedError
+_____________ test_saved_baseline_roundtrip_and_corrupt_not_silent _____________
+
+tmp_path = PosixPath('/tmp/pytest-of-user/pytest-628/test_saved_baseline_roundtrip_0')
+
+    def test_saved_baseline_roundtrip_and_corrupt_not_silent(tmp_path):
+        """المرجعية تُحفظ وتُحمّل كما هي — والتالفة تستثني ولا تُستبدل صامتة."""
+        _make_tree(tmp_path)
+>       first = build_project_map(tmp_path)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+backend/tests/invariants/test_awareness.py:106: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+repo_root = PosixPath('/tmp/pytest-of-user/pytest-628/test_saved_baseline_roundtrip_0')
+exclude_paths = None
+
+    def build_project_map(
+        repo_root: str | os.PathLike,
+        *,
+        exclude_paths: List[str | os.PathLike] | None = None,
+    ) -> Dict[str, str]:
+        """خريطة الشجرة الحية: {المسار النسبي posix: sha256}.
+    
+        exclude_paths: مسارات داخل الجذر تُستبعد (الحارس يستثني مخرجاته: مخزن
+        الخريطة وسجل المراقبة). تعذر قراءة ملف داخل النطاق يرفع OSError —
+        لا خريطة ناجحة ناقصة.
+        """
+>       raise NotImplementedError  # R-694 RED
+        ^^^^^^^^^^^^^^^^^^^^^^^^^
+E       NotImplementedError
+
+backend/awareness.py:73: NotImplementedError
+__________________ test_unreadable_file_fails_map_not_partial __________________
+
+tmp_path = PosixPath('/tmp/pytest-of-user/pytest-628/test_unreadable_file_fails_map0')
+
+    def test_unreadable_file_fails_map_not_partial(tmp_path):
+        """تعذر قراءة ملف داخل النطاق = استثناء — لا خريطة ناقصة ناجحة."""
+        _make_tree(tmp_path)
+        target = tmp_path / "src" / "app.py"
+        target.chmod(0o000)
+        try:
+            with pytest.raises(OSError):
+>               build_project_map(tmp_path)
+
+backend/tests/invariants/test_awareness.py:124: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+repo_root = PosixPath('/tmp/pytest-of-user/pytest-628/test_unreadable_file_fails_map0')
+exclude_paths = None
+
+    def build_project_map(
+        repo_root: str | os.PathLike,
+        *,
+        exclude_paths: List[str | os.PathLike] | None = None,
+    ) -> Dict[str, str]:
+        """خريطة الشجرة الحية: {المسار النسبي posix: sha256}.
+    
+        exclude_paths: مسارات داخل الجذر تُستبعد (الحارس يستثني مخرجاته: مخزن
+        الخريطة وسجل المراقبة). تعذر قراءة ملف داخل النطاق يرفع OSError —
+        لا خريطة ناجحة ناقصة.
+        """
+>       raise NotImplementedError  # R-694 RED
+        ^^^^^^^^^^^^^^^^^^^^^^^^^
+E       NotImplementedError
+
+backend/awareness.py:73: NotImplementedError
+_________________ test_supervisor_logs_tampering_periodically __________________
+
+tmp_path = PosixPath('/tmp/pytest-of-user/pytest-628/test_supervisor_logs_tampering0')
+
+    def test_supervisor_logs_tampering_periodically(tmp_path):
+        """(ج) الحارس الفعلي يسجّل العبث في سجل مراقبته: أول فحص يؤسس المرجعية،
+        وتعديل ملف بين فحصين يظهر كتغيير مرصود — بالبصمتين وتفاصيل الملفات."""
+        tree = Path(tempfile.mkdtemp(prefix="awareness_tree_"))
+        _make_tree(tree)
+        data_root = Path(tempfile.mkdtemp(prefix="awareness_data_"))
+        log = data_root / "supervisor" / "monitor_log.jsonl"
+        # لا تطبيق هنا: منفذ مغلق — الحارس يسجل أخطاء الجلب ويستمر (عقد R-687)
+        dead_port = _free_port()
+        proc = _spawn_supervisor(f"http://127.0.0.1:{dead_port}", log, tree)
+        try:
+>           baseline = _await_awareness_event(log, "baseline_created")
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_awareness_supervisor.py:116: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+log_path = PosixPath('/tmp/awareness_data_k5otrnjv/supervisor/monitor_log.jsonl')
+event = 'baseline_created', timeout = 30.0
+
+    def _await_awareness_event(
+        log_path: Path, event: str, timeout: float = 30.0
+    ) -> dict:
+        """انتظار حدث وعي محدد في سجل المراقبة (دورية فعلية مثبتة بالسجل)."""
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            for entry in _read_log(log_path):
+                aw = entry.get("awareness")
+                if isinstance(aw, dict) and aw.get("event") == event:
+                    return aw
+            time.sleep(0.25)
+>       pytest.fail(f"حدث الوعي «{event}» لم يظهر في سجل المراقبة خلال {timeout}s")
+E       Failed: حدث الوعي «baseline_created» لم يظهر في سجل المراقبة خلال 30.0s
+
+tests/test_awareness_supervisor.py:95: Failed
+________________ test_app_unaffected_during_and_after_awareness ________________
+
+tmp_path = PosixPath('/tmp/pytest-of-user/pytest-628/test_app_unaffected_during_and0')
+
+    def test_app_unaffected_during_and_after_awareness(tmp_path):
+        """(د) التطبيق لا يتأثر: يستجيب أثناء رصد التغيير وبعد توقف الحارس —
+        والفحص البنيوي مكمل: app.py بلا أي إشارة لطبقة الوعي."""
+        port = _free_port()
+        data_root = Path(tempfile.mkdtemp(prefix="awareness_app_root_"))
+        app_proc = _spawn_app(data_root, port)
+        tree = Path(tempfile.mkdtemp(prefix="awareness_tree2_"))
+        _make_tree(tree)
+        sup_log = data_root / "supervisor" / "monitor_log.jsonl"
+        deadline = time.time() + 60
+        up = False
+        while time.time() < deadline and not up:
+            try:
+                up = _get_health(port) == 200
+            except Exception:
+                time.sleep(0.5)
+        assert up, "التطبيق لم يقلع خلال المهلة"
+        sup_proc = _spawn_supervisor(f"http://127.0.0.1:{port}", sup_log, tree)
+        try:
+>           _await_awareness_event(sup_log, "baseline_created")
+
+tests/test_awareness_supervisor.py:155: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+log_path = PosixPath('/tmp/awareness_app_root_4z4ze7_2/supervisor/monitor_log.jsonl')
+event = 'baseline_created', timeout = 30.0
+
+    def _await_awareness_event(
+        log_path: Path, event: str, timeout: float = 30.0
+    ) -> dict:
+        """انتظار حدث وعي محدد في سجل المراقبة (دورية فعلية مثبتة بالسجل)."""
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            for entry in _read_log(log_path):
+                aw = entry.get("awareness")
+                if isinstance(aw, dict) and aw.get("event") == event:
+                    return aw
+            time.sleep(0.25)
+>       pytest.fail(f"حدث الوعي «{event}» لم يظهر في سجل المراقبة خلال {timeout}s")
+E       Failed: حدث الوعي «baseline_created» لم يظهر في سجل المراقبة خلال 30.0s
+
+tests/test_awareness_supervisor.py:95: Failed
+=============================== warnings summary ===============================
+backend/config.py:312
+  /home/user/workspace/sovereign_ai/backend/config.py:312: UserWarning: ⚠️ CORS مفتوح للجميع — مقبول في التطوير فقط (D-034)
+    warnings.warn("⚠️ CORS مفتوح للجميع — مقبول في التطوير فقط (D-034)")
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED backend/tests/invariants/test_awareness.py::test_project_map_generated_accurately
+FAILED backend/tests/invariants/test_awareness.py::test_overall_fingerprint_matches_independent_expected_value
+FAILED backend/tests/invariants/test_awareness.py::test_file_modification_detected
+FAILED backend/tests/invariants/test_awareness.py::test_saved_baseline_roundtrip_and_corrupt_not_silent
+FAILED backend/tests/invariants/test_awareness.py::test_unreadable_file_fails_map_not_partial
+FAILED tests/test_awareness_supervisor.py::test_supervisor_logs_tampering_periodically
+FAILED tests/test_awareness_supervisor.py::test_app_unaffected_during_and_after_awareness
+7 failed, 1 warning in 61.42s (0:01:01)
+exit: 1

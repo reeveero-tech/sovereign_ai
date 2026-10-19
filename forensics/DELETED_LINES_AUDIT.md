@@ -1185,3 +1185,30 @@ R-692 بـ622؛ وسجل 629 يسبق اختباري التدقيق):
 - `forensics/R693_evidence/junit_d183e95.xml`: +636/ −0
 - `forensics/R693_evidence/verify_full_d183e95.log`: +48/ −0
 الإجمالي: 730 إضافة / 4 حذفًا في 5 ملفًا.
+
+
+## إضافة R-694 (2026-10-19) — المرحلة ٣: طبقة الوعي (خريطة المشروع وكشف العبث)
+
+numstat لكل ملف مقابل الأب 1deb940 (من git الفعلي؛ اختبار دائم
+test_audit_consistency.py يطابق هذا الجدول مع git حرفيًا):
+
+- `backend/awareness.py`: +156 / −0
+- `backend/supervisor_daemon.py`: +112 / −10
+- `backend/tests/invariants/test_awareness.py`: +126 / −0
+- `backend/tests/invariants/test_audit_consistency.py`: +95 / −0
+- `docs/CHANGELOG.md`: +10 / −1
+- `docs/PROJECT_STATE.md`: +12 / −0
+- `forensics/R694_PHASE3_AWARENESS.md`: +83 / −0
+- `forensics/R694_evidence/full_suite_green_638.log`: +22 / −0
+- `forensics/R694_evidence/green_new_tests.log`: +9 / −0
+- `forensics/R694_evidence/junit_1deb940.xml`: +636 / −0
+- `forensics/R694_evidence/red_r694.log`: +274 / −0
+- `tests/test_awareness_supervisor.py`: +187 / −0
+- `forensics/DELETED_LINES_AUDIT.md`: +28 / −1
+
+الإجمالي: 1,750 إضافة / 12 حذفًا في 13 ملفًا.
+
+| المحذوف | المبرر |
+|---|---|
+| `backend/supervisor_daemon.py` (−10) | **مُبرر # DELETION-JUSTIFIED — المرحلة ٣:** إلحاق السجل صار يعيد النجاح (شرط تحديث المرجعية — لا يختفي تغيير دون سجل) + فحص الوعي داخل سطر الدورة — كل محذوف استُبدل بأقوى منه وعقد R-687 محفوظ (اختباراته القائمة خضراء). |
+| `docs/CHANGELOG.md` (−1) | **مُبرر # DELETION-JUSTIFIED:** تحديث سطر «آخر تحديث». |
