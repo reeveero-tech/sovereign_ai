@@ -1,0 +1,43 @@
+============================= test session starts ==============================
+platform linux -- Python 3.11.15, pytest-9.1.1, pluggy-1.7.0
+rootdir: /tmp/red_sl
+configfile: pytest.ini
+plugins: anyio-4.15.1
+collected 1 item
+
+backend/tests/invariants/test_awareness.py F                             [100%]
+
+=================================== FAILURES ===================================
+_____________ test_saved_baseline_roundtrip_and_corrupt_not_silent _____________
+
+tmp_path = PosixPath('/tmp/pytest-of-user/pytest-706/test_saved_baseline_roundtrip_0')
+
+    def test_saved_baseline_roundtrip_and_corrupt_not_silent(tmp_path):
+        """المرجعية تُحفظ وتُحمّل كما هي — والتالفة تستثني ولا تُستبدل صامتة."""
+        _make_tree(tmp_path)
+        first = build_project_map(tmp_path)
+        store = tmp_path / "map_store" / "project_map.json"
+        store.parent.mkdir(parents=True)
+        save_map(first, store)
+>       assert load_map(store) == first, "المرجعية لم تعد كما حُفظت"
+E       AssertionError: المرجعية لم تعد كما حُفظت
+E       assert {} == {'README.md':...8aeace432f67'}
+E         
+E         Right contains 4 more items:
+E         {'README.md': '51c3935c02ad666c06c0b0961d432233cf1fac1923b223a688f8d549c930899c',
+E          'data/runtime.log': '9b75290f6a6359a2a3471022cbba4b724e45105b313ae8f6c103a2f79e82a857',
+E          'src/app.py': '96dd2db88b7dc8e28cabe68d8e766dde83570e8050ca995a1af38b609cec8395',
+E          'src/config.json': 'e8c628edc9968ef0c668f54e0ba2636b35503357eb1aca0ddc828aeace432f67'}
+E         Use -v to get more diff
+
+backend/tests/invariants/test_awareness.py:110: AssertionError
+=============================== warnings summary ===============================
+backend/config.py:312
+  /tmp/red_sl/backend/config.py:312: UserWarning: ⚠️ CORS مفتوح للجميع — مقبول في التطوير فقط (D-034)
+    warnings.warn("⚠️ CORS مفتوح للجميع — مقبول في التطوير فقط (D-034)")
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED backend/tests/invariants/test_awareness.py::test_saved_baseline_roundtrip_and_corrupt_not_silent
+========================= 1 failed, 1 warning in 0.05s =========================
+exit: 1

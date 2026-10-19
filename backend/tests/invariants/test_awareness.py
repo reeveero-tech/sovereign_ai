@@ -124,3 +124,39 @@ def test_unreadable_file_fails_map_not_partial(tmp_path):
             build_project_map(tmp_path)
     finally:
         target.chmod(0o644)
+
+
+# ---------- R-694 (اعتراضات المراجع ج2): مخرجات الحارس واكتمال الاجتياز ----------
+
+def test_store_directly_under_root_not_empty_map(tmp_path):
+    """حارس انحدار لِدلالة الاستثناء: استثناء مسار الملف يستبعد الملف وحده —
+    مخزن مباشرة تحت الجذر لا يسقط الشجرة (خريطة فارغة). ملاحظة دقة (ج3):
+    هذا اختبار وحدة مباشر لواجهة البناء — نجح قبل إصلاح الحارس لأن عيب
+    الأب الواسع كان في استدعاء الحارس لا في الواجهة؛ تغطية الحارس نفسه
+    في اختبار التكامل (المخزن تحت الجذر عبر الحارس الفعلي)."""
+    _make_tree(tmp_path)
+    store = tmp_path / "project_map.json"
+    store.write_text("{}", encoding="utf-8")
+    got = build_project_map(tmp_path, exclude_paths=[store])
+    assert got, "استثناء المخزن أسقط الشجرة كلها — خريطة فارغة"
+    assert "project_map.json" not in got, "المخزن نفسه يجب أن يكون مستثنى"
+    assert "src/app.py" in got and "README.md" in got, "ملفات أخرى ضاعت"
+
+
+def test_untraversable_dir_fails_map_not_partial(tmp_path):
+    """اعتراض المراجع ج2: مجلد داخل النطاق يتعذر اجتيازه (لا ملف يتعذر
+    قراءته فقط) — يجب أن يفشل بناء الخريطة كليًا، لا أن ينجح بخريطة ناقصة
+    تصنف محتوياته محذوفة."""
+    _make_tree(tmp_path)
+    (tmp_path / "src" / "sub").mkdir()
+    (tmp_path / "src" / "sub" / "deep.py").write_text("x = 1\n", encoding="utf-8")
+    target = tmp_path / "src" / "sub"
+    target.chmod(0o000)
+    try:
+        with pytest.raises(OSError):
+            build_project_map(tmp_path)
+    finally:
+        target.chmod(0o755)
+    # وبعد إصلاح الصلاحية: الخريطة كاملة بلا نقص
+    got = build_project_map(tmp_path)
+    assert "src/sub/deep.py" in got, "الملف ضاع بعد إصلاح الصلاحية"

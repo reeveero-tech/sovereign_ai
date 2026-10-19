@@ -1212,3 +1212,36 @@ test_audit_consistency.py يطابق هذا الجدول مع git حرفيًا):
 |---|---|
 | `backend/supervisor_daemon.py` (−10) | **مُبرر # DELETION-JUSTIFIED — المرحلة ٣:** إلحاق السجل صار يعيد النجاح (شرط تحديث المرجعية — لا يختفي تغيير دون سجل) + فحص الوعي داخل سطر الدورة — كل محذوف استُبدل بأقوى منه وعقد R-687 محفوظ (اختباراته القائمة خضراء). |
 | `docs/CHANGELOG.md` (−1) | **مُبرر # DELETION-JUSTIFIED:** تحديث سطر «آخر تحديث». |
+
+
+## إضافة تصحيحات المراجع ج2–ج3 لـR-694 (2026-10-19) — اكتمال الاجتياز وتوحيد المسارات
+
+التزام التصحيحات فوق 17c17de (الالتزام الأصلي منسوب لتدقيقه أعلاه —
+هذا مدخل منفصل لفرق التصحيحات). أربعة عيوب عالجها RED→GREEN مشهود:
+مخرجات الحارس داخل الشجرة، استثناء الأب الواسع، ابتلاع rglob لفشل
+الاجتياز، وعدم توحيد المسارات النسبية/المطلقة:
+
+- `backend/awareness.py`: +A1 / −D1
+- `backend/supervisor_daemon.py`: +A2 / −D2
+- `backend/tests/invariants/test_awareness.py`: +A3 / −D3
+- `docs/CHANGELOG.md`: +A4 / −D4
+- `docs/PROJECT_STATE.md`: +A5 / −D5
+- `forensics/R694_PHASE3_AWARENESS.md`: +A6 / −D6
+- `forensics/R694_evidence/full_suite_green_643.log`: +A7 / −D7
+- `forensics/R694_evidence/junit_r694_working_tree_643.xml`: +A8 / −D8
+- `forensics/R694_evidence/red_diff_isolated.log`: +A9 / −D9
+- `forensics/R694_evidence/red_fingerprint_isolated.log`: +A10 / −D10
+- `forensics/R694_evidence/red_load_isolated.log`: +A11 / −D11
+- `forensics/R694_evidence/red_mixed_paths.log`: +A12 / −D12
+- `forensics/R694_evidence/red_outputs_and_traversal.log`: +A13 / −D13
+- `tests/test_awareness_supervisor.py`: +A14 / −D14
+- `forensics/DELETED_LINES_AUDIT.md`: +A15 / −D15
+
+الإجمالي: 523 إضافة / 30 حذفًا في 15 ملفًا.
+
+| المحذوف | المبرر |
+|---|---|
+| `backend/awareness.py` (−D1) | **مُبرر # DELETION-JUSTIFIED — تصحيحات المراجع ج2–ج3:** استبدال rglob باجتياز صريح يرفع أخطاءه (لا خريطة ناقصة صامتة) + توحيد resolve() — استبدال أقوى. |
+| `backend/supervisor_daemon.py` (−D2) | **مُبرر # DELETION-JUSTIFIED:** استثناء مسارَي المخرجين كملفين بدل الأب الواسع — استبدال أدق. |
+| `tests/test_awareness_supervisor.py` (−D14) | **مُبرر # DELETION-JUSTIFIED:** إعادة بناء اختبار مخرجات الحارس (تشغيل واحد، مسارات مختلطة، توكيد الفروق كاملًا) — التوكيد الجزئي القديم كان يسمح بفروق زائفة. |
+| `docs/CHANGELOG.md` (−D4) | **مُبرر # DELETION-JUSTIFIED:** سطر عنوان الملف. |

@@ -59,15 +59,17 @@ def awareness_map_path(data_root: str | os.PathLike) -> Path:
     return Path(data_root) / "awareness" / "project_map.json"
 
 
-def _is_excluded(rel: str, path: Path, exclude_paths: List[Path]) -> bool:
-    """استثناء تشغيلي مبرر: امتداد بناء، أو مسار داخل مخرجات الحارس."""
+def _is_excluded(path: Path, exclude_paths: List[Path]) -> bool:
+    """استثناء تشغيلي مبرر: امتداد بناء، أو مسار مخرج محدد (ملف المخزن أو
+    السجل أنفسهما — لا مجلداتهما: استثناء الأب واسع يسقط جيرة وربما الشجرة
+    كلها إن كان المخزن مباشرة تحت الجذر — اعتراض المراجع ج2)."""
     if path.suffix in EXCLUDED_SUFFIXES:
         return True
     for ex in exclude_paths:
         try:
             path.relative_to(ex)
             return True
-        except ValueError:  # R-694: ليس داخل المسار المستثنى — افحص التالي
+        except ValueError:  # R-694: ليس المسار المستثنى — افحص التالي
             continue
     return False
 
@@ -83,23 +85,30 @@ def build_project_map(
     الخريطة وسجل المراقبة). تعذر قراءة ملف داخل النطاق يرفع OSError —
     لا خريطة ناجحة ناقصة. الروابط الرمزية تُتخطى (سياسة موثقة).
     """
-    root = Path(repo_root)
-    excluded = [Path(p) for p in (exclude_paths or ())]
+    # R-694 (اعتراض المراجع ج3): توحيد المسارات — الجذر ومسارات الاستثناء
+    # إلى تمثيل مطلق متسق قبل الاجتياز والمقارنة؛ مسار نسبي ومسار مطلق
+    # يشيران إلى الملف نفسه يجب أن يتطابقا (وإلا عاد العبث الذاتي)
+    root = Path(repo_root).resolve()
+    excluded = [Path(p).resolve() for p in (exclude_paths or ())]
+
+    def _raise_traversal(exc: OSError) -> None:
+        """R-694 (اعتراض المراجع ج2): فشل اجتياز مجلد داخل النطاق يفشل
+        البناء كليًا — لا خريطة ناجحة ناقصة تصنف محتوياته محذوفة صامتة."""
+        raise exc
+
     result: Dict[str, str] = {}
-    for path in sorted(root.rglob("*")):
-        # استثناء بالاسم أثناء النزول: مخازن VCS/بناء/بيئات — لا ننزل فيها
-        if any(part in EXCLUDED_DIR_NAMES for part in path.relative_to(root).parts[:-1]):
-            continue
-        if path.is_dir():
-            continue
-        rel = path.relative_to(root).as_posix()
-        if path.name in EXCLUDED_DIR_NAMES:
-            continue
-        if path.is_symlink():
-            continue  # سياسة موثقة: الروابط الرمزية لا تُتبع
-        if _is_excluded(rel, path, excluded):
-            continue
-        result[rel] = _sha256_file(path)  # OSError عند تعذر القراءة — لا إسكات
+    for dirpath, dirnames, filenames in os.walk(root, onerror=_raise_traversal):
+        # تقليم النزول: مجلدات مستثناة بالاسم (VCS/بناء/بيئات) لا تُجتاز
+        dirnames[:] = [d for d in dirnames if d not in EXCLUDED_DIR_NAMES]
+        current = Path(dirpath)
+        for fname in sorted(filenames):
+            path = current / fname
+            if path.is_symlink():
+                continue  # سياسة موثقة: الروابط الرمزية لا تُتبع
+            if _is_excluded(path, excluded):
+                continue
+            rel = path.relative_to(root).as_posix()
+            result[rel] = _sha256_file(path)  # OSError عند تعذر القراءة — لا إسكات
     return result
 
 

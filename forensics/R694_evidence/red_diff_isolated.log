@@ -1,0 +1,48 @@
+============================= test session starts ==============================
+platform linux -- Python 3.11.15, pytest-9.1.1, pluggy-1.7.0
+rootdir: /tmp/red_df
+configfile: pytest.ini
+plugins: anyio-4.15.1
+collected 1 item
+
+backend/tests/invariants/test_awareness.py F                             [100%]
+
+=================================== FAILURES ===================================
+_______________________ test_file_modification_detected ________________________
+
+tmp_path = PosixPath('/tmp/pytest-of-user/pytest-705/test_file_modification_detecte0')
+
+    def test_file_modification_detected(tmp_path):
+        """(ب) تعديل ملف يُكتشف — والإضافة والحذف أيضًا (فروق مفروزة)."""
+        _make_tree(tmp_path)
+        first = build_project_map(tmp_path)
+        (tmp_path / "src" / "app.py").write_text("print('tampered')\n", encoding="utf-8")
+        (tmp_path / "src" / "new_file.py").write_text("x = 1\n", encoding="utf-8")
+        (tmp_path / "README.md").unlink()
+        second = build_project_map(tmp_path)
+        diff = diff_maps(first, second)
+>       assert diff == {
+            "added": ["src/new_file.py"],
+            "removed": ["README.md"],
+            "modified": ["src/app.py"],
+        }, f"الفروق غير صحيحة: {diff}"
+E       AssertionError: الفروق غير صحيحة: {'added': [], 'removed': [], 'modified': []}
+E       assert {'added': [],...modified': []} == {'added': ['s...'src/app.py']}
+E         
+E         Differing items:
+E         {'removed': []} != {'removed': ['README.md']}
+E         {'modified': []} != {'modified': ['src/app.py']}
+E         {'added': []} != {'added': ['src/new_file.py']}
+E         Use -v to get more diff
+
+backend/tests/invariants/test_awareness.py:96: AssertionError
+=============================== warnings summary ===============================
+backend/config.py:312
+  /tmp/red_df/backend/config.py:312: UserWarning: ⚠️ CORS مفتوح للجميع — مقبول في التطوير فقط (D-034)
+    warnings.warn("⚠️ CORS مفتوح للجميع — مقبول في التطوير فقط (D-034)")
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED backend/tests/invariants/test_awareness.py::test_file_modification_detected
+========================= 1 failed, 1 warning in 0.04s =========================
+exit: 1

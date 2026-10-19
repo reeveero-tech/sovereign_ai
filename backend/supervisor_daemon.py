@@ -84,7 +84,7 @@ def _default_map_store() -> Path:
 
 
 def _awareness_check(
-    repo_root: Path, map_store: Path
+    repo_root: Path, map_store: Path, log_path: Path
 ) -> "tuple[dict, dict | None]":
     """فحص وعي واحد — الحارس يقرأ الخريطة (لا التطبيق — أمر المالك).
 
@@ -96,10 +96,11 @@ def _awareness_check(
     المحاولة في الفحص التالي: التغيير لا يختفي دون سجل يوثقه. المرجعية
     التالفة/غير المقروءة ليست «أول تشغيل» صامتًا: خطأ يُسجل ولا تُستبدل."""
     try:
-        # مخرجات الحارس نفسها مستثناة من النطاق (لا يراقب مخرجاته) —
-        # المخزن وسجل المراقبة خارج نطاق الشجرة إن كانا خارجها أصلًا
+        # R-694 (اعتراض المراجع ج2): مخرجات الحارس مستثناة بمسارَي الملفين
+        # نفسيهما (المخزن والسجل) — لا أبويهما: استثناء الأب واسع يسقط
+        # جيرة، والحارس يكتب سجله كل دورة فيُرصد عبثًا ذاتيًا إن لم يُستثنَ
         current = awareness.build_project_map(
-            repo_root, exclude_paths=[map_store.parent]
+            repo_root, exclude_paths=[map_store, log_path]
         )
     except OSError as exc:
         return {"event": "map_build_failed", "error": str(exc)}, None
@@ -165,7 +166,9 @@ def run(
         if time.monotonic() >= next_map_check:
             try:
                 # R-694: حادثة الوعي تُرفق بسطر الدورة نفسه (عقد R-687 قائم)
-                awareness_event, new_baseline = _awareness_check(root, store)
+                awareness_event, new_baseline = _awareness_check(
+                    root, store, log_path
+                )
                 if awareness_event:
                     entry["awareness"] = awareness_event
             except Exception as exc:  # الوعي لا يقتل الحارس أبدًا — يُسجل ويتابع

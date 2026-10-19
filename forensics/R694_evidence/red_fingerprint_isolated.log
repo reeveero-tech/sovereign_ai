@@ -1,0 +1,43 @@
+============================= test session starts ==============================
+platform linux -- Python 3.11.15, pytest-9.1.1, pluggy-1.7.0
+rootdir: /tmp/red_fp
+configfile: pytest.ini
+plugins: anyio-4.15.1
+collected 1 item
+
+backend/tests/invariants/test_awareness.py F                             [100%]
+
+=================================== FAILURES ===================================
+_________ test_overall_fingerprint_matches_independent_expected_value __________
+
+tmp_path = PosixPath('/tmp/pytest-of-user/pytest-704/test_overall_fingerprint_match0')
+
+    def test_overall_fingerprint_matches_independent_expected_value(tmp_path):
+        """البصمة الكلية بقيمة متوقعة مستقلة (الصيغة القانونية الموثقة:
+        SHA256 لسطور «المسار:الهاش» مفروزة بالمسار) — وتغيير المحتوى يغيرها."""
+        _make_tree(tmp_path)
+        got_map = build_project_map(tmp_path)
+        # حساب مستقل داخل الاختبار — لا استدعاء لدالة التنفيذ
+        canonical = "\n".join(
+            f"{k}:{v}" for k, v in sorted(got_map.items())
+        )
+        expected_fp = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+        fp = overall_fingerprint(got_map)
+>       assert fp == expected_fp, "البصمة الكلية لا تطابق الصيغة القانونية"
+E       AssertionError: البصمة الكلية لا تطابق الصيغة القانونية
+E       assert 'deadbeef' == 'c2f2b362208d...f1503df5ec034'
+E         
+E         - c2f2b362208d96eacec3702a093d7ed0543b43f90548d298fe3f1503df5ec034
+E         + deadbeef
+
+backend/tests/invariants/test_awareness.py:80: AssertionError
+=============================== warnings summary ===============================
+backend/config.py:312
+  /tmp/red_fp/backend/config.py:312: UserWarning: ⚠️ CORS مفتوح للجميع — مقبول في التطوير فقط (D-034)
+    warnings.warn("⚠️ CORS مفتوح للجميع — مقبول في التطوير فقط (D-034)")
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED backend/tests/invariants/test_awareness.py::test_overall_fingerprint_matches_independent_expected_value
+========================= 1 failed, 1 warning in 0.04s =========================
+exit: 1

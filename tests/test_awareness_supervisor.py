@@ -185,3 +185,61 @@ def test_app_unaffected_during_and_after_awareness(tmp_path):
     app_src = (_BACKEND_DIR / "app.py").read_text(encoding="utf-8")
     assert "backend.awareness" not in app_src, "app.py يستورد طبقة الوعي — ربط ممنوع"
     assert "import awareness" not in app_src, "app.py يستورد طبقة الوعي — ربط ممنوع"
+
+
+def test_supervisor_outputs_inside_tree_not_spurious(tmp_path):
+    """اعتراضات المراجع ج2 وج3: المخزن **مباشرة تحت الجذر** والسجل داخل
+    الشجرة، بمسارات نسبية ومطلقة مختلطة تشير إلى المخرجات نفسها — كتابات
+    الحارس نفسه لا تُرصد كعبث (التوحيد)، والمرجعية غير فارغة وتشمل ملفات
+    المصدر، وتعديل المصدر يُسجل بدقة بالفروق الكاملة."""
+    tree = tmp_path / "tree"
+    tree.mkdir()
+    _make_tree(tree)
+    # المخزن مباشرة تحت الجذر المرصود + السجل داخل الشجرة (الحالة القاسية
+    # لاستثناء الأب الواسع: أب المخزن هو الجذر نفسه)
+    log = tree / "data" / "supervisor" / "monitor_log.jsonl"
+    map_store = tree / "project_map.json"
+    log.parent.mkdir(parents=True, exist_ok=True)
+    dead_port = _free_port()
+    # مسارات مختلطة: الجذر نسبي (بالنسبة إلى cwd الحارس = جذر المستودع)
+    # والمخرجان مطلقان — يشيران إلى الملفات نفسها داخل الشجرة
+    root_rel = os.path.relpath(tree, _REPO_ROOT)
+    proc = subprocess.Popen(
+        [sys.executable, "-m", "backend.supervisor_daemon",
+         "--url", f"http://127.0.0.1:{dead_port}", "--interval", "0.2",
+         "--map-interval", "0.4", "--log", str(log),
+         "--awareness-root", root_rel,
+         "--map-store", str(map_store)],
+        cwd=str(_REPO_ROOT),
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+    )
+    try:
+        baseline = _await_awareness_event(log, "baseline_created")
+        # المرجعية غير فارغة وتشمل ملفات المصدر (لا خريطة فارغة باستثناء الأب)
+        assert baseline.get("files", 0) >= 2, (
+            f"المرجعية شبه فارغة — استثناء واسع أسقط الشجرة: {baseline}"
+        )
+        # دورات مراقبة كافية والحارس يكتب سجله كل 0.2s — لا عبث ذاتي
+        time.sleep(2.0)
+        spurious = [
+            e for e in _read_log(log)
+            if isinstance(e.get("awareness"), dict)
+            and e["awareness"].get("event") == "changes_detected"
+        ]
+        assert not spurious, (
+            f"كتابات الحارس نفسه رُصدت كعبث: {len(spurious)} حدثًا — "
+            "مسارات المخرجات لم تُوحّد (نسبي/مطلق)"
+        )
+        # تعديل ملف مصدر حقيقي — الفروق الكاملة بالضبط
+        (tree / "src" / "app.py").write_text("print('real')\n", encoding="utf-8")
+        change = _await_awareness_event(log, "changes_detected")
+        assert change["changes"] == {
+            "added": [], "removed": [], "modified": ["src/app.py"],
+        }, f"الفروق ليست التعديل وحده بدقة: {change}"
+    finally:
+        proc.terminate()
+        try:
+            proc.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            proc.wait(timeout=10)
