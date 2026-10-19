@@ -1325,4 +1325,4 @@ test_audit_consistency.py يطابق هذا الجدول مع git حرفيًا):
 | `backend/supervisor_daemon.py` (−2) | **مُبرر # DELETION-JUSTIFIED:** استبدال بنية if/elif لخط الحوادث بأولوية حدث الوعي + حفظ خطأ المكوّن في الملخص — استبدال أكمل. |
 | `backend/tests/invariants/test_repair.py` (−102) | **مُبرر # DELETION-JUSTIFIED:** إعادة بناء اختبارات الرقعة والرفض على العدة غير الذاتية المرجع (المكوّن ≠ الوحدة المستهدفة) — التوكيدات القديمة كانت تبحث عن نص لا تثبت الصلاحية. |
 | `tests/test_repair_supervisor.py` (−109) | **مُبرر # DELETION-JUSTIFIED:** إعادة بناء اختبارات التكامل مع المسار المتصل الكامل وبرهان التنفيذ — استبدال أدق. |
-| `forensics/R695_PHASE4_AWARENESS.md` (−4) | **مُبرر # DELETION-JUSTIFIED:** استبدال وصف RED غير المستقل بالسجلات المعزولة وتصحيح الأرقام — دقة أعلى. |
+| `forensics/R695_PHASE4_REPAIR.md` (−4) | **مُبرر # DELETION-JUSTIFIED:** استبدال وصف RED غير المستقل بالسجلات المعزولة وتصحيح الأرقام — دقة أعلى. |
