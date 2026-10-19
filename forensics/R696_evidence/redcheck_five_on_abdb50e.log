@@ -2,7 +2,7 @@ FFFFF                                                                    [100%]
 =================================== FAILURES ===================================
 ___________ test_heartbeat_bounded_range_rejects_infinite_threshold ____________
 
-tmp_path = PosixPath('/tmp/pytest-of-user/pytest-1151/test_heartbeat_bounded_range_r0')
+tmp_path = PosixPath('/tmp/pytest-of-user/pytest-1173/test_heartbeat_bounded_range_r0')
 
     def test_heartbeat_bounded_range_rejects_infinite_threshold(tmp_path):
         """(اعتراض المراجع) فاصل ضخم محدود (1e308) يجتاز isfinite لكنه يشتري
@@ -27,7 +27,7 @@ E           assert 200 == 503
 tests/test_supervisor_status.py:453: AssertionError
 _____________________ test_heartbeat_huge_epoch_fails_safe _____________________
 
-tmp_path = PosixPath('/tmp/pytest-of-user/pytest-1151/test_heartbeat_huge_epoch_fail0')
+tmp_path = PosixPath('/tmp/pytest-of-user/pytest-1173/test_heartbeat_huge_epoch_fail0')
 
     def test_heartbeat_huge_epoch_fails_safe(tmp_path):
         """(اعتراض المراجع) epoch ضخم كـ10**400 يرفع OverflowError عند
@@ -51,7 +51,7 @@ E           assert 500 == 503
 tests/test_supervisor_status.py:475: AssertionError
 ____________________ test_last_heartbeat_derived_from_epoch ____________________
 
-tmp_path = PosixPath('/tmp/pytest-of-user/pytest-1151/test_last_heartbeat_derived_fr0')
+tmp_path = PosixPath('/tmp/pytest-of-user/pytest-1173/test_last_heartbeat_derived_fr0')
 
     def test_last_heartbeat_derived_from_epoch(tmp_path):
         """(اعتراض المراجع) last_heartbeat مشتق من الطابع المتحقق منه لا
@@ -77,16 +77,16 @@ tmp_path = PosixPath('/tmp/pytest-of-user/pytest-1151/test_last_heartbeat_derive
                 "last_heartbeat ليس مشتقًا من epoch: "
                 f"{body['last_heartbeat']} ≠ {now}"
             )
-E           AssertionError: last_heartbeat ليس مشتقًا من epoch: 1970-01-01T00:00:00+00:00 ≠ 1792395791.6179106
-E           assert 1792395791.6179106 < 1.0
-E            +  where 1792395791.6179106 = abs((0.0 - 1792395791.6179106))
-E            +    where 0.0 = <built-in method timestamp of datetime.datetime object at 0x7f86bc976190>()
-E            +      where <built-in method timestamp of datetime.datetime object at 0x7f86bc976190> = datetime.datetime(1970, 1, 1, 0, 0, tzinfo=datetime.timezone.utc).timestamp
+E           AssertionError: last_heartbeat ليس مشتقًا من epoch: 1970-01-01T00:00:00+00:00 ≠ 1792396839.551186
+E           assert 1792396839.551186 < 1.0
+E            +  where 1792396839.551186 = abs((0.0 - 1792396839.551186))
+E            +    where 0.0 = <built-in method timestamp of datetime.datetime object at 0x7f625ce7e400>()
+E            +      where <built-in method timestamp of datetime.datetime object at 0x7f625ce7e400> = datetime.datetime(1970, 1, 1, 0, 0, tzinfo=datetime.timezone.utc).timestamp
 
 tests/test_supervisor_status.py:502: AssertionError
 ___________________ test_awareness_alert_appears_and_clears ____________________
 
-tmp_path = PosixPath('/tmp/pytest-of-user/pytest-1151/test_awareness_alert_appears_a0')
+tmp_path = PosixPath('/tmp/pytest-of-user/pytest-1173/test_awareness_alert_appears_a0')
 
     def test_awareness_alert_appears_and_clears(tmp_path):
         """(اعتراض المراجع) تنبيه الوعي: تغيّر حقيقي ← تنبيه قائم ← فحص
@@ -139,13 +139,13 @@ tmp_path = PosixPath('/tmp/pytest-of-user/pytest-1151/test_awareness_alert_appea
 >               assert code == 200 and body["active_alerts"] == 0, (
                     f"تنبيه الوعي لم يزُل بعد الفحص النظيف: {code} {body}"
                 )
-E               AssertionError: تنبيه الوعي لم يزُل بعد الفحص النظيف: 200 {'supervisor': 'up', 'last_heartbeat': '2026-10-19T07:43:28.056979+00:00', 'active_alerts': 1}
+E               AssertionError: تنبيه الوعي لم يزُل بعد الفحص النظيف: 200 {'supervisor': 'up', 'last_heartbeat': '2026-10-19T08:00:55.895822+00:00', 'active_alerts': 1}
 E               assert (200 == 200 and 1 == 0)
 
 tests/test_supervisor_status.py:558: AssertionError
 __________________ test_status_fetch_failure_counts_as_alert ___________________
 
-tmp_path = PosixPath('/tmp/pytest-of-user/pytest-1151/test_status_fetch_failure_coun0')
+tmp_path = PosixPath('/tmp/pytest-of-user/pytest-1173/test_status_fetch_failure_coun0')
 
     def test_status_fetch_failure_counts_as_alert(tmp_path):
         """(اعتراض المراجع) نجاح /health وفشل /status: الحارس يرصد كليهما —
@@ -180,13 +180,13 @@ tmp_path = PosixPath('/tmp/pytest-of-user/pytest-1151/test_status_fetch_failure_
 >                   assert code == 200 and body["active_alerts"] >= 1, (
                         f"فشل /status وحده لم يُرصد كتنبيه: {code} {body}"
                     )
-E                   AssertionError: فشل /status وحده لم يُرصد كتنبيه: 200 {'supervisor': 'up', 'last_heartbeat': '2026-10-19T07:43:44.847694+00:00', 'active_alerts': 0}
+E                   AssertionError: فشل /status وحده لم يُرصد كتنبيه: 200 {'supervisor': 'up', 'last_heartbeat': '2026-10-19T08:01:12.614136+00:00', 'active_alerts': 0}
 E                   assert (200 == 200 and 0 >= 1)
 
 tests/test_supervisor_status.py:597: AssertionError
 =============================== warnings summary ===============================
 backend/config.py:312
-  /tmp/redcheck_abdb50e/backend/config.py:312: UserWarning: ⚠️ CORS مفتوح للجميع — مقبول في التطوير فقط (D-034)
+  /tmp/redcheck2_abdb50e/backend/config.py:312: UserWarning: ⚠️ CORS مفتوح للجميع — مقبول في التطوير فقط (D-034)
     warnings.warn("⚠️ CORS مفتوح للجميع — مقبول في التطوير فقط (D-034)")
 
 -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
@@ -196,5 +196,6 @@ FAILED tests/test_supervisor_status.py::test_heartbeat_huge_epoch_fails_safe
 FAILED tests/test_supervisor_status.py::test_last_heartbeat_derived_from_epoch
 FAILED tests/test_supervisor_status.py::test_awareness_alert_appears_and_clears
 FAILED tests/test_supervisor_status.py::test_status_fetch_failure_counts_as_alert
-5 failed, 6 deselected, 1 warning in 37.97s
+5 failed, 6 deselected, 1 warning in 37.81s
+
 exit: 1

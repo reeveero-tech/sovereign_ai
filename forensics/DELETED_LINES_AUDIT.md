@@ -1502,3 +1502,26 @@ TA/TD/NF — خلق سكربت المزامنة؛ القيم الصحيحة مث
 | `docs/CHANGELOG.md` (−1) | **مُبرر # DELETION-JUSTIFIED:** تصويب عبارة الحالة النهائية في مدخل المرحلة ٦ (678/679). |
 | `forensics/R-696_SAFE_INTEGRATION.md` (−5) | **مُبرر # DELETION-JUSTIFIED:** إفصاح التسلسل الزمني الصادق (الخمسة بعد التنفيذ — إثبات كشف انحدار لا RED أولًا) ووسم الأرقام التاريخية وتصويب فقرة الحزمة القديمة — لا إعادة كتابة للزمن. |
 | `forensics/DELETED_LINES_AUDIT.md` (−5) | **مُبرر # DELETION-JUSTIFIED:** تصويبات توصيف النطاقات والقيم ذاتية المرجع — دقة أعلى. |
+
+
+## إضافة تصويب وصف التسلسل والبوابات (2026-10-19)
+
+التزام فوق f758b0e (تصويب وصف تسلسل الستة: شاهد فشل مسبق بحجب تنفيذ
+مكتوب سلفًا — لا ادعاء ترتيب كتابة؛ تثبيت النطاق c129da6..abdb50e في
+الخاتمة؛ إعادة تشغيل بوابتَي الاختبارات بنمط الالتقاط الصريح
+rc=1 للأساس السابق وrc=0 للمصحح):
+
+- `REPORT_V2.md`: +4 / −3
+- `forensics/R-696_SAFE_INTEGRATION.md`: +10 / −6
+- `forensics/R696_evidence/redcheck_five_on_abdb50e.log`: +15 / −14
+- `forensics/R696_evidence/greencheck_five_on_c42c28f.log`: +2 / −1
+- `forensics/DELETED_LINES_AUDIT.md`: +23 / −0
+
+الإجمالي: 54 إضافة / 24 حذفًا في 5 ملفًا.
+
+| المحذوف | المبرر |
+|---|---|
+| `REPORT_V2.md` (−3) | **مُبرر # DELETION-JUSTIFIED:** تثبيت النطاق التاريخي صراحة (c129da6..abdb50e) بدل الوصف الملتبس — دقة أعلى. |
+| `forensics/R-696_SAFE_INTEGRATION.md` (−6) | **مُبرر # DELETION-JUSTIFIED:** استبدال ادعاء ترتيب الكتابة بالوصف الدقيق (شاهد فشل مسبق بحجب تنفيذ مكتوب سلفًا) — لا إعادة كتابة للزمن. |
+| `forensics/R696_evidence/redcheck_five_on_abdb50e.log` (−14) | **مُبرر # DELETION-JUSTIFIED:** استبدال السجل السابق بإعادة تشغيل البوابة الحقيقية (نمط الالتقاط الصريح rc=1) — الدليل الأدق. |
+| `forensics/R696_evidence/greencheck_five_on_c42c28f.log` (−1) | **مُبرر # DELETION-JUSTIFIED:** مثل أعلاه — rc=0 بالنمط الصريح. |
