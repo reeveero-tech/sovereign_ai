@@ -42,11 +42,11 @@ logger = logging.getLogger(__name__)
 
 # استيراد الإعدادات السيادية
 try:
-    from config import DATA_DIR, SOVEREIGN_KEY
+    from config import DATA_DIR, SOVEREIGN_KEY  # LEGACY-ROOT-KEY (read-only): تحقق أحداث ledger التاريخية فقط
 except ImportError:
     # للاستخدام المستقل للملف
     DATA_DIR = Path(__file__).parent.parent.parent / "data"
-    SOVEREIGN_KEY = os.getenv("SOVEREIGN_KEY", "يجب_تغيير_هذا_المفتاح_فوراً")
+    SOVEREIGN_KEY = os.getenv("SOVEREIGN_KEY", "يجب_تغيير_هذا_المفتاح_فوراً")  # LEGACY-ROOT-KEY (read-only)
     logger.warning("تم استخدام إعدادات افتراضية للـ config")
 
 
@@ -445,7 +445,7 @@ class SovereignCore:
                  index_file: Path = INDEX_FILE,
                  meta_file: Path = META_FILE,
                  integrity_file: Path = INTEGRITY_FILE,
-                 sovereign_key: str = SOVEREIGN_KEY,
+                 sovereign_key: str = SOVEREIGN_KEY,  # LEGACY-ROOT-KEY (read-only): تحقق الأحداث التاريخية فقط
                  keyring=None):
         
         self.log_file = log_file
@@ -456,7 +456,9 @@ class SovereignCore:
         self.blob_store = BlobStore(blobs_dir)
         self.index = SovereignIndex(index_file)
 
-        # مفتاح التوقيع
+        # مفتاح التوقيع — R-697: LEGACY-ROOT-KEY (read-only). هذا المفتاح لا يوقّع
+        # أحداثًا جديدة قطعًا (التوقيع الجديد fail-closed عبر KeyRing — R-626)؛ يُستخدم
+        # فقط في التحقق من أحداث ledger التاريخية الموقعة بالجذر قبل R-697.
         self.signing_key = sovereign_key.encode('utf-8') if sovereign_key else b''
         if not self.signing_key or self.signing_key == b'you_must_change_this_key_immediately':
             # توليد مفتاح جديد إذا كان افتراضياً
@@ -466,7 +468,7 @@ class SovereignCore:
         # (حتى تكون قابلة للتحقق لاحقًا، بدل unverifiable_missing_key)
         # R-629: حقن صريح — إذا مُرر keyring، يُستخدم (لا تحميل تلقائي).
         # إذا لم يُمرر، يُحمّل من المسار الافتراضي (fallback R-621 معطل في الاختبارات
-        # عبر تعطيل SOVEREIGN_KEYRING_FALLBACK).
+        # عبر تعطيل SOVEREIGN_KEYRING_FALLBACK).  # LEGACY-ROOT-KEY (read-only): اسم متغير بيئة لا مفتاح
         self._keyring = None
         self._keyring_key_id = None
         if keyring is not None:
@@ -478,7 +480,7 @@ class SovereignCore:
                 logger.info(f"🔑 KeyRing injected: {active.key_id}")
             else:
                 logger.warning("⚠️ Injected KeyRing has no active key — events will be unverifiable")
-        elif not os.environ.get("SOVEREIGN_KEYRING_FALLBACK_DISABLED"):
+        elif not os.environ.get("SOVEREIGN_KEYRING_FALLBACK_DISABLED"):  # LEGACY-ROOT-KEY (read-only): إعداد تحميل لا مفتاح
             # التحميل الافتراضي (التشغيل العادي — fallback R-621 يقرأ من المسار الحقيقي)
             try:
                 from backend.sovereign.keys import KeyRing
@@ -495,7 +497,7 @@ class SovereignCore:
                 logger.warning(f"⚠️ KeyRing not available: {e}")
         else:
             # R-629: fallback معطل (بيئة اختبار) — لا تحميل تلقائي
-            logger.info("🔑 KeyRing fallback disabled (SOVEREIGN_KEYRING_FALLBACK_DISABLED) — no auto-load")
+            logger.info("🔑 KeyRing fallback disabled (SOVEREIGN_KEYRING_FALLBACK_DISABLED) — no auto-load")  # LEGACY-ROOT-KEY (read-only): إعداد تحميل
 
         # حالة السجل
         self._last_hash = self._load_last_hash()

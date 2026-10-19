@@ -30,10 +30,11 @@ from pathlib import Path
 import numpy as np  # numpy اختياري، يُستخدم فقط للمصفوفات
 
 try:
-    from config import DATA_DIR, SOVEREIGN_KEY
+    from config import DATA_DIR, SOVEREIGN_KEY  # LEGACY-ROOT-KEY (read-only): مسار القراءة التاريخي فقط
+    pass  # R-697: استيراد derivation كسول داخل QuantumEncoder.__init__ (قطع دائرة سبكية عبر memory/__init__)
 except ImportError:
     DATA_DIR = Path(__file__).parent.parent.parent / "data"
-    SOVEREIGN_KEY = "يجب_تغيير_هذا_المفتاح_فوراً_في_بيئة_الإنتاج"
+    SOVEREIGN_KEY = "يجب_تغيير_هذا_المفتاح_فوراً_في_بيئة_الإنتاج"  # LEGACY-ROOT-KEY (read-only)
 
 import logging
 logger = logging.getLogger(__name__)
@@ -318,8 +319,18 @@ class QuantumLikeEncryption:
     عند محاولة القراءة بدون المفتاح الصحيح، تتغير الحالة وتُفسد البيانات.
     """
     
-    def __init__(self, master_key: str = SOVEREIGN_KEY):
-        self.master_key = hashlib.sha3_512(master_key.encode()).digest()
+    def __init__(self, master_key: str = None):
+        # R-697 (D-033): الافتراضي مفتاح مشتق بغرض encryption — لا الجذر الخام.
+        # مع وسط صريح يبقى السلوك كما هو (توافق الاختبارات والمستدعين).
+        if master_key is None:
+            # R-697 (D-033): استيراد كسول — يقطع الدائرة السبكية (memory/__init__ ← encoding ← sovereign)
+            try:
+                from backend.sovereign.keys.derivation import derive_key
+            except ImportError:
+                from sovereign.keys.derivation import derive_key
+            self.master_key = hashlib.sha3_512(derive_key("encryption")).digest()
+        else:
+            self.master_key = hashlib.sha3_512(master_key.encode()).digest()
         self.quantum_states: Dict[str, Dict] = {}
         self._bg_stop = threading.Event()
         self._cleanup_thread = threads.start_managed(

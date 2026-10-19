@@ -31,13 +31,26 @@ from enum import Enum
 
 try:
     from ..core import get_core, IntegrityStatus
-    from ...config import DATA_DIR, SOVEREIGN_KEY
+    from ...config import DATA_DIR, SOVEREIGN_KEY  # LEGACY-ROOT-KEY (read-only): بصمات عرض فقط
 except ImportError:
     from memory.core import get_core, IntegrityStatus
-    from config import DATA_DIR, SOVEREIGN_KEY
+    from config import DATA_DIR, SOVEREIGN_KEY  # LEGACY-ROOT-KEY (read-only)
 
 import logging
 logger = logging.getLogger(__name__)
+
+def _derive_key(purpose: str) -> bytes:
+    """R-697 (D-033): استيراد كسول لوحدة الاشتقاق — قطع الدوائر السبكية عند
+    تحميل الوحدات (sovereign/__init__ ← will ← instincts ← store)."""
+    try:
+        from backend.sovereign.keys.derivation import derive_key_from_module
+    except ImportError:
+        from sovereign.keys.derivation import derive_key_from_module
+    # الجذر يُقرأ من متغيرات هذه الوحدة وقت الاستدعاء (يحترم monkeypatch
+    # في اختبارات الفينيق — تغيير الجذر يُفشل فك الحالات القديمة، سلوك R-682)
+    return derive_key_from_module(purpose, globals())
+
+
 
 
 # ============================================================
@@ -579,17 +592,17 @@ class BootkitDefense:
             "created_at": time.time(),
             "core_fingerprint": self.core._last_hash if self.core else "GENESIS",
             "config_fingerprint": self._compute_config_fingerprint(),
-            "sovereign_fingerprint": hashlib.sha256(SOVEREIGN_KEY.encode()).hexdigest()
+            "sovereign_fingerprint": hashlib.sha256(SOVEREIGN_KEY.encode()).hexdigest()  # LEGACY-ROOT-KEY (read-only): بصمة عرض
         }
         
         chain_json = json.dumps(chain_data, sort_keys=True).encode()
         return base64.b64encode(chain_json)
     
     def _sign_boot_chain(self, chain: bytes) -> bytes:
-        """توقيع سلسلة الإقلاع"""
+        """توقيع سلسلة الإقلاع — R-697: مفتاح مشتق بغرض signing (D-033)، لا الجذر الخام."""
         # توقيع متعدد الطبقات
         layer1 = hashlib.sha3_512(chain).digest()
-        layer2 = hashlib.sha256(layer1 + SOVEREIGN_KEY.encode()).digest()
+        layer2 = hashlib.sha256(layer1 + _derive_key("signing")).digest()
         return base64.b64encode(layer2)
     
     def _create_boot_backup(self):
@@ -662,7 +675,7 @@ class BootkitDefense:
                 h.update(f.read_bytes())
         
         h.update(self.SCHEMA_VERSION.encode())
-        h.update(SOVEREIGN_KEY.encode())
+        h.update(SOVEREIGN_KEY.encode())  # LEGACY-ROOT-KEY (read-only): بصمة تكامل تربط بالجذر — عرض لا استخدام مفتاحي
         
         return h.hexdigest()
     

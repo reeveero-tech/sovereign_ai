@@ -42,14 +42,27 @@ import heapq
 try:
     from ..core import get_core, EventType
     from ..encoding import get_encoder
-    from ...config import DATA_DIR, SOVEREIGN_KEY
+    from ...config import DATA_DIR, SOVEREIGN_KEY  # LEGACY-ROOT-KEY (read-only): مسار فك تشفير الحمولات التاريخية فقط
 except ImportError:
     from memory.core import get_core, EventType
     from memory.encoding import get_encoder
-    from config import DATA_DIR, SOVEREIGN_KEY
+    from config import DATA_DIR, SOVEREIGN_KEY  # LEGACY-ROOT-KEY (read-only)
 
 import logging
 logger = logging.getLogger(__name__)
+
+def _derive_key(purpose: str) -> bytes:
+    """R-697 (D-033): استيراد كسول لوحدة الاشتقاق — قطع الدوائر السبكية عند
+    تحميل الوحدات (sovereign/__init__ ← will ← instincts ← store)."""
+    try:
+        from backend.sovereign.keys.derivation import derive_key_from_module
+    except ImportError:
+        from sovereign.keys.derivation import derive_key_from_module
+    # الجذر يُقرأ من متغيرات هذه الوحدة وقت الاستدعاء (يحترم monkeypatch
+    # في اختبارات الفينيق — تغيير الجذر يُفشل فك الحالات القديمة، سلوك R-682)
+    return derive_key_from_module(purpose, globals())
+
+
 
 
 # ============================================================
@@ -503,9 +516,14 @@ class SolidMemoryStore:
             tmp_path.replace(path)
     
     def _store_payload_key(self) -> bytes:
-        """مفتاح تشفير حمولات المخزن — حتمي من مفتاح السيادة (استمرارية
-        عبر مثيلات المشفر والمخزن: أي مشفّر/مخزن جديد يفك بيانات القديم)."""
-        return hashlib.sha3_512(SOVEREIGN_KEY.encode()).digest()[:32]
+        """مفتاح تشفير حمولات المخزن — R-697: مشتق بغرض encryption (D-033)، لا الجذر الخام.
+        حتمي: أي مشفّر/مخزن جديد يفك بيانات القديم (المشتق نفسه من الجذر نفسه)."""
+        return _derive_key("encryption")
+
+    def _store_payload_key_legacy(self) -> bytes:
+        """R-697 — LEGACY-ROOT-KEY (read-only): مفتاح الحمولات التاريخي (sha3_512 للجذر)
+        قبل الاشتقاق الغرضي. لفك الحمولات القديمة فقط — لا تشفير جديد به أبدًا."""
+        return hashlib.sha3_512(SOVEREIGN_KEY.encode()).digest()[:32]  # LEGACY-ROOT-KEY (read-only)
 
     def _encrypt_payload(self, payload: Dict, kind: str) -> str:
         """تشفير الـ payload للتخزين — AES-256-GCM موثق معياري.
@@ -552,11 +570,33 @@ class SolidMemoryStore:
                 return payload
             return {"_error": "حمولة غير قابلة للتفسير"}
         except ValueError:
-            logger.error(
-                f"R-682 [SECURITY]: {kind} payload GCM authentication FAILED — "
-                "tampered or corrupted record REJECTED"
-            )
-            return {"_error": "فشل مصادقة — تلاعب أو تلف"}
+            # R-697 — LEGACY-ROOT-KEY (read-only): حمولة قديمة شُفرت بمفتاح الجذر قبل
+            # الاشتقاق الغرضي — محاولة قراءة تاريخية واحدة، ولا كتابة جديدة بهذا المفتاح.
+            try:
+                if not isinstance(envelope, dict):
+                    raise ValueError("no envelope")
+                legacy_cipher = AES.new(
+                    self._store_payload_key_legacy(), AES.MODE_GCM,
+                    nonce=base64.b64decode(envelope["n"], validate=True),
+                )
+                legacy_cipher.update(f"sovereign-store-v1:{kind}".encode())
+                legacy_plain = legacy_cipher.decrypt_and_verify(
+                    base64.b64decode(envelope["d"], validate=True),
+                    base64.b64decode(envelope["t"], validate=True),
+                )
+                legacy_payload = json.loads(legacy_plain.decode("utf-8"))
+                if isinstance(legacy_payload, dict):
+                    logger.warning(
+                        "R-697 [LEGACY]: %s payload decrypted via LEGACY root key (read-only)", kind
+                    )
+                    return legacy_payload
+                return {"_error": "حمولة غير قابلة للتفسير"}
+            except Exception:
+                logger.error(
+                    f"R-682 [SECURITY]: {kind} payload GCM authentication FAILED — "
+                    "tampered or corrupted record REJECTED"
+                )
+                return {"_error": "فشل مصادقة — تلاعب أو تلف"}
         except (UnicodeDecodeError, json.JSONDecodeError, KeyError, TypeError) as e:
             logger.warning(f"R-682: حمولة {kind} إرثية/غير قابلة للفك: {e}")
             return {"_error": "صيغة إرثية"}

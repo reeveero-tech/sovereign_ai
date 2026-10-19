@@ -34,11 +34,11 @@ import ipaddress
 try:
     from ..core import get_core, EventType
     from ..encoding import get_encoder
-    from ...config import DATA_DIR, SOVEREIGN_KEY
+    from ...config import DATA_DIR, SOVEREIGN_KEY  # LEGACY-ROOT-KEY (read-only): استيراد تاريخي غير مستخدم مفتاحيًا
 except ImportError:
     from memory.core import get_core, EventType
     from memory.encoding import get_encoder
-    from config import DATA_DIR, SOVEREIGN_KEY
+    from config import DATA_DIR, SOVEREIGN_KEY  # LEGACY-ROOT-KEY (read-only): استيراد تاريخي
 
 import logging
 logger = logging.getLogger(__name__)

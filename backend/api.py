@@ -39,11 +39,17 @@ except ImportError:
 
 # مفتاح السيد (لمصادقة مسارات الكتابة — جولة المجلس <1>)
 try:
-    from config import SOVEREIGN_KEY as _SOVEREIGN_API_KEY
+    from config import SOVEREIGN_KEY as _SOVEREIGN_API_KEY  # LEGACY-ROOT-KEY (read-only): بيانات اعتماد تاريخية
 except ImportError:
     import sys as _sys
     _sys.path.append('.')
-    from config import SOVEREIGN_KEY as _SOVEREIGN_API_KEY
+    from config import SOVEREIGN_KEY as _SOVEREIGN_API_KEY  # LEGACY-ROOT-KEY (read-only)
+
+# R-697 (D-033): المفتاح القياسي لمصادقة API مشتق بغرض api_auth — لا مقارنة بالجذر إلا legacy قراءة فقط
+try:
+    from backend.sovereign.keys.derivation import derive_key_hex as _derive_api_auth  # R-697 (D-033)
+except ImportError:
+    from sovereign.keys.derivation import derive_key_hex as _derive_api_auth  # R-697 (D-033)
 
 
 def _require_master_key(api_key: Optional[str] = None,
@@ -54,11 +60,21 @@ def _require_master_key(api_key: Optional[str] = None,
     في الرأس (X-API-Key) أو في جسم الطلب (api_key). المقارنة ثابتة الزمن.
     """
     key = api_key or x_api_key
-    # مقارنة بايتات UTF-8 (اعتراض المراجع): المدخلات غير-ASCII يجب ألا
-    # تتحول إلى خطأ خادم من compare_digest — ترفض 401 فقط.
-    if not key or not hmac.compare_digest(
-        str(key).encode("utf-8"), str(_SOVEREIGN_API_KEY).encode("utf-8")
-    ):
+    # R-697 (D-033): المفتاح القياسي هو المشتق (api_auth). الجذر الخام يبقى
+    # مقبولًا كمسار legacy قراءة فقط (توافقًا مع بيانات الاعتماد التاريخية) —
+    # لا مسار كتابة جديد يعتمد عليه.
+    derived_api_key = _derive_api_auth("api_auth")
+    authenticated = False
+    if key:
+        key_bytes = str(key).encode("utf-8")
+        # مقارنة بايتات UTF-8 (اعتراض المراجع): المدخلات غير-ASCII يجب ألا
+        # تتحول إلى خطأ خادم من compare_digest — ترفض 401 فقط.
+        authenticated = hmac.compare_digest(
+            key_bytes, derived_api_key.encode("utf-8")
+        ) or hmac.compare_digest(
+            key_bytes, str(_SOVEREIGN_API_KEY).encode("utf-8")  # LEGACY-ROOT-KEY (read-only)
+        )
+    if not key or not authenticated:
         raise HTTPException(
             status_code=401,
             detail="مفتاح السيد مطلوب لهذه العملية — المصادقة إلزامية (جولة المجلس <1>)"

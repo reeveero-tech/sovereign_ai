@@ -1598,3 +1598,40 @@ CI/Local/Clone عند c4f091e + دورة verify.sh --full ناجحة من clone 
 |---|---|
 | `docs/PROJECT_STATE.md` (−1) | **مُبرر # DELETION-JUSTIFIED:** استبدال سطر الترويسة المتقادم «2026-10-14 (الدفعة M6 — R-614)» بسطر الحالة الحقيقية «2026-10-19 — 678 اختبارًا — HEAD: 3f0e937» — أمر المالك الصريح (تصويب توثيقي، تحديث تاريخ لا حذف محتوى). |
 | `docs/CHANGELOG.md` (−1) | **مُبرر # DELETION-JUSTIFIED:** استبدال سطر «آخر تحديث» المتأخر (R-695) بالسطر الشامل (R-696 + جولة المرحلة صفر الثانية + تدقيق الوكيل الثالث) — أمر المالك الصريح. |
+
+## R-697 — فصل اشتقاق المفاتيح الغرضي HKDF (2026-10-20)
+
+التزام ذري واحد فوق `dc07a08` تنفيذًا لقرار المالك D-033 عبر الجولة R-697
+(الجولة الأولى من ROADMAP_V3). كل الحذوفات أسطر مستبدلة في ترحيل
+الاستهلاك من الجذر الخام إلى المفاتيح المشتقة — لا حذف وظائف، لا حذف
+ملفات. `# DELETION-JUSTIFIED` في رسالة الالتزام نفسه.
+
+- `backend/api.py`: +23 / −7
+- `backend/app.py`: +20 / −12
+- `backend/consciousness/identity_core.py`: +33 / −11
+- `backend/memory/biological/instincts.py`: +3 / −3
+- `backend/memory/core.py`: +9 / −7
+- `backend/memory/defense/bootkit.py`: +19 / −6
+- `backend/memory/defense/polymorphic.py`: +4 / −4
+- `backend/memory/defense/ransomware.py`: +77 / −19
+- `backend/memory/defense/stealth.py`: +2 / −2
+- `backend/memory/encoding.py`: +15 / −4
+- `backend/memory/store/__init__.py`: +50 / −10
+- `backend/repair.py`: +1 / −1
+- `backend/safety.py`: +17 / −6
+- `docs/CHANGELOG.md`: +10 / −1
+- `docs/DECISIONS.md`: +14 / −0
+- `docs/PROJECT_STATE.md`: +2 / −1
+- `docs/SECURITY.md`: +20 / −1
+- `backend/sovereign/keys/derivation.py`: +92 / −0 (ملف جديد)
+- `backend/tests/invariants/test_key_derivation.py`: +156 / −0 (ملف جديد — الاختبارات السبعة الإلزامية)
+- `docs/ROADMAP_V3.md`: +18 / −0 (ملف جديد)
+- `forensics/R-697_HKDF.md`: +136 / −0 (ملف جديد — تقرير الجولة)
+- `forensics/DELETED_LINES_AUDIT.md`: +37 / −0 (مدخل هذه الجولة نفسه)
+
+الإجمالي: 758 إضافةً / 95 حذفًا في 22 ملفًا.
+
+| المحذوف | المبرر |
+|---|---|
+| 13 ملف كود (−92 سطرًا) | **مُبرر # DELETION-JUSTIFIED:** استبدال الاستخدام المباشر للجذر الخام (توقيع/تشفير/هوية/مصادقة/فينيق) بمفاتيح مشتقة لكل غرض عبر HKDF-SHA256 — أمر المالك R-697 تنفيذًا لـD-033. الأسطر المحذوفة هي: استيرادات الجذر المباشرة (استُبدلت باستيرادات كسولة تقطع الدوائر السبكية)، ومقارنات/اشتقاقات الجذر الخام (استُبدلت بـderive_key/derive_key_hex)، ومسارات الكتابة بالجذر (استُبدلت بمسارات مشتقة مع إبقاء مسارات القراءة التاريخية موسومة LEGACY-ROOT-KEY read-only). لا حذف وظائف — نفس السلوك الظاهر مع مفاتيح معزولة لكل غرض. |
+| `docs/CHANGELOG.md` (−1)، `docs/PROJECT_STATE.md` (−1)، `docs/SECURITY.md` (−1) | **مُبرر # DELETION-JUSTIFIED:** استبدال أسطر «آخر تحديث» المتقادمة بالسطر الحالي (R-697 — 2026-10-20) — تحديث ترويسة لا حذف محتوى، أمر المالك الصريح (قاعدة الدفعة الذرية). |

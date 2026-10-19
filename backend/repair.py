@@ -122,7 +122,7 @@ _CLASSIFICATION_RULES: List = [
     (re.compile(
         r"Invalid [Kk]ey|InvalidToken|decryption|Fernet|cryptography"
     ), "encryption_error",
-     "تحقق من مفتاح SOVEREIGN_KEY وصلاحية مفاتيح التشفير"),
+     "تحقق من مفتاح SOVEREIGN_KEY وصلاحية مفاتيح التشفير"),  # LEGACY-ROOT-KEY (read-only): نص رسالة لا استخدام مفتاحي
     (re.compile(r"SyntaxError|invalid syntax"), "syntax_error",
      "راجع بناء الملف المصدر — خطأ نحوي صريح"),
     (re.compile(r"PermissionError|Errno 13|No such file|ENOENT|OSError"),

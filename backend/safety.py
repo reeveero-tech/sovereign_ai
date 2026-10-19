@@ -15,8 +15,12 @@ from config import (
     SOVEREIGN_REQUESTS_DIR,
     SOVEREIGN_RESPONSES_DIR,
     DATA_DIR,
-    SOVEREIGN_KEY
+    SOVEREIGN_KEY  # LEGACY-ROOT-KEY (read-only): التحقق من التواقيع التاريخية فقط
 )
+try:
+    from backend.sovereign.keys.derivation import derive_key
+except ImportError:
+    from sovereign.keys.derivation import derive_key  # R-697: مفتاح مشتق للغرض signing (D-033)
 
 
 class ActionType(Enum):
@@ -444,20 +448,27 @@ class SafetyGuard:
         return action_type in critical_actions
     
     def _verify_signature(self, signature: str, action_id: str) -> bool:
-        """التحقق من توقيع السيد للأوامر الخطيرة"""
+        """التحقق من توقيع السيد للأوامر الخطيرة — R-697: مفتاح مشتق (signing)،
+        مع قبول تواقيع الجذر التاريخية للقراءة فقط (لا توليد جديد بها)."""
         expected = hashlib.sha256(
-            f"{action_id}{SOVEREIGN_KEY}".encode()
+            action_id.encode() + derive_key("signing")
         ).hexdigest()[:16]
-        return signature == expected
+        if signature == expected:
+            return True
+        legacy_expected = hashlib.sha256(
+            f"{action_id}{SOVEREIGN_KEY}".encode()  # LEGACY-ROOT-KEY (read-only)
+        ).hexdigest()[:16]
+        return signature == legacy_expected
     
     # ============================================================
     # إنشاء توقيع للسيد (للاستخدام في الواجهة)
     # ============================================================
     
     def generate_signature(self, action_id: str) -> str:
-        """توليد توقيع للسيد لاستخدامه في الأوامر الخطيرة"""
+        """توليد توقيع للسيد لاستخدامه في الأوامر الخطيرة — R-697: مفتاح مشتق فقط،
+        لا توليد بالمفتاح الجذر أبدًا (D-033)."""
         return hashlib.sha256(
-            f"{action_id}{SOVEREIGN_KEY}".encode()
+            action_id.encode() + derive_key("signing")
         ).hexdigest()[:16]
     
     # ============================================================

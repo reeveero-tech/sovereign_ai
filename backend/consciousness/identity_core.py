@@ -40,7 +40,7 @@ try:
     from ..memory.defense.ransomware import get_ransomware_defense
     from ..memory.defense.bootkit import get_bootkit_defense
     from .field import get_consciousness_field
-    from ...config import DATA_DIR, SOVEREIGN_KEY
+    from ...config import DATA_DIR, SOVEREIGN_KEY  # LEGACY-ROOT-KEY (read-only): مسار فك التشفير التاريخي فقط
 except ImportError:
     from memory.core import get_core, EventType, IntegrityStatus
     from memory.store import get_store
@@ -51,10 +51,21 @@ except ImportError:
     from memory.defense.ransomware import get_ransomware_defense
     from memory.defense.bootkit import get_bootkit_defense
     from consciousness.field import get_consciousness_field
-    from config import DATA_DIR, SOVEREIGN_KEY
+    from config import DATA_DIR, SOVEREIGN_KEY  # LEGACY-ROOT-KEY (read-only): مسار فك التشفير التاريخي فقط
 
 import logging
 logger = logging.getLogger(__name__)
+
+def derive_key(purpose: str, root_key=None) -> bytes:
+    """R-697 (D-033): وكيل كسول لوحدة الاشتقاق — الاستيراد المباشر على مستوى
+    الوحدة يسبب دائرة سبكية (identity_core ← sovereign ← will ← identity_core).
+    الاستيراد يتم عند أول استدعاء فعلي، بعد اكتمال تحميل كل الوحدات."""
+    try:
+        from backend.sovereign.keys.derivation import derive_key as _real_derive
+    except ImportError:
+        from sovereign.keys.derivation import derive_key as _real_derive
+    return _real_derive(purpose, root_key)
+
 
 
 # ============================================================
@@ -242,8 +253,8 @@ class IdentityCore:
         
         الختم هو ما يثبت هوية النظام بشكل لا يقبل الجدل.
         """
-        # جمع البصمات الأساسية
-        sovereign_key_hash = hashlib.sha3_512(SOVEREIGN_KEY.encode()).hexdigest()
+        # جمع البصمات الأساسية — R-697: هوية الختم من مفتاح مشتق (keyring_identity)، لا الجذر الخام
+        sovereign_key_hash = hashlib.sha3_512(derive_key("keyring_identity")).hexdigest()
         core_hash = self.core._last_hash if self.core else "GENESIS"
         
         # بصمة الأنماط الأصلية (R-604: بصمة القوالب الثابتة لا الاحتمالات المتغيرة)
@@ -295,12 +306,13 @@ class IdentityCore:
         if not self.seal:
             return False
         
-        # إعادة حساب البصمات
-        sovereign_key_hash = hashlib.sha3_512(SOVEREIGN_KEY.encode()).hexdigest()
+        # إعادة حساب البصمات — R-697: keyring_identity مشتق، مع قبول بصمة الجذر التاريخية (قراءة فقط)
+        sovereign_key_hash = hashlib.sha3_512(derive_key("keyring_identity")).hexdigest()
+        legacy_key_hash = hashlib.sha3_512(SOVEREIGN_KEY.encode()).hexdigest()  # LEGACY-ROOT-KEY (read-only)
         archetype_fingerprint = self._archetype_template_fingerprint()
         
         # التحقق من تطابق البصمات
-        if self.seal.sovereign_key_hash != sovereign_key_hash:
+        if self.seal.sovereign_key_hash not in (sovereign_key_hash, legacy_key_hash):
             logger.error("❌ ختم الهوية تالف: مفتاح السيد تغير!")
             return False
         
@@ -404,16 +416,26 @@ class IdentityCore:
             logger.error(f"خطأ في تحميل ختم الهوية: {e}")
     
     def _encrypt_seal(self, data: str) -> bytes:
-        """تشفير ختم الهوية"""
-        key = hashlib.sha3_256(SOVEREIGN_KEY.encode()).digest()
+        """تشفير ختم الهوية — R-697: مفتاح مشتق بغرض encryption (D-033). لا كتابة بالجذر إطلاقًا."""
+        key = derive_key("encryption")
         data_bytes = data.encode()
         # تشفير بسيط - في الإنتاج استخدم مكتبة تشفير قوية
         encrypted = bytes(a ^ b for a, b in zip(data_bytes, key * (len(data_bytes) // 32 + 1)))
         return encrypted
     
     def _decrypt_seal(self, encrypted: bytes) -> str:
-        """فك تشفير ختم الهوية"""
-        key = hashlib.sha3_256(SOVEREIGN_KEY.encode()).digest()
+        """فك تشفير ختم الهوية — المسار الحالي (مفتاح مشتق)، وعند الفشل مسار legacy للقراءة فقط."""
+        try:
+            key = derive_key("encryption")
+            decrypted = bytes(a ^ b for a, b in zip(encrypted, key * (len(encrypted) // 32 + 1)))
+            return decrypted.decode()
+        except (UnicodeDecodeError, ValueError):
+            return self._decrypt_legacy(encrypted)
+    
+    def _decrypt_legacy(self, encrypted: bytes) -> str:
+        """R-697 — LEGACY-ROOT-KEY (read-only): فك تشفير الأختام التاريخية التي شُفرت
+        بمفتاح الجذر (sha3_256) قبل الاشتقاق الغرضي. قراءة فقط — لا كتابة جديدة بهذا المسار."""
+        key = hashlib.sha3_256(SOVEREIGN_KEY.encode()).digest()  # LEGACY-ROOT-KEY (read-only)
         decrypted = bytes(a ^ b for a, b in zip(encrypted, key * (len(encrypted) // 32 + 1)))
         return decrypted.decode()
     

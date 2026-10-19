@@ -33,10 +33,10 @@ import numpy as np
 
 try:
     from ..core import get_core, EventType
-    from ...config import DATA_DIR, SOVEREIGN_KEY
+    from ...config import DATA_DIR, SOVEREIGN_KEY  # LEGACY-ROOT-KEY (read-only): بصمات هوية فقط
 except ImportError:
     from memory.core import get_core, EventType
-    from config import DATA_DIR, SOVEREIGN_KEY
+    from config import DATA_DIR, SOVEREIGN_KEY  # LEGACY-ROOT-KEY (read-only): بصمات هوية
 
 import logging
 logger = logging.getLogger(__name__)
@@ -191,7 +191,7 @@ class PolymorphicDefense:
         sequence = ''.join(random.choices(bases, k=256))
         
         # البصمة العميقة
-        fingerprint = hashlib.sha3_512(f"{SOVEREIGN_KEY}:{sequence}:{time.time()}".encode()).hexdigest()
+        fingerprint = hashlib.sha3_512(f"{SOVEREIGN_KEY}:{sequence}:{time.time()}".encode()).hexdigest()  # LEGACY-ROOT-KEY (read-only): بصمة DNA عرض
         
         self.dna = DigitalRNA(
             id=dna_id,
@@ -232,7 +232,7 @@ class PolymorphicDefense:
         
         # تحديث البصمة
         self.dna.fingerprint = hashlib.sha3_512(
-            f"{SOVEREIGN_KEY}:{self.dna.sequence}:{self.dna.mutations_count}".encode()
+            f"{SOVEREIGN_KEY}:{self.dna.sequence}:{self.dna.mutations_count}".encode()  # LEGACY-ROOT-KEY (read-only): بصمة DNA عرض
         ).hexdigest()
         
         # تسجيل التحول

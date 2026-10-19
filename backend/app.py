@@ -79,8 +79,12 @@ logger = logging.getLogger(__name__)
 # ============================================================
 
 # مفتاح السيد (للمصادقة)
-# M1: يُقرأ من config (SOVEREIGN_KEY من متغير البيئة) بدلاً من توليد عشوائي غير محفوظ
-from config import SOVEREIGN_KEY as SOVEREIGN_API_KEY
+# M1: يُقرأ من config (SOVEREIGN_KEY من متغير البيئة) بدلاً من توليد عشوائي غير محفوظ (LEGACY-ROOT-KEY read-only: عرض/حالة)
+from config import SOVEREIGN_KEY as SOVEREIGN_API_KEY  # LEGACY-ROOT-KEY (read-only): بيانات اعتماد تاريخية
+try:
+    from backend.sovereign.keys.derivation import derive_key_hex as _derive_api_auth  # R-697 (D-033)
+except ImportError:
+    from sovereign.keys.derivation import derive_key_hex as _derive_api_auth  # R-697 (D-033)  # R-697 (D-033): مفتاح api_auth مشتق
 
 # إعدادات CORS (السماح بالاتصال من جميع المصادر)
 # M1: CORS من config (متغير البيئة CORS_ORIGINS) — ليس مفتوحاً دائماً
@@ -869,13 +873,17 @@ def verify_api_key(api_key: str) -> bool:
     """التحقق من صحة مفتاح API للسيد
 
     ⚠️ SECURITY (جولة المجلس <1> — أمين 1.6): مقارنة ثابتة الزمن — لا تسريب توقيت.
+    R-697 (D-033): المفتاح القياسي مشتق (api_auth). الجذر legacy مقبول للقراءة فقط.
     """
     if not api_key:
         return False
     # مقارنة بايتات UTF-8 (اعتراض المراجع): المدخلات غير-ASCII تُرفض لا
     # تتحول إلى خطأ خادم.
+    key_bytes = str(api_key).encode("utf-8")
     return hmac.compare_digest(
-        str(api_key).encode("utf-8"), str(SOVEREIGN_API_KEY).encode("utf-8")
+        key_bytes, _derive_api_auth("api_auth").encode("utf-8")
+    ) or hmac.compare_digest(
+        key_bytes, str(SOVEREIGN_API_KEY).encode("utf-8")  # LEGACY-ROOT-KEY (read-only)
     )
 
 
@@ -1407,11 +1415,11 @@ async def get_api_key_header(
     # ثابتة الزمن عبر verify_api_key — لا مقارنة مباشرة
     if not verify_api_key(x_api_key):
         raise HTTPException(status_code=403, detail="غير مصرح: مطلوب مفتاح السيد")
-    from config import SOVEREIGN_KEY_FINGERPRINT
+    from config import SOVEREIGN_KEY_FINGERPRINT  # LEGACY-ROOT-KEY (read-only): بصمة عرض
     return {
-        "fingerprint": SOVEREIGN_KEY_FINGERPRINT,
+        "fingerprint": SOVEREIGN_KEY_FINGERPRINT,  # LEGACY-ROOT-KEY (read-only): بصمة عرض
         "source": "header (X-API-Key) — not logged in URLs",
-        "note": "المفتاح لا يُكشف عبر API. أعد تعيينه عبر SOVEREIGN_KEY أو data/key.secret.",
+        "note": "المفتاح لا يُكشف عبر API. أعد تعيينه عبر SOVEREIGN_KEY أو data/key.secret.",  # LEGACY-ROOT-KEY (read-only): نص إرشادي
         "timestamp": time.time()
     }
 
@@ -1426,18 +1434,18 @@ async def get_api_key(x_api_key: str = Header(None, alias="X-API-Key")):
     أُزيلت لأنها تُسجّل في سجلات الوصول (uvicorn access log).
     لا يُكشف المفتاح نفسه أبداً — يُعاد فقط بصمة المفتاح (SHA-256) ومصدره
     ومدى ثباته عبر إعادة التشغيل. المفتاح الحقيقي يُدار عبر متغير البيئة
-    SOVEREIGN_KEY أو ملف data/key.secret (مستثنى من git، صلاحيات 0600).
+    SOVEREIGN_KEY أو ملف data/key.secret (مستثنى من git، صلاحيات 0600).  # LEGACY-ROOT-KEY (read-only): نص إرشادي
     """
     if not x_api_key or not verify_api_key(x_api_key):
         raise HTTPException(status_code=403, detail="غير مصرح: مطلوب مفتاح السيد في الرأس X-API-Key")
-    from config import SOVEREIGN_KEY_FINGERPRINT, DATA_DIR, IS_DEVELOPMENT
+    from config import SOVEREIGN_KEY_FINGERPRINT, DATA_DIR, IS_DEVELOPMENT  # LEGACY-ROOT-KEY (read-only): بصمة عرض
     secret_file = DATA_DIR / "key.secret"
     return {
-        "fingerprint": SOVEREIGN_KEY_FINGERPRINT,
-        "persistent": secret_file.exists() or bool(os.getenv("SOVEREIGN_KEY")),
-        "source": "env" if os.getenv("SOVEREIGN_KEY") else ("key.secret" if secret_file.exists() else "ephemeral"),
+        "fingerprint": SOVEREIGN_KEY_FINGERPRINT,  # LEGACY-ROOT-KEY (read-only): بصمة عرض
+        "persistent": secret_file.exists() or bool(os.getenv("SOVEREIGN_KEY")),  # LEGACY-ROOT-KEY (read-only): حالة عرض
+        "source": "env" if os.getenv("SOVEREIGN_KEY") else ("key.secret" if secret_file.exists() else "ephemeral"),  # LEGACY-ROOT-KEY (read-only): حالة عرض
         "development": IS_DEVELOPMENT,
-        "note": "المفتاح لا يُكشف عبر API. أعد تعيينه عبر SOVEREIGN_KEY أو data/key.secret.",
+        "note": "المفتاح لا يُكشف عبر API. أعد تعيينه عبر SOVEREIGN_KEY أو data/key.secret.",  # LEGACY-ROOT-KEY (read-only): نص إرشادي
         "timestamp": time.time()
     }
 

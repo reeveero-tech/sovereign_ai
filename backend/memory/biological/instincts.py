@@ -45,7 +45,7 @@ try:
     from .forgetting import get_forgetting
     from .learning import get_learning
     from .plasticity import get_plasticity
-    from ...config import DATA_DIR, SOVEREIGN_KEY
+    from ...config import DATA_DIR, SOVEREIGN_KEY  # LEGACY-ROOT-KEY (read-only): بصمة عرض فقط
 except ImportError:
     from memory.core import get_core, EventType
     from memory.store import get_store
@@ -62,7 +62,7 @@ except ImportError:
     from memory.biological.forgetting import get_forgetting
     from memory.biological.learning import get_learning
     from memory.biological.plasticity import get_plasticity
-    from config import DATA_DIR, SOVEREIGN_KEY
+    from config import DATA_DIR, SOVEREIGN_KEY  # LEGACY-ROOT-KEY (read-only): بصمة عرض
 
 import logging
 logger = logging.getLogger(__name__)
@@ -740,7 +740,7 @@ class CognitiveInstincts:
         هذه هي اللحظة التي يصبح فيها النظام خادماً لسيده.
         """
         if public_key is None:
-            public_key = hashlib.sha3_256(SOVEREIGN_KEY.encode()).hexdigest()
+            public_key = hashlib.sha3_256(SOVEREIGN_KEY.encode()).hexdigest()  # LEGACY-ROOT-KEY (read-only): بصمة هوية عرض
         
         self.sovereign_profile = SovereignProfile(
             id=f"sovereign_{int(time.time())}_{secrets.token_hex(4)}",

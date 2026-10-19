@@ -41,16 +41,29 @@ from pathlib import Path
 try:
     from ..core import get_core, EventType, IntegrityStatus
     from ..encoding import get_encoder
-    from ...config import DATA_DIR, SOVEREIGN_KEY
+    from ...config import DATA_DIR, SOVEREIGN_KEY  # LEGACY-ROOT-KEY (read-only): المسارات التاريخية والبصمة فقط
     from .watcher import get_watcher
 except ImportError:
     from memory.core import get_core, EventType, IntegrityStatus
     from memory.encoding import get_encoder
-    from config import DATA_DIR, SOVEREIGN_KEY
+    from config import DATA_DIR, SOVEREIGN_KEY  # LEGACY-ROOT-KEY (read-only)
     from memory.defense.watcher import get_watcher
 
 import logging
 logger = logging.getLogger(__name__)
+
+def _derive_key(purpose: str) -> bytes:
+    """R-697 (D-033): استيراد كسول لوحدة الاشتقاق — قطع الدوائر السبكية عند
+    تحميل الوحدات (sovereign/__init__ ← will ← instincts ← store)."""
+    try:
+        from backend.sovereign.keys.derivation import derive_key_from_module
+    except ImportError:
+        from sovereign.keys.derivation import derive_key_from_module
+    # الجذر يُقرأ من متغيرات هذه الوحدة وقت الاستدعاء (يحترم monkeypatch
+    # في اختبارات الفينيق — تغيير الجذر يُفشل فك الحالات القديمة، سلوك R-682)
+    return derive_key_from_module(purpose, globals())
+
+
 
 
 # ============================================================
@@ -353,7 +366,7 @@ class RansomwareDefense:
                 "events_count": self.core.get_statistics().get("index", {}).get("total_events", 0)
             },
             "identity": {
-                "sovereign_key_fingerprint": hashlib.sha256(SOVEREIGN_KEY.encode()).hexdigest()[:16],
+                "sovereign_key_fingerprint": hashlib.sha256(SOVEREIGN_KEY.encode()).hexdigest()[:16],  # LEGACY-ROOT-KEY (read-only): بصمة عرض لا استخدام مفتاحي
                 "creation_time": time.time()
             },
             "critical_memory": self._extract_critical_items()
@@ -576,7 +589,7 @@ class RansomwareDefense:
         )
         try:
             data = base64.b64decode(encrypted, validate=True)
-            key1 = hashlib.sha256(SOVEREIGN_KEY.encode()).digest()
+            key1 = hashlib.sha256(SOVEREIGN_KEY.encode()).digest()  # LEGACY-ROOT-KEY (read-only): مسار ترقية v1 التاريخي — قراءة فقط
             candidates = self._seed_candidates(resurrection_key, seed_id)
             if not candidates:
                 logger.warning(
@@ -1032,8 +1045,14 @@ class RansomwareDefense:
         return False
     
     def _derive_death_key(self, blob_hash: str) -> bytes:
-        """استخلاص مفتاح الموت"""
-        base = f"{SOVEREIGN_KEY}:{blob_hash}:{self.master_resurrection_key}".encode()
+        """استخلاص مفتاح الموت — R-697: مشتق بغرض phoenix_ash (D-033)، لا الجذر الخام."""
+        base = _derive_key("phoenix_ash") + f":{blob_hash}:{self.master_resurrection_key}".encode()
+        return hashlib.sha3_512(base).digest()[:32]
+
+    def _derive_death_key_legacy(self, blob_hash: str) -> bytes:
+        """R-697 — LEGACY-ROOT-KEY (read-only): مفتاح موت تاريخي مشتق من الجذر الخام
+        (قبل R-697). لفك رماد قديم فقط — لا تشفير جديد به أبدًا."""
+        base = f"{SOVEREIGN_KEY}:{blob_hash}:{self.master_resurrection_key}".encode()  # LEGACY-ROOT-KEY (read-only)
         return hashlib.sha3_512(base).digest()[:32]
     
     # ============================================================
@@ -1193,7 +1212,7 @@ class RansomwareDefense:
         ⚠️ SECURITY (جولة المجلس <1> — أمين 4.2): مقارنة ثابتة الزمن
         (hmac كان مستوردًا دون استخدام).
         """
-        expected = hashlib.sha256(f"{SOVEREIGN_KEY}:{self.master_resurrection_key}".encode()).hexdigest()
+        expected = hashlib.sha256(_derive_key("phoenix_seed") + f":{self.master_resurrection_key}".encode()).hexdigest()
         # مقارنة بايتات UTF-8 (اعتراض المراجع): إدخال غير-ASCII يُرفض لا ينهار
         return hmac.compare_digest(str(key).encode("utf-8"), str(expected).encode("utf-8"))
     
@@ -1346,12 +1365,26 @@ class RansomwareDefense:
             try:
                 raw = cipher.decrypt_and_verify(ct, tag)
             except ValueError:
-                logger.error(
-                    "R-682 [SECURITY]: ash GCM authentication FAILED — "
-                    f"tampered/wrong-key ash {ash.id} REJECTED, "
-                    f"original {ash.original_id[:16]}..."
-                )
-                return False
+                # R-697 — LEGACY-ROOT-KEY (read-only): رماد قديم شُفر بمفتاح موت
+                # مشتق من الجذر قبل الاشتقاق الغرضي — محاولة قراءة تاريخية واحدة،
+                # ولا كتابة جديدة بها (إعادة التخزين لاحقًا تتم بمفتاح phoenix_ash المشتق).
+                legacy_key = self._derive_death_key_legacy(ash.original_id)
+                legacy_cipher = AES.new(legacy_key, AES.MODE_GCM, nonce=nonce)
+                legacy_cipher.update(aad)
+                try:
+                    raw = legacy_cipher.decrypt_and_verify(ct, tag)
+                    logger.warning(
+                        "R-697 [LEGACY]: ash {id} decrypted via LEGACY root-derived "
+                        "death key (read-only migration) — re-encryption on next "
+                        "death cycle uses derived phoenix_ash key".format(id=ash.id)
+                    )
+                except ValueError:
+                    logger.error(
+                        "R-682 [SECURITY]: ash GCM authentication FAILED — "
+                        f"tampered/wrong-key ash {ash.id} REJECTED, "
+                        f"original {ash.original_id[:16]}..."
+                    )
+                    return False
             if not raw:
                 logger.error(f"R-682: ash {ash.id} decrypted to EMPTY — rejected")
                 return False
@@ -1550,8 +1583,8 @@ class RansomwareDefense:
     # ============================================================
     
     def _generate_master_key(self) -> str:
-        """توليد مفتاح القيامة الرئيسي"""
-        return hashlib.sha3_512(f"{SOVEREIGN_KEY}:{time.time()}:{secrets.token_hex(32)}".encode()).hexdigest()
+        """توليد مفتاح القيامة الرئيسي — R-697: عشوائية مرتبطة بمفتاح مشتق (phoenix_seed) لا الجذر الخام."""
+        return hashlib.sha3_512(_derive_key("phoenix_seed") + f":{time.time()}:{secrets.token_hex(32)}".encode()).hexdigest()
     
     def _generate_resurrection_key(self, seed_id: Optional[str] = None) -> str:
         """توليد مفتاح قيامة — حتمي من (المفتاح الرئيسي + معرف البذرة).
@@ -1572,12 +1605,12 @@ class RansomwareDefense:
         """مفتاح القيامة العام (للسيد فقط).
 
         R-682 (security — عقد موحد): يعيد بصمة التحقق
-        sha256(SOVEREIGN_KEY:master) — وهي القيمة الوحيدة التي تقبلها
+        sha256(SOVEREIGN_KEY:master) — وهي القيمة الوحيدة التي تقبلها  # LEGACY-ROOT-KEY (read-only): توثيق المسار التاريخي
         resurrect() عبر _verify_resurrection_key. المفتاح الرئيسي نفسه
         لا يُكشف عبر الواجهات العامة أبدًا.
         """
         return hashlib.sha256(
-            f"{SOVEREIGN_KEY}:{self.master_resurrection_key}".encode()
+            _derive_key("phoenix_seed") + f":{self.master_resurrection_key}".encode()
         ).hexdigest()
     
     # ============================================================
@@ -1593,7 +1626,7 @@ class RansomwareDefense:
         """تغليف المفتاح الرئيسي بـ AES-GCM تحت مفتاح السيادة — لا يُخزَّن مكشوفًا أبدًا."""
         if AES is None:
             raise RuntimeError("pycryptodome غير متوفر — لا يمكن تأمين مفتاح القيامة")
-        k = hashlib.sha256(SOVEREIGN_KEY.encode()).digest()  # 32 بايت لمفتاح AES-256
+        k = _derive_key("phoenix_seed")  # R-697: مفتاح AES-256 مشتق (D-033) — لا sha256 للجذر
         nonce = get_random_bytes(12)
         cipher = AES.new(k, AES.MODE_GCM, nonce=nonce)
         cipher.update(self._MASTER_WRAP_AAD)  # بيانات مرتبطة — توثق غرض التغليف
@@ -1613,12 +1646,37 @@ class RansomwareDefense:
         """
         try:
             envelope = json.loads(wrapped)
-            k = hashlib.sha256(SOVEREIGN_KEY.encode()).digest()
+            k = _derive_key("phoenix_seed")
             cipher = AES.new(
                 k, AES.MODE_GCM,
                 nonce=base64.b64decode(envelope["n"], validate=True),
             )
             cipher.update(self._MASTER_WRAP_AAD)  # بيانات مرتبطة — توثق غرض التغليف
+            plain = cipher.decrypt_and_verify(
+                base64.b64decode(envelope["d"], validate=True),
+                base64.b64decode(envelope["t"], validate=True),
+            )
+            value = plain.decode("utf-8")
+            if len(value) == 128 and all(c in "0123456789abcdef" for c in value):
+                return value
+            return None
+        except Exception:
+            # R-697 — LEGACY-ROOT-KEY (read-only): مغلف قديم شُفر بمفتاح الجذر
+            # (sha256) قبل الاشتقاق الغرضي — فك للقراءة فقط، وإعادة التغليف الجديدة
+            # دائمًا بالمفتاح المشتق (انظر _wrap_master_key).
+            return self._unwrap_master_key_legacy(wrapped)
+
+    def _unwrap_master_key_legacy(self, wrapped: str) -> Optional[str]:
+        """R-697 — LEGACY-ROOT-KEY (read-only): فك تغليف تاريخي بمفتاح الجذر.
+        قراءة فقط — لا كتابة/تغليف جديد بهذا المسار إطلاقًا."""
+        try:
+            envelope = json.loads(wrapped)
+            k = hashlib.sha256(SOVEREIGN_KEY.encode()).digest()  # LEGACY-ROOT-KEY (read-only)
+            cipher = AES.new(
+                k, AES.MODE_GCM,
+                nonce=base64.b64decode(envelope["n"], validate=True),
+            )
+            cipher.update(self._MASTER_WRAP_AAD)
             plain = cipher.decrypt_and_verify(
                 base64.b64decode(envelope["d"], validate=True),
                 base64.b64decode(envelope["t"], validate=True),
