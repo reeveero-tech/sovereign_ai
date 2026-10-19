@@ -27,6 +27,7 @@ backend/repair.py — المرحلة ٤ (R-695): مصنف الأخطاء ومق�
 
 from __future__ import annotations
 
+import ast
 import difflib
 import json
 import os
@@ -192,37 +193,104 @@ def _import_fix_transform(
     backend/ لكن الجملة عارية بلا مسار) يصير مستوردًا من مساره الصحيح —
     الأصل يفشل بـImportError والرقعة تصلحه (يُفحص على نسخة اختبارية).
 
-    شروط الانطباق الصارمة: جملة استيراد **علوية كاملة** (بلا إزاحة) للوحدة
-    الناقصة نفسها — import X / import X as Y / from X import ... — خارجها
-    None (مراجعة يدوية — لا رقعة شكلية ولا تعليق). الناتج صالح نحويًا
+    التحديد بـAST لا بالنص: تُحوَّل جمل الاستيراد **العلوية الفعلية** فقط
+    (عقد وحدات استيراد على مستوى الوحدة) — النص نفسه داخل سلسلة نصية
+    أو تعليق ليس جملة ولا يُمس (اعتراض المراجع ج3). الناتج صالح نحويًا
     دائمًا: الجملة تُستبدل بمكافئها المؤهل دون تغيير الإزاحات أو السياق."""
     if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", str(missing_module)):
         return None
-    lines = source_text.splitlines(keepends=True)
-    # جملة استيراد علوية كاملة فقط — بلا إزاحة تفسد البنية الناتجة.
-    # كل الجمل المطابقة تُؤهل (إصلاح كامل لا أول جملة)
-    bare = re.compile(
-        r"^import " + re.escape(missing_module) + r"(\s+as\s+[A-Za-z_][A-Za-z0-9_]*)?\s*$"
-    )
-    from_form = re.compile(
-        r"^from " + re.escape(missing_module) + r" import "
-    )
-    changed = False
-    result = []
-    for line in lines:
-        text = line.rstrip("\r\n")
-        match = bare.match(text)
-        if match:
-            result.append(
-                "from backend import " + missing_module + (match.group(1) or "") + "\n"
+    try:
+        tree = ast.parse(source_text)
+    except SyntaxError:
+        return None  # مصدر لا يُترجم — لا رقعة (مراجعة يدوية)
+    # أرقام أسطر جمل الاستيراد العلوية الفعلية — **جمل مدعومة فقط**:
+    # اسم واحد مطابق تمامًا للوحدة الناقصة (import X / import X as Y).
+    # الجملة المركبة (أسماء متعددة في جملة واحدة) مرفوضة: تحويل السطر
+    # كله يغير جهة استيراد الأسماء الأخرى — خلل دلالي خارج الإصلاح
+    # المقصود → مراجعة يدوية بلا رقعة (اعتراض المراجع ج4)
+    # كل الاستيرادات العلوية المتعلقة بالوحدة تُفحص قبل أي تحويل (اعتراض
+    # المراجع ج4 — لا رقعة جزئية): إن وُجد استيراد متعلق بها خارج الشروط
+    # المدعومة (متعدد الأسماء، سطر مشترك، مسار فرعي) فالمصدر كله
+    # **مراجعة يدوية بلا رقعة** — لا يُحذف الموضع من الأهداف ثم يستمر
+    # إنتاج الرقعة تاركًا الاستيراد المعطوب دون إصلاح
+    statements_per_line: dict = {}
+    for node in tree.body:
+        statements_per_line[node.lineno] = (
+            statements_per_line.get(node.lineno, 0) + 1
+        )
+
+    def _related(node: ast.AST) -> bool:
+        if isinstance(node, ast.Import):
+            return any(
+                alias.name == missing_module
+                or alias.name.startswith(missing_module + ".")
+                for alias in node.names
             )
+        if isinstance(node, ast.ImportFrom):
+            return bool(node.module) and (
+                node.module == missing_module
+                or node.module.startswith(missing_module + ".")
+            )
+        return False
+
+    def _supported(node: ast.AST) -> bool:
+        # جملة مدعومة مستقلة بحدود متحققة: اسم واحد مطابق تمامًا
+        # (import X / import X as Y) أو من مسار الوحدة ذاته
+        # (from X import ...) — وعلى سطر غير مشترك بين جمل
+        if statements_per_line.get(node.lineno, 0) != 1:
+            return False  # سطر مشترك — تحويله يغير جهة أسماء أخرى
+        if isinstance(node, ast.Import):
+            return len(node.names) == 1 and (
+                node.names[0].name == missing_module
+            )
+        if isinstance(node, ast.ImportFrom):
+            return node.module == missing_module
+        return False
+
+    # بوابة الانطباق (اعتراض المراجع ج4 — لا رقعة جزئية أبدًا): **جميع**
+    # عقد Import/ImportFrom المتعلقة بالوحدة عبر ast.walk — لا العلوية
+    # وحدها؛ عقدة متعلقة متداخلة (داخل شرط/دالة) لا يصلحها التحويل
+    # المعلن فتبقي العطل نفسه عند التنفيذ. الانطباق يشترط أن تكون كل
+    # العقد المتعلقة جملًا علوية مباشرة مستقلة بالصيغ المدعومة — أي
+    # استثناء يجعل المصدر كله مراجعة يدوية بلا رقعة
+    related_nodes = [
+        node for node in ast.walk(tree)
+        if isinstance(node, (ast.Import, ast.ImportFrom)) and _related(node)
+    ]
+    if not related_nodes:
+        return None
+    top_level = set(map(id, tree.body))
+    for node in related_nodes:
+        if id(node) not in top_level:
+            return None  # عقدة متعلقة متداخلة — مراجعة يدوية، لا رقعة
+    if any(not _supported(node) for node in related_nodes):
+        return None  # استيراد متعلق غير مدعوم — مراجعة يدوية، لا رقعة جزئية
+    target_lines: set = {node.lineno for node in related_nodes}
+    lines = source_text.splitlines(keepends=True)
+    result = []
+    changed = False
+    for i, line in enumerate(lines, start=1):
+        text = line.rstrip("\r\n")
+        if i in target_lines:
             changed = True
-        elif from_form.match(text):
-            result.append(text.replace(
-                "from " + missing_module + " import ",
-                "from backend." + missing_module + " import ", 1,
-            ) + "\n")
-            changed = True
+            if text.startswith("import " + missing_module + " "):
+                # import X as Y → from backend import X as Y
+                rest = text[len("import " + missing_module):].strip()
+                result.append(
+                    "from backend import " + missing_module + (
+                        " " + rest if rest else ""
+                    ) + "\n"
+                )
+            elif text == "import " + missing_module:
+                result.append("from backend import " + missing_module + "\n")
+            elif text.startswith("from " + missing_module + " import "):
+                result.append(text.replace(
+                    "from " + missing_module + " import ",
+                    "from backend." + missing_module + " import ", 1,
+                ) + "\n")
+            else:
+                # جملة معقدة خارج الأنماط المدعومة — لا رقعة شكلية
+                return None
         else:
             result.append(line)
     return "".join(result) if changed else None

@@ -1,0 +1,91 @@
+============================= test session starts ==============================
+platform linux -- Python 3.11.15, pytest-9.1.1, pluggy-1.7.0
+rootdir: /home/user/workspace/sovereign_ai
+configfile: pytest.ini
+plugins: anyio-4.15.1
+collected 1 item
+
+backend/tests/invariants/test_repair.py F                                [100%]
+
+=================================== FAILURES ===================================
+_____________ test_import_fix_transform_applicability_and_validity _____________
+
+    def test_import_fix_transform_applicability_and_validity():
+        """قاعدة التحويل المعلنة: جملة استيراد **علوية كاملة** للوحدة الناقصة
+        وحدها تُحوَّل (import X → from backend import X، from X import y →
+        from backend.X import y) — والناتج صالح نحويًا دائمًا (يُترجم)،
+        وخارجها لا انطباق (مراجعة يدوية بلا رقعة شكلية)."""
+        source = textwrap.dedent(
+            """\
+            import json
+            import predictive
+            from predictive import engine
+            from memory import engine as mem
+    
+    
+            def run():
+                pass
+            """
+        )
+        new_text = _import_fix_transform(source, "predictive")
+        assert new_text is not None, "لم تنطبق القاعدة على استيراد موجود"
+        # الناتج يُترجم — صلاحية نحوية إلزامية (اعتراض المراجع: لا IndentationError)
+        compile(new_text, "<patched>", "exec")
+        assert "from backend import predictive" in new_text
+        assert "from backend.predictive import engine" in new_text
+        # بقية الملف لم تتغير
+        assert "import json" in new_text
+        assert "from memory import engine as mem" in new_text
+        assert "def run():" in new_text
+        # لا انطباق على وحدة غير مستوردة أو جملة غير علوية
+        assert _import_fix_transform(source, "nonexistent_mod") is None
+        indented = "def f():\n    import predictive\n"
+        assert _import_fix_transform(indented, "predictive") is None, (
+            "جملة غير علوية لا يجب أن تنطبق — الناتج كان سيفسد البنية"
+        )
+        # سالب نصي (اعتراض المراجع ج3): النص نفسه داخل سلسلة نصية ليس جملة
+        # استيراد — التحديد AST (عقد وحدات) لا مطابقة نصية
+        in_string = 'DOC = """\nimport predictive\n"""\nimport json\n'
+        result = _import_fix_transform(in_string, "predictive")
+        assert result is None, (
+            "نص داخل سلسلة حُوِّل كأنه جملة استيراد — التحديد ليس AST"
+        )
+        # سالب جملة متعددة الأسماء (اعتراض المراجع ج4): تحويل السطر كله يغير
+        # جهة استيراد الأسماء الأخرى (json) — خارج الإصلاح المقصود. الجمل
+        # المدعومة فقط: اسم واحد مطابق تمامًا للوحدة الناقصة؛ المركبات
+        # مراجعة يدوية بلا رقعة
+        multi = "import predictive as p, json\n"
+        result = _import_fix_transform(multi, "predictive")
+        assert result is None, (
+            "جملة متعددة الأسماء حُوِّلت — تغيّر استيراد json أيضًا: "
+            f"{result}"
+        )
+        # المركّبة من وحدة أخرى لا تنطبق (سالب حدود الجملة)
+        other = "import json, predictive\n"
+        assert _import_fix_transform(other, "predictive") is None
+        # سالب الاستيراد المتداخل (اعتراض المراجع ج4): عقدة متعلقة بالوحدة
+        # داخل شرط — تأهيل العلوية يترك المتداخلة تسبب العطل نفسه عند تنفيذ
+        # المرقّع (رقعة جزئية). المصدر كله مراجعة يدوية بلا رقعة
+        nested = "import predictive\nif True:\n    import predictive\n"
+        result = _import_fix_transform(nested, "predictive")
+>       assert result is None, (
+            "استيراد متداخل متعلق بالوحدة بقي دون إصلاح مع رقعة: "
+            f"{result}"
+        )
+E       AssertionError: استيراد متداخل متعلق بالوحدة بقي دون إصلاح مع رقعة: from backend import predictive
+E         if True:
+E             import predictive
+E         
+E       assert 'from backend import predictive\nif True:\n    import predictive\n' is None
+
+backend/tests/invariants/test_repair.py:252: AssertionError
+=============================== warnings summary ===============================
+backend/config.py:312
+  /home/user/workspace/sovereign_ai/backend/config.py:312: UserWarning: ⚠️ CORS مفتوح للجميع — مقبول في التطوير فقط (D-034)
+    warnings.warn("⚠️ CORS مفتوح للجميع — مقبول في التطوير فقط (D-034)")
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED backend/tests/invariants/test_repair.py::test_import_fix_transform_applicability_and_validity
+========================= 1 failed, 1 warning in 0.06s =========================
+exit: 1

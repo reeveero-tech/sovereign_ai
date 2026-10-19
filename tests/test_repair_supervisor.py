@@ -153,18 +153,42 @@ def test_supervisor_loop_classifies_awareness_incidents(tmp_path):
     """حوادث الوعي تصل المصنف حتى مع استجابة HTTP سليمة (اعتراض المراجع
     ج4): تغيّر شجرة حقيقي → changes_detected → حادثة سلامة مصنفة بسطر
     الدورة."""
+    # خادم سليم (استجابة HTTP سليمة — عين الاختبار: المصنف يُستدعى مع
+    # الجلب الناجح، لا مع خطأ جلب فقط)
     tree = Path(tempfile.mkdtemp(prefix="repair_aw_tree_"))
     _make_tree(tree)
     data_root = Path(tempfile.mkdtemp(prefix="repair_aw_data_"))
     log = data_root / "supervisor" / "monitor_log.jsonl"
-    dead_port = _free_port()
-    proc = _spawn_supervisor(f"http://127.0.0.1:{dead_port}", log, tree, data_root)
+    port = _free_port()
+    server = HTTPServer(("127.0.0.1", port), _status_app_factory(None))
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    proc = _spawn_supervisor(f"http://127.0.0.1:{port}", log, tree, data_root)
     try:
-        _await_incident_in_log(log, "network_error")
-        # تغيير حقيقي في الشجرة → حدث وعي → حادثة سلامة مصنفة
+        # لا خطأ جلب إطلاقًا — انتظار أول سطر دورة سليم (fetch ناجح)
+        deadline = time.time() + 20
+        while time.time() < deadline:
+            entries = _read_log(log)
+            if entries and all(
+                "health" in e and "status" in e and not (
+                    isinstance(e.get("health"), dict) and e["health"].get("error")
+                ) for e in entries
+            ):
+                break
+            time.sleep(0.25)
+        else:
+            pytest.fail("لم يظهر سطر دورة سليم خلال المهلة")
+        # تغيير حقيقي في الشجرة مع استجابة سليمة → حدث وعي → حادثة سلامة
+        # مصنفة (الوصف المختبر: المصنف يُستدعى حتى مع استجابة سليمة)
         (tree / "src" / "app.py").write_text("print('tampered')\n", encoding="utf-8")
         incident = _await_incident_in_log(log, "integrity_change")
         assert incident["action"], "إجراء حادثة السلامة غائب"
+        # لا حادثة خطأ جلب في السجل كله — العين سليمة فعلًا
+        for entry in _read_log(log):
+            if isinstance(entry.get("incident"), dict):
+                assert entry["incident"].get("class") != "network_error", (
+                    "ظهر خطأ جلب في عين سليمة"
+                )
     finally:
         proc.terminate()
         try:
@@ -172,6 +196,7 @@ def test_supervisor_loop_classifies_awareness_incidents(tmp_path):
         except subprocess.TimeoutExpired:
             proc.kill()
             proc.wait(timeout=10)
+        server.shutdown()
 
 
 def _status_app_factory(component_error: str):
@@ -289,12 +314,25 @@ def test_supervisor_proposes_without_applying(tmp_path):
         "المصدر المعزول تغير — تطبيق تلقائي ممنوع"
     )
     diff_file = data_root / "proposals" / result["diff_file"]
-    diff_text = diff_file.read_text(encoding="utf-8")
-    # فحص الرقعة بالتنفيذ على نسخة اختبارية: الأصل يفشل والمرقّع يستورد
-    patched = tmp_path / "patched_copy.py"
-    new_text = _restore_from_unified_diff(source_text, diff_text)
-    compile(new_text, "<patched>", "exec")
-    patched.write_text(new_text, encoding="utf-8")
+    # فحص تطبيق فعلي (git apply --check) على نسخة مؤقتة ثم التشغيل —
+    # الأصل يفشل والمرقّع يستورد (اعتراض المراجع ج3)
+    import shutil
+    work = tmp_path / "apply_check"
+    shutil.copytree(tree, work)
+    check_run = subprocess.run(
+        ["git", "apply", "--check", str(diff_file)],
+        cwd=str(work), capture_output=True, text=True,
+    )
+    assert check_run.returncode == 0, (
+        f"الرقعة لا تنطبق: {check_run.stderr[-300:]}"
+    )
+    apply_run = subprocess.run(
+        ["git", "apply", str(diff_file)], cwd=str(work),
+        capture_output=True, text=True,
+    )
+    assert apply_run.returncode == 0, f"فشل التطبيق: {apply_run.stderr[-200:]}"
+    patched_file = work / "backend" / "memory" / "__init__.py"
+    compile(patched_file.read_text(encoding="utf-8"), "<patched>", "exec")
     original_run = subprocess.run(
         [sys.executable, "-c",
          f"import sys; sys.path.insert(0, {str(tree)!r}); "
@@ -304,8 +342,8 @@ def test_supervisor_proposes_without_applying(tmp_path):
     assert original_run.returncode != 0, "الأصل المفروض أنه يفشل بالاستيراد"
     patched_run = subprocess.run(
         [sys.executable, "-c",
-         f"import sys; sys.path.insert(0, {str(tree)!r}); "
-         f"exec(open({str(patched)!r}).read())"],
+         f"import sys; sys.path.insert(0, {str(work)!r}); "
+         f"exec(open({str(patched_file)!r}).read())"],
         capture_output=True, text=True,
     )
     assert patched_run.returncode == 0, (
@@ -313,37 +351,89 @@ def test_supervisor_proposes_without_applying(tmp_path):
     )
 
 
-def _restore_from_unified_diff(original_text: str, diff_text: str) -> str:
-    """استرجاع النص الجديد من رقعة unified diff — في الاختبار فقط
-    (الإنتاج بلا أي آلية تطبيق). أسطر السياق في الجانبين معًا."""
-    lines = diff_text.splitlines()
-    hunks = []
-    current = None
-    for l in lines:
-        if l.startswith("@@"):
-            current = {"start": int(_re_search(r"@@ -(\d+)", l)),
-                       "added": [], "removed": 0}
-            hunks.append(current)
-        elif current is not None:
-            if l.startswith(("--- ", "+++ ")):
-                continue
-            if l.startswith("+"):
-                current["added"].append(l[1:])
-            elif l.startswith("-"):
-                current["removed"] += 1
-            elif l.startswith(" "):
-                current["added"].append(l[1:])
-                current["removed"] += 1
-    original = original_text.splitlines()
-    for h in reversed(hunks):
-        s = h["start"]
-        original[s - 1: s - 1 + h["removed"]] = h["added"]
-    return "\n".join(original) + "\n"
-
-
 def _re_search(pattern: str, text: str) -> int:
     import re
     return int(re.search(pattern, text).group(1))
+
+
+def test_supervisor_retries_proposal_after_save_failure(tmp_path):
+    """فشل كتابة الرقعة عبر الحارس نفسه (اعتراض المراجع ج3): الحادثة تظهر
+    في سطر المراقبة صراحة save_failed بالسبب، ولا يُثبَّت التوقيع — ثم زوال
+    العائق يعيد معالجة الحادثة نفسها إلى اقتراح ناجح. العائق: مخزن الرقعة
+    للقراءة فقط (كتابة الرقعة تفشل)."""
+    tree, data_root, component_src, source_text = _make_repair_fixture(tmp_path)
+    log = data_root / "supervisor" / "monitor_log.jsonl"
+    port = _free_port()
+    server = HTTPServer(("127.0.0.1", port), _status_app_factory(
+        "ModuleNotFoundError: No module named 'predictive'"
+    ))
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    store = data_root / "proposals"
+    store.mkdir(parents=True)
+    store.chmod(0o555)  # العائق: الكتابة ممنوعة
+    try:
+        proc = _spawn_supervisor(f"http://127.0.0.1:{port}", log, tree, data_root)
+        try:
+            failure = _await_incident_in_log(log, "save_failed")
+            assert failure.get("reason"), "سبب فشل الحفظ غائب من السطر"
+            # زوال العائق → الدورة التالية تعيد معالجة الحادثة نفسها
+            store.chmod(0o755)
+            recovered = _await_incident_in_log(log, "import_error")
+            assert recovered.get("proposal"), (
+                f"لم يتعافَ الاقتراح بعد زوال العائق: {recovered}"
+            )
+            assert component_src.read_text(encoding="utf-8") == source_text
+        finally:
+            proc.terminate()
+            try:
+                proc.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                proc.wait(timeout=10)
+    finally:
+        store.chmod(0o755)
+        server.shutdown()
+
+
+def test_supervisor_retries_proposal_after_log_failure(tmp_path):
+    """نفس العين بعائق إلحاق سجل الاقتراحات: المسار ممنوع الكتابة (open
+    للإلحاق يفشل) → save_failed ظاهر بالسبب → زوال العائق يعيد المعالجة."""
+    tree, data_root, component_src, source_text = _make_repair_fixture(tmp_path)
+    log = data_root / "supervisor" / "monitor_log.jsonl"
+    port = _free_port()
+    server = HTTPServer(("127.0.0.1", port), _status_app_factory(
+        "ModuleNotFoundError: No module named 'predictive'"
+    ))
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    proposals_log = data_root / "proposals" / "proposals_log.jsonl"
+    proposals_log.parent.mkdir(parents=True)
+    proposals_log.mkdir()  # العائق: السجل دليل — الإلحاق يفشل
+    try:
+        proc = _spawn_supervisor(f"http://127.0.0.1:{port}", log, tree, data_root)
+        try:
+            failure = _await_incident_in_log(log, "save_failed")
+            assert failure.get("reason"), "سبب فشل الحفظ غائب من السطر"
+            proposals_log.rmdir()  # زوال العائق
+            recovered = _await_incident_in_log(log, "import_error")
+            assert recovered.get("proposal"), (
+                f"لم يتعافَ الاقتراح بعد زوال العائق: {recovered}"
+            )
+            assert component_src.read_text(encoding="utf-8") == source_text
+            log_text = proposals_log.read_text(encoding="utf-8")
+            assert '"applied": false' in log_text
+        finally:
+            proc.terminate()
+            try:
+                proc.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                proc.wait(timeout=10)
+    finally:
+        if proposals_log.is_dir():
+            proposals_log.rmdir()
+        server.shutdown()
 
 
 def test_app_unaffected_during_and_after_repair(tmp_path):

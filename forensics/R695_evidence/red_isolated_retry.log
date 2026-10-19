@@ -1,0 +1,73 @@
+============================= test session starts ==============================
+platform linux -- Python 3.11.15, pytest-9.1.1, pluggy-1.7.0
+rootdir: /tmp/r695_red_retry
+configfile: pytest.ini
+plugins: anyio-4.15.1
+collected 1 item
+
+tests/test_repair_supervisor.py F                                        [100%]
+
+=================================== FAILURES ===================================
+_____________ test_supervisor_retries_proposal_after_save_failure ______________
+
+tmp_path = PosixPath('/tmp/pytest-of-user/pytest-909/test_supervisor_retries_propos0')
+
+    def test_supervisor_retries_proposal_after_save_failure(tmp_path):
+        """فشل كتابة الرقعة عبر الحارس نفسه (اعتراض المراجع ج3): الحادثة تظهر
+        في سطر المراقبة صراحة save_failed بالسبب، ولا يُثبَّت التوقيع — ثم زوال
+        العائق يعيد معالجة الحادثة نفسها إلى اقتراح ناجح. العائق: مخزن الرقعة
+        للقراءة فقط (كتابة الرقعة تفشل)."""
+        tree, data_root, component_src, source_text = _make_repair_fixture(tmp_path)
+        log = data_root / "supervisor" / "monitor_log.jsonl"
+        port = _free_port()
+        server = HTTPServer(("127.0.0.1", port), _status_app_factory(
+            "ModuleNotFoundError: No module named 'predictive'"
+        ))
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        store = data_root / "proposals"
+        store.mkdir(parents=True)
+        store.chmod(0o555)  # العائق: الكتابة ممنوعة
+        try:
+            proc = _spawn_supervisor(f"http://127.0.0.1:{port}", log, tree, data_root)
+            try:
+                failure = _await_incident_in_log(log, "save_failed")
+                assert failure.get("reason"), "سبب فشل الحفظ غائب من السطر"
+                # زوال العائق → الدورة التالية تعيد معالجة الحادثة نفسها
+                store.chmod(0o755)
+>               recovered = _await_incident_in_log(log, "import_error")
+                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_repair_supervisor.py:382: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+log_path = PosixPath('/tmp/pytest-of-user/pytest-909/test_supervisor_retries_propos0/data/supervisor/monitor_log.jsonl')
+incident_class = 'import_error', timeout = 40.0
+
+    def _await_incident_in_log(log_path: Path, incident_class: str | None = None,
+                               timeout: float = 40.0) -> dict:
+        """انتظار سطر دورة يحمل حادثة مصنفة من الحارس الفعلي."""
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            for entry in _read_log(log_path):
+                inc = entry.get("incident")
+                if isinstance(inc, dict) and inc.get("class"):
+                    if incident_class is None or inc["class"] == incident_class:
+                        return inc
+            time.sleep(0.25)
+>       pytest.fail(
+            f"الحارس لم يسجل حادثة {incident_class or 'مصنفة'} في سجل المراقبة خلال المهلة"
+        )
+E       Failed: الحارس لم يسجل حادثة import_error في سجل المراقبة خلال المهلة
+
+tests/test_repair_supervisor.py:59: Failed
+=============================== warnings summary ===============================
+backend/config.py:312
+  /tmp/r695_red_retry/backend/config.py:312: UserWarning: ⚠️ CORS مفتوح للجميع — مقبول في التطوير فقط (D-034)
+    warnings.warn("⚠️ CORS مفتوح للجميع — مقبول في التطوير فقط (D-034)")
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_repair_supervisor.py::test_supervisor_retries_proposal_after_save_failure
+======================== 1 failed, 1 warning in 40.82s =========================
+exit: 1

@@ -1,0 +1,51 @@
+........................................................................ [ 10%]
+........................................................................ [ 21%]
+........................................................................ [ 32%]
+........................................................................ [ 43%]
+........................................................................ [ 54%]
+........................................................................ [ 64%]
+F....................................................................... [ 75%]
+........................................................................ [ 86%]
+........................................................................ [ 97%]
+..................                                                       [100%]
+=================================== FAILURES ===================================
+_______________ test_audit_r695cd_corrections_entry_matches_git ________________
+
+    def test_audit_r695cd_corrections_entry_matches_git():
+        """مدخل ج3/ج4: الصفوف والإجمالي والمبررات تطابق git حرفيًا — الحذف
+        بلا مبرر يفشل والمبرر لملف بلا حذف فعلي يفشل (عقد R-694 ج2)."""
+>       r695cd, parent = _r695cd_corrections_commit()
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+backend/tests/invariants/test_audit_consistency.py:1156: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    def _r695cd_corrections_commit():
+        """التزام تصحيحات ج3/ج4 لـR-695 — يثبت برسالته (لا بترتيبه)."""
+        proc = subprocess.run(
+            ["git", "log", "--format=%H %P",
+             "--grep=تصحيحات المراجع ج3/ج4 لـR-695", "-1", "--no-merges"],
+            capture_output=True, text=True, cwd=str(_REPO_ROOT), check=True,
+        )
+        parts = proc.stdout.strip().split()
+>       assert len(parts) >= 2, "التزام تصحيحات ج3/ج4 لـR-695 غير موجود"
+E       AssertionError: التزام تصحيحات ج3/ج4 لـR-695 غير موجود
+E       assert 0 >= 2
+E        +  where 0 = len([])
+
+backend/tests/invariants/test_audit_consistency.py:1149: AssertionError
+=============================== warnings summary ===============================
+backend/config.py:312
+backend/config.py:312
+  /home/user/workspace/sovereign_ai/backend/config.py:312: UserWarning: ⚠️ CORS مفتوح للجميع — مقبول في التطوير فقط (D-034)
+    warnings.warn("⚠️ CORS مفتوح للجميع — مقبول في التطوير فقط (D-034)")
+
+../venvs/venv311/lib/python3.11/site-packages/starlette/testclient.py:40
+  /home/user/workspace/venvs/venv311/lib/python3.11/site-packages/starlette/testclient.py:40: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.
+    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED backend/tests/invariants/test_audit_consistency.py::test_audit_r695cd_corrections_entry_matches_git
+1 failed, 665 passed, 1 deselected, 3 warnings in 202.20s (0:03:22)
+exit: 1

@@ -1326,3 +1326,45 @@ test_audit_consistency.py يطابق هذا الجدول مع git حرفيًا):
 | `backend/tests/invariants/test_repair.py` (−102) | **مُبرر # DELETION-JUSTIFIED:** إعادة بناء اختبارات الرقعة والرفض على العدة غير الذاتية المرجع (المكوّن ≠ الوحدة المستهدفة) — التوكيدات القديمة كانت تبحث عن نص لا تثبت الصلاحية. |
 | `tests/test_repair_supervisor.py` (−109) | **مُبرر # DELETION-JUSTIFIED:** إعادة بناء اختبارات التكامل مع المسار المتصل الكامل وبرهان التنفيذ — استبدال أدق. |
 | `forensics/R695_PHASE4_REPAIR.md` (−4) | **مُبرر # DELETION-JUSTIFIED:** استبدال وصف RED غير المستقل بالسجلات المعزولة وتصحيح الأرقام — دقة أعلى. |
+
+
+## إضافة تصحيحات المراجع ج3/ج4 لـR-695 (2026-10-19) — إعادة محاولة الحارس وبرهان التطبيق وبوابة انطباق لا رقعة جزئية
+
+التزام فوق bc14cd6 (مانعات المراجع ج3/ج4 عولجت بـRED→GREEN معزول مشهود —
+عشرة سجلات تعطيل معزول في R695_evidence):
+
+- `backend/repair.py`: +92 / −24
+- `backend/supervisor_daemon.py`: +19 / −1
+- `backend/tests/invariants/test_audit_consistency.py`: +69 / −0
+- `backend/tests/invariants/test_repair.py`: +73 / −8
+- `docs/CHANGELOG.md`: +15 / −1
+- `docs/PROJECT_STATE.md`: +18 / −1
+- `forensics/DELETED_LINES_AUDIT.md`: +42 / −0
+- `forensics/R695_PHASE4_REPAIR.md`: +107 / −34
+- `forensics/R695_evidence/full_suite_green_j3.log`: +23 / −0
+- `forensics/R695_evidence/full_suite_green_j34_final.log`: +51 / −0
+- `forensics/R695_evidence/full_suite_green_j4.log`: +23 / −0
+- `forensics/R695_evidence/full_suite_green_j4b.log`: +23 / −0
+- `forensics/R695_evidence/full_suite_green_j4c.log`: +23 / −0
+- `forensics/R695_evidence/full_suite_green_j4d.log`: +23 / −0
+- `forensics/R695_evidence/junit_r695_j34_final_working_tree.xml`: +23 / −0
+- `forensics/R695_evidence/junit_r695_j3_working_tree.xml`: +1 / −0
+- `forensics/R695_evidence/junit_r695_j4_working_tree.xml`: +1 / −0
+- `forensics/R695_evidence/red_isolated_multiname.log`: +77 / −0
+- `forensics/R695_evidence/red_isolated_nested_import.log`: +91 / −0
+- `forensics/R695_evidence/red_isolated_partial_fix.log`: +91 / −0
+- `forensics/R695_evidence/red_isolated_retry.log`: +73 / −0
+- `forensics/R695_evidence/red_isolated_shared_line.log`: +90 / −0
+- `tests/test_repair_supervisor.py`: +130 / −40
+
+الإجمالي: 1,178 إضافة / 109 حذفًا في 23 ملفًا.
+
+| المحذوف | المبرر |
+|---|---|
+| `backend/repair.py` (−24) | **مُبرر # DELETION-JUSTIFIED — تصحيحات ج3/ج4:** استبدال فحص العقد العلوية وحدها ببوابة ast.walk الكاملة (لا رقعة جزئية أبدًا) — استبدال أدق وأصدق. |
+| `backend/supervisor_daemon.py` (−1) | **مُبرر # DELETION-JUSTIFIED:** نقل تثبيت توقيع الخطأ إلى ما بعد نجاح المعالجة (إعادة المحاولة عند الفشل) — استبدال أصح. |
+| `backend/tests/invariants/test_repair.py` (−8) | **مُبرر # DELETION-JUSTIFIED:** حذف المسترجع النصي واستبداله ببرهان git apply + السوالب الأربعة — استبدال أثبت. |
+| `tests/test_repair_supervisor.py` (−40) | **مُبرر # DELETION-JUSTIFIED:** استبدال المسترجع ببرهان git apply + اختبارا إعادة المحاولة عبر الحارس — استبدال أدق. |
+| `docs/CHANGELOG.md` (−1) | **مُبرر # DELETION-JUSTIFIED:** تحديث صف الحزمة للأرقام الفعلية — دقة أعلى. |
+| `docs/PROJECT_STATE.md` (−1) | **مُبرر # DELETION-JUSTIFIED:** مثل أعلاه. |
+| `forensics/R695_PHASE4_REPAIR.md` (−34) | **مُبرر # DELETION-JUSTIFIED:** تصحيح وصف JUnit ج2 (أخضر لا فاشل — بإسناد خصائص XML المستخرجة) وفصل حالتي التشغيل + تحديث الجدول والبوابة والأرقام — دقة أعلى. |

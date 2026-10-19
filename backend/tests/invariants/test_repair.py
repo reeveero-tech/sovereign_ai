@@ -224,6 +224,55 @@ def test_import_fix_transform_applicability_and_validity():
     assert _import_fix_transform(indented, "predictive") is None, (
         "جملة غير علوية لا يجب أن تنطبق — الناتج كان سيفسد البنية"
     )
+    # سالب نصي (اعتراض المراجع ج3): النص نفسه داخل سلسلة نصية ليس جملة
+    # استيراد — التحديد AST (عقد وحدات) لا مطابقة نصية
+    in_string = 'DOC = """\nimport predictive\n"""\nimport json\n'
+    result = _import_fix_transform(in_string, "predictive")
+    assert result is None, (
+        "نص داخل سلسلة حُوِّل كأنه جملة استيراد — التحديد ليس AST"
+    )
+    # سالب جملة متعددة الأسماء (اعتراض المراجع ج4): تحويل السطر كله يغير
+    # جهة استيراد الأسماء الأخرى (json) — خارج الإصلاح المقصود. الجمل
+    # المدعومة فقط: اسم واحد مطابق تمامًا للوحدة الناقصة؛ المركبات
+    # مراجعة يدوية بلا رقعة
+    multi = "import predictive as p, json\n"
+    result = _import_fix_transform(multi, "predictive")
+    assert result is None, (
+        "جملة متعددة الأسماء حُوِّلت — تغيّر استيراد json أيضًا: "
+        f"{result}"
+    )
+    # المركّبة من وحدة أخرى لا تنطبق (سالب حدود الجملة)
+    other = "import json, predictive\n"
+    assert _import_fix_transform(other, "predictive") is None
+    # سالب الاستيراد المتداخل (اعتراض المراجع ج4): عقدة متعلقة بالوحدة
+    # داخل شرط — تأهيل العلوية يترك المتداخلة تسبب العطل نفسه عند تنفيذ
+    # المرقّع (رقعة جزئية). المصدر كله مراجعة يدوية بلا رقعة
+    nested = "import predictive\nif True:\n    import predictive\n"
+    result = _import_fix_transform(nested, "predictive")
+    assert result is None, (
+        "استيراد متداخل متعلق بالوحدة بقي دون إصلاح مع رقعة: "
+        f"{result}"
+    )
+    # سالب الاستيراد غير المدعوم مع آخر مدعوم (اعتراض المراجع ج4): المصدر
+    # فيه استيراد متعلق بالوحدة خارج الشروط (متعدد الأسماء) وآخر مدعوم —
+    # إنتاج رقعة للثاني يترك الأول المعطوب دون إصلاح (رقعة جزئية كاذبة).
+    # الأصل: المصدر كله مراجعة يدوية بلا رقعة — لا حذف الموضع واستمرار
+    mixed = "import predictive as p, json\nimport predictive as q\n"
+    result = _import_fix_transform(mixed, "predictive")
+    assert result is None, (
+        "رقعة جزئية: استيراد غير مدعوم للوحدة بقي دون إصلاح مع اقتراح: "
+        f"{result}"
+    )
+    # سالب الجملتين على سطر واحد (اعتراض المراجع ج4): الفاصلة المنقوطة —
+    # العقدة الثانية تجعل رقم السطر هدفاً فيحوّل التحويل النصي الجملة
+    # الأولى المتعددة الأسماء ويغير جهة استيراد json مجددًا. الأسطر
+    # المشتركة بين عدة جمل تُرفض بلا رقعة (حدود متحققة لا رقم سطر وحده)
+    two_stmts = "import predictive as p, json; import predictive as q\n"
+    result = _import_fix_transform(two_stmts, "predictive")
+    assert result is None, (
+        "سطر بجملتين حُوِّل — قد يغير جهة استيراد الأسماء الأخرى: "
+        f"{result}"
+    )
 
 
 def test_proposal_not_applied_and_patch_is_real(tmp_path):
@@ -256,22 +305,38 @@ def test_proposal_not_applied_and_patch_is_real(tmp_path):
     assert component_src.read_text(encoding="utf-8") == source_text, (
         "المصدر المعزول تغير — تطبيق تلقائي ممنوع"
     )
-    # استرجاع النص المرقّع من الرقعة (hunk موحد بسيط) — في الاختبار فقط
-    new_text = _restore_from_unified_diff(source_text, diff_text)
-    # الناتج المرقّع صالح نحويًا + أثره الإصلاحي بالتنفيذ:
-    # الأصل يفشل (ImportError) والمرقّع يستورد من مساره الصحيح
-    compile(new_text, "<patched>", "exec")
+    # فحص تطبيق فعلي على نسخة مؤقتة فقط (اعتراض المراجع ج3): git apply
+    # --check يثبت مطابقة سياق الرقعة للأصل، ثم التطبيق والترجمة والتشغيل
+    import shutil
+    work = tmp_path / "apply_check"
+    shutil.copytree(repo, work)
+    apply_check = subprocess.run(
+        ["git", "apply", "--check", str(diff_file)],
+        cwd=str(work), capture_output=True, text=True,
+    )
+    assert apply_check.returncode == 0, (
+        f"الرقعة لا تنطبق على الأصل — السياق لا يطابق: "
+        f"{apply_check.stderr[-300:]}"
+    )
+    applied = subprocess.run(
+        ["git", "apply", str(diff_file)],
+        cwd=str(work), capture_output=True, text=True,
+    )
+    assert applied.returncode == 0, f"فشل تطبيق الرقعة: {applied.stderr[-200:]}"
+    patched_file = work / "backend" / "memory" / "__init__.py"
+    patched_text = patched_file.read_text(encoding="utf-8")
+    compile(patched_text, "<patched>", "exec")  # صلاحية نحوية للمرقّع
+    # الأثر الإصلاحي بالتنفيذ: الأصل يفشل والمرقّع يستورد من مساره الصحيح
     original_run = subprocess.run(
         [_sys.executable, "-c",
          f"import sys; sys.path.insert(0, {str(repo)!r}); exec(open({str(component_src)!r}).read())"],
         capture_output=True, text=True,
     )
     assert original_run.returncode != 0, "الأصل المفروض أنه يفشل بالاستيراد"
-    patched = tmp_path / "patched_copy.py"
-    patched.write_text(new_text, encoding="utf-8")
     patched_run = subprocess.run(
         [_sys.executable, "-c",
-         f"import sys; sys.path.insert(0, {str(repo)!r}); exec(open({str(patched)!r}).read())"],
+         f"import sys; sys.path.insert(0, {str(work)!r}); "
+         f"exec(open({str(patched_file)!r}).read())"],
         capture_output=True, text=True,
     )
     assert patched_run.returncode == 0, (

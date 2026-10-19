@@ -248,7 +248,6 @@ def run(
                 entry["incident"] = {"class": "processing_failed",
                                      "error": str(exc)}
         elif error_text and error_text != last_error_signature:
-            last_error_signature = error_text
             try:
                 incident = repair.incident_from_monitor_line(entry)
                 if incident is not None:
@@ -261,6 +260,25 @@ def run(
                             **({"proposal": outcome["diff_file"]}
                                if outcome.get("diff_file") else {}),
                         }
+                    if outcome.get("status") == "save_failed":
+                        # R-695 (اعتراض المراجع ج3): فشل الحفظ يظهر في سطر
+                        # المراقبة صراحة بالحالة والسبب — ولا يُثبَّت توقيع
+                        # الخطأ كمنجز: الدورة التالية تعيد معالجة الحادثة نفسها
+                        entry["incident"] = {
+                            "class": "save_failed",
+                            "reason": outcome.get("reason", ""),
+                        }
+                    elif outcome.get("status") == "processing_failed":
+                        entry["incident"] = {
+                            "class": "processing_failed",
+                            "error": outcome.get("error", ""),
+                        }
+                    else:
+                        # نجاح أو حالة نهائية — التوقيع يُثبت هنا فقط؛
+                        # إعادة المحاولة محجوزة للفشل
+                        last_error_signature = error_text
+                else:
+                    last_error_signature = error_text
             except Exception as exc:  # التصنيف لا يقتل الحارس — يُسجل ويتابع
                 entry["incident"] = {"class": "processing_failed",
                                      "error": str(exc)}
