@@ -984,3 +984,83 @@ def test_audit_r694b_justifications_cover_exactly_deletions():
     assert not extra, "مبرر لملف بلا حذف فعلي: " + ", ".join(sorted(extra))
     for name, row in justifications.items():
         assert "# DELETION-JUSTIFIED" in row, f"مبرر بلا الوسم: {name}"
+
+
+# ---------- R-695: المرحلة ٤ — مصنف الأخطاء ومقترح الرقع ----------
+
+def _r695_commit_range():
+    """مدخل R-695 مثبت على التزام R-695 وأبيه (62375e0) — لا بآخر التزامين."""
+    proc = subprocess.run(
+        ["git", "log", "--format=%H %P", "--grep=^R-695", "-1", "--no-merges"],
+        capture_output=True, text=True, cwd=str(_REPO_ROOT), check=True,
+    )
+    parts = proc.stdout.strip().split()
+    assert len(parts) >= 2, "التزام R-695 غير موجود في تاريخ git"
+    return parts[0], parts[1]
+
+
+def _r695_git_numstat():
+    r695, parent = _r695_commit_range()
+    proc = subprocess.run(
+        ["git", "diff", "--numstat", f"{parent}..{r695}"],
+        capture_output=True, text=True, cwd=str(_REPO_ROOT), check=True,
+    )
+    result = {}
+    for line in proc.stdout.strip().splitlines():
+        a, d, name = line.split("\t")
+        result[name] = (int(a), int(d))
+    return result
+
+
+def _r695_section():
+    src = _AUDIT.read_text(encoding="utf-8")
+    start = src.index("## إضافة R-695")
+    lines = src[start:].splitlines()
+    end_idx = len(lines)
+    for i, line in enumerate(lines[1:], start=1):
+        if line.startswith("## "):
+            end_idx = i
+            break
+    rows, justifications, total = {}, {}, None
+    for line in lines[:end_idx]:
+        m = _ROW.match(line)
+        if m:
+            rows[m.group(1)] = (int(m.group(2)), int(m.group(3)))
+        if "DELETION-JUSTIFIED" in line and line.startswith("| `"):
+            justifications[line.split("`")[1]] = line
+        m = re.search(r"الإجمالي: ([\d,]+) إضافة / (\d+) حذفًا في (\d+) ملف", line)
+        if m and total is None:
+            total = (int(m.group(1).replace(",", "")), int(m.group(2)),
+                     int(m.group(3)))
+    return rows, justifications, total
+
+
+def test_audit_r695_rows_total_and_justifications_match_git():
+    """مدخل R-695: الصفوف والإجمالي والمبررات تطابق git حرفيًا — الحذف بلا
+    مبرر يفشل، والمبرر لملف بلا حذف يفشل (عقد المراجع R-694 ج2 مجددًا)."""
+    rows, justifications, total = _r695_section()
+    numstat = _r695_git_numstat()
+    assert rows, "مدخل R-695 بلا صفوف"
+    assert total, "سطر الإجمالي غائب من مدخل R-695"
+    mismatches = []
+    for name, declared in sorted(rows.items()):
+        actual = numstat.get(name)
+        if actual is None:
+            mismatches.append(f"{name}: في التدقيق وليس في git")
+        elif actual != declared:
+            mismatches.append(f"{name}: التدقيق {declared} ≠ git {actual}")
+    missing = [n for n in numstat if n not in rows]
+    if missing:
+        mismatches.append("في git بلا صف: " + ", ".join(sorted(missing)))
+    assert not mismatches, "مدخل R-695 لا يطابق git:\n  " + "\n  ".join(mismatches)
+    ta = sum(v[0] for v in numstat.values())
+    td = sum(v[1] for v in numstat.values())
+    assert total == (ta, td, len(numstat)), (
+        f"الإجمالي المعلن {total} ≠ git {(ta, td, len(numstat))}"
+    )
+    actually_deleted = {n for n, (a, d) in numstat.items() if d > 0}
+    justified = set(justifications)
+    assert not (actually_deleted - justified), "حذف بلا مبرر"
+    assert not (justified - actually_deleted), "مبرر لملف بلا حذف فعلي"
+    for name, row in justifications.items():
+        assert "# DELETION-JUSTIFIED" in row, f"مبرر بلا الوسم: {name}"

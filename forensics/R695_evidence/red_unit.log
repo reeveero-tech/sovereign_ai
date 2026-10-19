@@ -1,0 +1,283 @@
+FFFFFFFF                                                                 [100%]
+=================================== FAILURES ===================================
+_____________________ test_healthy_line_is_not_an_incident _____________________
+
+    def test_healthy_line_is_not_an_incident():
+        """السطر السليم ليس حادثة (اعتراض المراجع) — التحويل يستخرج حقول
+        الخطأ الفعلية لا كامل JSON كنص."""
+        healthy = {
+            "ts": 1792380000.0, "target": "http://127.0.0.1:9999",
+            "health": {"status": "ok"}, "status": {"state": "healthy"},
+        }
+>       assert incident_from_monitor_line(healthy) is None
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+backend/tests/invariants/test_repair.py:49: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+entry = {'ts': 1792380000.0, 'target': 'http://127.0.0.1:9999', 'health': {'status': 'ok'}, 'status': {'state': 'healthy'}}
+
+    def incident_from_monitor_line(entry: dict) -> Optional[dict]:
+        """سطر سجل مراقبة الحارس → حادثة بالتمثيل الداخلي الموحد.
+    
+        يستخرج حقول الخطأ الفعلية (health.error / status.error) وأحداث الوعي
+        (changes_detected = حادثة تغيّر سلامة) — لا كامل JSON كنص للبحث.
+        السطر السليم ليس حادثة → None.
+        """
+>       raise NotImplementedError("R-695: الهيكل — لم يُنفذ بعد")
+E       NotImplementedError: R-695: الهيكل — لم يُنفذ بعد
+
+backend/repair.py:48: NotImplementedError
+__________________ test_incident_extracted_from_error_fields ___________________
+
+    def test_incident_extracted_from_error_fields():
+        """الحادثة تُستخرج من health.error/status.error بتمثيل داخلي موحد
+        (معرف + مصدر + نص الخطأ الفعلي) — لا النص الكامل."""
+        line = _health_error_line("URLError: connection refused (errno 111)")
+>       incident = incident_from_monitor_line(line)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+backend/tests/invariants/test_repair.py:56: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+entry = {'ts': 1792380000.0, 'target': 'http://127.0.0.1:9999', 'health': {'error': 'URLError: connection refused (errno 111)'}, 'status': {'error': 'URLError: connection refused (errno 111)'}}
+
+    def incident_from_monitor_line(entry: dict) -> Optional[dict]:
+        """سطر سجل مراقبة الحارس → حادثة بالتمثيل الداخلي الموحد.
+    
+        يستخرج حقول الخطأ الفعلية (health.error / status.error) وأحداث الوعي
+        (changes_detected = حادثة تغيّر سلامة) — لا كامل JSON كنص للبحث.
+        السطر السليم ليس حادثة → None.
+        """
+>       raise NotImplementedError("R-695: الهيكل — لم يُنفذ بعد")
+E       NotImplementedError: R-695: الهيكل — لم يُنفذ بعد
+
+backend/repair.py:48: NotImplementedError
+_________________ test_awareness_change_is_integrity_incident __________________
+
+    def test_awareness_change_is_integrity_incident():
+        """changes_detected حادثة تغيّر سلامة — لا خطأ استيراد أو شبكة
+        (اعتراض المراجع)."""
+        line = {
+            "ts": 1792380000.0, "target": "http://x",
+            "health": {"status": "ok"}, "status": {"state": "healthy"},
+            "awareness": {"event": "changes_detected", "changes": {
+                "added": [], "removed": [], "modified": ["src/app.py"]}},
+        }
+>       incident = incident_from_monitor_line(line)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+backend/tests/invariants/test_repair.py:72: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+entry = {'ts': 1792380000.0, 'target': 'http://x', 'health': {'status': 'ok'}, 'status': {'state': 'healthy'}, ...}
+
+    def incident_from_monitor_line(entry: dict) -> Optional[dict]:
+        """سطر سجل مراقبة الحارس → حادثة بالتمثيل الداخلي الموحد.
+    
+        يستخرج حقول الخطأ الفعلية (health.error / status.error) وأحداث الوعي
+        (changes_detected = حادثة تغيّر سلامة) — لا كامل JSON كنص للبحث.
+        السطر السليم ليس حادثة → None.
+        """
+>       raise NotImplementedError("R-695: الهيكل — لم يُنفذ بعد")
+E       NotImplementedError: R-695: الهيكل — لم يُنفذ بعد
+
+backend/repair.py:48: NotImplementedError
+________________________ test_classify_known_incidents _________________________
+
+    def test_classify_known_incidents():
+        """(أ) تصنيف حادثات معروفة إلى فئاتها الصحيحة + إجراء مقترح لكل
+        فئة، والخاصة قبل العامة (OSError بذكر اتصال = شبكة لا IO)، والمجهولة
+        تبقى غير مصنفة."""
+        cases = [
+            ("ModuleNotFoundError: No module named 'predictive'",
+             "import_error"),
+            ("ImportError: cannot import name 'engine' from 'memory'",
+             "import_error"),
+            ("URLError: <urlopen error [Errno 111] Connection refused>",
+             "network_error"),
+            ("ConnectionError: HTTPConnectionPool timeout of 5s exceeded",
+             "network_error"),
+            ("OSError [Errno 111] Connection refused by peer — network",
+             "network_error"),  # الخاصة قبل العامة: ذكر اتصال داخل OSError
+            ("ValueError: Invalid key (Fernet) — decryption failed",
+             "encryption_error"),
+            ("SyntaxError: invalid syntax (line 42)",
+             "syntax_error"),
+            ("PermissionError: [Errno 13] Permission denied: /data/x.json",
+             "io_error"),
+        ]
+        for error_text, expected_class in cases:
+>           incident = incident_from_monitor_line(_health_error_line(error_text))
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+backend/tests/invariants/test_repair.py:100: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+entry = {'ts': 1792380000.0, 'target': 'http://127.0.0.1:9999', 'health': {'error': "ModuleNotFoundError: No module named 'predictive'"}, 'status': {'error': "ModuleNotFoundError: No module named 'predictive'"}}
+
+    def incident_from_monitor_line(entry: dict) -> Optional[dict]:
+        """سطر سجل مراقبة الحارس → حادثة بالتمثيل الداخلي الموحد.
+    
+        يستخرج حقول الخطأ الفعلية (health.error / status.error) وأحداث الوعي
+        (changes_detected = حادثة تغيّر سلامة) — لا كامل JSON كنص للبحث.
+        السطر السليم ليس حادثة → None.
+        """
+>       raise NotImplementedError("R-695: الهيكل — لم يُنفذ بعد")
+E       NotImplementedError: R-695: الهيكل — لم يُنفذ بعد
+
+backend/repair.py:48: NotImplementedError
+________________ test_proposal_rejected_without_classification _________________
+
+tmp_path = PosixPath('/tmp/pytest-of-user/pytest-789/test_proposal_rejected_without0')
+
+    def test_proposal_rejected_without_classification(tmp_path):
+        """(ب) رفض الاقتراح بلا تصنيف، وبالتصنيف غير المرتبط بالحادثة نفسها —
+        ولا يُكتب أي ملف اقتراح."""
+>       incident = incident_from_monitor_line(
+            _health_error_line("ModuleNotFoundError: No module named 'xyz'")
+        )
+
+backend/tests/invariants/test_repair.py:120: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+entry = {'ts': 1792380000.0, 'target': 'http://127.0.0.1:9999', 'health': {'error': "ModuleNotFoundError: No module named 'xyz'"}, 'status': {'error': "ModuleNotFoundError: No module named 'xyz'"}}
+
+    def incident_from_monitor_line(entry: dict) -> Optional[dict]:
+        """سطر سجل مراقبة الحارس → حادثة بالتمثيل الداخلي الموحد.
+    
+        يستخرج حقول الخطأ الفعلية (health.error / status.error) وأحداث الوعي
+        (changes_detected = حادثة تغيّر سلامة) — لا كامل JSON كنص للبحث.
+        السطر السليم ليس حادثة → None.
+        """
+>       raise NotImplementedError("R-695: الهيكل — لم يُنفذ بعد")
+E       NotImplementedError: R-695: الهيكل — لم يُنفذ بعد
+
+backend/repair.py:48: NotImplementedError
+__________________ test_import_guard_transform_applicability ___________________
+
+    def test_import_guard_transform_applicability():
+        """قاعدة التحويل المعلنة: تنطبق على سطر استيراد الوحدة الناقصة نفسها
+        فقط — ولا تنطبق على غيره (مراجعة يدوية بلا رقعة شكلية)."""
+        source = textwrap.dedent(
+            """\
+            import json
+            import predictive
+            from memory import engine
+    
+    
+            def run():
+                pass
+            """
+        )
+>       new_text = _import_guard_transform(source, "predictive", "import_error")
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+backend/tests/invariants/test_repair.py:153: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+source_text = 'import json\nimport predictive\nfrom memory import engine\n\n\ndef run():\n    pass\n'
+missing_module = 'predictive', incident_class = 'import_error'
+
+    def _import_guard_transform(
+        source_text: str, missing_module: str, incident_class: str
+    ) -> Optional[str]:
+        """قاعدة التحويل المعلنة الوحيدة: استيراد معطوب → استيراد محروس.
+    
+        شروط الانطباق: سطر استيراد للمكوّن الناقص نفسه (import/from) في
+        المصدر المعزول. خارجها → None (مراجعة يدوية — لا رقعة شكلية).
+        """
+>       raise NotImplementedError("R-695: الهيكل — لم يُنفذ بعد")
+E       NotImplementedError: R-695: الهيكل — لم يُنفذ بعد
+
+backend/repair.py:93: NotImplementedError
+_________________ test_proposal_not_applied_and_patch_is_real __________________
+
+tmp_path = PosixPath('/tmp/pytest-of-user/pytest-789/test_proposal_not_applied_and_0')
+
+    def test_proposal_not_applied_and_patch_is_real(tmp_path):
+        """(ج) الاقتراح لا يُطبق تلقائيًا: المصدر المعزول لا يتغير، والرقعة
+        ملف .diff فعلي يُحفظ في مخزن مخرجات الحارس ويُشار إليه من السجل،
+        وتُفحص الرقعة على نسخة اختبارية فقط (تغيير سلوك حقيقي)."""
+        repo = tmp_path / "repo"
+        (repo / "backend" / "predictive").mkdir(parents=True)
+        source_text = "import predictive\nimport json\n"
+        component_src = repo / "backend" / "predictive" / "__init__.py"
+        component_src.write_text(source_text, encoding="utf-8")
+>       incident = incident_from_monitor_line(
+            _health_error_line("ModuleNotFoundError: No module named 'predictive'")
+        )
+
+backend/tests/invariants/test_repair.py:173: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+entry = {'ts': 1792380000.0, 'target': 'http://127.0.0.1:9999', 'health': {'error': "ModuleNotFoundError: No module named 'predictive'"}, 'status': {'error': "ModuleNotFoundError: No module named 'predictive'"}}
+
+    def incident_from_monitor_line(entry: dict) -> Optional[dict]:
+        """سطر سجل مراقبة الحارس → حادثة بالتمثيل الداخلي الموحد.
+    
+        يستخرج حقول الخطأ الفعلية (health.error / status.error) وأحداث الوعي
+        (changes_detected = حادثة تغيّر سلامة) — لا كامل JSON كنص للبحث.
+        السطر السليم ليس حادثة → None.
+        """
+>       raise NotImplementedError("R-695: الهيكل — لم يُنفذ بعد")
+E       NotImplementedError: R-695: الهيكل — لم يُنفذ بعد
+
+backend/repair.py:48: NotImplementedError
+________________________ test_process_incident_pipeline ________________________
+
+tmp_path = PosixPath('/tmp/pytest-of-user/pytest-789/test_process_incident_pipeline0')
+
+    def test_process_incident_pipeline(tmp_path):
+        """خط الحارس كاملًا: حادثة مصنفة + مكوّن معزول منطبق → اقتراح؛
+        حادثة بلا مرجع كود → إجراء تشغيلي بلا رقعة (لا اختراع تعديل)."""
+        repo = tmp_path / "repo"
+        (repo / "backend" / "predictive").mkdir(parents=True)
+        (repo / "backend" / "predictive" / "__init__.py").write_text(
+            "import predictive\n", encoding="utf-8")
+        data = tmp_path / "data"
+        # سجل العزل: مصدر المكونات المعزولة الوحيد (حالة منطقية — R-687)
+        loyalty = data / "loyalty"
+        loyalty.mkdir(parents=True, exist_ok=True)
+        (loyalty / "quarantine_log.jsonl").write_text(
+            '{"time": 1.0, "kind": "quarantine", "detail": "خلل", '
+            '"component": "predictive"}\n',
+            encoding="utf-8",
+        )
+>       incident = incident_from_monitor_line(
+            _health_error_line("ModuleNotFoundError: No module named 'predictive'")
+        )
+
+backend/tests/invariants/test_repair.py:238: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+entry = {'ts': 1792380000.0, 'target': 'http://127.0.0.1:9999', 'health': {'error': "ModuleNotFoundError: No module named 'predictive'"}, 'status': {'error': "ModuleNotFoundError: No module named 'predictive'"}}
+
+    def incident_from_monitor_line(entry: dict) -> Optional[dict]:
+        """سطر سجل مراقبة الحارس → حادثة بالتمثيل الداخلي الموحد.
+    
+        يستخرج حقول الخطأ الفعلية (health.error / status.error) وأحداث الوعي
+        (changes_detected = حادثة تغيّر سلامة) — لا كامل JSON كنص للبحث.
+        السطر السليم ليس حادثة → None.
+        """
+>       raise NotImplementedError("R-695: الهيكل — لم يُنفذ بعد")
+E       NotImplementedError: R-695: الهيكل — لم يُنفذ بعد
+
+backend/repair.py:48: NotImplementedError
+=============================== warnings summary ===============================
+backend/config.py:312
+  /home/user/workspace/sovereign_ai/backend/config.py:312: UserWarning: ⚠️ CORS مفتوح للجميع — مقبول في التطوير فقط (D-034)
+    warnings.warn("⚠️ CORS مفتوح للجميع — مقبول في التطوير فقط (D-034)")
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED backend/tests/invariants/test_repair.py::test_healthy_line_is_not_an_incident
+FAILED backend/tests/invariants/test_repair.py::test_incident_extracted_from_error_fields
+FAILED backend/tests/invariants/test_repair.py::test_awareness_change_is_integrity_incident
+FAILED backend/tests/invariants/test_repair.py::test_classify_known_incidents
+FAILED backend/tests/invariants/test_repair.py::test_proposal_rejected_without_classification
+FAILED backend/tests/invariants/test_repair.py::test_import_guard_transform_applicability
+FAILED backend/tests/invariants/test_repair.py::test_proposal_not_applied_and_patch_is_real
+FAILED backend/tests/invariants/test_repair.py::test_process_incident_pipeline
+8 failed, 1 warning in 0.39s
+exit: 1

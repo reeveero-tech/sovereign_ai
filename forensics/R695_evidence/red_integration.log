@@ -1,0 +1,153 @@
+FFF                                                                      [100%]
+=================================== FAILURES ===================================
+________________ test_supervisor_loop_classifies_real_incidents ________________
+
+tmp_path = PosixPath('/tmp/pytest-of-user/pytest-790/test_supervisor_loop_classifie0')
+
+    def test_supervisor_loop_classifies_real_incidents(tmp_path):
+        """الربط الفعلي: حلقة الحارس تصنف حوادثها الفعلية — خطأ جلب حقيقي
+        (منفذ مغلق — عقد R-687 القائم، لا بيانات مصطنعة) يظهر في سطر الدورة
+        بحادثة مصنفة network_error مع الإجراء، والسطر يحمل عقد الدورة كاملًا."""
+        tree = Path(tempfile.mkdtemp(prefix="repair_tree_"))
+        _make_tree(tree)
+        data_root = Path(tempfile.mkdtemp(prefix="repair_data_"))
+        log = data_root / "supervisor" / "monitor_log.jsonl"
+        dead_port = _free_port()
+        proc = _spawn_supervisor(f"http://127.0.0.1:{dead_port}", log, tree, data_root)
+        try:
+>           incident = _await_incident_in_log(log)
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_repair_supervisor.py:110: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+log_path = PosixPath('/tmp/repair_data_4zme8ib9/supervisor/monitor_log.jsonl')
+timeout = 30.0
+
+    def _await_incident_in_log(log_path: Path, timeout: float = 30.0) -> dict:
+        """انتظار سطر دورة يحمل حادثة مصنفة من الحارس الفعلي."""
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            for entry in _read_log(log_path):
+                if isinstance(entry.get("incident"), dict) and entry["incident"].get("class"):
+                    return entry["incident"]
+            time.sleep(0.25)
+>       pytest.fail("الحارس لم يصنف حادثة فعلية في سجل المراقبة خلال المهلة")
+E       Failed: الحارس لم يصنف حادثة فعلية في سجل المراقبة خلال المهلة
+
+tests/test_repair_supervisor.py:91: Failed
+__________________ test_supervisor_proposes_without_applying ___________________
+
+tmp_path = PosixPath('/tmp/pytest-of-user/pytest-790/test_supervisor_proposes_witho0')
+
+    def test_supervisor_proposes_without_applying(tmp_path):
+        """(ج) عبر الحارس الفعلي (--process-incident): مصدر معزول معلوم → وصف
+        + ملف رقعة + سجل؛ والمصدر المعزول والحي لم يتغيرا حرفيًا قبل العملية
+        وبعدها؛ والرقعة تُفحص على نسخة اختبارية فقط (تغيير سلوك حقيقي)."""
+        tree = Path(tempfile.mkdtemp(prefix="repair_prop_tree_"))
+        (tree / "backend" / "predictive").mkdir(parents=True)
+        component_src = tree / "backend" / "predictive" / "__init__.py"
+        source_text = "import predictive\nimport json\n"
+        component_src.write_text(source_text, encoding="utf-8")
+        data_root = Path(tempfile.mkdtemp(prefix="repair_prop_data_"))
+        loyalty = data_root / "loyalty"
+        loyalty.mkdir(parents=True)
+        (loyalty / "quarantine_log.jsonl").write_text(
+            '{"time": 1.0, "kind": "quarantine", "detail": "خلل", '
+            '"component": "predictive"}\n', encoding="utf-8")
+        # حادثة استيراد حقيقية الشكل — من صيغة أخطاء الحارس القائمة
+        incident_file = data_root / "incident.json"
+        incident_file.write_text(json.dumps({
+            "id": "1792380000.0:http://127.0.0.1:1",
+            "source": "supervisor", "kind": "fetch_error",
+            "error_text": "ModuleNotFoundError: No module named 'predictive'",
+        }), encoding="utf-8")
+        proc = subprocess.Popen(
+            [sys.executable, "-m", "backend.supervisor_daemon",
+             "--process-incident", str(incident_file),
+             "--awareness-root", str(tree)],
+            cwd=str(_REPO_ROOT),
+            env={**os.environ, "SOVEREIGN_DATA_ROOT": str(data_root)},
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        )
+        try:
+            out, err = proc.communicate(timeout=60)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            out, err = proc.communicate()
+            pytest.fail(f"--process-incident لم يكتمل: {err.decode()[:300]}")
+>       assert proc.returncode == 0, f"فشل المعالجة: {err.decode()[:300]}"
+E       AssertionError: فشل المعالجة: usage: supervisor_daemon.py [-h] [--url URL] [--interval INTERVAL] [--log LOG]
+E                                     [--map-interval MAP_INTERVAL]
+E                                     [--awareness-root AWARENESS_ROOT]
+E                                     [--map-store MAP_STORE]
+E         supervisor_daemon.py: error: unrecognized argumen
+E       assert 2 == 0
+E        +  where 2 = <Popen: returncode: 2 args: ['/home/user/workspace/venvs/venv311/bin/python'...>.returncode
+
+tests/test_repair_supervisor.py:166: AssertionError
+_________________ test_app_unaffected_during_and_after_repair __________________
+
+tmp_path = PosixPath('/tmp/pytest-of-user/pytest-790/test_app_unaffected_during_and0')
+
+    def test_app_unaffected_during_and_after_repair(tmp_path):
+        """(د) التطبيق لا يتأثر: يستجيب أثناء معالجة الحارس لحادثة وبعدها،
+        وapp.py وbackend/compat وbackend/Mr.py لم تتغير (بصمات قبل/بعد) ولا
+        استيراد للمرحلة ٤ في app.py."""
+        port = _free_port()
+        data_root = Path(tempfile.mkdtemp(prefix="repair_app_data_"))
+        app_proc = _spawn_app(data_root, port)
+        tree = Path(tempfile.mkdtemp(prefix="repair_app_tree_"))
+        _make_tree(tree)
+        # بصمات الملفات المحظورة قبل المعالجة
+        forbidden = ["app.py"]
+        compat_files = sorted(
+            p.name for p in (_BACKEND_DIR / "compat").iterdir() if p.is_file()
+        ) if (_BACKEND_DIR / "compat").is_dir() else []
+        mr = _BACKEND_DIR / "Mr.py"
+        before = {
+            "app.py": (_BACKEND_DIR / "app.py").read_bytes(),
+            "Mr.py": mr.read_bytes() if mr.exists() else b"",
+>           "compat": [p.read_bytes() for p in (_BACKEND_DIR / "compat").iterdir()]
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+            if (_BACKEND_DIR / "compat").is_dir() else [],
+        }
+
+tests/test_repair_supervisor.py:235: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/test_repair_supervisor.py:235: in <listcomp>
+    "compat": [p.read_bytes() for p in (_BACKEND_DIR / "compat").iterdir()]
+               ^^^^^^^^^^^^^^
+../../.local/share/uv/python/cpython-3.11.15-linux-x86_64-gnu/lib/python3.11/pathlib.py:1050: in read_bytes
+    with self.open(mode='rb') as f:
+         ^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = PosixPath('/home/user/workspace/sovereign_ai/backend/compat/__pycache__')
+mode = 'rb', buffering = -1, encoding = None, errors = None, newline = None
+
+    def open(self, mode='r', buffering=-1, encoding=None,
+             errors=None, newline=None):
+        """
+        Open the file pointed by this path and return a file object, as
+        the built-in open() function does.
+        """
+        if "b" not in mode:
+            encoding = io.text_encoding(encoding)
+>       return io.open(self, mode, buffering, encoding, errors, newline)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       IsADirectoryError: [Errno 21] Is a directory: '/home/user/workspace/sovereign_ai/backend/compat/__pycache__'
+
+../../.local/share/uv/python/cpython-3.11.15-linux-x86_64-gnu/lib/python3.11/pathlib.py:1044: IsADirectoryError
+=============================== warnings summary ===============================
+backend/config.py:312
+  /home/user/workspace/sovereign_ai/backend/config.py:312: UserWarning: ⚠️ CORS مفتوح للجميع — مقبول في التطوير فقط (D-034)
+    warnings.warn("⚠️ CORS مفتوح للجميع — مقبول في التطوير فقط (D-034)")
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_repair_supervisor.py::test_supervisor_loop_classifies_real_incidents
+FAILED tests/test_repair_supervisor.py::test_supervisor_proposes_without_applying
+FAILED tests/test_repair_supervisor.py::test_app_unaffected_during_and_after_repair
+3 failed, 1 warning in 30.28s
+exit: 1

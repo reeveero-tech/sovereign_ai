@@ -1266,3 +1266,30 @@ test_audit_consistency.py يطابق هذا الجدول مع git حرفيًا):
 |---|---|
 | `forensics/DELETED_LINES_AUDIT.md` (−19) | **مُبرر # DELETION-JUSTIFIED:** استبدال صفوف العناصر النائبة بالقيم الفعلية من git + حذف صفوف المبررات المنسوبة لملفات بلا حذف فعلي (نسبة خاطئة رفضها المراجع) — استبدال أدق. |
 | `forensics/R694_PHASE3_AWARENESS.md` (−8) | **مُبرر # DELETION-JUSTIFIED:** استبدال خانات RED غير الدقيقة (NotImplementedError للسلوكيات ذات التعطيل المعزول) بوصف دقيق كما طلب المراجع. |
+
+
+## إضافة R-695 (2026-10-19) — المرحلة ٤: مصنف الأخطاء ومقترح الرقع
+
+التزام شامل فوق 62375e0 (كود + اختبارات + توثيق + أدلة معًا). الحذف
+الفعلي معلل أدناه — لا حذف بلا مبرر:
+
+- `backend/repair.py`: +398 / −0
+- `backend/supervisor_daemon.py`: +71 / −6
+- `backend/tests/invariants/test_audit_consistency.py`: +80 / −0
+- `backend/tests/invariants/test_repair.py`: +274 / −0
+- `docs/CHANGELOG.md`: +12 / −1
+- `docs/PROJECT_STATE.md`: +13 / −0
+- `forensics/R695_PHASE4_REPAIR.md`: +103 / −0
+- `forensics/R695_evidence/full_suite_green_657.log`: +23 / −0
+- `forensics/R695_evidence/junit_r695_working_tree_657.xml`: +16 / −0
+- `forensics/R695_evidence/red_integration.log`: +153 / −0
+- `forensics/R695_evidence/red_unit.log`: +283 / −0
+- `tests/test_repair_supervisor.py`: +285 / −0
+- `forensics/DELETED_LINES_AUDIT.md`: +27 / −0
+
+الإجمالي: 1,738 إضافة / 7 حذفًا في 13 ملفًا.
+
+| المحذوف | المبرر |
+|---|---|
+| `backend/supervisor_daemon.py` (−6) | **مُبرر # DELETION-JUSTIFIED — المرحلة ٤:** توحيد جذر البيانات (_data_root) وإصلاح العلة الكامنة من R-694 (_default_log_path كانت غير معرفة) + توقيع فحص الوعي بمعامل الاستثناءات — استبدال أدق وأصلح. |
+| `docs/CHANGELOG.md` (−1) | **مُبرر # DELETION-JUSTIFIED:** سطر «آخر تحديث». |

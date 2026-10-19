@@ -30,7 +30,7 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-from backend import awareness
+from backend import awareness, repair
 
 _MODULE_DIR = os.path.dirname(os.path.abspath(__file__))
 _REPO_ROOT = os.path.dirname(_MODULE_DIR)
@@ -77,14 +77,28 @@ def _append_log_line(log_path: Path, entry: dict) -> bool:
         return False
 
 
+def _data_root() -> Path:
+    """جذر البيانات الموحد (يُحترم SOVEREIGN_DATA_ROOT) — عزل الاختبارات."""
+    return Path(os.getenv("SOVEREIGN_DATA_ROOT") or os.path.join(_REPO_ROOT, "data"))
+
+
+def _default_log_path() -> Path:
+    """سجل المراقبة في جذر البيانات (يُحترم SOVEREIGN_DATA_ROOT).
+
+    R-695: كانت هذه الدالة مستدعاة من main وغير معرفة (علة كامنة من تعديل
+    R-694 — تشغيل الحارس بلا --log ينهار بـNameError؛ الاختبارات القائمة
+    تمرر --log دائمًا فلم تنكشف) — تُعرف الآن وتُفحص باختبار انحدار."""
+    return _data_root() / "supervisor" / "monitor_log.jsonl"
+
+
 def _default_map_store() -> Path:
     """مخزن خريطة الوعي في جذر البيانات (يُحترم SOVEREIGN_DATA_ROOT)."""
-    data_root = os.getenv("SOVEREIGN_DATA_ROOT") or os.path.join(_REPO_ROOT, "data")
-    return awareness.awareness_map_path(data_root)
+    return awareness.awareness_map_path(_data_root())
 
 
 def _awareness_check(
-    repo_root: Path, map_store: Path, log_path: Path
+    repo_root: Path, map_store: Path, log_path: Path,
+    extra_excludes: "list[Path] | None" = None,
 ) -> "tuple[dict, dict | None]":
     """فحص وعي واحد — الحارس يقرأ الخريطة (لا التطبيق — أمر المالك).
 
@@ -99,8 +113,11 @@ def _awareness_check(
         # R-694 (اعتراض المراجع ج2): مخرجات الحارس مستثناة بمسارَي الملفين
         # نفسيهما (المخزن والسجل) — لا أبويهما: استثناء الأب واسع يسقط
         # جيرة، والحارس يكتب سجله كل دورة فيُرصد عبثًا ذاتيًا إن لم يُستثنَ
+        # R-695 (اعتراض المراجع): مخرجات المرحلة ٤ (مخزن المقترحات) مستثناة
+        # بنطاقها المحدد لا بالجملة — لا يرصد الحارس كتاباته هو حوادث عبث
         current = awareness.build_project_map(
-            repo_root, exclude_paths=[map_store, log_path]
+            repo_root,
+            exclude_paths=[map_store, log_path, *(extra_excludes or [])],
         )
     except OSError as exc:
         return {"event": "map_build_failed", "error": str(exc)}, None
@@ -149,7 +166,9 @@ def run(
     signal.signal(signal.SIGINT, _handle_stop)
     root = Path(repo_root) if repo_root is not None else Path(_REPO_ROOT)
     store = Path(map_store) if map_store is not None else _default_map_store()
+    data_root = _data_root()
     next_map_check = 0.0  # أول فحص فور الإقلاع
+    last_error_signature: str | None = None  # R-695: لا إعادة معالجة نفس الخطأ
     while not _STOP:
         started = time.time()
         health, health_err = _fetch_json(f"{url.rstrip('/')}/health", timeout=5)
@@ -167,7 +186,8 @@ def run(
             try:
                 # R-694: حادثة الوعي تُرفق بسطر الدورة نفسه (عقد R-687 قائم)
                 awareness_event, new_baseline = _awareness_check(
-                    root, store, log_path
+                    root, store, log_path,
+                    extra_excludes=[repair._proposals_root(data_root)],
                 )
                 if awareness_event:
                     entry["awareness"] = awareness_event
@@ -177,6 +197,34 @@ def run(
             next_map_check = time.monotonic() + max(map_interval, 0.1)
         else:
             new_baseline = None
+        # R-695 (الربط الفعلي — اعتراض المراجع): حوادث الحارس نفسها تمر
+        # بالخط — تحويل ← تصنيف ← اقتراح إن وُجد مرجع كود معزول منطبق.
+        # من حقول الأخطاء الفعلية (لا بيانات مصطنعة) ومرة واحدة لكل توقيع
+        # خطأ جديد — والنتيجة مفتاح إضافي بسطر الدورة (عقد R-687 قائم)
+        health = entry.get("health") if isinstance(entry.get("health"), dict) else {}
+        status = entry.get("status") if isinstance(entry.get("status"), dict) else {}
+        error_text = next(
+            (f.get("error") for f in (health, status)
+             if isinstance(f.get("error"), str) and f.get("error")),
+            None,
+        )
+        if error_text and error_text != last_error_signature:
+            last_error_signature = error_text
+            try:
+                incident = repair.incident_from_monitor_line(entry)
+                if incident is not None:
+                    outcome = repair.process_incident(incident, root, data_root)
+                    classification = outcome.get("classification")
+                    if classification is not None and classification.get("class"):
+                        entry["incident"] = {
+                            "class": classification["class"],
+                            "action": classification.get("action", ""),
+                            **({"proposal": outcome["diff_file"]}
+                               if outcome.get("diff_file") else {}),
+                        }
+            except Exception as exc:  # التصنيف لا يقتل الحارس — يُسجل ويتابع
+                entry["incident"] = {"class": "processing_failed",
+                                     "error": str(exc)}
         # R-694: الترتيب الإلزامي — إلحاق ناجح أولًا ثم حفظ المرجعية:
         # فشل السجل يُبقي المرجعية السابقة (إعادة المحاولة — لا يضيع الأثر)
         if _append_log_line(log_path, entry) and new_baseline is not None:
@@ -219,7 +267,24 @@ def main(argv=None) -> int:
         "--map-store", default=None,
         help="مخزن الخريطة المرجعية (افتراضي: <جذر البيانات>/awareness/project_map.json)",
     )
+    parser.add_argument(
+        "--process-incident", default=None, metavar="JSON_FILE",
+        help="R-695: معالجة حادثة واحدة (ملف JSON) بخط التصنيف والاقتراح ثم الخروج — إعادة معالجة واختبار، لا وضع التشغيل",
+    )
     args = parser.parse_args(argv)
+    if args.process_incident:
+        # R-695: وضع أحادي لخط الحادثة — قراءة ← تصنيف ← اقتراح ← طباعة
+        # النتيجة JSON. لا تطبيق — الاقتراح يُحفظ في المخزن للمراجعة فقط.
+        with open(args.process_incident, "r", encoding="utf-8") as f:
+            incident = json.load(f)
+        repo_root = (
+            Path(args.awareness_root) if args.awareness_root else Path(_REPO_ROOT)
+        )
+        result = repair.process_incident(incident, repo_root, _data_root())
+        print(json.dumps(result, ensure_ascii=False))
+        return 0 if result.get("status") in (
+            "proposed", "classified_no_proposal", "manual_review"
+        ) else 1
     log_path = Path(args.log) if args.log else _default_log_path()
     try:
         log_path.parent.mkdir(parents=True, exist_ok=True)
