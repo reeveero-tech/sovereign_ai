@@ -649,9 +649,12 @@ def _load_heartbeat() -> Optional[dict]:
     """قراءة ملف نبض الحارس (R-696 — الربط الآمن) والتحقق من عقده.
 
     القناة الوحيدة: ملف في جذر البيانات يكتبه الحارس كل دورة — لا استيراد
-    لكود الحارس ولا خيوط ولا منفذ ثانٍ. أي خلل (ملف غائب/غير مقروء/تالف،
-    أرقام غير محدودة، طابع مستقبلي، نبض غير قابل للتحليل) → None: قيمة
-    تالفة لا تمنح حالة صحية، ولا تنعكس نصوص الأخطاء أبدًا."""
+    لكود الحارس ولا خيوط ولا منفذ ثانٍ. أي خلل → None: قيمة تالفة لا
+    تمنح حالة صحية، ولا تنعكس نصوص الأخطاء أبدًا.
+    نطاق موثق ومحدود (اعتراض المراجع): الفاصل (0، 60] ومهلة النبض
+    min(max(10s، 3×الفاصل)، 120s) — قيمة ضخمة كـ1e308 لا تشتري صلاحية
+    أبدية، والتحويلات الرقمية تفشل إلى None لا إلى استثناء (epoch ضخم
+    كـ10**400 يرفع OverflowError عند float() فيُلتقط)."""
     import math
 
     from config import DATA_DIR
@@ -665,24 +668,31 @@ def _load_heartbeat() -> Optional[dict]:
     epoch = data.get("epoch")
     interval = data.get("interval")
     alerts = data.get("active_alerts")
-    heartbeat = data.get("heartbeat")
+    try:
+        # التحويلات تفشل بأمان — رقم ضخم يرفع OverflowError لا استجابة مكسورة
+        if (
+            not isinstance(epoch, (int, float)) or isinstance(epoch, bool)
+            or not math.isfinite(epoch := float(epoch))
+        ):
+            return None
+        if (
+            not isinstance(interval, (int, float)) or isinstance(interval, bool)
+            or not math.isfinite(interval := float(interval))
+        ):
+            return None
+    except (OverflowError, ValueError, TypeError):
+        return None
+    # النطاق الموثق: فاصل الحارس الحقيقي (0، 60] ثانية — خارجه تالف
+    if not (0.0 < interval <= 60.0):
+        return None
+    if epoch > time.time() + 5.0:  # طابع مستقبلي — مرفوض
+        return None
     if not (
-        isinstance(epoch, (int, float)) and not isinstance(epoch, bool)
-        and math.isfinite(epoch)
-        and isinstance(interval, (int, float)) and not isinstance(interval, bool)
-        and math.isfinite(interval) and interval > 0
-        and isinstance(alerts, int) and not isinstance(alerts, bool)
+        isinstance(alerts, int) and not isinstance(alerts, bool)
         and alerts >= 0
-        and isinstance(heartbeat, str)
     ):
         return None
-    if float(epoch) > time.time() + 5.0:  # طابع مستقبلي — مرفوض
-        return None
-    try:
-        datetime.fromisoformat(heartbeat)  # نبض موثق قابل للتحليل فقط
-    except ValueError:
-        return None
-    return data
+    return {"epoch": epoch, "interval": interval, "active_alerts": alerts}
 
 
 @app.get("/supervisor/status")
@@ -690,26 +700,30 @@ async def supervisor_status():
     """حالة الحارس — قراءة فقط (R-696: الربط الآمن).
 
     يقرأ ملف النبض الذي يكتبه الحارس كل دورة؛ النبض الصالح حديثًا (ضمن
-    max(10s، 3×فاصله)) = up بمفاتيح supervisor/last_heartbeat/active_alerts.
-    الملف الغائب/التالف أو النبض المنتهي = down مع 503 — اكتشاف موت
-    الحارس بعد انتهاء مهلة النبض لا فور توقفه، وفشل الحارس لا يُسقط
-    التطبيق: لا استيراد ولا خيوط ولا كتابة على الإطلاق."""
+    min(max(10s، 3×الفاصل)، 120s) — نطاق موثق) = up. الملف الغائب/التالف
+    أو النبض المنتهي = down مع 503 — اكتشاف موت الحارس بعد انتهاء مهلة
+    النبض لا فور توقفه، وفشل الحارس لا يُسقط التطبيق: لا استيراد ولا
+    خيوط ولا كتابة. last_heartbeat مشتق من الطابع المتحقق منه (epoch)
+    لا منسوخ من نص الملف — فلا يمكنه مخالفة الطابع."""
     data = _load_heartbeat()
     if data is None:
         return JSONResponse(
             status_code=503,
             content={"supervisor": "down", "reason": "invalid"},
         )
-    age = time.time() - float(data["epoch"])
-    threshold = max(10.0, 3.0 * float(data["interval"]))
+    age = time.time() - data["epoch"]
+    threshold = min(max(10.0, 3.0 * data["interval"]), 120.0)
     if age > threshold:
         return JSONResponse(
             status_code=503,
             content={"supervisor": "down", "reason": "stale"},
         )
+    from datetime import datetime, timezone
     return {
         "supervisor": "up",
-        "last_heartbeat": data["heartbeat"],
+        "last_heartbeat": datetime.fromtimestamp(
+            data["epoch"], tz=timezone.utc
+        ).isoformat(),
         "active_alerts": data["active_alerts"],
     }
 

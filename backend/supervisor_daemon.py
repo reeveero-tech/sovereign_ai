@@ -224,10 +224,11 @@ def run(
     while not _STOP:
         started = time.time()
         health, health_err = _fetch_json(f"{url.rstrip('/')}/health", timeout=5)
-        # R-696: شرط تنبيه فشل الجلب يُلتقط هنا — متغير health يُعاد
-        # استخدامه لاحقًا في معالجة الحوادث فلا يصلح للشرط بعدها
-        fetch_alert_active = health is None
         status, status_err = _fetch_json(f"{url.rstrip('/')}/status", timeout=5)
+        # R-696: شرط تنبيه فشل الجلب يُلتقط هنا — يشمل فشل /status كذلك
+        # (الحارس يرصد كليهما)، ومتغيرا الجلب يُعاد استخدامها لاحقًا في
+        # معالجة الحوادث فلا يصلحان للشرط بعدها
+        fetch_alert_active = health is None or status is None
         entry = {
             "ts": time.time(),
             "target": url,
@@ -249,12 +250,13 @@ def run(
                         _status_path(data_root).with_suffix(".json.tmp"),
                     ],
                 )
+                # R-696: العلم يُحدَّث في كل فحص — الفحص النظيف
+                # (لا تغيّر بعد تحديث المرجعية) يُطفئ التنبيه؛ تحديثه
+                # داخل if فقط يُبقيه قائمًا للأبد عند عودة فارغة
+                awareness_alert_active = bool(awareness_event) and (
+                    awareness_event.get("event") == "changes_detected"
+                )
                 if awareness_event:
-                    # R-696: شرط تنبيه الوعي قائم في هذه الدورة — يزول
-                    # عند فحص نظيف (لا تغيّر) بعد تحديث المرجعية
-                    awareness_alert_active = (
-                        awareness_event.get("event") == "changes_detected"
-                    )
                     entry["awareness"] = awareness_event
             except Exception as exc:  # الوعي لا يقتل الحارس أبدًا — يُسجل ويتابع
                 entry["awareness"] = {"event": "check_failed", "error": str(exc)}

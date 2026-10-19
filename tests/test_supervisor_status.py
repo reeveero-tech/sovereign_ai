@@ -432,3 +432,193 @@ def test_supervisor_status_does_not_leak_paths_or_secrets(tmp_path):
         _assert_no_leak(body)
     finally:
         _stop(app_proc)
+
+
+def test_heartbeat_bounded_range_rejects_infinite_threshold(tmp_path):
+    """(اعتراض المراجع) فاصل ضخم محدود (1e308) يجتاز isfinite لكنه يشتري
+    صلاحية أبدية عبر 3×الفاصل — النطاق الموثق (0، 60] يرفضه: 503 invalid،
+    والنبض القديم لا يمنح up أبدًا."""
+    data_root = tmp_path / "data"
+    sup_dir = data_root / "supervisor"
+    sup_dir.mkdir(parents=True)
+    app_port = _free_port()
+    app_proc = _spawn_app(data_root, app_port)
+    try:
+        _await_app(app_port)
+        (sup_dir / "status.json").write_text(json.dumps({
+            "heartbeat": "1970-01-01T00:00:00+00:00",
+            "epoch": 0, "interval": 1e308, "active_alerts": 0,
+        }), encoding="utf-8")
+        code, body = _get(app_port, "/supervisor/status")
+        assert code == 503, f"الفاصل الضخم يجب أن يُرفض: {code} {body}"
+        assert body["supervisor"] == "down"
+        assert body["reason"] == "invalid"
+    finally:
+        _stop(app_proc)
+
+
+def test_heartbeat_huge_epoch_fails_safe(tmp_path):
+    """(اعتراض المراجع) epoch ضخم كـ10**400 يرفع OverflowError عند
+    float() داخل isfinite — التحويل يفشل إلى 503 لا إلى استجابة مكسورة."""
+    data_root = tmp_path / "data"
+    sup_dir = data_root / "supervisor"
+    sup_dir.mkdir(parents=True)
+    app_port = _free_port()
+    app_proc = _spawn_app(data_root, app_port)
+    try:
+        _await_app(app_port)
+        (sup_dir / "status.json").write_text(json.dumps({
+            "heartbeat": "2026-10-19T12:00:00+00:00",
+            "epoch": 10 ** 400, "interval": 2.0, "active_alerts": 0,
+        }), encoding="utf-8")
+        code, body = _get(app_port, "/supervisor/status")
+        assert code == 503, f"epoch الضخم يجب أن يفشل بأمان: {code} {body}"
+        assert body["supervisor"] == "down"
+        assert body["reason"] == "invalid"
+    finally:
+        _stop(app_proc)
+
+
+def test_last_heartbeat_derived_from_epoch(tmp_path):
+    """(اعتراض المراجع) last_heartbeat مشتق من الطابع المتحقق منه لا
+    منسوخ من نص الملف — نبض نصي مخالف للطابع لا يظهر في الاستجابة؛
+    الاستجابة توافق epoch (ضمن ثانية)."""
+    data_root = tmp_path / "data"
+    sup_dir = data_root / "supervisor"
+    sup_dir.mkdir(parents=True)
+    app_port = _free_port()
+    app_proc = _spawn_app(data_root, app_port)
+    try:
+        _await_app(app_port)
+        now = time.time()
+        (sup_dir / "status.json").write_text(json.dumps({
+            "heartbeat": "1970-01-01T00:00:00+00:00",  # نص مخالف للطابع
+            "epoch": now, "interval": 2.0, "active_alerts": 0,
+        }), encoding="utf-8")
+        code, body = _get(app_port, "/supervisor/status")
+        assert code == 200, f"{code} {body}"
+        from datetime import datetime
+        parsed = datetime.fromisoformat(body["last_heartbeat"])
+        assert abs(parsed.timestamp() - now) < 1.0, (
+            "last_heartbeat ليس مشتقًا من epoch: "
+            f"{body['last_heartbeat']} ≠ {now}"
+        )
+    finally:
+        _stop(app_proc)
+
+
+def test_awareness_alert_appears_and_clears(tmp_path):
+    """(اعتراض المراجع) تنبيه الوعي: تغيّر حقيقي ← تنبيه قائم ← فحص
+    نظيف لاحق ← زوال — العلم يُحدَّث في كل فحص لا عند وجود حدث فقط
+    (العائد الفارغ في الفحص النظيف يُطفئه)."""
+    data_root = tmp_path / "data"
+    data_root.mkdir()
+    tree = tmp_path / "tree"
+    _make_tree(tree)
+    log = data_root / "supervisor" / "monitor_log.jsonl"
+    app_port = _free_port()
+    app_proc = _spawn_app(data_root, app_port)
+    try:
+        _await_app(app_port)
+        sup_proc = _spawn_supervisor(
+            f"http://127.0.0.1:{app_port}", log, tree, data_root
+        )
+        try:
+            _await_status_file(data_root)
+            # جلب سليم → لا تنبيه جلب؛ تنبيه الوعي وحده هو المختبر
+            deadline = time.time() + 15
+            while time.time() < deadline:
+                code, body = _get(app_port, "/supervisor/status")
+                if code == 200 and body["active_alerts"] == 0:
+                    break
+                time.sleep(0.25)
+            assert code == 200 and body["active_alerts"] == 0, (
+                f"خط أساس غير نظيف: {code} {body}"
+            )
+            # تغيّر حقيقي ← تنبيه الوعي قائم
+            (tree / "src" / "new_module.py").write_text(
+                "print('change')\n", encoding="utf-8"
+            )
+            deadline = time.time() + 15
+            while time.time() < deadline:
+                code, body = _get(app_port, "/supervisor/status")
+                if code == 200 and body["active_alerts"] >= 1:
+                    break
+                time.sleep(0.25)
+            assert code == 200 and body["active_alerts"] >= 1, (
+                f"تنبيه الوعي لم يظهر: {code} {body}"
+            )
+            # لا تغيّرات أخرى ← فحص نظيف ← الزوال
+            deadline = time.time() + 15
+            while time.time() < deadline:
+                code, body = _get(app_port, "/supervisor/status")
+                if code == 200 and body["active_alerts"] == 0:
+                    break
+                time.sleep(0.25)
+            assert code == 200 and body["active_alerts"] == 0, (
+                f"تنبيه الوعي لم يزُل بعد الفحص النظيف: {code} {body}"
+            )
+        finally:
+            _stop(sup_proc)
+    finally:
+        _stop(app_proc)
+
+
+def test_status_fetch_failure_counts_as_alert(tmp_path):
+    """(اعتراض المراجع) نجاح /health وفشل /status: الحارس يرصد كليهما —
+    شرط فشل الجلب يشمل فشل الجلب الثاني لا /health وحده."""
+    data_root = tmp_path / "data"
+    data_root.mkdir()
+    tree = tmp_path / "tree"
+    _make_tree(tree)
+    log = data_root / "supervisor" / "monitor_log.jsonl"
+    app_port = _free_port()
+    app_proc = _spawn_app(data_root, app_port)
+    try:
+        _await_app(app_port)
+        broken_port = _free_port()
+        server = HTTPServer(
+            ("127.0.0.1", broken_port), _health_ok_status_broken_handler()
+        )
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            sup_proc = _spawn_supervisor(
+                f"http://127.0.0.1:{broken_port}", log, tree, data_root
+            )
+            try:
+                _await_status_file(data_root)
+                deadline = time.time() + 15
+                while time.time() < deadline:
+                    code, body = _get(app_port, "/supervisor/status")
+                    if code == 200 and body["active_alerts"] >= 1:
+                        break
+                    time.sleep(0.25)
+                assert code == 200 and body["active_alerts"] >= 1, (
+                    f"فشل /status وحده لم يُرصد كتنبيه: {code} {body}"
+                )
+            finally:
+                _stop(sup_proc)
+        finally:
+            server.shutdown()
+    finally:
+        _stop(app_proc)
+
+
+def _health_ok_status_broken_handler():
+    class Handler(BaseHTTPRequestHandler):
+        def do_GET(self):  # noqa: N802 — توقيع المكتبة القياسي
+            if self.path == "/health":
+                body = json.dumps({"status": "ok"}).encode()
+                self.send_response(200)
+            else:  # /status — معطوب
+                body = b"broken"
+                self.send_response(500)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, *a):
+            pass
+
+    return Handler

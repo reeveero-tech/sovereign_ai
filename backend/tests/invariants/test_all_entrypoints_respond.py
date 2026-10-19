@@ -75,14 +75,14 @@ def test_all_registered_routes_respond(client):
         f"expected a real route surface, got only {len(routes)} routes"
     )
 
-    # R-696: /supervisor/status يرد 503 **بتصميمه** عند غياب نبض الحارس —
-    # رفض مقصود لا فشل استجابة (مبدأ 422/400/403 نفسه): عقد الربط الآمن
-    # يُختبر سلوكيًا في الحالتين (up/down) في tests/test_supervisor_status.py
-    DESIGNED_PROBE_5XX = {"/supervisor/status"}
+    # R-696 (تصحيح المراجع): /supervisor/status يُطلب فعلًا — لا يُتجاوز.
+    # يُقبل 503 لهذا المسار وGET فقط **بعد توكيد عقد down الصحيح** (المفاتيح
+    # والأسباب المسموحة حصرًا)؛ 503 بعقد مكسور أو 500 أو أي خلل آخر يبقى
+    # فشلًا كما هو. عقد الربط يُختبر سلوكيًا في الحالتين (up/down) في
+    # tests/test_supervisor_status.py.
+    PROBE = "/supervisor/status"
     failures = []
     for methods, path in routes:
-        if path in DESIGNED_PROBE_5XX:
-            continue
         concrete = _substitute_params(path)
         for method in methods:
             if method == "GET":
@@ -93,7 +93,22 @@ def test_all_registered_routes_respond(client):
                 # طريقة أخرى (PUT/DELETE...) — طلب بجسم فارغ مناسب
                 resp = client.request(method, concrete, json={})
             if resp.status_code >= 500:
-                failures.append((method, path, resp.status_code))
+                if path == PROBE and method == "GET":
+                    # 503 مقبول بعقد down الصحيح وحده
+                    try:
+                        body = resp.json()
+                    except Exception:
+                        failures.append((method, path, resp.status_code))
+                        continue
+                    if not (
+                        resp.status_code == 503
+                        and set(body) == {"supervisor", "reason"}
+                        and body.get("supervisor") == "down"
+                        and body.get("reason") in {"invalid", "stale"}
+                    ):
+                        failures.append((method, path, resp.status_code))
+                else:
+                    failures.append((method, path, resp.status_code))
 
     assert len(failures) == 0, (
         f"Registered endpoints returning 5xx (dead/broken routes): {failures}"
