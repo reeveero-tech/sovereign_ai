@@ -1,0 +1,200 @@
+FFFFF                                                                    [100%]
+=================================== FAILURES ===================================
+___________ test_heartbeat_bounded_range_rejects_infinite_threshold ____________
+
+tmp_path = PosixPath('/tmp/pytest-of-user/pytest-1151/test_heartbeat_bounded_range_r0')
+
+    def test_heartbeat_bounded_range_rejects_infinite_threshold(tmp_path):
+        """(اعتراض المراجع) فاصل ضخم محدود (1e308) يجتاز isfinite لكنه يشتري
+        صلاحية أبدية عبر 3×الفاصل — النطاق الموثق (0، 60] يرفضه: 503 invalid،
+        والنبض القديم لا يمنح up أبدًا."""
+        data_root = tmp_path / "data"
+        sup_dir = data_root / "supervisor"
+        sup_dir.mkdir(parents=True)
+        app_port = _free_port()
+        app_proc = _spawn_app(data_root, app_port)
+        try:
+            _await_app(app_port)
+            (sup_dir / "status.json").write_text(json.dumps({
+                "heartbeat": "1970-01-01T00:00:00+00:00",
+                "epoch": 0, "interval": 1e308, "active_alerts": 0,
+            }), encoding="utf-8")
+            code, body = _get(app_port, "/supervisor/status")
+>           assert code == 503, f"الفاصل الضخم يجب أن يُرفض: {code} {body}"
+E           AssertionError: الفاصل الضخم يجب أن يُرفض: 200 {'supervisor': 'up', 'last_heartbeat': '1970-01-01T00:00:00+00:00', 'active_alerts': 0}
+E           assert 200 == 503
+
+tests/test_supervisor_status.py:453: AssertionError
+_____________________ test_heartbeat_huge_epoch_fails_safe _____________________
+
+tmp_path = PosixPath('/tmp/pytest-of-user/pytest-1151/test_heartbeat_huge_epoch_fail0')
+
+    def test_heartbeat_huge_epoch_fails_safe(tmp_path):
+        """(اعتراض المراجع) epoch ضخم كـ10**400 يرفع OverflowError عند
+        float() داخل isfinite — التحويل يفشل إلى 503 لا إلى استجابة مكسورة."""
+        data_root = tmp_path / "data"
+        sup_dir = data_root / "supervisor"
+        sup_dir.mkdir(parents=True)
+        app_port = _free_port()
+        app_proc = _spawn_app(data_root, app_port)
+        try:
+            _await_app(app_port)
+            (sup_dir / "status.json").write_text(json.dumps({
+                "heartbeat": "2026-10-19T12:00:00+00:00",
+                "epoch": 10 ** 400, "interval": 2.0, "active_alerts": 0,
+            }), encoding="utf-8")
+            code, body = _get(app_port, "/supervisor/status")
+>           assert code == 503, f"epoch الضخم يجب أن يفشل بأمان: {code} {body}"
+E           AssertionError: epoch الضخم يجب أن يفشل بأمان: 500 None
+E           assert 500 == 503
+
+tests/test_supervisor_status.py:475: AssertionError
+____________________ test_last_heartbeat_derived_from_epoch ____________________
+
+tmp_path = PosixPath('/tmp/pytest-of-user/pytest-1151/test_last_heartbeat_derived_fr0')
+
+    def test_last_heartbeat_derived_from_epoch(tmp_path):
+        """(اعتراض المراجع) last_heartbeat مشتق من الطابع المتحقق منه لا
+        منسوخ من نص الملف — نبض نصي مخالف للطابع لا يظهر في الاستجابة؛
+        الاستجابة توافق epoch (ضمن ثانية)."""
+        data_root = tmp_path / "data"
+        sup_dir = data_root / "supervisor"
+        sup_dir.mkdir(parents=True)
+        app_port = _free_port()
+        app_proc = _spawn_app(data_root, app_port)
+        try:
+            _await_app(app_port)
+            now = time.time()
+            (sup_dir / "status.json").write_text(json.dumps({
+                "heartbeat": "1970-01-01T00:00:00+00:00",  # نص مخالف للطابع
+                "epoch": now, "interval": 2.0, "active_alerts": 0,
+            }), encoding="utf-8")
+            code, body = _get(app_port, "/supervisor/status")
+            assert code == 200, f"{code} {body}"
+            from datetime import datetime
+            parsed = datetime.fromisoformat(body["last_heartbeat"])
+>           assert abs(parsed.timestamp() - now) < 1.0, (
+                "last_heartbeat ليس مشتقًا من epoch: "
+                f"{body['last_heartbeat']} ≠ {now}"
+            )
+E           AssertionError: last_heartbeat ليس مشتقًا من epoch: 1970-01-01T00:00:00+00:00 ≠ 1792395791.6179106
+E           assert 1792395791.6179106 < 1.0
+E            +  where 1792395791.6179106 = abs((0.0 - 1792395791.6179106))
+E            +    where 0.0 = <built-in method timestamp of datetime.datetime object at 0x7f86bc976190>()
+E            +      where <built-in method timestamp of datetime.datetime object at 0x7f86bc976190> = datetime.datetime(1970, 1, 1, 0, 0, tzinfo=datetime.timezone.utc).timestamp
+
+tests/test_supervisor_status.py:502: AssertionError
+___________________ test_awareness_alert_appears_and_clears ____________________
+
+tmp_path = PosixPath('/tmp/pytest-of-user/pytest-1151/test_awareness_alert_appears_a0')
+
+    def test_awareness_alert_appears_and_clears(tmp_path):
+        """(اعتراض المراجع) تنبيه الوعي: تغيّر حقيقي ← تنبيه قائم ← فحص
+        نظيف لاحق ← زوال — العلم يُحدَّث في كل فحص لا عند وجود حدث فقط
+        (العائد الفارغ في الفحص النظيف يُطفئه)."""
+        data_root = tmp_path / "data"
+        data_root.mkdir()
+        tree = tmp_path / "tree"
+        _make_tree(tree)
+        log = data_root / "supervisor" / "monitor_log.jsonl"
+        app_port = _free_port()
+        app_proc = _spawn_app(data_root, app_port)
+        try:
+            _await_app(app_port)
+            sup_proc = _spawn_supervisor(
+                f"http://127.0.0.1:{app_port}", log, tree, data_root
+            )
+            try:
+                _await_status_file(data_root)
+                # جلب سليم → لا تنبيه جلب؛ تنبيه الوعي وحده هو المختبر
+                deadline = time.time() + 15
+                while time.time() < deadline:
+                    code, body = _get(app_port, "/supervisor/status")
+                    if code == 200 and body["active_alerts"] == 0:
+                        break
+                    time.sleep(0.25)
+                assert code == 200 and body["active_alerts"] == 0, (
+                    f"خط أساس غير نظيف: {code} {body}"
+                )
+                # تغيّر حقيقي ← تنبيه الوعي قائم
+                (tree / "src" / "new_module.py").write_text(
+                    "print('change')\n", encoding="utf-8"
+                )
+                deadline = time.time() + 15
+                while time.time() < deadline:
+                    code, body = _get(app_port, "/supervisor/status")
+                    if code == 200 and body["active_alerts"] >= 1:
+                        break
+                    time.sleep(0.25)
+                assert code == 200 and body["active_alerts"] >= 1, (
+                    f"تنبيه الوعي لم يظهر: {code} {body}"
+                )
+                # لا تغيّرات أخرى ← فحص نظيف ← الزوال
+                deadline = time.time() + 15
+                while time.time() < deadline:
+                    code, body = _get(app_port, "/supervisor/status")
+                    if code == 200 and body["active_alerts"] == 0:
+                        break
+                    time.sleep(0.25)
+>               assert code == 200 and body["active_alerts"] == 0, (
+                    f"تنبيه الوعي لم يزُل بعد الفحص النظيف: {code} {body}"
+                )
+E               AssertionError: تنبيه الوعي لم يزُل بعد الفحص النظيف: 200 {'supervisor': 'up', 'last_heartbeat': '2026-10-19T07:43:28.056979+00:00', 'active_alerts': 1}
+E               assert (200 == 200 and 1 == 0)
+
+tests/test_supervisor_status.py:558: AssertionError
+__________________ test_status_fetch_failure_counts_as_alert ___________________
+
+tmp_path = PosixPath('/tmp/pytest-of-user/pytest-1151/test_status_fetch_failure_coun0')
+
+    def test_status_fetch_failure_counts_as_alert(tmp_path):
+        """(اعتراض المراجع) نجاح /health وفشل /status: الحارس يرصد كليهما —
+        شرط فشل الجلب يشمل فشل الجلب الثاني لا /health وحده."""
+        data_root = tmp_path / "data"
+        data_root.mkdir()
+        tree = tmp_path / "tree"
+        _make_tree(tree)
+        log = data_root / "supervisor" / "monitor_log.jsonl"
+        app_port = _free_port()
+        app_proc = _spawn_app(data_root, app_port)
+        try:
+            _await_app(app_port)
+            broken_port = _free_port()
+            server = HTTPServer(
+                ("127.0.0.1", broken_port), _health_ok_status_broken_handler()
+            )
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+            try:
+                sup_proc = _spawn_supervisor(
+                    f"http://127.0.0.1:{broken_port}", log, tree, data_root
+                )
+                try:
+                    _await_status_file(data_root)
+                    deadline = time.time() + 15
+                    while time.time() < deadline:
+                        code, body = _get(app_port, "/supervisor/status")
+                        if code == 200 and body["active_alerts"] >= 1:
+                            break
+                        time.sleep(0.25)
+>                   assert code == 200 and body["active_alerts"] >= 1, (
+                        f"فشل /status وحده لم يُرصد كتنبيه: {code} {body}"
+                    )
+E                   AssertionError: فشل /status وحده لم يُرصد كتنبيه: 200 {'supervisor': 'up', 'last_heartbeat': '2026-10-19T07:43:44.847694+00:00', 'active_alerts': 0}
+E                   assert (200 == 200 and 0 >= 1)
+
+tests/test_supervisor_status.py:597: AssertionError
+=============================== warnings summary ===============================
+backend/config.py:312
+  /tmp/redcheck_abdb50e/backend/config.py:312: UserWarning: ⚠️ CORS مفتوح للجميع — مقبول في التطوير فقط (D-034)
+    warnings.warn("⚠️ CORS مفتوح للجميع — مقبول في التطوير فقط (D-034)")
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_supervisor_status.py::test_heartbeat_bounded_range_rejects_infinite_threshold
+FAILED tests/test_supervisor_status.py::test_heartbeat_huge_epoch_fails_safe
+FAILED tests/test_supervisor_status.py::test_last_heartbeat_derived_from_epoch
+FAILED tests/test_supervisor_status.py::test_awareness_alert_appears_and_clears
+FAILED tests/test_supervisor_status.py::test_status_fetch_failure_counts_as_alert
+5 failed, 6 deselected, 1 warning in 37.97s
+exit: 1
