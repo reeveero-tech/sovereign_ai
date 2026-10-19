@@ -104,6 +104,44 @@ def _default_log_path() -> Path:
     return _data_root() / "supervisor" / "monitor_log.jsonl"
 
 
+def _status_path(data_root: Path | None = None) -> Path:
+    """ملف حالة الحارس (R-696): جذر البيانات/supervisor/status.json —
+    القناة الوحيدة للربط الآمن (قراءة فقط من التطبيق — لا استيراد ولا
+    منفذ). يُكتب ذرّيًا كل دورة."""
+    root = Path(data_root) if data_root is not None else _data_root()
+    return root / "supervisor" / "status.json"
+
+
+def _write_status_file(
+    interval: float, active_alerts: int,
+) -> bool:
+    """كتابة ملف الحالة ذرّيًا (tmp ثم replace) — فشل الكتابة لا يقتل
+    الحارس: يعاد في الدورة التالية. النبض طابع زمني فعلي، وشرطا التنبيه
+    (فشل الجلب، تغيّر الوعي) حال الدورة الجارية — مستقلان عن منع تكرار
+    معالجة الحادثة بتوقيعها."""
+    from datetime import datetime, timezone
+
+    path = _status_path()
+    payload = {
+        "heartbeat": datetime.now(timezone.utc).isoformat(),
+        "epoch": time.time(),
+        "interval": float(interval),
+        "active_alerts": int(active_alerts),
+    }
+    tmp = path.with_suffix(".json.tmp")
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp.write_text(json.dumps(payload), encoding="utf-8")
+        os.replace(tmp, path)
+        return True
+    except OSError:
+        try:
+            tmp.unlink(missing_ok=True)
+        except OSError:  # R-696: تنظيف المؤقت فاشل — لا يهم؛ الدورة التالية تعيد الكتابة ذرّيًا
+            pass
+        return False
+
+
 def _default_map_store() -> Path:
     """مخزن خريطة الوعي في جذر البيانات (يُحترم SOVEREIGN_DATA_ROOT)."""
     return awareness.awareness_map_path(_data_root())
@@ -182,9 +220,13 @@ def run(
     data_root = _data_root()
     next_map_check = 0.0  # أول فحص فور الإقلاع
     last_error_signature: str | None = None  # R-695: لا إعادة معالجة نفس الخطأ
+    awareness_alert_active = False  # R-696: آخر فحص وعي رصد تغيّرًا
     while not _STOP:
         started = time.time()
         health, health_err = _fetch_json(f"{url.rstrip('/')}/health", timeout=5)
+        # R-696: شرط تنبيه فشل الجلب يُلتقط هنا — متغير health يُعاد
+        # استخدامه لاحقًا في معالجة الحوادث فلا يصلح للشرط بعدها
+        fetch_alert_active = health is None
         status, status_err = _fetch_json(f"{url.rstrip('/')}/status", timeout=5)
         entry = {
             "ts": time.time(),
@@ -200,9 +242,19 @@ def run(
                 # R-694: حادثة الوعي تُرفق بسطر الدورة نفسه (عقد R-687 قائم)
                 awareness_event, new_baseline = _awareness_check(
                     root, store, log_path,
-                    extra_excludes=[repair._proposals_root(data_root)],
+                    extra_excludes=[
+                        repair._proposals_root(data_root),
+                        # R-696: ملف الحالة ومؤقته — بنطاق مسارهما المحدد
+                        _status_path(data_root),
+                        _status_path(data_root).with_suffix(".json.tmp"),
+                    ],
                 )
                 if awareness_event:
+                    # R-696: شرط تنبيه الوعي قائم في هذه الدورة — يزول
+                    # عند فحص نظيف (لا تغيّر) بعد تحديث المرجعية
+                    awareness_alert_active = (
+                        awareness_event.get("event") == "changes_detected"
+                    )
                     entry["awareness"] = awareness_event
             except Exception as exc:  # الوعي لا يقتل الحارس أبدًا — يُسجل ويتابع
                 entry["awareness"] = {"event": "check_failed", "error": str(exc)}
@@ -284,6 +336,13 @@ def run(
                                      "error": str(exc)}
         # R-694: الترتيب الإلزامي — إلحاق ناجح أولًا ثم حفظ المرجعية:
         # فشل السجل يُبقي المرجعية السابقة (إعادة المحاولة — لا يضيع الأثر)
+        # R-696: ملف الحالة كل دورة — النبض + شرطا التنبيه الحاليان
+        # (فشل جلب هذه الدورة، وتغيّر الوعي المرصود آخر فحص)
+        _write_status_file(
+            interval,
+            (1 if fetch_alert_active else 0)
+            + (1 if awareness_alert_active else 0),
+        )
         if _append_log_line(log_path, entry) and new_baseline is not None:
             try:
                 awareness.save_map(new_baseline, store)

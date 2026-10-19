@@ -1,0 +1,231 @@
+FFFFFF                                                                   [100%]
+=================================== FAILURES ===================================
+________________ test_supervisor_status_returns_up_when_healthy ________________
+
+tmp_path = PosixPath('/tmp/pytest-of-user/pytest-1045/test_supervisor_status_returns0')
+
+    def test_supervisor_status_returns_up_when_healthy(tmp_path):
+        """حالة حية: تطبيق + حارس حقيقيان (القناة ملف النبض) → 200 up
+        بالمفاتيح المطلوبة بالضبط: supervisor/last_heartbeat/active_alerts."""
+        data_root = tmp_path / "data"
+        data_root.mkdir()
+        tree = tmp_path / "tree"
+        _make_tree(tree)
+        log = data_root / "supervisor" / "monitor_log.jsonl"
+        app_port = _free_port()
+        app_proc = _spawn_app(data_root, app_port)
+        try:
+            _await_app(app_port)
+            sup_proc = _spawn_supervisor(
+                f"http://127.0.0.1:{app_port}", log, tree, data_root
+            )
+            try:
+>               _await_status_file(data_root)
+
+tests/test_supervisor_status.py:139: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+data_root = PosixPath('/tmp/pytest-of-user/pytest-1045/test_supervisor_status_returns0/data')
+timeout = 30.0
+
+    def _await_status_file(data_root: Path, timeout: float = 30.0) -> Path:
+        status = data_root / "supervisor" / "status.json"
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            if status.is_file():
+                try:
+                    if json.loads(status.read_text(encoding="utf-8")).get("epoch"):
+                        return status
+                except (OSError, ValueError):
+                    pass
+            time.sleep(0.25)
+>       pytest.fail("ملف نبض الحارس لم يُكتب خلال المهلة")
+E       Failed: ملف نبض الحارس لم يُكتب خلال المهلة
+
+tests/test_supervisor_status.py:106: Failed
+________________ test_supervisor_status_alerts_appear_and_clear ________________
+
+tmp_path = PosixPath('/tmp/pytest-of-user/pytest-1045/test_supervisor_status_alerts_0')
+
+    def test_supervisor_status_alerts_appear_and_clear(tmp_path):
+        """شرط التنبيه يظهر ويزول (اعتراض المراجع): حارس على منفذ مغلق →
+        active_alerts ≥ 1 (شرط فشل الجلب قائم في الدورة)؛ ثم خادم حي على
+        المنفذ نفسه → الشرط يزول → active_alerts = 0. شروط دورة قائمة —
+        لا عدّ أسطر سجل متأثرة بمنع التكرار."""
+        data_root = tmp_path / "data"
+        data_root.mkdir()
+        tree = tmp_path / "tree"
+        _make_tree(tree)
+        log = data_root / "supervisor" / "monitor_log.jsonl"
+        app_port = _free_port()
+        app_proc = _spawn_app(data_root, app_port)
+        try:
+            _await_app(app_port)
+            dead_port = _free_port()
+            sup_proc = _spawn_supervisor(
+                f"http://127.0.0.1:{dead_port}", log, tree, data_root
+            )
+            try:
+>               _await_status_file(data_root)
+
+tests/test_supervisor_status.py:180: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+data_root = PosixPath('/tmp/pytest-of-user/pytest-1045/test_supervisor_status_alerts_0/data')
+timeout = 30.0
+
+    def _await_status_file(data_root: Path, timeout: float = 30.0) -> Path:
+        status = data_root / "supervisor" / "status.json"
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            if status.is_file():
+                try:
+                    if json.loads(status.read_text(encoding="utf-8")).get("epoch"):
+                        return status
+                except (OSError, ValueError):
+                    pass
+            time.sleep(0.25)
+>       pytest.fail("ملف نبض الحارس لم يُكتب خلال المهلة")
+E       Failed: ملف نبض الحارس لم يُكتب خلال المهلة
+
+tests/test_supervisor_status.py:106: Failed
+_______________ test_supervisor_status_returns_down_when_killed ________________
+
+tmp_path = PosixPath('/tmp/pytest-of-user/pytest-1045/test_supervisor_status_returns1')
+
+    def test_supervisor_status_returns_down_when_killed(tmp_path):
+        """إسقاط فعلي: الحارس حي (up بموته مكتشف بمهلة النبض لا فور القتل)
+        ثم يُقتل وتُنتظر المهلة الطبيعية (عتبة max(10s، 3×الفاصل) — بلا أي
+        تعديل لملف النبض) → 503 down بالمفاتيح المطلوبة بالضبط، والتطبيق لا
+        يسقط: /health يعمل و/chat يرد ردًا صالحًا وفق عقده (ChatResponse)."""
+        data_root = tmp_path / "data"
+        data_root.mkdir()
+        tree = tmp_path / "tree"
+        _make_tree(tree)
+        log = data_root / "supervisor" / "monitor_log.jsonl"
+        app_port = _free_port()
+        app_proc = _spawn_app(data_root, app_port)
+        try:
+            _await_app(app_port)
+            dead_port = _free_port()
+            sup_proc = _spawn_supervisor(
+                f"http://127.0.0.1:{dead_port}", log, tree, data_root
+            )
+            try:
+>               _await_status_file(data_root)
+
+tests/test_supervisor_status.py:250: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+data_root = PosixPath('/tmp/pytest-of-user/pytest-1045/test_supervisor_status_returns1/data')
+timeout = 30.0
+
+    def _await_status_file(data_root: Path, timeout: float = 30.0) -> Path:
+        status = data_root / "supervisor" / "status.json"
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            if status.is_file():
+                try:
+                    if json.loads(status.read_text(encoding="utf-8")).get("epoch"):
+                        return status
+                except (OSError, ValueError):
+                    pass
+            time.sleep(0.25)
+>       pytest.fail("ملف نبض الحارس لم يُكتب خلال المهلة")
+E       Failed: ملف نبض الحارس لم يُكتب خلال المهلة
+
+tests/test_supervisor_status.py:106: Failed
+_________________ test_app_startup_succeeds_without_supervisor _________________
+
+tmp_path = PosixPath('/tmp/pytest-of-user/pytest-1045/test_app_startup_succeeds_with0')
+
+    def test_app_startup_succeeds_without_supervisor(tmp_path):
+        """الإقلاع بلا حارس من البداية: التطبيق يعمل، والنقطة تُقرأ down
+        بـ503 (الملف غائب) — لا اعتماد وجوديًا على الحارس."""
+        data_root = tmp_path / "data"
+        data_root.mkdir()
+        app_port = _free_port()
+        app_proc = _spawn_app(data_root, app_port)
+        try:
+            _await_app(app_port)
+            code, body = _get(app_port, "/supervisor/status")
+>           assert code == 503, f"بلا حارس يجب 503: {code} {body}"
+E           AssertionError: بلا حارس يجب 503: 404 {'detail': 'Not Found'}
+E           assert 404 == 503
+
+tests/test_supervisor_status.py:298: AssertionError
+_________________ test_supervisor_status_endpoint_is_readonly __________________
+
+tmp_path = PosixPath('/tmp/pytest-of-user/pytest-1045/test_supervisor_status_endpoin0')
+
+    def test_supervisor_status_endpoint_is_readonly(tmp_path):
+        """قراءة فقط (بلا كاتب متزامن — بلا حارس): ملف نبض ثابت، بصمة دليل
+        الحارس ومحتوياته قبل الطلبات وبعدها متطابقة، وطرق الكتابة على المسار
+        مرفوضة (405) بلا أثر، ومصدر app.py لا يفتح مسار النبض للكتابة."""
+        data_root = tmp_path / "data"
+        sup_dir = data_root / "supervisor"
+        sup_dir.mkdir(parents=True)
+        # ملف نبض صالح ثابت (عُدة الواجهة — بلا كاتب حي)
+        from datetime import datetime, timezone
+        status_file = sup_dir / "status.json"
+        status_file.write_text(json.dumps({
+            "heartbeat": datetime.now(timezone.utc).isoformat(),
+            "epoch": time.time(), "interval": 2.0, "active_alerts": 0,
+        }), encoding="utf-8")
+        app_port = _free_port()
+        app_proc = _spawn_app(data_root, app_port)
+        try:
+            _await_app(app_port)
+            before_dir = sorted(p.name for p in sup_dir.iterdir())
+            before_bytes = status_file.read_bytes()
+            code, body = _get(app_port, "/supervisor/status")
+>           assert code == 200 and body["supervisor"] == "up"
+E           assert (404 == 200)
+
+tests/test_supervisor_status.py:328: AssertionError
+____________ test_supervisor_status_does_not_leak_paths_or_secrets _____________
+
+tmp_path = PosixPath('/tmp/pytest-of-user/pytest-1045/test_supervisor_status_does_no0')
+
+    def test_supervisor_status_does_not_leak_paths_or_secrets(tmp_path):
+        """لا تسريب: الحالتان (up وكل أسباب down: غائب/تالف/قديم/مستقبلي)
+        بمفاتيح مطلوبة بالضبط، ولا قيمة تحمل مسارًا أو سرًّا أو جذر بيانات —
+        تشمل حالة فساد الملف وفشل قراءته (اعتراض المراجع)."""
+        data_root = tmp_path / "data"
+        sup_dir = data_root / "supervisor"
+        sup_dir.mkdir(parents=True)
+        app_port = _free_port()
+        app_proc = _spawn_app(data_root, app_port)
+        try:
+            _await_app(app_port)
+            status_file = sup_dir / "status.json"
+    
+            def _assert_no_leak(body):
+                for value in body.values():
+                    text = str(value)
+                    for banned in (str(data_root), "SOVEREIGN", "KEY", "/"):
+                        assert banned not in text, (
+                            f"تسريب في الاستجابة: {banned!r} في {text!r}"
+                        )
+    
+            # ١) غائب → down/invalid
+            code, body = _get(app_port, "/supervisor/status")
+>           assert code == 503 and set(body) == {"supervisor", "reason"}
+E           assert (404 == 503)
+
+tests/test_supervisor_status.py:388: AssertionError
+=============================== warnings summary ===============================
+backend/config.py:312
+  /home/user/workspace/sovereign_ai/backend/config.py:312: UserWarning: ⚠️ CORS مفتوح للجميع — مقبول في التطوير فقط (D-034)
+    warnings.warn("⚠️ CORS مفتوح للجميع — مقبول في التطوير فقط (D-034)")
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_supervisor_status.py::test_supervisor_status_returns_up_when_healthy
+FAILED tests/test_supervisor_status.py::test_supervisor_status_alerts_appear_and_clear
+FAILED tests/test_supervisor_status.py::test_supervisor_status_returns_down_when_killed
+FAILED tests/test_supervisor_status.py::test_app_startup_succeeds_without_supervisor
+FAILED tests/test_supervisor_status.py::test_supervisor_status_endpoint_is_readonly
+FAILED tests/test_supervisor_status.py::test_supervisor_status_does_not_leak_paths_or_secrets
+6 failed, 1 warning in 97.90s (0:01:37)
+exit: 1

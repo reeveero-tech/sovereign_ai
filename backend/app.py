@@ -645,6 +645,75 @@ async def health_check():
     }
 
 
+def _load_heartbeat() -> Optional[dict]:
+    """قراءة ملف نبض الحارس (R-696 — الربط الآمن) والتحقق من عقده.
+
+    القناة الوحيدة: ملف في جذر البيانات يكتبه الحارس كل دورة — لا استيراد
+    لكود الحارس ولا خيوط ولا منفذ ثانٍ. أي خلل (ملف غائب/غير مقروء/تالف،
+    أرقام غير محدودة، طابع مستقبلي، نبض غير قابل للتحليل) → None: قيمة
+    تالفة لا تمنح حالة صحية، ولا تنعكس نصوص الأخطاء أبدًا."""
+    import math
+
+    from config import DATA_DIR
+    path = DATA_DIR / "supervisor" / "status.json"
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    if not isinstance(data, dict):
+        return None
+    epoch = data.get("epoch")
+    interval = data.get("interval")
+    alerts = data.get("active_alerts")
+    heartbeat = data.get("heartbeat")
+    if not (
+        isinstance(epoch, (int, float)) and not isinstance(epoch, bool)
+        and math.isfinite(epoch)
+        and isinstance(interval, (int, float)) and not isinstance(interval, bool)
+        and math.isfinite(interval) and interval > 0
+        and isinstance(alerts, int) and not isinstance(alerts, bool)
+        and alerts >= 0
+        and isinstance(heartbeat, str)
+    ):
+        return None
+    if float(epoch) > time.time() + 5.0:  # طابع مستقبلي — مرفوض
+        return None
+    try:
+        datetime.fromisoformat(heartbeat)  # نبض موثق قابل للتحليل فقط
+    except ValueError:
+        return None
+    return data
+
+
+@app.get("/supervisor/status")
+async def supervisor_status():
+    """حالة الحارس — قراءة فقط (R-696: الربط الآمن).
+
+    يقرأ ملف النبض الذي يكتبه الحارس كل دورة؛ النبض الصالح حديثًا (ضمن
+    max(10s، 3×فاصله)) = up بمفاتيح supervisor/last_heartbeat/active_alerts.
+    الملف الغائب/التالف أو النبض المنتهي = down مع 503 — اكتشاف موت
+    الحارس بعد انتهاء مهلة النبض لا فور توقفه، وفشل الحارس لا يُسقط
+    التطبيق: لا استيراد ولا خيوط ولا كتابة على الإطلاق."""
+    data = _load_heartbeat()
+    if data is None:
+        return JSONResponse(
+            status_code=503,
+            content={"supervisor": "down", "reason": "invalid"},
+        )
+    age = time.time() - float(data["epoch"])
+    threshold = max(10.0, 3.0 * float(data["interval"]))
+    if age > threshold:
+        return JSONResponse(
+            status_code=503,
+            content={"supervisor": "down", "reason": "stale"},
+        )
+    return {
+        "supervisor": "up",
+        "last_heartbeat": data["heartbeat"],
+        "active_alerts": data["active_alerts"],
+    }
+
+
 @app.get("/status", response_model=SystemStatusResponse)
 async def system_status():
     """

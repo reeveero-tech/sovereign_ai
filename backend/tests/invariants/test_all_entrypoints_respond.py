@@ -75,8 +75,14 @@ def test_all_registered_routes_respond(client):
         f"expected a real route surface, got only {len(routes)} routes"
     )
 
+    # R-696: /supervisor/status يرد 503 **بتصميمه** عند غياب نبض الحارس —
+    # رفض مقصود لا فشل استجابة (مبدأ 422/400/403 نفسه): عقد الربط الآمن
+    # يُختبر سلوكيًا في الحالتين (up/down) في tests/test_supervisor_status.py
+    DESIGNED_PROBE_5XX = {"/supervisor/status"}
     failures = []
     for methods, path in routes:
+        if path in DESIGNED_PROBE_5XX:
+            continue
         concrete = _substitute_params(path)
         for method in methods:
             if method == "GET":

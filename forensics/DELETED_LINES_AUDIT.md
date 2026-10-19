@@ -1397,3 +1397,28 @@ TA/TD/NF — خلق سكربت المزامنة؛ القيم الصحيحة مث
 | المحذوف | المبرر |
 |---|---|
 | `forensics/DELETED_LINES_AUDIT.md` (−1) | **مُبرر # DELETION-JUSTIFIED:** استبدال سطر الإجمالي النائب بالقيم الفعلية — دقة أعلى. |
+
+
+## إضافة R-696 (2026-10-19) — المرحلة ٥: الربط الآمن (نقطة قراءة فقط)
+
+التزام فوق 6427885 (ملف نبض ذرّي يكتبه الحارس + نقطة /supervisor/status
+قراءة فقط في التطبيق — RED→GREEN مشهود: 6/6 فاشلة قبل التنفيذ):
+
+- `backend/app.py`: +69 / −0
+- `backend/supervisor_daemon.py`: +60 / −1
+- `backend/tests/invariants/test_all_entrypoints_respond.py`: +6 / −0
+- `backend/tests/invariants/test_audit_consistency.py`: +70 / −0
+- `docs/CHANGELOG.md`: +8 / −0
+- `docs/PROJECT_STATE.md`: +10 / −0
+- `forensics/R696_SAFE_INTEGRATION.md`: +94 / −0
+- `forensics/R696_evidence/full_suite_green.log`: +23 / −0
+- `forensics/R696_evidence/green_all_six.log`: +9 / −0
+- `forensics/R696_evidence/red_all_six.log`: +231 / −0
+- `tests/test_supervisor_status.py`: +434 / −0
+- `forensics/DELETED_LINES_AUDIT.md`: +25 / −0
+
+الإجمالي: 1,039 إضافة / 1 حذفًا في 12 ملفًا.
+
+| المحذوف | المبرر |
+|---|---|
+| `backend/supervisor_daemon.py` (−1) | **مُبرر # DELETION-JUSTIFIED:** سطر تعليق قديم للشرط استُبدل بالتقاط مبكر عند الجلب (متغير health يُعاد استخدامه في معالجة الحوادث فلا يصلح للشرط بعدها) — إصلاح أدق. |
