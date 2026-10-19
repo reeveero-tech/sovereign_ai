@@ -1433,8 +1433,8 @@ TA/TD/NF — خلق سكربت المزامنة؛ القيم الصحيحة مث
 - `REPORT_V2.md`: +62 / −0
 - `docs/CHANGELOG.md`: +5 / −0
 - `docs/PROJECT_STATE.md`: +8 / −0
-- `forensics/DELETED_LINES_AUDIT.md`: +15 / −0
+- `forensics/DELETED_LINES_AUDIT.md`: +16 / −0
 
-الإجمالي: 90 إضافة / 0 حذفًا في 4 ملفًا.
+الإجمالي: 91 إضافة / 0 حذفًا في 4 ملفًا.
 
 لا حذف في هذا الالتزام — لا مبررات مطلوبة.
