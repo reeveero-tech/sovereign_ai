@@ -1221,27 +1221,48 @@ test_audit_consistency.py يطابق هذا الجدول مع git حرفيًا):
 مخرجات الحارس داخل الشجرة، استثناء الأب الواسع، ابتلاع rglob لفشل
 الاجتياز، وعدم توحيد المسارات النسبية/المطلقة:
 
-- `backend/awareness.py`: +A1 / −D1
-- `backend/supervisor_daemon.py`: +A2 / −D2
-- `backend/tests/invariants/test_awareness.py`: +A3 / −D3
-- `docs/CHANGELOG.md`: +A4 / −D4
-- `docs/PROJECT_STATE.md`: +A5 / −D5
-- `forensics/R694_PHASE3_AWARENESS.md`: +A6 / −D6
-- `forensics/R694_evidence/full_suite_green_643.log`: +A7 / −D7
-- `forensics/R694_evidence/junit_r694_working_tree_643.xml`: +A8 / −D8
-- `forensics/R694_evidence/red_diff_isolated.log`: +A9 / −D9
-- `forensics/R694_evidence/red_fingerprint_isolated.log`: +A10 / −D10
-- `forensics/R694_evidence/red_load_isolated.log`: +A11 / −D11
-- `forensics/R694_evidence/red_mixed_paths.log`: +A12 / −D12
-- `forensics/R694_evidence/red_outputs_and_traversal.log`: +A13 / −D13
-- `tests/test_awareness_supervisor.py`: +A14 / −D14
-- `forensics/DELETED_LINES_AUDIT.md`: +A15 / −D15
+- `backend/awareness.py`: +28 / −19
+- `backend/supervisor_daemon.py`: +8 / −5
+- `backend/tests/invariants/test_awareness.py`: +36 / −0
+- `docs/CHANGELOG.md`: +7 / −0
+- `docs/PROJECT_STATE.md`: +10 / −0
+- `forensics/R694_PHASE3_AWARENESS.md`: +39 / −6
+- `forensics/R694_evidence/full_suite_green_643.log`: +22 / −0
+- `forensics/R694_evidence/junit_r694_working_tree_643.xml`: +1 / −0
+- `forensics/R694_evidence/red_diff_isolated.log`: +48 / −0
+- `forensics/R694_evidence/red_fingerprint_isolated.log`: +43 / −0
+- `forensics/R694_evidence/red_load_isolated.log`: +43 / −0
+- `forensics/R694_evidence/red_mixed_paths.log`: +63 / −0
+- `forensics/R694_evidence/red_outputs_and_traversal.log`: +84 / −0
+- `tests/test_awareness_supervisor.py`: +58 / −0
+- `forensics/DELETED_LINES_AUDIT.md`: +33 / −0
 
 الإجمالي: 523 إضافة / 30 حذفًا في 15 ملفًا.
 
 | المحذوف | المبرر |
 |---|---|
-| `backend/awareness.py` (−D1) | **مُبرر # DELETION-JUSTIFIED — تصحيحات المراجع ج2–ج3:** استبدال rglob باجتياز صريح يرفع أخطاءه (لا خريطة ناقصة صامتة) + توحيد resolve() — استبدال أقوى. |
-| `backend/supervisor_daemon.py` (−D2) | **مُبرر # DELETION-JUSTIFIED:** استثناء مسارَي المخرجين كملفين بدل الأب الواسع — استبدال أدق. |
-| `tests/test_awareness_supervisor.py` (−D14) | **مُبرر # DELETION-JUSTIFIED:** إعادة بناء اختبار مخرجات الحارس (تشغيل واحد، مسارات مختلطة، توكيد الفروق كاملًا) — التوكيد الجزئي القديم كان يسمح بفروق زائفة. |
-| `docs/CHANGELOG.md` (−D4) | **مُبرر # DELETION-JUSTIFIED:** سطر عنوان الملف. |
+| `backend/awareness.py` (−19) | **مُبرر # DELETION-JUSTIFIED — تصحيحات المراجع ج2–ج3:** استبدال rglob باجتياز صريح يرفع أخطاءه (لا خريطة ناقصة صامتة) + توحيد resolve() — استبدال أقوى. |
+| `backend/supervisor_daemon.py` (−5) | **مُبرر # DELETION-JUSTIFIED:** استثناء مسارَي المخرجين كملفين بدل الأب الواسع — استبدال أدق. |
+| `forensics/R694_PHASE3_AWARENESS.md` (−6) | **مُبرر # DELETION-JUSTIFIED:** تصحيح وصف دقة RED (السجل الأول متطلب مشترك لا إثبات مستقل) — دقة أعلى. |
+
+
+## إضافة أدلة إغلاق R-694 (2026-10-19) — تدقيق التصحيحات آليًا ودقة وصف RED
+
+التزام فوق 03c5271 (اعتراض إغلاق المراجع: قيم مدخل التصحيحات ظلت
+عناصر نائبة لأن سكربت المزامنة توقف قبل الكتابة، ونُسب حذف لملفات لم
+تُحذف منها أسطر). هذا الالتزام يعالج الأدلة والتوثيق فقط — لا شيفرة
+إنتاجية. مدخل التصحيحات أعلاه الآن مُتحقق منه آليًا باختبارين دائمين
+(test_audit_r694b_*):
+
+- `backend/tests/invariants/test_audit_consistency.py`: +102 / −0
+- `docs/CHANGELOG.md`: +7 / −0
+- `docs/PROJECT_STATE.md`: +9 / −0
+- `forensics/DELETED_LINES_AUDIT.md`: +40 / −19
+- `forensics/R694_PHASE3_AWARENESS.md`: +9 / −8
+
+الإجمالي: 167 إضافة / 27 حذفًا في 5 ملفًا.
+
+| المحذوف | المبرر |
+|---|---|
+| `forensics/DELETED_LINES_AUDIT.md` (−19) | **مُبرر # DELETION-JUSTIFIED:** استبدال صفوف العناصر النائبة بالقيم الفعلية من git + حذف صفوف المبررات المنسوبة لملفات بلا حذف فعلي (نسبة خاطئة رفضها المراجع) — استبدال أدق. |
+| `forensics/R694_PHASE3_AWARENESS.md` (−8) | **مُبرر # DELETION-JUSTIFIED:** استبدال خانات RED غير الدقيقة (NotImplementedError للسلوكيات ذات التعطيل المعزول) بوصف دقيق كما طلب المراجع. |

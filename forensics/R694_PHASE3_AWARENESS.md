@@ -47,15 +47,15 @@
   يثبت أن app.py لا يستورد وحدة الوعي (إشارة consciousness.awareness
   القائمة مسبقًا وحدة أخرى غير محورنا — الفحص دقيق على استيرادنا).
 
-## الاختبارات (RED→GREEN — 7 جديدة، كلها سلوكية)
+## الاختبارات (10 اختبارات وعي جديدة، منها حارس انحدار نجح قبل الإصلاح؛ خانة RED = التعطيل المعزول حيث كان لكل سلوك، والسجل الأول red_r694.log تاريخي: فشل عند المتطلب المشترك build_project_map لا إثباتًا مستقلًا لكل سلوك)
 
 | الاختبار | ما يثبته | RED | GREEN |
 |---|---|---|---|
 | test_project_map_generated_accurately | (أ) دقة الخريطة حرفيًا + المستبعدات التشغيلية | NotImplementedError | ✓ |
-| test_overall_fingerprint_matches_independent_expected_value | البصمة بقيمة مستقلة + تغيير المحتوى يغيرها | NotImplementedError | ✓ |
-| test_file_modification_detected | (ب) التعديل/الإضافة/الحذف تُكتشف | NotImplementedError | ✓ |
-| test_saved_baseline_roundtrip_and_corrupt_not_silent | المرجعية دورة كاملة + التالفة تستثني | NotImplementedError | ✓ |
-| test_unreadable_file_fails_map_not_partial | لا خريطة ناقصة عند تعذر القراءة | NotImplementedError | ✓ |
+| test_overall_fingerprint_matches_independent_expected_value | البصمة بقيمة مستقلة + تغيير المحتوى يغيرها | تعطيل معزول: «البصمة الكلية لا تطابق الصيغة القانونية» (red_fingerprint_isolated.log) | ✓ |
+| test_file_modification_detected | (ب) التعديل/الإضافة/الحذف تُكتشف | تعطيل معزول: «الفروق غير صحيحة» (red_diff_isolated.log) | ✓ |
+| test_saved_baseline_roundtrip_and_corrupt_not_silent | المرجعية دورة كاملة + التالفة تستثني | تعطيل معزول: «المرجعية لم تعد كما حُفظت» (red_load_isolated.log) | ✓ |
+| test_unreadable_file_fails_map_not_partial | لا خريطة ناقصة عند تعذر القراءة | NotImplementedError (المتطلب المشترك — التاريخي) | ✓ |
 | test_supervisor_logs_tampering_periodically | (ج) الحارس الفعلي يسجّل العبث دوريًا (عمليات حقيقية، تعديل بين فحصين، البصمتان وتفاصيل الملف) | الحدث لم يظهر خلال 30s | ✓ |
 | test_app_unaffected_during_and_after_awareness | (د) التطبيق يستجيب أثناء الرصد وبعد توقف الحارس + الفحص البنيوي | الحدث لم يظهر خلال 30s | ✓ |
 
@@ -102,9 +102,10 @@
 
 ## الحزمة والأدلة
 
-- الحزمة النهائية: **643 ناجحًا / 644 مجمّعًا** — صفر تخطٍّ. الالتزام
-  الأول (17c17de): 640/641؛ تصحيحات المراجع ج2–ج3 أضافت 3 اختبارات
-  (المخزن-تحت-الجذر، الاجتياز المعطوب، مخرجات الحارس بمسارات مختلطة).
+- الحزمة النهائية: **645 ناجحًا / 646 مجمّعًا** — صفر تخطٍّ. الالتزام
+  الأول (17c17de): 640/641؛ تصحيحات ج2–ج3 أضافت 3 اختبارات؛ وتصحيح
+  أدلة الإغلاق أضاف اختبارَي تحقق آلي لمدخل التصحيحات (test_audit_r694b_*)
+  — كل مدخل التدقيق الآن مُتحقق منه آليًا (الأصل والتصحيحات).
 - الأدلة في `forensics/R694_evidence/`: سجلات RED الفعلية (الأول للمتطلب
   المشترك + المعزولة للسلوكيات الثلاثة + مخرجات/اجتياز + المسارات
   المختلطة)، سجلات GREEN للحزمتين (638 للأول، 643 للتصحيحات)، وJUnit:

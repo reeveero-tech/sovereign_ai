@@ -882,3 +882,105 @@ def test_audit_r694_total_matches():
     assert int(m.group(3)) == len(numstat), (
         f"عدد الملفات المعلن {m.group(3)} ≠ git {len(numstat)}"
     )
+
+
+# ---------- R-694 — مدخل تصحيحات المراجع ج2–ج3 (التزام منفصل فوق 17c17de) ----------
+
+def _r694b_corrections_commit():
+    """التزام التصحيحات ج2–ج3 — يثبَّت برسالته لا بترتيبه (التزامات
+    الأدلة اللاحقة لا تحمل هذه العبارة فلا تُخطئ)."""
+    proc = subprocess.run(
+        ["git", "log", "--format=%H %P",
+         "--grep=تصحيحات المراجع ج2–ج3 للمرحلة ٣", "-1", "--no-merges"],
+        capture_output=True, text=True, cwd=str(_REPO_ROOT), check=True,
+    )
+    parts = proc.stdout.strip().split()
+    assert len(parts) >= 2, "التزام تصحيحات ج2–ج3 غير موجود في تاريخ git"
+    return parts[0], parts[1]
+
+
+def _r694b_numstat():
+    r694b, parent = _r694b_corrections_commit()
+    proc = subprocess.run(
+        ["git", "diff", "--numstat", f"{parent}..{r694b}"],
+        capture_output=True, text=True, cwd=str(_REPO_ROOT), check=True,
+    )
+    result = {}
+    for line in proc.stdout.strip().splitlines():
+        a, d, name = line.split("\t")
+        result[name] = (int(a), int(d))
+    return result
+
+
+def _r694b_section_rows():
+    """قسم التصحيحات من الملف الحالي: الصفوف + الإجمالي + صفوف المبررات."""
+    src = _AUDIT.read_text(encoding="utf-8")
+    start = src.index("## إضافة تصحيحات المراجع ج2–ج3 لـR-694")
+    lines = src[start:].splitlines()
+    end_idx = len(lines)
+    for i, line in enumerate(lines[1:], start=1):
+        if line.startswith("## "):
+            end_idx = i
+            break
+    section = lines[:end_idx]
+    rows = {}
+    justifications = {}
+    total = None
+    for line in section:
+        m = _ROW.match(line)
+        if m:
+            rows[m.group(1)] = (int(m.group(2)), int(m.group(3)))
+        if "DELETION-JUSTIFIED" in line and line.startswith("| `"):
+            name = line.split("`")[1]
+            justifications[name] = line
+        m = re.search(
+            r"الإجمالي: ([\d,]+) إضافة / (\d+) حذفًا في (\d+) ملف", line
+        )
+        if m and total is None:
+            total = (
+                int(m.group(1).replace(",", "")), int(m.group(2)),
+                int(m.group(3)),
+            )
+    return rows, justifications, total
+
+
+def test_audit_r694b_rows_and_total_match_git():
+    """كل صفوف مدخل التصحيحات وإجماليُّه تطابق git حرفيًا (اعتراض إغلاق
+    المراجع: التزام عادي آخر يُوثَّق ويتحقق آليًا — لا يكشفه تدقيق الأصل)."""
+    rows, _, total = _r694b_section_rows()
+    numstat = _r694b_numstat()
+    assert rows, "مدخل التصحيحات بلا صفوف — لم يُصلح بعد؟"
+    assert total, "سطر الإجمالي غائب من مدخل التصحيحات"
+    mismatches = []
+    for name, declared in sorted(rows.items()):
+        actual = numstat.get(name)
+        if actual is None:
+            mismatches.append(f"{name}: في التدقيق وليس في git")
+        elif actual != declared:
+            mismatches.append(
+                f"{name}: التدقيق {declared} ≠ git {actual}"
+            )
+    missing = [n for n in numstat if n not in rows]
+    if missing:
+        mismatches.append("في git بلا صف: " + ", ".join(sorted(missing)))
+    assert not mismatches, "مدخل التصحيحات لا يطابق git:\n  " + "\n  ".join(mismatches)
+    ta = sum(v[0] for v in numstat.values())
+    td = sum(v[1] for v in numstat.values())
+    assert total == (ta, td, len(numstat)), (
+        f"الإجمالي المعلن {total} ≠ git {(ta, td, len(numstat))}"
+    )
+
+
+def test_audit_r694b_justifications_cover_exactly_deletions():
+    """المبررات تغطي الحذف الفعلي حصرًا: كل ملف له حذف له صف مُعلَّل،
+    ولا تعليل لملف بلا حذف (اعتراض المراجع: نسبة حذف لملفات لم تُحذف)."""
+    _, justifications, _ = _r694b_section_rows()
+    numstat = _r694b_numstat()
+    actually_deleted = {n for n, (a, d) in numstat.items() if d > 0}
+    justified = set(justifications)
+    missing = actually_deleted - justified
+    extra = justified - actually_deleted
+    assert not missing, "حذف بلا مبرر: " + ", ".join(sorted(missing))
+    assert not extra, "مبرر لملف بلا حذف فعلي: " + ", ".join(sorted(extra))
+    for name, row in justifications.items():
+        assert "# DELETION-JUSTIFIED" in row, f"مبرر بلا الوسم: {name}"
