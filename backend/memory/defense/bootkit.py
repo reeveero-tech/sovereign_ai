@@ -391,7 +391,8 @@ class BootkitDefense:
             
             # التحقق من عدم التلاعب
             stored_fingerprint = self._load_stored_fingerprint()
-            if stored_fingerprint and stored_fingerprint != self._config_fingerprint:
+            # R-697: التحقق الثنائي — بصمة مشتقة جديدة أو تاريخية legacy (قراءة فقط)
+            if stored_fingerprint and not self._config_fingerprint_matches(stored_fingerprint):
                 logger.warning("⚠️ تغيير غير مصرح به في ملفات التهيئة")
                 return False
             
@@ -662,7 +663,9 @@ class BootkitDefense:
     # ============================================================
     
     def _compute_config_fingerprint(self) -> str:
-        """حساب بصمة ملفات التهيئة"""
+        """حساب بصمة ملفات التهيئة — R-697 (D-033): مربوطة بمفتاح مشتق
+        (keyring_identity) لا الجذر الخام؛ كل سلسلة/نسخة احتياطية جديدة تحمل
+        الصيغة المشتقة، والتحقق الثنائي يقبل الصيغة التاريخية أيضًا (قراءة فقط)."""
         h = hashlib.sha256()
         
         config_files = [
@@ -675,9 +678,37 @@ class BootkitDefense:
                 h.update(f.read_bytes())
         
         h.update(self.SCHEMA_VERSION.encode())
-        h.update(SOVEREIGN_KEY.encode())  # LEGACY-ROOT-KEY (read-only): بصمة تكامل تربط بالجذر — عرض لا استخدام مفتاحي
+        h.update(_derive_key("keyring_identity"))
         
         return h.hexdigest()
+    
+    def _compute_config_fingerprint_legacy(self) -> str:
+        """R-697 — LEGACY-ROOT-KEY (read-only): صيغة البصمة التاريخية (تخلط
+        الجذر الخام) للتحقق من البصمات المخزنة قبل R-697 فقط — لا تُكتب في
+        سجلات/سلاسل/نسخ احتياطية جديدة أبدًا."""
+        h = hashlib.sha256()
+        
+        config_files = [
+            DATA_DIR / "config.json",
+            DATA_DIR / "memory/config.json"
+        ]
+        
+        for f in config_files:
+            if f.exists():
+                h.update(f.read_bytes())
+        
+        h.update(self.SCHEMA_VERSION.encode())
+        h.update(SOVEREIGN_KEY.encode())  # LEGACY-ROOT-KEY (read-only)
+        
+        return h.hexdigest()
+    
+    def _config_fingerprint_matches(self, stored: str) -> bool:
+        """R-697: تحقق ثنائي — الصيغة المشتقة (القياسية) أو التاريخية (legacy
+        قراءة فقط للبصمات المخزنة قبل الاشتقاق الغرضي)."""
+        return stored in (
+            self._compute_config_fingerprint(),
+            self._compute_config_fingerprint_legacy(),
+        )
     
     def _load_stored_fingerprint(self) -> Optional[str]:
         """تحميل البصمة المخزنة"""

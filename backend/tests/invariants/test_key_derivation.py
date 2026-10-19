@@ -154,3 +154,66 @@ def test_all_consumers_migrated():
         "استخدامات مباشرة غير موسومة لـSOVEREIGN_KEY خارج وحدة الاشتقاق "
         f"(يجب migrate أو وسم LEGACY-ROOT-KEY read-only):\n" + "\n".join(violations)
     )
+
+# ---------- جولة التصحيح (اعتراض المراجع الختامي): مسار المخزن + بصمة الإقلاع ----------
+
+def test_store_encryption_uses_derived_key_not_root():
+    """مسار المخزن الفعلي (تخزين قيمة ثم قراءتها): الاشتقاق يُستدعى بغرض
+    'encryption' صراحةً والمفتاح المستعمل مشتق — لا الجذر الخام ولا اشتقاقه
+    التاريخي (sha3_512). أمر الجولة: «تخزين قيمة ثم قراءة المفتاح المستخدم
+    (عبر mock على دالة الاشتقاق، مع تأكيد أنه استُدعي بـpurpose='encryption')»."""
+    from backend.memory.store import SolidMemoryStore
+    from backend.sovereign.keys import derivation as derivation_mod
+
+    store = object.__new__(SolidMemoryStore)
+    recorded = []
+    original = derivation_mod.derive_key_from_module
+
+    def spy(purpose, module_globals):
+        recorded.append(purpose)
+        return original(purpose, module_globals)
+
+    payload = {"round": "R-697", "value": "سيادي"}
+    with mock.patch.object(derivation_mod, "derive_key_from_module", side_effect=spy):
+        blob = store._encrypt_payload(payload, "episodic")
+        back = store._decrypt_payload(blob, "episodic")
+
+    # دورة كاملة (حفظ + قراءة) عبر المفتاح المشتق — نفس الصيغة، المفتاح فقط اشتُق
+    assert back == payload
+    assert "encryption" in recorded, (
+        "تشفير المخزن لم يستدعِ الاشتقاق بغرض 'encryption' — ما زال يستخدم الجذر مباشرة"
+    )
+    # المفتاح المستعمل ليس الجذر الخام ولا اشتقاقه التاريخي
+    key = store._store_payload_key()
+    root = SOVEREIGN_KEY.encode("utf-8")
+    assert key != root
+    assert key != hashlib.sha3_512(root).digest()[:32]
+
+
+def test_bootkit_config_fingerprint_migrated_with_legacy_verification():
+    """بصمة تهيئة الإقلاع مربوطة بمفتاح مشتق (keyring_identity) لا الجذر الخام —
+    كل سلسلة/نسخة احتياطية جديدة تحمل الصيغة المشتقة؛ والتحقق الثنائي يقبل
+    البصمة التاريخية (legacy قراءة فقط) ويرفض أي بصمة غريبة."""
+    import backend.memory.defense.bootkit as bk_mod
+    from backend.memory.defense.bootkit import BootkitDefense
+
+    bk = object.__new__(BootkitDefense)
+    recorded = []
+    original = bk_mod._derive_key
+
+    def spy(purpose):
+        recorded.append(purpose)
+        return original(purpose)
+
+    with mock.patch.object(bk_mod, "_derive_key", side_effect=spy):
+        new_fp = bk._compute_config_fingerprint()
+    legacy_fp = bk._compute_config_fingerprint_legacy()
+
+    assert "keyring_identity" in recorded, (
+        "بصمة التهيئة لم تستدعِ الاشتقاق بغرض 'keyring_identity' — ما زالت تخلط الجذر الخام"
+    )
+    # الصيغتان متمايزتان والتحقق ثنائي: المشتقة القياسية + التاريخية قراءة فقط
+    assert new_fp != legacy_fp
+    assert bk._config_fingerprint_matches(new_fp) is True
+    assert bk._config_fingerprint_matches(legacy_fp) is True
+    assert bk._config_fingerprint_matches("deadbeef" * 8) is False

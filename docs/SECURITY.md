@@ -16,10 +16,10 @@
 |---|---|---|
 | `signing` | توقيع أحداث ledger وأفعال السلامة وسلسلة الإقلاع | safety.py، bootkit.py، memory/core.py |
 | `encryption` | تشفير حمولات المخزن وختم الهوية | store/__init__.py، identity_core.py، encoding.py |
-| `keyring_identity` | بصمة ختم الهوية المرتبطة بالجذر | identity_core.py |
+| `keyring_identity` | بصمة الهوية المرتبطة بمفتاح السيد | identity_core.py (ختم الهوية)، bootkit.py (بصمة التهيئة) |
 | `phoenix_seed` | بذور الإحياء الرئيسية وتغليفها | ransomware.py |
 | `phoenix_ash` | مفاتيح موت/رماد البيانات | ransomware.py |
-| `api_auth` | المصادقة القياسية للـAPI (X-API-Key) | api.py، app.py — الجذر الخام legacy مقبول للقراءة فقط |
+| `api_auth` | المصادقة القياسية للـAPI (X-API-Key) | api.py، app.py — الجذر الخام يبقى مقبولًا كبيان اعتماد تاريخي (legacy credential)؛ لا يُستخدم لتشفير/توقيع بيانات جديدة |
 
 ---
 
