@@ -1,0 +1,70 @@
+============================= test session starts ==============================
+platform linux -- Python 3.11.15, pytest-9.1.1, pluggy-1.7.0
+rootdir: /tmp/r695_red_cont
+configfile: pytest.ini
+plugins: anyio-4.15.1
+collected 1 item
+
+tests/test_repair_supervisor.py F                                        [100%]
+
+=================================== FAILURES ===================================
+____________ test_continuous_path_from_supervisor_event_to_proposal ____________
+
+tmp_path = PosixPath('/tmp/pytest-of-user/pytest-872/test_continuous_path_from_supe0')
+
+    def test_continuous_path_from_supervisor_event_to_proposal(tmp_path):
+        """المسار المتصل (اعتراض المراجع ج4): حدث حارس قائم — خطأ مكوّن يبلغ
+        عنه التطبيق في /status (last_error) — يمر كاملًا عبر الحارس الفعلي:
+        جلب ← ملخص يحفظ الخطأ ← سطر دورة ← حادثة ← تصنيف ← اقتراح منطبق على
+        المكوّن المعزول (رقعة فعلية)، لا ملف حادثة منشأ ولا CLI."""
+        tree, data_root, component_src, source_text = _make_repair_fixture(tmp_path)
+        log = data_root / "supervisor" / "monitor_log.jsonl"
+        # تطبيق مرجعي يبلغ عن خطأ مكوّن استيراد — بعقد /status الفعلي نفسه
+        port = _free_port()
+        server = HTTPServer(("127.0.0.1", port), _status_app_factory(
+            "ModuleNotFoundError: No module named 'predictive'"
+        ))
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            proc = _spawn_supervisor(
+                f"http://127.0.0.1:{port}", log, tree, data_root
+            )
+            try:
+                # الحلقة تصنف خطأ المكوّن المُبلَّغ وتقترح — المسار المتصل كله
+>               incident = _await_incident_in_log(log, "import_error")
+                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_repair_supervisor.py:232: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+log_path = PosixPath('/tmp/pytest-of-user/pytest-872/test_continuous_path_from_supe0/data/supervisor/monitor_log.jsonl')
+incident_class = 'import_error', timeout = 40.0
+
+    def _await_incident_in_log(log_path: Path, incident_class: str | None = None,
+                               timeout: float = 40.0) -> dict:
+        """انتظار سطر دورة يحمل حادثة مصنفة من الحارس الفعلي."""
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            for entry in _read_log(log_path):
+                inc = entry.get("incident")
+                if isinstance(inc, dict) and inc.get("class"):
+                    if incident_class is None or inc["class"] == incident_class:
+                        return inc
+            time.sleep(0.25)
+>       pytest.fail(
+            f"الحارس لم يسجل حادثة {incident_class or 'مصنفة'} في سجل المراقبة خلال المهلة"
+        )
+E       Failed: الحارس لم يسجل حادثة import_error في سجل المراقبة خلال المهلة
+
+tests/test_repair_supervisor.py:59: Failed
+=============================== warnings summary ===============================
+backend/config.py:312
+  /tmp/r695_red_cont/backend/config.py:312: UserWarning: ⚠️ CORS مفتوح للجميع — مقبول في التطوير فقط (D-034)
+    warnings.warn("⚠️ CORS مفتوح للجميع — مقبول في التطوير فقط (D-034)")
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_repair_supervisor.py::test_continuous_path_from_supervisor_event_to_proposal
+======================== 1 failed, 1 warning in 40.61s =========================
+exit: 1

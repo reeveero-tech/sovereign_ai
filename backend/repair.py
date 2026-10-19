@@ -52,6 +52,20 @@ def incident_from_monitor_line(entry: dict) -> Optional[dict]:
     """
     health = entry.get("health") if isinstance(entry.get("health"), dict) else {}
     status = entry.get("status") if isinstance(entry.get("status"), dict) else {}
+    # R-695 (اعتراض المراجع ج4): حدث الوعي له الأولوية على سطر يحمل الأمرين
+    # معًا — خطأ الجلب يتكرر كل دورة (يُعالج مرة بتوقيعه في دورته) بينما
+    # حدث التغيير إشارة منفردة لا يجوز أن يُحجب بخطأ الجلب المتزامن
+    awareness = entry.get("awareness")
+    if isinstance(awareness, dict) and awareness.get("event") == "changes_detected":
+        return {
+            "id": f"{entry.get('ts')}:{entry.get('target')}",
+            "source": "supervisor",
+            "kind": "integrity_change",
+            "error_text": "تغيّر مرصود غير مفسّر في شجرة المشروع",
+            "context": {"awareness": awareness},
+        }
+    # حقول الخطأ الفعلية: أخطاء الجلب + خطأ المكوّن الذي يبلغ عنه التطبيق
+    # في /status (last_error) — مسار بيانات حقيقي لا نص مصطنع
     error_text = None
     for field in (health, status):
         err = field.get("error")
@@ -66,14 +80,14 @@ def incident_from_monitor_line(entry: dict) -> Optional[dict]:
             "error_text": error_text,
             "context": {"health": health, "status": status},
         }
-    awareness = entry.get("awareness")
-    if isinstance(awareness, dict) and awareness.get("event") == "changes_detected":
+    comp_err = status.get("component_error")
+    if isinstance(comp_err, str) and comp_err:
         return {
             "id": f"{entry.get('ts')}:{entry.get('target')}",
             "source": "supervisor",
-            "kind": "integrity_change",
-            "error_text": "تغيّر مرصود غير مفسّر في شجرة المشروع",
-            "context": {"awareness": awareness},
+            "kind": "component_error",
+            "error_text": comp_err,
+            "context": {"health": health, "status": status},
         }
     return None  # سطر سليم — ليس حادثة
 
@@ -169,38 +183,49 @@ def _component_source_candidates(component: str, repo_root: Path) -> List[Path]:
     return [c for c in candidates if c.is_file()]
 
 
-def _import_guard_transform(
-    source_text: str, missing_module: str, incident_class: str
+def _import_fix_transform(
+    source_text: str, missing_module: str
 ) -> Optional[str]:
-    """قاعدة التحويل المعلنة الوحيدة: استيراد معطوب → استيراد محروس.
+    """قاعدة التحويل المعلنة الوحيدة: تأهيل استيراد وحدة موجودة في backend/.
 
-    شروط الانطباق: سطر استيراد علوي للمكوّن الناقص نفسه (import/from) في
-    المصدر المعزول. خارجها → None (مراجعة يدوية — لا رقعة شكلية).
-    التغيير حقيقي: الاستيراد الخام يصير حرسًا برسالة واضحة موسومة
-    R-695 — لا تعليقًا وحده."""
-    if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_.]*", str(missing_module)):
+    الأثر الإصلاحي واضح ومثبت بالتنفيذ: الاستيراد المعطوب (وحدة موجودة في
+    backend/ لكن الجملة عارية بلا مسار) يصير مستوردًا من مساره الصحيح —
+    الأصل يفشل بـImportError والرقعة تصلحه (يُفحص على نسخة اختبارية).
+
+    شروط الانطباق الصارمة: جملة استيراد **علوية كاملة** (بلا إزاحة) للوحدة
+    الناقصة نفسها — import X / import X as Y / from X import ... — خارجها
+    None (مراجعة يدوية — لا رقعة شكلية ولا تعليق). الناتج صالح نحويًا
+    دائمًا: الجملة تُستبدل بمكافئها المؤهل دون تغيير الإزاحات أو السياق."""
+    if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", str(missing_module)):
         return None
     lines = source_text.splitlines(keepends=True)
-    pattern = re.compile(
-        r"^(\s*)(?:import|from)\s+" + re.escape(missing_module) + r"\b"
+    # جملة استيراد علوية كاملة فقط — بلا إزاحة تفسد البنية الناتجة.
+    # كل الجمل المطابقة تُؤهل (إصلاح كامل لا أول جملة)
+    bare = re.compile(
+        r"^import " + re.escape(missing_module) + r"(\s+as\s+[A-Za-z_][A-Za-z0-9_]*)?\s*$"
     )
-    for i, line in enumerate(lines):
-        match = pattern.match(line)
-        if not match:
-            continue
-        indent = match.group(1)
-        statement = line.rstrip("\r\n")
-        guarded = (
-            f"{indent}try:\n"
-            f"{statement}\n"
-            f"{indent}except ImportError as _r695_error:  "
-            f"# R-695: اقتراح حارس — يُراجع قبل أي تطبيق\n"
-            f"{indent}    raise RuntimeError("
-            f'"R-695 ({incident_class}): استيراد معطوب — '
-            f"{missing_module}\") from _r695_error\n"
-        )
-        return "".join(lines[:i]) + guarded + "".join(lines[i + 1:])
-    return None
+    from_form = re.compile(
+        r"^from " + re.escape(missing_module) + r" import "
+    )
+    changed = False
+    result = []
+    for line in lines:
+        text = line.rstrip("\r\n")
+        match = bare.match(text)
+        if match:
+            result.append(
+                "from backend import " + missing_module + (match.group(1) or "") + "\n"
+            )
+            changed = True
+        elif from_form.match(text):
+            result.append(text.replace(
+                "from " + missing_module + " import ",
+                "from backend." + missing_module + " import ", 1,
+            ) + "\n")
+            changed = True
+        else:
+            result.append(line)
+    return "".join(result) if changed else None
 
 
 def _missing_module_from_incident(incident: dict) -> Optional[str]:
@@ -243,9 +268,20 @@ def build_proposal(
         raise ValueError("R-695: لا اقتراح بلا تصنيف — الحادثة غير مصنفة")
     if not isinstance(incident, dict) or not incident.get("id"):
         raise ValueError("R-695: حادثة غير صالحة — بلا معرف")
-    if classification.get("incident_id") != incident["id"]:
+    # R-695 (اعتراض المراجع ج2): التصنيف مزور يُرفض — لا يكفي تطابق المعرف؛
+    # التصنيف يجب أن يكون نتيجة المصنف نفسه لهذه الحادثة (إعادة تشغيل
+    # القواعد الحتمية ومطابقة حرفية — قاموس يدوي بمعرف صحيح لا يمر)
+    genuine = classify_incident(incident)
+    if classification != genuine:
         raise ValueError(
-            "R-695: التصنيف غير مرتبط بهذه الحادثة — رفض الاقتراح"
+            "R-695: تصنيف مزور — ليس نتيجة المصنف لهذه الحادثة"
+        )
+    # R-695 (اعتراض المراجع ج2): مرجع الكود يجب أن يكون مكوّنًا معزولًا
+    # مثبتًا — من قارئ سجل العزل القائم لا من اسم يُمرر مباشرة
+    quarantined = quarantined_components(data_root)
+    if component not in quarantined:
+        raise ValueError(
+            "R-695: المكوّن غير معزول — لا اقتراح على كود غير معزول"
         )
     if classification.get("class") != "import_error":
         return {
@@ -261,14 +297,27 @@ def build_proposal(
             "status": "manual_review",
             "reason": "الخطأ لا يسمّي وحدة ناقصة — مراجعة يدوية",
         }
-    for source in _component_source_candidates(component, Path(repo_root)):
+    # شرط الأثر الإصلاحي: الوحدة موجودة فعلًا في backend/ (الخلل في مسار
+    # الاستيراد لا في وجودها) — إلا فالإصلاح مراجعة يدوية لا رقعة
+    root = Path(repo_root)
+    module_exists = (
+        (root / "backend" / f"{missing_module}.py").is_file()
+        or (root / "backend" / missing_module).is_dir()
+    )
+    if not module_exists:
+        return {
+            "status": "manual_review",
+            "reason": (
+                f"الوحدة {missing_module} غير موجودة في backend/ — "
+                "إصلاحها ليس قاعدة معلنة (تثبيت تبعية) — مراجعة يدوية"
+            ),
+        }
+    for source in _component_source_candidates(component, root):
         try:
             source_text = source.read_text(encoding="utf-8")
         except OSError:  # R-695: مصدر غير قابل للقراءة — جرّب المرشح التالي
             continue
-        new_text = _import_guard_transform(
-            source_text, missing_module, classification["class"]
-        )
+        new_text = _import_fix_transform(source_text, missing_module)
         if new_text is None:
             continue
         # رقعة unified diff فعلية (difflib) — تُحفظ كملف .diff في المخزن
@@ -339,30 +388,16 @@ def build_proposal(
 
 
 def quarantined_components(data_root: str | os.PathLike) -> List[str]:
-    """المكونات المعزولة حاليًا من سجل العزل الدائم (قراءة فقط).
+    """المكونات المعزولة حاليًا — من قارئ سجل العزل القائم (R-687).
 
-    سجل العزل حالة منطقية (R-687): مكوّن معزول = آخر حدث له عزل. لا
-    استيراد لوحدات التشغيل هنا — قراءة مباشرة للسجل بنفس عقد القارئ."""
-    log_path = Path(data_root) / "loyalty" / "quarantine_log.jsonl"
-    if not log_path.is_file():
-        return []
-    state: Dict[str, str] = {}
-    try:
-        with open(log_path, "r", encoding="utf-8") as f:
-            for line in f:
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    entry = json.loads(line)
-                except json.JSONDecodeError:  # R-695: سطر ممزق — يُتخطى كعقد القراءة
-                    continue
-                component = entry.get("component")
-                if component:
-                    state[str(component)] = str(entry.get("kind", ""))
-    except OSError:
-        return []  # سجل غير مقروء — لا مكونات تُفترض
-    return sorted(c for c, kind in state.items() if kind == "quarantine")
+    لا إعادة بناء لآلة الحالات هنا (اعتراض المراجع): قراء العزل القائمة
+    موثوقة ومختبرة — نستدعيها ونكتفي. العزل حالة منطقية مرتبطة بمكون."""
+    from backend import loyalty_log  # قارئ قائم — stdlib خالص
+
+    state, _marker = loyalty_log.read_quarantine_state(
+        loyalty_log.quarantine_log_path(data_root)
+    )
+    return sorted(state)
 
 
 def process_incident(
@@ -379,6 +414,7 @@ def process_incident(
     if classification is None:
         return {"status": "unclassified"}
     result: Optional[dict] = None
+    failure: Optional[dict] = None
     for component in quarantined_components(data_root):
         outcome = build_proposal(
             incident, classification, component, repo_root, data_root
@@ -386,6 +422,13 @@ def process_incident(
         if outcome.get("status") == "proposed":
             result = outcome
             break  # أول مرجع كود منطبق يكفي — لا تكرار
+        if outcome.get("status") == "save_failed":
+            # R-695 (اعتراض المراجع ج3): فشل الحفظ ينتشر صراحة — لا يظهر
+            # كأنه غياب قاعدة منطبقة؛ الحادثة لا تُعد منجزة قبله
+            failure = outcome
+            break
+    if failure is not None:
+        return failure
     if result is not None:
         return result
     return {

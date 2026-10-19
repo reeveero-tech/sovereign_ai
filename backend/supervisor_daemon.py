@@ -55,12 +55,25 @@ def _fetch_json(url: str, timeout: float):
 
 
 def _summarize_status(status: dict) -> dict:
-    """/status كبير — يُختصر للسجل: الحالة + عدد المكونات + الطابع الزمني."""
+    """/status كبير — يُختصر للسجل: الحالة + عدد المكونات + الطابع الزمني.
+
+    R-695: خطأ المكوّن الذي يبلغ عنه التطبيق (last_error في صحة المكونات)
+    يُحفظ في الملخص — مسار بيانات حقيقي من /status إلى خط حوادث الحارس
+    (المصنف يقرأه ويصنفه)، لا نص مصطنع."""
     components = status.get("components")
+    component_error = None
+    if isinstance(components, dict):
+        for health in components.values():
+            if isinstance(health, dict):
+                err = health.get("last_error")
+                if isinstance(err, str) and err:
+                    component_error = err
+                    break
     return {
         "status": status.get("status"),
         "version": status.get("version"),
         "components_count": len(components) if isinstance(components, dict) else None,
+        "component_error": component_error,
         "timestamp": status.get("timestamp"),
     }
 
@@ -208,7 +221,33 @@ def run(
              if isinstance(f.get("error"), str) and f.get("error")),
             None,
         )
-        if error_text and error_text != last_error_signature:
+        if error_text is None:
+            # R-695: خطأ المكوّن الذي يبلغ عنه التطبيق في /status — حقيقي
+            comp_err = status.get("component_error")
+            if isinstance(comp_err, str) and comp_err:
+                error_text = comp_err
+        if isinstance(entry.get("awareness"), dict) and entry[
+            "awareness"
+        ].get("event") == "changes_detected":
+            # R-695 (اعتراض المراجع ج4): حدث الوعي يصل المصنف حتى مع استجابة
+            # HTTP سليمة — حادثة سلامة تُصنف وتُوثق لا تُهمَل
+            try:
+                aw_incident = repair.incident_from_monitor_line(entry)
+                if aw_incident is not None:
+                    aw_outcome = repair.process_incident(
+                        aw_incident, root, data_root
+                    )
+                    aw_class = aw_outcome.get("classification") or {}
+                    entry["incident"] = {
+                        "class": aw_class.get("class", "integrity_change"),
+                        "action": aw_class.get("action", ""),
+                        **({"proposal": aw_outcome["diff_file"]}
+                           if aw_outcome.get("diff_file") else {}),
+                    }
+            except Exception as exc:  # لا يقتل الحارس — يُسجل ويتابع
+                entry["incident"] = {"class": "processing_failed",
+                                     "error": str(exc)}
+        elif error_text and error_text != last_error_signature:
             last_error_signature = error_text
             try:
                 incident = repair.incident_from_monitor_line(entry)

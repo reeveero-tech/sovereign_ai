@@ -1,0 +1,46 @@
+============================= test session starts ==============================
+platform linux -- Python 3.11.15, pytest-9.1.1, pluggy-1.7.0
+rootdir: /tmp/r695_red_prop
+configfile: pytest.ini
+plugins: anyio-4.15.1
+collected 1 item
+
+backend/tests/invariants/test_repair.py F                                [100%]
+
+=================================== FAILURES ===================================
+_________________ test_proposal_not_applied_and_patch_is_real __________________
+
+tmp_path = PosixPath('/tmp/pytest-of-user/pytest-870/test_proposal_not_applied_and_0')
+
+    def test_proposal_not_applied_and_patch_is_real(tmp_path):
+        """(ج) الاقتراح لا يُطبق تلقائيًا: المصدر المعزول لا يتغير، والرقعة
+        ملف .diff فعلي يُحفظ في مخزن مخرجات الحارس ويُشار إليه من السجل،
+        وأثرها الإصلاحي يُثبت **بالتنفيذ** على نسخة اختبارية فقط: الأصل يفشل
+        بالاستيراد والمرقّع يستورد بنجاح."""
+        import difflib
+        import subprocess
+        import sys as _sys
+    
+        repo, data, component_src, source_text = _make_repo_with_quarantined_component(tmp_path)
+        incident = _import_error_incident()
+        classification = classify_incident(incident)
+        proposal = build_proposal(incident, classification, "memory",
+                                  repo, data)
+>       assert proposal["status"] == "proposed", f"لم يقترح: {proposal}"
+E       AssertionError: لم يقترح: {'status': 'manual_review', 'reason': 'لا مصدر معزول ينطبق عليه شرط القاعدة (استيراد الوحدة الناقصة) — مراجعة يدوية، لا رقعة شكلية'}
+E       assert 'manual_review' == 'proposed'
+E         
+E         - proposed
+E         + manual_review
+
+backend/tests/invariants/test_repair.py:243: AssertionError
+=============================== warnings summary ===============================
+backend/config.py:312
+  /tmp/r695_red_prop/backend/config.py:312: UserWarning: ⚠️ CORS مفتوح للجميع — مقبول في التطوير فقط (D-034)
+    warnings.warn("⚠️ CORS مفتوح للجميع — مقبول في التطوير فقط (D-034)")
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED backend/tests/invariants/test_repair.py::test_proposal_not_applied_and_patch_is_real
+========================= 1 failed, 1 warning in 0.06s =========================
+exit: 1

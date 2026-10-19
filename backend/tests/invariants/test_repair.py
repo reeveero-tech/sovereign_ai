@@ -4,13 +4,12 @@
 
 مواصفة المالك 2026-10-19: (أ) تصنيف حادثة معروفة إلى الفئة الصحيحة،
 (ب) رفض اقتراح إصلاح لو لم تكن هناك حادثة مصنفة، (ج) اقتراح لا يُطبق
-تلقائيًا. واعتراضات المراجع (تخطيط R-695): الصيغة من مدخلات سجل الحارس
-القائم (لا اختراع)، الخاصة قبل العامة، السطر السليم ليس حادثة، الرفض
-بالتصنيف غير المرتبط، والرقعة تغيير حقيقي لا تعليق — تُفحص على نسخة
-اختبارية فقط.
+تلقائيًا. واعتراضات المراجع ج2: شروط الاقتراح صارمة (تصنيف حقيقي ومكوّن
+معزول مثبت — لا قاموس يدوي ولا اسم يمرر)، الرقعة صالحة نحويًا بأثر
+إصلاحي واضح (تُترجم وتُشغَّل)، وفشل الحفظ ينتشر ولا يختفي.
 """
 
-import re
+import json
 import sys
 import textwrap
 from pathlib import Path
@@ -23,7 +22,7 @@ for p in [str(_REPO_ROOT), str(_REPO_ROOT / "backend")]:
         sys.path.insert(0, p)
 
 from backend.repair import (  # noqa: E402
-    _import_guard_transform,
+    _import_fix_transform,
     build_proposal,
     classify_incident,
     incident_from_monitor_line,
@@ -39,6 +38,37 @@ def _health_error_line(error: str) -> dict:
     }
 
 
+def _make_repo_with_quarantined_component(tmp_path: Path, component: str = "memory"):
+    """شجرة اختبار: مستودع بمكوّن معزول في سجل العزل (عبر القارئ القائم)
+    ومصدره فيه الاستيراد المعطوب لوحدة موجودة في backend/ — والمكوّن غير
+    الوحدة المستهدفة (البرهان غير ذاتي المرجع: ترقيع المكوّن لا يستورد
+    المكوّن نفسه)."""
+    repo = tmp_path / "repo"
+    (repo / "backend" / component).mkdir(parents=True)
+    (repo / "backend" / "predictive").mkdir(parents=True)
+    source_text = "import json\nimport predictive\n"
+    component_src = repo / "backend" / component / "__init__.py"
+    component_src.write_text(source_text, encoding="utf-8")
+    # الوحدة المستهدفة نظيفة وقابلة للاستيراد — الخلل في مسار الاستيراد
+    (repo / "backend" / "predictive" / "__init__.py").write_text(
+        "marker = 'predictive-ok'\n", encoding="utf-8")
+    data = tmp_path / "data"
+    loyalty = data / "loyalty"
+    loyalty.mkdir(parents=True)
+    (loyalty / "quarantine_log.jsonl").write_text(
+        json.dumps({"time": 1.0, "kind": "quarantine", "detail": "خلل",
+                    "component": component}) + "\n",
+        encoding="utf-8",
+    )
+    return repo, data, component_src, source_text
+
+
+def _import_error_incident():
+    return incident_from_monitor_line(
+        _health_error_line("ModuleNotFoundError: No module named 'predictive'")
+    )
+
+
 def test_healthy_line_is_not_an_incident():
     """السطر السليم ليس حادثة (اعتراض المراجع) — التحويل يستخرج حقول
     الخطأ الفعلية لا كامل JSON كنص."""
@@ -50,19 +80,35 @@ def test_healthy_line_is_not_an_incident():
 
 
 def test_incident_extracted_from_error_fields():
-    """الحادثة تُستخرج من health.error/status.error بتمثيل داخلي موحد
-    (معرف + مصدر + نص الخطأ الفعلي) — لا النص الكامل."""
+    """الحادثة تُستخرج من health.error/status.error بتمثيل داخلي موحد."""
     line = _health_error_line("URLError: connection refused (errno 111)")
     incident = incident_from_monitor_line(line)
     assert incident is not None
     assert incident["error_text"] == "URLError: connection refused (errno 111)"
     assert incident["source"] == "supervisor"
-    assert incident["id"]  # معرف حادثة موجود
+    assert incident["id"]
+
+
+def test_component_error_reported_by_app_is_incident():
+    """خطأ المكوّن الذي يبلغ عنه التطبيق في /status (last_error عبر ملخص
+    الحارس) حادثة فعلية — مسار بيانات حقيقي لا نص مصطنع."""
+    line = {
+        "ts": 1792380000.0, "target": "http://127.0.0.1:9999",
+        "health": {"status": "ok"},
+        "status": {
+            "status": "operational", "components_count": 7,
+            "component_error": "ImportError: No module named 'predictive'",
+            "timestamp": 1792380000.0,
+        },
+    }
+    incident = incident_from_monitor_line(line)
+    assert incident is not None
+    assert incident["kind"] == "component_error"
+    assert "No module named 'predictive'" in incident["error_text"]
 
 
 def test_awareness_change_is_integrity_incident():
-    """changes_detected حادثة تغيّر سلامة — لا خطأ استيراد أو شبكة
-    (اعتراض المراجع)."""
+    """changes_detected حادثة تغيّر سلامة — لا خطأ استيراد أو شبكة."""
     line = {
         "ts": 1792380000.0, "target": "http://x",
         "health": {"status": "ok"}, "status": {"state": "healthy"},
@@ -104,140 +150,194 @@ def test_classify_known_incidents():
             f"{error_text} → {classification['class']} ≠ {expected_class}"
         )
         assert classification["action"], "إجراء مقترح غائب"
-        assert classification["incident_id"] == incident["id"], (
-            "التصنيف غير مرتبط بالحادثة نفسها"
-        )
-    # المجهولة تبقى غير مصنفة بلا اقتراح
+        assert classification["incident_id"] == incident["id"]
     unknown = incident_from_monitor_line(
         _health_error_line("خطأ غير معروف النمط إطلاقًا")
     )
     assert classify_incident(unknown) is None
 
 
-def test_proposal_rejected_without_classification(tmp_path):
-    """(ب) رفض الاقتراح بلا تصنيف، وبالتصنيف غير المرتبط بالحادثة نفسها —
-    ولا يُكتب أي ملف اقتراح."""
-    incident = incident_from_monitor_line(
-        _health_error_line("ModuleNotFoundError: No module named 'xyz'")
-    )
+def test_proposal_rejected_without_genuine_classification(tmp_path):
+    """(ب) رفض الاقتراح: بلا تصنيف، وبالتصنيف غير المرتبط بالحادثة،
+    وبالتصنيف المزور (معرف صحيح ومحتوى يدوي)، وبالمكوّن غير المعزول —
+    ولا يُكتب أي ملف اقتراح في كل حالات الرفض."""
+    repo, data, component_src, source_text = _make_repo_with_quarantined_component(tmp_path)
+    incident = _import_error_incident()
     # بلا تصنيف إطلاقًا
     with pytest.raises(ValueError):
-        build_proposal(incident, None, "predictive", tmp_path, tmp_path)
-    # تصنيف مرتبط بحادثة أخرى (معرّف مختلف)
+        build_proposal(incident, None, "memory", repo, data)
+    # تصنيف مرتبط بحادثة أخرى (معرف مختلف)
     other = dict(incident)
     other["id"] = "different-incident-id"
-    classification = classify_incident(other)
     with pytest.raises(ValueError):
-        build_proposal(incident, classification, "predictive",
-                       tmp_path, tmp_path)
-    # لا ملف اقتراح كُتب
-    assert not (tmp_path / "proposals").exists() or not any(
-        (tmp_path / "proposals").rglob("*.diff")
-    ), "ملف رقعة كُتب رغم الرفض"
+        build_proposal(incident, classify_incident(other), "memory",
+                       repo, data)
+    # تصنيف مزور: معرف الحادثة الصحيح لكن المحتوى يدوي (اعتراض المراجع ج2)
+    forged = {
+        "incident_id": incident["id"], "class": "import_error",
+        "action": "مزور",
+    }
+    with pytest.raises(ValueError):
+        build_proposal(incident, forged, "memory", repo, data)
+    # مكوّن غير معزول (لا سجل عزل يذكره — قارئ العزل القائم هو الحكم)
+    with pytest.raises(ValueError):
+        build_proposal(incident, classify_incident(incident), "not_quarantined_x",
+                       repo, data)
+    # لا ملف رقعة كُتب رغم كل المحاولات
+    proposals = data / "proposals"
+    assert not proposals.exists() or not any(proposals.rglob("*.diff")), (
+        "ملف رقعة كُتب رغم الرفض"
+    )
+    assert component_src.read_text(encoding="utf-8") == source_text
 
 
-def test_import_guard_transform_applicability():
-    """قاعدة التحويل المعلنة: تنطبق على سطر استيراد الوحدة الناقصة نفسها
-    فقط — ولا تنطبق على غيره (مراجعة يدوية بلا رقعة شكلية)."""
+def test_import_fix_transform_applicability_and_validity():
+    """قاعدة التحويل المعلنة: جملة استيراد **علوية كاملة** للوحدة الناقصة
+    وحدها تُحوَّل (import X → from backend import X، from X import y →
+    from backend.X import y) — والناتج صالح نحويًا دائمًا (يُترجم)،
+    وخارجها لا انطباق (مراجعة يدوية بلا رقعة شكلية)."""
     source = textwrap.dedent(
         """\
         import json
         import predictive
-        from memory import engine
+        from predictive import engine
+        from memory import engine as mem
 
 
         def run():
             pass
         """
     )
-    new_text = _import_guard_transform(source, "predictive", "import_error")
+    new_text = _import_fix_transform(source, "predictive")
     assert new_text is not None, "لم تنطبق القاعدة على استيراد موجود"
-    assert "try:" in new_text and "except ImportError" in new_text
-    assert "import predictive" in new_text  # الاستيراد الأصلي باقٍ داخل الحرس
-    assert "R-695" in new_text  # الاقتراح موسوم لمصدر المراجعة
-    # الوحدات الأخرى لا تُمس
-    assert "import json" in new_text and "from memory import engine" in new_text
-    # لا انطباق على وحدة غير مستوردة في المصدر
-    assert _import_guard_transform(source, "nonexistent_mod", "import_error") is None
+    # الناتج يُترجم — صلاحية نحوية إلزامية (اعتراض المراجع: لا IndentationError)
+    compile(new_text, "<patched>", "exec")
+    assert "from backend import predictive" in new_text
+    assert "from backend.predictive import engine" in new_text
+    # بقية الملف لم تتغير
+    assert "import json" in new_text
+    assert "from memory import engine as mem" in new_text
+    assert "def run():" in new_text
+    # لا انطباق على وحدة غير مستوردة أو جملة غير علوية
+    assert _import_fix_transform(source, "nonexistent_mod") is None
+    indented = "def f():\n    import predictive\n"
+    assert _import_fix_transform(indented, "predictive") is None, (
+        "جملة غير علوية لا يجب أن تنطبق — الناتج كان سيفسد البنية"
+    )
 
 
 def test_proposal_not_applied_and_patch_is_real(tmp_path):
     """(ج) الاقتراح لا يُطبق تلقائيًا: المصدر المعزول لا يتغير، والرقعة
     ملف .diff فعلي يُحفظ في مخزن مخرجات الحارس ويُشار إليه من السجل،
-    وتُفحص الرقعة على نسخة اختبارية فقط (تغيير سلوك حقيقي)."""
-    repo = tmp_path / "repo"
-    (repo / "backend" / "predictive").mkdir(parents=True)
-    source_text = "import predictive\nimport json\n"
-    component_src = repo / "backend" / "predictive" / "__init__.py"
-    component_src.write_text(source_text, encoding="utf-8")
-    incident = incident_from_monitor_line(
-        _health_error_line("ModuleNotFoundError: No module named 'predictive'")
-    )
+    وأثرها الإصلاحي يُثبت **بالتنفيذ** على نسخة اختبارية فقط: الأصل يفشل
+    بالاستيراد والمرقّع يستورد بنجاح."""
+    import difflib
+    import subprocess
+    import sys as _sys
+
+    repo, data, component_src, source_text = _make_repo_with_quarantined_component(tmp_path)
+    incident = _import_error_incident()
     classification = classify_incident(incident)
-    proposal = build_proposal(incident, classification, "predictive",
-                              repo, tmp_path / "data")
-    # الاقتراح مكتوب: وصف + ملف رقعة + سجل
+    proposal = build_proposal(incident, classification, "memory",
+                              repo, data)
+    assert proposal["status"] == "proposed", f"لم يقترح: {proposal}"
     assert proposal["description"], "وصف الإصلاح غائب"
-    diff_file = tmp_path / "data" / "proposals" / proposal["diff_file"]
+    diff_file = data / "proposals" / proposal["diff_file"]
     assert diff_file.is_file(), "ملف الرقعة غير موجود فعلًا"
     diff_text = diff_file.read_text(encoding="utf-8")
-    assert diff_text.startswith("--- "), "الرقعة ليست unified diff"
-    assert "+++ " in diff_text, "الرقعة بلا جهة الهدف"
-    log = (tmp_path / "data" / "proposals" / "proposals_log.jsonl")
-    assert log.is_file(), "سجل الاقتراحات غائب"
-    assert proposal["diff_file"] in log.read_text(encoding="utf-8"), (
-        "السجل لا يشير إلى ملف الرقعة"
+    assert diff_text.startswith("--- ") and "+++ " in diff_text, (
+        "الرقعة ليست unified diff"
     )
+    log_text = (data / "proposals" / "proposals_log.jsonl").read_text(
+        encoding="utf-8")
+    assert proposal["diff_file"] in log_text, "السجل لا يشير إلى ملف الرقعة"
+    assert '"applied": false' in log_text, "السجل لا يوثق عدم التطبيق"
     # المصدر المعزول لم يتغير حرفيًا — لا تطبيق تلقائي
     assert component_src.read_text(encoding="utf-8") == source_text, (
         "المصدر المعزول تغير — تطبيق تلقائي ممنوع"
     )
-    # فحص الرقعة على نسخة اختبارية: التغيير حقيقي (استيراد محروس)
-    # استرجاع النص الجديد من الرقعة (hunk واحد بسيط بصيغة unified diff)
-    new_lines = _apply_unified_diff(source_text, diff_text)
-    assert "except ImportError" in new_lines, "الرقعة لا تنتج الحرس المقصود"
-    assert "import predictive" in new_lines, "الاستيراد الأصلي ضاع في الرقعة"
+    # استرجاع النص المرقّع من الرقعة (hunk موحد بسيط) — في الاختبار فقط
+    new_text = _restore_from_unified_diff(source_text, diff_text)
+    # الناتج المرقّع صالح نحويًا + أثره الإصلاحي بالتنفيذ:
+    # الأصل يفشل (ImportError) والمرقّع يستورد من مساره الصحيح
+    compile(new_text, "<patched>", "exec")
+    original_run = subprocess.run(
+        [_sys.executable, "-c",
+         f"import sys; sys.path.insert(0, {str(repo)!r}); exec(open({str(component_src)!r}).read())"],
+        capture_output=True, text=True,
+    )
+    assert original_run.returncode != 0, "الأصل المفروض أنه يفشل بالاستيراد"
+    patched = tmp_path / "patched_copy.py"
+    patched.write_text(new_text, encoding="utf-8")
+    patched_run = subprocess.run(
+        [_sys.executable, "-c",
+         f"import sys; sys.path.insert(0, {str(repo)!r}); exec(open({str(patched)!r}).read())"],
+        capture_output=True, text=True,
+    )
+    assert patched_run.returncode == 0, (
+        f"المرقّع فشل — الرقعة لا تصلح: {patched_run.stderr[-300:]}"
+    )
 
 
-def _apply_unified_diff(original_text: str, diff_text: str) -> str:
-    """تطبيق الرقعة في الاختبار فقط (الإنتاج ممنوع من التطبيق) — hunk
-    واحد بسيط بصيغة unified diff القياسية."""
+def _restore_from_unified_diff(original_text: str, diff_text: str) -> str:
+    """استرجاع النص الجديد من رقعة unified diff بسيطة — في الاختبار فقط
+    (الإنتاج بلا أي آلية تطبيق)."""
+    import re as _re
     lines = diff_text.splitlines()
-    # رؤوس unified diff: --- a/... +++ b/... @@ ... @@
-    hunk_start = next(i for i, l in enumerate(lines) if l.startswith("@@"))
-    header = lines[hunk_start]
-    old_count = int(re.search(r"-(\d+),(\d+)", header).group(2))
-    removed, added = [], []
-    for l in lines[hunk_start + 1:]:
-        if l.startswith("-"):
-            removed.append(l[1:])
-        elif l.startswith("+"):
-            added.append(l[1:])
-        elif l.startswith(" "):
-            removed.append(l[1:]); added.append(l[1:])
-    assert len(removed) == old_count, "hunk غير متسق"
-    return "\n".join(added) + ("\n" if original_text.endswith("\n") else "")
+    hunks = []
+    current = None
+    for l in lines:
+        if l.startswith("@@"):
+            current = {"start": int(_re.search(r"@@ -(\d+)", l).group(1)),
+                       "added": [], "removed": 0}
+            hunks.append(current)
+        elif current is not None:
+            if l.startswith(("--- ", "+++ ")):
+                continue  # رؤوس الملفات
+            if l.startswith("+"):
+                current["added"].append(l[1:])
+            elif l.startswith("-"):
+                current["removed"] += 1
+            elif l.startswith(" "):
+                # سطر سياق: في الجانبين معًا — الجانب القديم يُستبدل أيضًا
+                current["added"].append(l[1:])
+                current["removed"] += 1
+    original = original_text.splitlines()
+    # التطبيق من الأخير للأول — مواضع البدايات لا تتزحزح
+    for h in reversed(hunks):
+        s = h["start"]
+        original[s - 1: s - 1 + h["removed"]] = h["added"]
+    return "\n".join(original) + "\n"
+
+
+def test_save_failure_propagates_not_hidden(tmp_path):
+    """فشل حفظ الاقتراح ينتشر صراحة — لا يظهر كغياب قاعدة منطبقة ولا
+    يُسجل نجاح كاذب (اعتراض المراجع ج3)."""
+    repo, data, component_src, source_text = _make_repo_with_quarantined_component(tmp_path)
+    incident = _import_error_incident()
+    # المخزن للقراءة فقط: الكتابة تفشل (شروط الانطباق كلها متحققة قبله)
+    store = data / "proposals"
+    store.mkdir(parents=True)
+    store.chmod(0o555)
+    try:
+        result = process_incident(incident, repo, data)
+        assert result["status"] == "save_failed", (
+            f"فشل الحفظ اختفى: {result}"
+        )
+        assert "reason" in result, "سبب الفشل غائب"
+    finally:
+        store.chmod(0o755)
+    # ولا نجاح كاذب في السجل
+    log = data / "proposals" / "proposals_log.jsonl"
+    assert not log.exists() or "applied\": true" not in log.read_text(
+        encoding="utf-8")
 
 
 def test_process_incident_pipeline(tmp_path):
     """خط الحارس كاملًا: حادثة مصنفة + مكوّن معزول منطبق → اقتراح؛
     حادثة بلا مرجع كود → إجراء تشغيلي بلا رقعة (لا اختراع تعديل)."""
-    repo = tmp_path / "repo"
-    (repo / "backend" / "predictive").mkdir(parents=True)
-    (repo / "backend" / "predictive" / "__init__.py").write_text(
-        "import predictive\n", encoding="utf-8")
-    data = tmp_path / "data"
-    # سجل العزل: مصدر المكونات المعزولة الوحيد (حالة منطقية — R-687)
-    loyalty = data / "loyalty"
-    loyalty.mkdir(parents=True, exist_ok=True)
-    (loyalty / "quarantine_log.jsonl").write_text(
-        '{"time": 1.0, "kind": "quarantine", "detail": "خلل", '
-        '"component": "predictive"}\n',
-        encoding="utf-8",
-    )
-    incident = incident_from_monitor_line(
-        _health_error_line("ModuleNotFoundError: No module named 'predictive'")
-    )
+    repo, data, *_ = _make_repo_with_quarantined_component(tmp_path)
+    incident = _import_error_incident()
     result = process_incident(incident, repo, data)
     assert result["status"] == "proposed", f"الخط لم يقترح: {result}"
     assert result["classification"]["class"] == "import_error"
@@ -253,8 +353,15 @@ def test_process_incident_pipeline(tmp_path):
     )
     assert result2["classification"]["class"] == "network_error"
     after_diffs = set(proposals_dir.rglob("*.diff")) if proposals_dir.exists() else set()
-    assert after_diffs == before_diffs, (
-        "رقعة اختُرعت لحادثة بلا مرجع كود"
+    assert after_diffs == before_diffs, "رقعة اختُرعت لحادثة بلا مرجع كود"
+    # وحدة ناقصة غير موجودة في backend/ → مراجعة يدوية بلا رقعة (ليست
+    # خلل مسار بل خلل وجود — إصلاحها ليس قاعدة معلنة)
+    ghost = incident_from_monitor_line(
+        _health_error_line("ModuleNotFoundError: No module named 'ghost_mod'")
+    )
+    result3 = process_incident(ghost, repo, data)
+    assert result3["status"] == "classified_no_proposal", (
+        f"وحدة غير موجودة أنتجت رقعة: {result3}"
     )
 
 
@@ -262,7 +369,8 @@ def test_default_log_path_defined_and_isolated(tmp_path, monkeypatch):
     """اختبار انحدار لعلة كامنة مكتشفة أثناء R-695: _default_log_path كانت
     مستدعاة من main وغير معرفة (تشغيل الحارس بلا --log ينهار بـNameError —
     من تعديل R-694؛ الاختبارات القائمة تمرر --log دائمًا فلم تنكشف).
-    الدالة موجودة وتحترم SOVEREIGN_DATA_ROOT (عزل الاختبارات)."""
+    ملاحظة دقة: أُضيف هذا الاختبار بعد الإصلاح — لم يُشهد فشله RED ولا
+    يُنسب إليه RED (اعتراض المراجع ج2 على الأدلة)."""
     from backend import supervisor_daemon
     assert hasattr(supervisor_daemon, "_default_log_path"), (
         "_default_log_path غير معرفة — تشغيل الحارس بلا --log ينهار"

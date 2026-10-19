@@ -1,0 +1,52 @@
+============================= test session starts ==============================
+platform linux -- Python 3.11.15, pytest-9.1.1, pluggy-1.7.0
+rootdir: /tmp/r695_red_cls
+configfile: pytest.ini
+plugins: anyio-4.15.1
+collected 1 item
+
+backend/tests/invariants/test_repair.py F                                [100%]
+
+=================================== FAILURES ===================================
+________________________ test_classify_known_incidents _________________________
+
+    def test_classify_known_incidents():
+        """(أ) تصنيف حادثات معروفة إلى فئاتها الصحيحة + إجراء مقترح لكل
+        فئة، والخاصة قبل العامة (OSError بذكر اتصال = شبكة لا IO)، والمجهولة
+        تبقى غير مصنفة."""
+        cases = [
+            ("ModuleNotFoundError: No module named 'predictive'",
+             "import_error"),
+            ("ImportError: cannot import name 'engine' from 'memory'",
+             "import_error"),
+            ("URLError: <urlopen error [Errno 111] Connection refused>",
+             "network_error"),
+            ("ConnectionError: HTTPConnectionPool timeout of 5s exceeded",
+             "network_error"),
+            ("OSError [Errno 111] Connection refused by peer — network",
+             "network_error"),  # الخاصة قبل العامة: ذكر اتصال داخل OSError
+            ("ValueError: Invalid key (Fernet) — decryption failed",
+             "encryption_error"),
+            ("SyntaxError: invalid syntax (line 42)",
+             "syntax_error"),
+            ("PermissionError: [Errno 13] Permission denied: /data/x.json",
+             "io_error"),
+        ]
+        for error_text, expected_class in cases:
+            incident = incident_from_monitor_line(_health_error_line(error_text))
+            classification = classify_incident(incident)
+>           assert classification is not None, f"لم تُصنف: {error_text}"
+E           AssertionError: لم تُصنف: ModuleNotFoundError: No module named 'predictive'
+E           assert None is not None
+
+backend/tests/invariants/test_repair.py:148: AssertionError
+=============================== warnings summary ===============================
+backend/config.py:312
+  /tmp/r695_red_cls/backend/config.py:312: UserWarning: ⚠️ CORS مفتوح للجميع — مقبول في التطوير فقط (D-034)
+    warnings.warn("⚠️ CORS مفتوح للجميع — مقبول في التطوير فقط (D-034)")
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED backend/tests/invariants/test_repair.py::test_classify_known_incidents
+========================= 1 failed, 1 warning in 0.06s =========================
+exit: 1

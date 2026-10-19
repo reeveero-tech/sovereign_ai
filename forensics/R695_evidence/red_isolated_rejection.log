@@ -1,0 +1,40 @@
+============================= test session starts ==============================
+platform linux -- Python 3.11.15, pytest-9.1.1, pluggy-1.7.0
+rootdir: /tmp/r695_red_rej
+configfile: pytest.ini
+plugins: anyio-4.15.1
+collected 1 item
+
+backend/tests/invariants/test_repair.py F                                [100%]
+
+=================================== FAILURES ===================================
+____________ test_proposal_rejected_without_genuine_classification _____________
+
+tmp_path = PosixPath('/tmp/pytest-of-user/pytest-869/test_proposal_rejected_without0')
+
+    def test_proposal_rejected_without_genuine_classification(tmp_path):
+        """(ب) رفض الاقتراح: بلا تصنيف، وبالتصنيف غير المرتبط بالحادثة،
+        وبالتصنيف المزور (معرف صحيح ومحتوى يدوي)، وبالمكوّن غير المعزول —
+        ولا يُكتب أي ملف اقتراح في كل حالات الرفض."""
+        repo, data, component_src, source_text = _make_repo_with_quarantined_component(tmp_path)
+        incident = _import_error_incident()
+        # بلا تصنيف إطلاقًا
+        with pytest.raises(ValueError):
+            build_proposal(incident, None, "memory", repo, data)
+        # تصنيف مرتبط بحادثة أخرى (معرف مختلف)
+        other = dict(incident)
+        other["id"] = "different-incident-id"
+>       with pytest.raises(ValueError):
+E       Failed: DID NOT RAISE ValueError
+
+backend/tests/invariants/test_repair.py:172: Failed
+=============================== warnings summary ===============================
+backend/config.py:312
+  /tmp/r695_red_rej/backend/config.py:312: UserWarning: ⚠️ CORS مفتوح للجميع — مقبول في التطوير فقط (D-034)
+    warnings.warn("⚠️ CORS مفتوح للجميع — مقبول في التطوير فقط (D-034)")
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED backend/tests/invariants/test_repair.py::test_proposal_rejected_without_genuine_classification
+========================= 1 failed, 1 warning in 0.29s =========================
+exit: 1

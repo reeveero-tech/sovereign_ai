@@ -1293,3 +1293,36 @@ test_audit_consistency.py يطابق هذا الجدول مع git حرفيًا):
 |---|---|
 | `backend/supervisor_daemon.py` (−6) | **مُبرر # DELETION-JUSTIFIED — المرحلة ٤:** توحيد جذر البيانات (_data_root) وإصلاح العلة الكامنة من R-694 (_default_log_path كانت غير معرفة) + توقيع فحص الوعي بمعامل الاستثناءات — استبدال أدق وأصلح. |
 | `docs/CHANGELOG.md` (−1) | **مُبرر # DELETION-JUSTIFIED:** سطر «آخر تحديث». |
+
+
+## إضافة تصحيحات المراجع ج2 لـR-695 (2026-10-19) — رقعة صالحة وشروط صارمة ومسار متصل
+
+التزام فوق 5e8bc03 (المانعات الأربع عولجت بـRED→GREEN معزول مشهود —
+سجلات التعطيل المعزول في R695_evidence):
+
+- `backend/repair.py`: +104 / −61
+- `backend/supervisor_daemon.py`: +41 / −2
+- `backend/tests/invariants/test_repair.py`: +210 / −102
+- `tests/test_repair_supervisor.py`: +232 / −109
+- `docs/CHANGELOG.md`: +9 / −0
+- `docs/PROJECT_STATE.md`: +10 / −0
+- `forensics/R695_PHASE4_REPAIR.md`: +52 / −4
+- `forensics/R695_evidence/full_suite_green_662.log`: +23 / −0
+- `forensics/R695_evidence/junit_r695_corrections_working_tree.xml`: +1 / −0
+- `forensics/R695_evidence/red_isolated_classification.log`: +52 / −0
+- `forensics/R695_evidence/red_isolated_continuous_path.log`: +70 / −0
+- `forensics/R695_evidence/red_isolated_proposal.log`: +46 / −0
+- `forensics/R695_evidence/red_isolated_rejection.log`: +40 / −0
+- `forensics/R695_evidence/red_isolated_save_failure.log`: +45 / −0
+- `backend/tests/invariants/test_audit_consistency.py`: +70 / −0
+- `forensics/DELETED_LINES_AUDIT.md`: +33 / −0
+
+الإجمالي: 1,038 إضافة / 278 حذفًا في 16 ملفًا.
+
+| المحذوف | المبرر |
+|---|---|
+| `backend/repair.py` (−61) | **مُبرر # DELETION-JUSTIFIED — تصحيحات ج2:** استبدال قاعدة الرقعة غير الصالحة (إزاحة الجملة داخل try) بقاعدة تأهيل الاستيراد الصالحة + فرض الشروط الصارمة (تصنيف حتمي + عزل مثبت) — استبدال أصلح وأدق. |
+| `backend/supervisor_daemon.py` (−2) | **مُبرر # DELETION-JUSTIFIED:** استبدال بنية if/elif لخط الحوادث بأولوية حدث الوعي + حفظ خطأ المكوّن في الملخص — استبدال أكمل. |
+| `backend/tests/invariants/test_repair.py` (−102) | **مُبرر # DELETION-JUSTIFIED:** إعادة بناء اختبارات الرقعة والرفض على العدة غير الذاتية المرجع (المكوّن ≠ الوحدة المستهدفة) — التوكيدات القديمة كانت تبحث عن نص لا تثبت الصلاحية. |
+| `tests/test_repair_supervisor.py` (−109) | **مُبرر # DELETION-JUSTIFIED:** إعادة بناء اختبارات التكامل مع المسار المتصل الكامل وبرهان التنفيذ — استبدال أدق. |
+| `forensics/R695_PHASE4_AWARENESS.md` (−4) | **مُبرر # DELETION-JUSTIFIED:** استبدال وصف RED غير المستقل بالسجلات المعزولة وتصحيح الأرقام — دقة أعلى. |

@@ -1,0 +1,45 @@
+============================= test session starts ==============================
+platform linux -- Python 3.11.15, pytest-9.1.1, pluggy-1.7.0
+rootdir: /tmp/r695_red_save
+configfile: pytest.ini
+plugins: anyio-4.15.1
+collected 1 item
+
+backend/tests/invariants/test_repair.py F                                [100%]
+
+=================================== FAILURES ===================================
+___________________ test_save_failure_propagates_not_hidden ____________________
+
+tmp_path = PosixPath('/tmp/pytest-of-user/pytest-871/test_save_failure_propagates_n0')
+
+    def test_save_failure_propagates_not_hidden(tmp_path):
+        """فشل حفظ الاقتراح ينتشر صراحة — لا يظهر كغياب قاعدة منطبقة ولا
+        يُسجل نجاح كاذب (اعتراض المراجع ج3)."""
+        repo, data, component_src, source_text = _make_repo_with_quarantined_component(tmp_path)
+        incident = _import_error_incident()
+        # المخزن للقراءة فقط: الكتابة تفشل (شروط الانطباق كلها متحققة قبله)
+        store = data / "proposals"
+        store.mkdir(parents=True)
+        store.chmod(0o555)
+        try:
+            result = process_incident(incident, repo, data)
+>           assert result["status"] == "save_failed", (
+                f"فشل الحفظ اختفى: {result}"
+            )
+E           AssertionError: فشل الحفظ اختفى: {'status': 'classified_no_proposal', 'classification': {'incident_id': '1792380000.0:http://127.0.0.1:9999', 'class': 'import_error', 'action': 'تحقق من التبعيات ومسارات الاستيراد؛ افحص عزل المكوّن ومصدره'}, 'note': 'لا مرجع كود معزول منطبق — إجراء تشغيلي فقط، والرقعة تحتاج مراجعة يدوية'}
+E           assert 'classified_no_proposal' == 'save_failed'
+E             
+E             - save_failed
+E             + classified_no_proposal
+
+backend/tests/invariants/test_repair.py:324: AssertionError
+=============================== warnings summary ===============================
+backend/config.py:312
+  /tmp/r695_red_save/backend/config.py:312: UserWarning: ⚠️ CORS مفتوح للجميع — مقبول في التطوير فقط (D-034)
+    warnings.warn("⚠️ CORS مفتوح للجميع — مقبول في التطوير فقط (D-034)")
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED backend/tests/invariants/test_repair.py::test_save_failure_propagates_not_hidden
+========================= 1 failed, 1 warning in 0.06s =========================
+exit: 1
