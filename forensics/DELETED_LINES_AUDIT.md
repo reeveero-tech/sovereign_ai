@@ -1525,3 +1525,21 @@ rc=1 للأساس السابق وrc=0 للمصحح):
 | `forensics/R-696_SAFE_INTEGRATION.md` (−6) | **مُبرر # DELETION-JUSTIFIED:** استبدال ادعاء ترتيب الكتابة بالوصف الدقيق (شاهد فشل مسبق بحجب تنفيذ مكتوب سلفًا) — لا إعادة كتابة للزمن. |
 | `forensics/R696_evidence/redcheck_five_on_abdb50e.log` (−14) | **مُبرر # DELETION-JUSTIFIED:** استبدال السجل السابق بإعادة تشغيل البوابة الحقيقية (نمط الالتقاط الصريح rc=1) — الدليل الأدق. |
 | `forensics/R696_evidence/greencheck_five_on_c42c28f.log` (−1) | **مُبرر # DELETION-JUSTIFIED:** مثل أعلاه — rc=0 بالنمط الصريح. |
+
+## إضافة جولة المرحلة صفر الثانية — تصويب الدقة (2026-10-19)
+
+التزام فوق c4f091e (فحص حالة كامل: 678/0/0 + تطابق ثلاثي للهويات
+CI/Local/Clone عند c4f091e + دورة verify.sh --full ناجحة من clone نظيف —
+سجل الجولة: forensics/PHASE0_ROUND_2026-10-19.md؛ ثم تصويب دقة وثائق ثبت
+عدم مطابقتها للواقع الحالي بأمر المراجع):
+
+- `OWNER_REQUIRED.md`: +10 / −0
+- `docs/OPEN_QUESTIONS.md`: +9 / −1
+- `forensics/PHASE0_ROUND_2026-10-19.md`: +95 / −0
+- `forensics/DELETED_LINES_AUDIT.md`: +18 / −0
+
+الإجمالي: 132 إضافةً / 1 حذفًا في 4 ملفات.
+
+| المحذوف | المبرر |
+|---|---|
+| `docs/OPEN_QUESTIONS.md` (−1) | **مُبرر # DELETION-JUSTIFIED:** سطر «آخر تحديث: 2026-10-14» استُبدل بسطر «آخر تحديث: 2026-10-19» — تحديث تاريخ الملف لا حذف محتوى. |
