@@ -1091,9 +1091,13 @@ def compute_sovereignty_score_v2(repo_root=None, invariants_evidence=None) -> di
     compat_ratio = (compat_with / compat_total) if compat_total else 0.0
 
     # 6) no_mocks_in_prod — مسح فعلي (نفس تعريف primitives القابل لإعادة الحساب)
+    # R-711 (بند ٣ من التدقيق): استدعاء واحد فقط للمسح الثقيل — كان يُستدعى
+    # مرتين في الطلب الواحد (المتغير no_mocks + مدخل inputs) وكل استدعاء يمسح
+    # الشجرة كاملة. القيمة تُخزَّن وتُعاد — دلالات العدادات لم تتغير.
     from backend.sovereign.primitives import Primitives
     prim = Primitives(repo_root=repo_root)
-    no_mocks = 1 if prim.mocks_outside_tests_count() == 0 else 0
+    mocks_outside_count = prim.mocks_outside_tests_count()
+    no_mocks = 1 if mocks_outside_count == 0 else 0
 
     # 7) invariants_passing — من دليل معلوم الهوية (لا تشغيل هنا)
     if invariants_evidence is None:
@@ -1149,7 +1153,7 @@ def compute_sovereignty_score_v2(repo_root=None, invariants_evidence=None) -> di
         "documented_total_events": documented_total,
         "compat_total": compat_total,
         "compat_with_sunset": compat_with,
-        "mocks_outside_tests_count": prim.mocks_outside_tests_count(),
+        "mocks_outside_tests_count": mocks_outside_count,
         "repo_head_sha": sha,
     }
     result["aggregation"] = (
