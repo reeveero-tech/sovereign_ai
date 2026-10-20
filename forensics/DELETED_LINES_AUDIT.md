@@ -1733,3 +1733,23 @@ rebase ولا force-push. التفصيل: `forensics/R-698_ED25519.md` §٦.
 | `backend/memory/core.py` (−4) | **مُبرر # DELETION-JUSTIFIED:** أربعة أسطر: الاستبدال المعيب بالثابت العلني `b'new_generated_key_here'` وتعليقه («توليد مفتاح جديد إذا كان افتراضيًا» — لم يكن توليدًا بل ثابتًا علنيًا) — استُبدلت بالرفض المغلق (`signing_key=None`). هذا هو إصلاح الثغرة نفسه. |
 | `docs/CHANGELOG.md` (−1) | **مُبرر # DELETION-JUSTIFIED:** ترويسة «آخر تحديث» المتقادمة — استُبدلت بترويسة هذه الجولة. |
 | `docs/PROJECT_STATE.md` (−1) | **مُبرر # DELETION-JUSTIFIED:** ترويسة «آخر تحديث» المتقادمة — استُبدلت بترويسة هذه الجولة. |
+
+## R-701 — سلامة السجل مع أكثر من كاتب (2026-10-20)
+
+التزام ذري فوق `5615dda` بتفويض المالك — لا amend ولا rebase ولا force-push. التفصيل: `forensics/R-701_LEDGER_MULTIWRITER.md`.
+
+- `backend/memory/core.py`: +49 / −10
+- `backend/tests/invariants/test_ledger_multiwriter_integrity.py`: +110 / −0
+- `docs/CHANGELOG.md`: +9 / −1
+- `docs/PROJECT_STATE.md`: +2 / −1
+- `forensics/DELETED_LINES_AUDIT.md`: +20 / −0 (مدخل هذا الالتزام نفسه)
+- `forensics/R-698_ED25519.md`: +5 / −0
+- `forensics/R-701_LEDGER_MULTIWRITER.md`: +72 / −0
+
+الإجمالي: 267 إضافةً / 12 حذفًا في 7 ملفات.
+
+| المحذوف | المبرر |
+|---|---|
+| `backend/memory/core.py` (−10) | **مُبرر # DELETION-JUSTIFIED:** عشرة أسطر في ثلاثة مواضع، كلها إصلاح العيوب نفسها: (أ) كتلة المزامنة التي تقبل أي ذيل (ارتداد 3ec945b) → مزامنة للأمام فقط؛ (ب) فرع الذاكرة المؤقتة «تطابق _last_hash → إعادة بلا مهلة» → المهلة وحدها؛ (ج) شرط «آخر تجزئة = _last_hash» وسطر خطئه → شرط العضوية. لا حذف وظيفة. |
+| `docs/CHANGELOG.md` (−1) | **مُبرر # DELETION-JUSTIFIED:** ترويسة «آخر تحديث» المتقادمة — استُبدلت بترويسة هذه الجولة. |
+| `docs/PROJECT_STATE.md` (−1) | **مُبرر # DELETION-JUSTIFIED:** ترويسة «آخر تحديث» المتقادمة — استُبدلت بترويسة هذه الجولة. |

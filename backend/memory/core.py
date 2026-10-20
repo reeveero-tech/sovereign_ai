@@ -633,6 +633,27 @@ class SovereignCore:
             logger.warning(f"R-698: tail last-hash read failed: {e}")
             return None
 
+    def _ledger_contains_hash(self, event_hash: str) -> bool:
+        """R-701: هل تجزئة الحدث موجودة في الملف؟ (GENESIS دائمًا) — مسح كامل،
+        يُستدعى فقط حين يختلف ذيل القرص عن الذاكرة (كاتب آخر — حالة نادرة)."""
+        if event_hash == "GENESIS":
+            return True
+        try:
+            with open(self.log_file, 'r', encoding='utf-8') as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        if json.loads(line).get('hash') == event_hash:
+                            return True
+                    # TOLERATED: malformed line — not a match; verify_* reports it (R-701)
+                    except ValueError:
+                        continue
+        except OSError as e:
+            logger.error(f"R-701: ledger scan failed: {e}")
+        return False
+
     def _load_genesis_status(self) -> bool:
         """التحقق من وجود حدث البداية"""
         if self.meta_file.exists():
@@ -815,13 +836,24 @@ class SovereignCore:
             # 1.5) R-698 (تصويب): مزامنة آخر تجزئة من القرص تحت القفل — كاتب
             # آخر (مثل KeyRotation أو نسخة نواة أخرى) قد ألحق حدثًا موسلسلًا؛
             # البناء على تجزئة الذاكرة القديمة كان يكسر سلسلة prev_hash.
+            # R-701: المزامنة للأمام فقط — تُقبل التجزئة من القرص إن كانت
+            # تجزئتنا المعروفة موجودة في الملف (الملف تقدّم بكاتب مشروع). ملف
+            # تراجع (اقتُطع/أُعيدت كتابته) لا يُقبل: نُبقي التجزئة القديمة فيبقى
+            # الكسر دليلًا (كان تصويب R-698 يقبله فيمحو دليل الاقتطاع).
             _disk_last = self._tail_last_hash()
             if _disk_last is not None and _disk_last != self._last_hash:
-                logger.info(
-                    f"R-698: ledger advanced by another writer — resync "
-                    f"{self._last_hash[:12]}… → {_disk_last[:12]}…"
-                )
-                self._last_hash = _disk_last
+                if self._ledger_contains_hash(self._last_hash):
+                    logger.info(
+                        f"R-698: ledger advanced by another writer — resync "
+                        f"{self._last_hash[:12]}… → {_disk_last[:12]}…"
+                    )
+                    self._last_hash = _disk_last
+                else:
+                    logger.error(
+                        f"R-701 [SECURITY]: ledger rewound or rewritten — known last "
+                        f"hash {self._last_hash[:12]}… not in file; NOT resyncing "
+                        f"(chain break preserved as tamper evidence)"
+                    )
 
             # 2) تحديد الوقت الحالي
             event_time = utc_now_iso()
@@ -1132,9 +1164,9 @@ class SovereignCore:
         """
         # M1: تخزين مؤقت للتحقق — لا نعيد فحص السجل الكامل في كل استعلام حالة
         # R-606: يُعاد التحقق فقط إذا تغيّر السجل (آخر تجزئة) أو انقضت المهلة (60 ثانية)
+        # R-701: المهلة وحدها تحكم الذاكرة — كان تطابق _last_hash في الذاكرة
+        # يعيد النتيجة بلا حد زمني، فتعديل سطر سابق أو إلحاق كاتب آخر لا يُرى أبدًا.
         if not verbose and self._integrity_cache is not None:
-            if self._integrity_cache.get("last_hash") == self._last_hash:
-                return self._integrity_cache["status"]
             if (time.time() - self._integrity_cache.get("ts", 0)) < 60.0:
                 return self._integrity_cache["status"]
         
@@ -1146,6 +1178,10 @@ class SovereignCore:
         
         prev_hash = "GENESIS"
         event_count = 0
+        # R-701: تجزئتنا المعروفة يجب أن تكون ضمن السلسلة (كشف الاقتطاع) — لا أن
+        # تكون آخرها بالضرورة (كاتب مشروع آخر قد يكون مدّ السلسلة بعدها).
+        _known_last = self._last_hash
+        _seen_known = _known_last == "GENESIS"
         
         with open(self.log_file, 'r', encoding='utf-8') as f:
             for line_num, line in enumerate(f, 1):
@@ -1242,6 +1278,8 @@ class SovereignCore:
                         return IntegrityStatus.PARTIAL
                     
                     prev_hash = event['hash']
+                    if prev_hash == _known_last:
+                        _seen_known = True
                     
                     if verbose and event_count % 1000 == 0:
                         logger.info(f"   تم التحقق من {event_count} حدث...")
@@ -1253,9 +1291,10 @@ class SovereignCore:
                     logger.error(f"❌ فشل في السطر {line_num}: {e}")
                     return IntegrityStatus.CORRUPTED
         
-        # التحقق من أن آخر تجزئة متطابقة
-        if prev_hash != self._last_hash:
-            logger.error(f"❌ آخر تجزئة غير متطابقة: {prev_hash[:16]}... != {self._last_hash[:16]}...")
+        # التحقق من أن آخر تجزئة معروفة لهذه النسخة ما زالت في السلسلة
+        # (R-701: عضوية لا مساواة — الاقتطاع يُكشف، وتمديد كاتب مشروع لا يُدان)
+        if not _seen_known:
+            logger.error(f"❌ آخر تجزئة معروفة غير موجودة في السلسلة (اقتطاع/إعادة كتابة): {_known_last[:16]}... (ذيل الملف {prev_hash[:16]}...)")
             return IntegrityStatus.CORRUPTED
         
         # حفظ نتيجة التحقق
