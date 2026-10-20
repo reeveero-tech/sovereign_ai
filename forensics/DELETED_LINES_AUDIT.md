@@ -1657,3 +1657,35 @@ CI/Local/Clone عند c4f091e + دورة verify.sh --full ناجحة من clone 
 |---|---|
 | `backend/memory/defense/bootkit.py` (−3) | **مُبرر # DELETION-JUSTIFIED:** استبدال سطر خلط الجذر الخام في بصمة التهيئة بالصيغة المشتقة (keyring_identity) + استبدال شرط التحقق الأحادي بالتحقق الثنائي — اعتراض المراجع الختامي الموثق (البصمة تُكتب في سجلات جديدة وتدخل قرار سلامة، فليست عرضًا فقط). |
 | `backend/sovereign/keys/derivation.py` (−1)، `docs/SECURITY.md` (−2)، `docs/PROJECT_STATE.md` (−1)، `docs/CHANGELOG.md` (−1)، `forensics/R-697_HKDF.md` (−1) | **مُبرر # DELETION-JUSTIFIED:** استبدال أسطر وصف متقادمة/غير دقيقة («مقبول للقراءة فقط» لوصف بيان اعتماد الجذر، ترويسات «آخر تحديث»، سطر حالة الجولة) بالصياغات المصوبة — تصويب توثيقي، لا حذف محتوى. |
+
+## R-698 — Ed25519 + ملفات التشغيل والنشر (2026-10-20)
+
+التزام ذري واحد فوق `d491417` (ثلاث مهام بأمر المالك): مسار مزدوج
+Ed25519/HMAC + ملفات الحارس + تجهيز النشر — ملفات فقط لا تشغيل.
+
+- `.dockerignore`: +11 / −1
+- `Dockerfile`: +20 / −0
+- `backend/memory/core.py`: +51 / −15
+- `backend/sovereign/keys/ed25519_verifier.py`: +163 / −0 (ملف جديد)
+- `backend/sovereign/keys/keyring.py`: +39 / −0
+- `backend/sovereign/keys/rotation.py`: +12 / −3
+- `backend/sovereign/keys/verifier.py`: +31 / −0
+- `backend/tests/invariants/test_ed25519_migration.py`: +285 / −0 (ملف جديد)
+- `docs/CHANGELOG.md`: +10 / −1
+- `docs/DECISIONS.md`: +14 / −0
+- `docs/DEPLOYMENT_READY.md`: +73 / −0 (ملف جديد)
+- `docs/OPERATIONS.md`: +42 / −0
+- `docs/PROJECT_STATE.md`: +2 / −1
+- `fly.toml`: +6 / −1
+- `forensics/R-698_ED25519.md`: +131 / −0 (ملف جديد — تقرير الجولة)
+- `scripts/docker-compose.supervisor.yml`: +40 / −0 (ملف جديد)
+- `scripts/sovereign-supervisor.service`: +43 / −0 (ملف جديد)
+- `forensics/DELETED_LINES_AUDIT.md`: +32 / −0 (مدخل هذه الجولة نفسه)
+
+الإجمالي: 1005 إضافةً / 22 حذفًا في 18 ملفًا.
+
+| المحذوف | المبرر |
+|---|---|
+| `backend/memory/core.py` (−15) | **مُبرر # DELETION-JUSTIFIED:** إعادة هيكلة مسار التحقق الداخلي (فرع ed25519 بالمفتاح العام + فرع HMAC التاريخي كما هو) وفرع التوقيع حسب نوع المفتاح — أمر المالك R-698. لا حذف وظائف: كل مسارات HMAC التاريخية محفوظة حرفيًا داخل الفرع الجديد. |
+| `backend/sovereign/keys/rotation.py` (−3) | **مُبرر # DELETION-JUSTIFIED:** استبدال سطر إنشاء المفتاح بفرع النوع الصريح (hmac/ed25519) — أمر المالك. |
+| `.dockerignore` (−1)، `fly.toml` (−1)، `docs/CHANGELOG.md` (−1)، `docs/PROJECT_STATE.md` (−1) | **مُبرر # DELETION-JUSTIFIED:** استبدال سطر memory_mb غير الصالب في fly.toml، وإعادة تنظيم كتلة استثناءات .dockerignore، وأسطر ترويسات «آخر تحديث» المتقادمة — تصويب تجهيز النشر وتحديث ترويسة، لا حذف محتوى. |

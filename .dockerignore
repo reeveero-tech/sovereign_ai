@@ -11,7 +11,6 @@ venv/
 # (نسخة محلية فيها هذه الملفات كانت ستضمّن الأسرار في طبقات الصورة).
 *.secret
 *.secret.*
-data/key.secret*
 data/keys/keyring.json
 data/phoenix/
 credentials/
@@ -19,3 +18,14 @@ credentials/
 *.pem
 *.key
 *.p12
+
+# R-698 (جاهزية fly.io): بيانات التشغيل لا تُخبز في الصورة إطلاقًا —
+# تُجهز عند النشر (حجم دائم أو استرجاع) وفق docs/DEPLOYMENT_READY.md.
+# (الأسرار أعلاه مستثناة سلفًا — هذا يستثني حالة التشغيل نفسها.)
+data/
+nexus_data/
+logs/
+cache/
+temp/
+guardian/data/
+audit/

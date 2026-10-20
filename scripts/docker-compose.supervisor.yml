@@ -1,0 +1,40 @@
+# docker-compose.supervisor.yml — الحارس المعزول عبر Docker Compose (R-698 — بديل systemd)
+#
+# ملف فقط — لا تشغيل (تشغيله من صلاحيات المالك). العقد التصميمي (R-687):
+# عملية مستقلة كليًا، كل التواصل عبر HTTP — الحارس لا يملك منفذ استماع.
+#
+# الشبكة: 127.0.0.1 داخل حاوية الحارس لا تشير إلى حاوية التطبيق — لذلك
+# APP_URL يستخدم اسم خدمة التطبيق (`app`) عبر شبكة Compose الداخلية.
+# إن كان التطبيق يعمل خارج Compose، عدّل APP_URL إلى عنوانه الفعلي
+# (أو استخدم network_mode: host — موثق في docs/OPERATIONS.md).
+
+services:
+  # التطبيق (نفس صورة Dockerfile — نقطة التشغيل الافتراضية uvicorn:8080)
+  app:
+    build: .
+    restart: unless-stopped
+    environment:
+      # الرفض المغلق: الصورة تُقلع بلا قيمة أسرار داخل الملف — تُمرر عبر
+      # environment/الأسرار الخارجية (لا أسرار أبدًا داخل الملف — DEPLOYMENT_READY.md)
+      - AI_ENVIRONMENT=production
+    env_file:
+      - path: ./deploy.env
+        required: false   # SOVEREIGN_KEY وCORS_ORIGINS تُمرر هنا (ليست في git)
+    ports:
+      - "8080:8080"
+
+  # الحارس — يراقب التطبيق بالاسم الداخلي `app` (شبكة Compose)
+  supervisor:
+    build: .
+    restart: unless-stopped   # إعادة التشغيل التلقائي — الحارس لا يموت مع المراقَب
+    command: sh -c "cd /app && python -m backend.supervisor_daemon --url http://app:8080 --interval 2.0"
+    environment:
+      - PYTHONUNBUFFERED=1
+      - SOVEREIGN_DATA_ROOT=/var/lib/sovereign
+    volumes:
+      - supervisor-data:/var/lib/sovereign   # سجل المراقبة append-only
+    depends_on:
+      - app
+
+volumes:
+  supervisor-data:

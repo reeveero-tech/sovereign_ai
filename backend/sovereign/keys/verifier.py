@@ -91,6 +91,25 @@ class SignatureVerifier:
         2. إذا كان الحدث لا يحمل key_id (قديم — LEGACY_PRE_KEYRING) →
            UNVERIFIABLE_MISSING_KEY (لا نعرف أي مفتاح استُخدم)
         """
+        # R-698 (المسار المزدوج — أمر المالك): نوع التوقيع يُكتشف من الحدث
+        # نفسه — صريحًا لا استنتاجًا:
+        # - sig_type غائب أو "hmac" → المسار التاريخي الحالي (HMAC-SHA256).
+        # - sig_type صريح "ed25519" → Ed25519Verifier.
+        # - أي نوع آخر → رفض صريح INVALID (لا تخفيض تلقائي إلى HMAC).
+        sig_type = event.get("sig_type")
+        if sig_type == "ed25519":
+            from .ed25519_verifier import Ed25519Verifier
+            return Ed25519Verifier(self.keyring).verify_event(event)
+        if sig_type is not None and sig_type != "hmac":
+            return VerificationResult(
+                status=VerificationStatus.INVALID,
+                key_id=event.get("key_id"),
+                reason=(
+                    f"unknown sig_type '{sig_type}' — explicit rejection "
+                    f"(no automatic fallback to HMAC)"
+                ),
+            )
+
         event_data = self.extract_event_data(event)
         event_key_id = event.get("key_id")
 
@@ -129,6 +148,18 @@ class SignatureVerifier:
                 status=VerificationStatus.UNVERIFIABLE_MISSING_KEY,
                 key_id=event_key_id,
                 reason=f"key {event_key_id} is marked LOST — cannot verify, not claiming forgery"
+            )
+
+        # R-698 (عزل الأنواع — الاتجاه الآخر): حدث بلا sig_type منسوب لمفتاح
+        # Ed25519 → رفض صريح INVALID — لا يُحسب HMAC ببذرة Ed25519 أبدًا.
+        if getattr(key_record, "key_type", "hmac") == "ed25519":
+            return VerificationResult(
+                status=VerificationStatus.INVALID,
+                key_id=event_key_id,
+                reason=(
+                    f"type mismatch: event has no sig_type (historical HMAC) but "
+                    f"key {event_key_id} is ed25519 — explicit rejection"
+                ),
             )
 
         # ⚠️ SECURITY (جولة المجلس <1> — أمين 3.3/بصير BAS-D03/حكيم):

@@ -40,7 +40,8 @@ class KeyRotation:
                 ledger_path = repo_root / "data" / "sovereign_core" / "ledger.jsonl"
         self.ledger_path = Path(ledger_path)
 
-    def rotate(self, reason: str = "scheduled_rotation") -> Optional[KeyRecord]:
+    def rotate(self, reason: str = "scheduled_rotation",
+               key_type: str = "hmac") -> Optional[KeyRecord]:
         """
         يُنفّذ تدوير مفتاح كامل:
         1. يُنشأ مفتاح جديد
@@ -54,8 +55,16 @@ class KeyRotation:
             # 1) المفتاح النشط الحالي (إن وُجد)
             old_key = self.keyring.get_active_key()
 
-            # 2) إنشاء مفتاح جديد
-            new_key = self.keyring.generate_new_key(reason=f"rotation: {reason}")
+            # 2) إنشاء مفتاح جديد — R-698: نوع المفتاح صريح (hmac تاريخي
+            # أو ed25519 الجديد) — الدوران إلى ed25519 لا يمس التاريخ
+            if key_type == "ed25519":
+                new_key = self.keyring.generate_new_ed25519_key(
+                    reason=f"rotation: {reason}"
+                )
+            else:
+                new_key = self.keyring.generate_new_key(
+                    reason=f"rotation: {reason}"
+                )
 
             # 3) تقاعد المفتاح القديم (لا حذف — فقط تغيير حالة)
             if old_key is not None and old_key.key_id != new_key.key_id:

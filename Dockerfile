@@ -1,3 +1,12 @@
+# Dockerfile — جاهز لـfly.io (R-698 — تحديث تجهيز النشر، لا نشر فعلي)
+#
+# قواعد ثابتة محفوظة:
+# - الرفض المغلق: AI_ENVIRONMENT=production — التطبيق يرفض الإقلاع بلا
+#   SOVEREIGN_KEY من الأسرار الخارجية (جولة المجلس <1> — أمين 2.2).
+# - الأسرار لا تدخل الصورة إطلاقًا (.dockerignore: key.secret/keyring/
+#   credentials/*.pem) — تُمرر عبر fly secrets.
+# - التشغيل من داخل backend (app.py يستورد نسبيًا).
+
 FROM python:3.11-slim
 
 WORKDIR /app
@@ -17,6 +26,17 @@ ENV PYTHONPATH=/app/backend
 # يعمل (لا يُقبل البدء بلا SOVEREIGN_KEY من fly secrets).
 ENV AI_ENVIRONMENT=production
 
+# R-698 (جاهزية fly.io): مستخدم غير جذري بأقل امتياز — التطبيق لا يحتاج
+# root أبدًا؛ الملفات الجارية تُكتب في /app/data (ملكية sovereign).
+RUN useradd --system --uid 1001 --create-home sovereign \
+    && mkdir -p /app/data \
+    && chown -R sovereign:sovereign /app
+USER sovereign
+
 EXPOSE 8080
+
+# فحص حيوية داخل الحاوية — /health عبر urllib (لا curl في slim)
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+    CMD ["python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health', timeout=4)"]
 
 CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8080"]

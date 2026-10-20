@@ -112,3 +112,45 @@ uvicorn app:app --host 0.0.0.0 --port 8000
 
 - **كيف يعمل**: يلتقط بصمة محتوى الكود والاختبارات قبل تشغيل pytest (sha256 على كل ملف .py حي — forensics/ والأرشيف والبيانات مستثناة)، يشغل الأمر الفعلي (بادئة junit-prefix بـSHA حقيقي)، يقارن البصمة بعد التشغيل (تغيير = فشل)، ثم يختم تقرير JUnit بالبصمة الملتقطة حرفيًا ويسجل الفعل كاملًا في forensics/build_actions.jsonl (الأمر + رمز الخروج + الهوية + وقتا البدء والنهاية).
 - **كيف يتحقق المالك من أن البوابة لم تُتلاعب بها**: `python3 -c "import sys, subprocess; sys.path.insert(0,'.'); sys.path.insert(0,'backend'); from backend.sovereign.score import _v2_content_fingerprint, _v2_invariants_evidence; head=subprocess.run(['git','rev-parse','HEAD'],capture_output=True,text=True).stdout.strip(); print('tree:', _v2_content_fingerprint('.')); ev=_v2_invariants_evidence('.', junit_path='forensics/pytest_results.xml'); print(ev)"` — `passing: 1` يعني أن تقرير JUnit مقبول ومربوط بمحتوى الشجرة الحالية (بصمته المضمّنة تطابق بصمة الشجرة الآن)؛ أي رفض يعني عدم قبول الدليل — قد يكون لتغيّر الكود بعد التشغيل، أو أن التقرير من شجرة أخرى، أو لفشل الاختبارات أو نقص الدليل نفسه. حد معلن: البصمة 78fc736b7ed9f204... قابلة لإعادة الإنتاج عند الالتزامين 6f9553c و5753ab8 (تحقق فعلي في worktree نظيف) وغير قابلة عند HEAD بعد التزام الإغلاق — لأن جولة الإغلاق نفسها عدّلت backend/sovereign/score.py بأمر المالك (القسم ٢) فتغيّرت بصمة الشجرة.
+
+---
+
+## 10) تشغيل الحارس كخدمة (R-698 — ملفات فقط، لا تشغيل)
+
+> الحارس المعزول (`backend/supervisor_daemon.py` — R-687): عملية مستقلة
+> تقرأ `/health` و`/status` من التطبيق عبر HTTP وتكتب سجل مراقبة
+> append-only. **لا يملك منفذ استماع خاصًا إطلاقًا** — كل منافذ التشغيل
+> تبقى للتطبيق (8080 في الصورة / 8000 محليًا). لا يستورده التطبيق ولا
+> يستورد التطبيق — موت أي طرف لا يمس الآخر.
+
+### systemd (الخيار الأول)
+
+الملف: `scripts/sovereign-supervisor.service` — قبل التفعيل عدّل:
+
+| البند | القيمة الافتراضية في الملف | ملاحظة |
+|---|---|---|
+| جذر المستودع | `/opt/sovereign_ai` | WorkingDirectory — يلزم مسار النشر الفعلي |
+| عنوان التطبيق | `http://127.0.0.1:8000` | عدّله إن كان التطبيق على 8080 أو مضيف آخر |
+| جذر البيانات | `/var/lib/sovereign` | قابل للكتابة للمستخدم `sovereign` — السجل في `<الجذر>/supervisor/monitor_log.jsonl` |
+| فترة الدورة | 2.0 ثانية | `--interval` |
+| إعادة التشغيل | `Restart=always` (بعد 5 ثوانٍ، حد 5 محاولات/دقيقة) | systemd ينهض الحارس تلقائيًا |
+
+التفعيل (من صلاحيات المالك): نسخ الوحدة إلى `/etc/systemd/system/` ثم
+`systemctl daemon-reload` ثم `systemctl enable --now sovereign-supervisor`.
+
+### Docker Compose (البديل)
+
+الملف: `scripts/docker-compose.supervisor.yml` — خدمتان: `app` (نفس صورة
+Dockerfile، المنفذ 8080) و`supervisor` (الأمر: `python -m
+backend.supervisor_daemon --url http://app:8080` عبر شبكة Compose —
+**127.0.0.1 داخل حاوية الحارس لا تشير إلى حاوية التطبيق**؛ الاسم الداخلي
+`app` هو العنوان الصحيح). إعادة التشغيل التلقائية `unless-stopped`، وسجل
+المراقبة في وحدة تخزين `supervisor-data` (append-only).
+
+### قواعد ثابتة للحارس في أي وضع تشغيل
+
+- لا استيراد للحارس داخل `app.py` (حارس بنيوي يمنع ذلك — R-687).
+- سجل المراقبة append-only: `<جذر البيانات>/supervisor/monitor_log.jsonl`.
+- فشل قراءة التطبيق لا يوقف الحارس — يُسجل الخطأ ويستمر (المراقب لا يموت
+  مع المراقَب).
+- خريطة الوعي: أول فحص عند الإقلاع ثم كل 60 ثانية (`--map-interval`).

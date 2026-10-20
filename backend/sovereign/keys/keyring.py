@@ -48,6 +48,7 @@ class KeyRecord:
     status: KeyStatus
     reason_for_retirement: Optional[str] = None  # "lost"|"rotated"|"compromised"|"expired"
     notes: str = ""
+    key_type: str = "hmac"  # R-698: "hmac" (تاريخي) أو "ed25519" — الغياب يعني hmac تاريخيًا
 
     def to_dict(self) -> Dict:
         """يُعيد نسخة dict قابلة للـ JSON (بدون المفتاح الخاص للنشر)"""
@@ -144,6 +145,7 @@ class KeyRing:
                         status=KeyStatus(kd["status"]),
                         reason_for_retirement=kd.get("reason_for_retirement"),
                         notes=kd.get("notes", ""),
+                        key_type=kd.get("key_type", "hmac"),  # R-698: الغياب = hmac تاريخي
                     )
                     self._keys[rec.key_id] = rec
                 self._active_key_id = data.get("active_key_id")
@@ -268,6 +270,7 @@ class KeyRing:
             status=KeyStatus.ACTIVE,
             reason_for_retirement=None,
             notes=reason,
+            key_type="hmac",  # R-698: النوع صريح — توليد HMAC تقليدي
         )
         self._keys[key_id] = rec
         self._active_key_id = key_id
@@ -279,6 +282,42 @@ class KeyRing:
             "key_id": key_id,
             "public_key": rec.public_key,
             "reason": reason,
+        })
+        return rec
+
+    def generate_new_ed25519_key(self, reason: str = "initial") -> KeyRecord:
+        """R-698: يُنشئ مفتاح Ed25519 جديدًا (بجانب مفاتيح HMAC القديمة —
+        لا يستبدلها). البذرة (32 بايتًا) تُخزن في private_key والمفتاح
+        العام الخام في public_key — التحقق التاريخي لا يحتاج الخاصة.
+        key_id و البصمة بنفس حسابات HMAC (تماثل البنية) — والتاريخ إلحافي."""
+        from . import ed25519_verifier as _ed
+
+        seed_hex = _ed.generate_seed_hex()
+        key_id = hashlib.sha256(seed_hex.encode("utf-8")).hexdigest()[:16]
+        now = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+        public_hex = _ed.public_from_seed_hex(seed_hex)
+
+        rec = KeyRecord(
+            key_id=key_id,
+            public_key=public_hex,  # المفتاح العام الخام (32 بايتًا سداسيًا) — للتحقق
+            private_key=seed_hex,  # البذرة — للتوقيع (لا تُنشر أبدًا)
+            valid_from=now,
+            valid_until=None,
+            status=KeyStatus.ACTIVE,
+            reason_for_retirement=None,
+            notes=reason,
+            key_type="ed25519",
+        )
+        self._keys[key_id] = rec
+        self._active_key_id = key_id
+
+        self._append_history({
+            "ts": now,
+            "action": "KEY_CREATED",
+            "key_id": key_id,
+            "public_key": public_hex,
+            "reason": reason,
+            "key_type": "ed25519",  # R-698
         })
         return rec
 

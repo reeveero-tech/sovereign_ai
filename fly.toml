@@ -37,4 +37,9 @@ primary_region = 'ams'
   memory = '512'
   cpu_kind = 'shared'
   cpus = 1
-  memory_mb = 256
+
+# R-698 (جاهزية النشر): الأسرار لا تُوضع في هذا الملف أبدًا — تُضبط بأوامر
+# ينفذها المالك (docs/DEPLOYMENT_READY.md للقائمة الكاملة):
+#   fly secrets set SOVEREIGN_KEY=$(python3 -c "import secrets; print(secrets.token_urlsafe(48))")
+#   fly secrets set CORS_ORIGINS="https://your-domain.example"
+# الصورة ترفض الإقلاع بدونهما في الإنتاج (فشل مغلق — D-034/RK-02).

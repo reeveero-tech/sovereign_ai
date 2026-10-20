@@ -1,0 +1,43 @@
+# sovereign-supervisor.service — الحارس المعزول كخدمة systemd (R-698 — ملف فقط، لا تشغيل)
+#
+# العقد التصميمي (R-687): عملية مستقلة كليًا — لا يستوردها التطبيق ولا
+# تستورده، كل التواصل عبر HTTP فقط (/health و/status). موت أي طرف لا يمس
+# الآخر. إعادة التشغيل التلقائي عبر systemd (Restart=always).
+#
+# الحارس لا يملك منفذ استماع خاصًا إطلاقًا — يقرأ التطبيق عبر APP_URL.
+# القيم أدناه افتراضية: عدّل المسارات وAPP_URL قبل التفعيل الفعلي
+# (التفعيل من صلاحيات المالك — هذه الجولة ملفات فقط).
+
+[Unit]
+Description=Sovereign AI — الحارس المعزول (supervisor daemon, R-687/R-698)
+Documentation=file:///opt/sovereign_ai/docs/OPERATIONS.md
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+[Service]
+Type=simple
+# جذر المستودع — الوحدة تُشغّل `python -m backend.supervisor_daemon`
+WorkingDirectory=/opt/sovereign_ai
+ExecStart=/usr/bin/python3 -m backend.supervisor_daemon --url http://127.0.0.1:8000 --interval 2.0
+Environment=PYTHONUNBUFFERED=1
+# جذر البيانات القابل للكتابة — سجل المراقبة يُكتب في <الجذر>/supervisor/monitor_log.jsonl
+Environment=SOVEREIGN_DATA_ROOT=/var/lib/sovereign
+# ملف بيئة اختياري لتجاوز القيم (APP_URL وغيرها) دون تعديل الوحدة
+EnvironmentFile=-/etc/default/sovereign-supervisor
+
+# عزل وحق أقل امتيازًا — الحارس يقرأ HTTP ويكتب سجله فقط
+User=sovereign
+Group=sovereign
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ReadWritePaths=/var/lib/sovereign
+
+# إعادة التشغيل التلقائي — الحارس لا يموت مع المراقَب (R-687)
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

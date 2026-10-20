@@ -664,6 +664,14 @@ class SovereignCore:
             try:
                 key_record = self._keyring.get_key(_use_key_id)
                 if key_record is not None and hasattr(key_record, 'private_key') and key_record.private_key is not None:
+                    # R-698: توقيع حسب نوع المفتاح — Ed25519 للمفاتيح الجديدة،
+                    # HMAC للمفاتيح التاريخية (نفس البيانات المعيارية — لا تغيير صيغة)
+                    if getattr(key_record, 'key_type', 'hmac') == 'ed25519':
+                        try:
+                            from backend.sovereign.keys import ed25519_verifier as _ed
+                        except ImportError:
+                            from sovereign.keys import ed25519_verifier as _ed
+                        return _ed.sign_hex(data.encode('utf-8'), key_record.private_key)
                     # توقيع HMAC بالمفتاح الخاص من KeyRing
                     import hmac as _hmac
                     key_bytes = key_record.private_key.encode('utf-8') if isinstance(key_record.private_key, str) else key_record.private_key
@@ -788,6 +796,11 @@ class SovereignCore:
             # — يضمن أن key_id يطابق المفتاح المستخدم للتوقيع (لا هوية مزيّفة)
             if _current_key_id:
                 event["key_id"] = _current_key_id
+            # R-698: مؤشر نوع التوقيع للأحداث الجديدة الموقعة Ed25519 —
+            # غيابه يعني المسار التاريخي HMAC (لا يُكتب للـhmac — الحدث
+            # التاريخي يظل بصيغته تمامًا)
+            if _key_record is not None and getattr(_key_record, 'key_type', 'hmac') == 'ed25519':
+                event["sig_type"] = "ed25519"
             
             # 6) كتابة الحدث إلى السجل (JSONL)
             event_line = json.dumps(event, ensure_ascii=False)
@@ -1113,21 +1126,44 @@ class SovereignCore:
                     # - الأحداث التاريخية (بلا key_id): تُتحقق بالصيغة القديمة
                     #   (مفتاح الإعدادات، بيانات بلا key_id) — لا إعادة توقيع للتاريخ.
                     if 'key_id' in event:
-                        # R-625: التحقق يستخدم key_id من الحدث نفسه (وليس المفتاح النشط)
-                        # — يضمن أن أحداث المفتاح A تُتحقق بنجاح بعد الدوران إلى B
-                        expected_signature = self._compute_event_signature(
-                            event['hash'],
-                            event['prev_hash'],
-                            event['blob'],
-                            event['time'],
-                            event['type'],
-                            key_id=event.get('key_id')
-                        )
-                        # R-625: مقارنة آمنة (hmac.compare_digest)
-                        import hmac as _hmac
-                        if not _hmac.compare_digest(event['signature'], expected_signature):
-                            logger.error(f"❌ فشل في السطر {line_num}: التوقيع غير صحيح (صيغة KeyRing)")
-                            return IntegrityStatus.CORRUPTED
+                        if event.get('sig_type') == 'ed25519':
+                            # R-698: تحقق Ed25519 بالمفتاح العام — لا إعادة توقيع
+                            # بالمفتاح الخاص (التحقق يعمل حتى بغياب مادة التوقيع الخاصة).
+                            # مفتاح غير معروف أو نوعه ليس ed25519 → فساد صريح.
+                            try:
+                                from backend.sovereign.keys import ed25519_verifier as _ed
+                            except ImportError:
+                                from sovereign.keys import ed25519_verifier as _ed
+                            _kr_rec = self._keyring.get_key(event.get('key_id')) if self._keyring else None
+                            if _kr_rec is None or getattr(_kr_rec, 'key_type', 'hmac') != 'ed25519':
+                                logger.error(f"❌ فشل في السطر {line_num}: حدث ed25519 بمفتاح غير معروف أو نوع غير مطابق")
+                                return IntegrityStatus.CORRUPTED
+                            _event_data = (
+                                f"{event['hash']}|{event['prev_hash']}|{event['blob']}|"
+                                f"{event['time']}|{event['type']}|{event.get('key_id', '')}"
+                            )
+                            if not _ed.verify_hex(
+                                _kr_rec.public_key, _event_data.encode('utf-8'),
+                                event['signature']
+                            ):
+                                logger.error(f"❌ فشل في السطر {line_num}: توقيع Ed25519 غير صحيح")
+                                return IntegrityStatus.CORRUPTED
+                        else:
+                            # R-625: التحقق يستخدم key_id من الحدث نفسه (وليس المفتاح النشط)
+                            # — يضمن أن أحداث المفتاح A تُتحقق بنجاح بعد الدوران إلى B
+                            expected_signature = self._compute_event_signature(
+                                event['hash'],
+                                event['prev_hash'],
+                                event['blob'],
+                                event['time'],
+                                event['type'],
+                                key_id=event.get('key_id')
+                            )
+                            # R-625: مقارنة آمنة (hmac.compare_digest)
+                            import hmac as _hmac
+                            if not _hmac.compare_digest(event['signature'], expected_signature):
+                                logger.error(f"❌ فشل في السطر {line_num}: التوقيع غير صحيح (صيغة KeyRing)")
+                                return IntegrityStatus.CORRUPTED
                     else:
                         # صيغة تاريخية — تحقق بالمفتاح القديم
                         if not verify_hmac(
