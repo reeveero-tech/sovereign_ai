@@ -1932,3 +1932,11 @@ rebase ولا force-push. التفصيل: `forensics/R-698_ED25519.md` §٦.
 | أسطر memory/ وinfrastructure/ وattached_assets/ وFff,IDs.py,encryption.py,investigation.py,Mr.py في PROJECT_STATE §4 | **مُبرر # DELETION-JUSTIFIED:** عناصر غير موجودة في الشجرة (بند ٨ من التدقيق — أُرشفت/حُذفت في R-110/R-685). |
 | سطر «157 إضافةً» في مدخل B-1 | **مُبرر # DELETION-JUSTIFIED:** رقم خاطئ — صُوّب إلى 155 بمثبت git numstat (تصويب مُعلن لا صامت). |
 | ترويستا «آخر تحديث» في CHANGELOG وPROJECT_STATE (نسخة R-711) | **مُبرر # DELETION-JUSTIFIED:** متقادمتان — استُبدلتا بمدخل R-712. |
+
+## GS-1 — دليل التجربة + جدول قرارات المالك (2026-10-20)
+
+| المحذوف (المُستبدَل) | المبرر |
+|---|---|
+| سطر هيكل docs في README («20 ملفاً متتبعة») | **مُبرر # DELETION-JUSTIFIED:** العدد صار 22 بإضافة GETTING_STARTED.md وOWNER_DECISIONS_PENDING.md — استُبدل بالعدد الفعلي. |
+| سطر هيكل docs في PROJECT_STATE §4 («20 ملفاً متتبعة») | **مُبرر # DELETION-JUSTIFIED:** السبب نفسه — 22. |
+| ترويستا «آخر تحديث» في CHANGELOG وPROJECT_STATE (نسخة R-712) | **مُبرر # DELETION-JUSTIFIED:** متقادمتان — استُبدلتا بمدخل GS-1. |

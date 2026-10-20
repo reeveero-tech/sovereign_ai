@@ -19,7 +19,7 @@ sovereign_ai/
 │   ├── quantum/        # الكم
 │   └── sovereign/      # السيادة
 ├── frontend/         # الواجهة (RTL عربي)
-├── docs/             # الوثائق الحاكمة (20 ملفاً متتبعة)
+├── docs/             # الوثائق الحاكمة (22 ملفاً متتبعة)
 ├── guardian/         # الحارس (أمان/نسخ احتياطي)
 ├── nexus/            # منصة منفصلة (NexusCore)
 ├── main.py           # نقطة تشغيل بديلة
@@ -39,6 +39,8 @@ sovereign_ai/
 
 هذا المشروع يخضع لقاعدة **الدفعة الذرية**: لا يُدفع/يُدمج أي شيء دون تحديث الحالة والوثائق والخارطة في نفس الدفعة.
 
+- [GETTING_STARTED.md](docs/GETTING_STARTED.md) — **دليل التجربة خطوة بخطوة (ابدأ هنا)**
+- [OWNER_DECISIONS_PENDING.md](docs/OWNER_DECISIONS_PENDING.md) — قرارات تنتظر المالك (عرض فقط)
 - [PROJECT_CHARTER.md](docs/PROJECT_CHARTER.md) — لماذا المشروع؟
 - [PROJECT_STATE.md](docs/PROJECT_STATE.md) — أين نحن الآن؟
 - [ROADMAP.md](docs/ROADMAP.md) — إلى أين نذهب؟
