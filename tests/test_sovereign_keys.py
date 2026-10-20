@@ -261,8 +261,14 @@ def test_key_rotation_full_cycle(isolated_keyring):
     rot_event = json.loads(ledger_lines[-1])
     assert rot_event["type"] == "KEY_ROTATED"
     assert rot_event["key_id"] == new_key.key_id  # القاعدة الصارمة
-    assert rot_event["old_key_id"] == key1.key_id
-    assert rot_event["reason"] == "test_rotation"
+    # R-698 (تصويب أمني): old_key_id/reason انتقلا من حقول علوية غير موثقة
+    # (خارج التجزئة والتوقيع — قابلة للعبث بلا كشف) إلى blob المُجزّأ الموقّع
+    payload = rotation.core.get_payload(rot_event)
+    assert payload["old_key_id"] == key1.key_id
+    assert payload["reason"] == "test_rotation"
+    assert payload["new_key_id"] == new_key.key_id
+    # والحدث موقّع فعلًا ويُتحقق (كان التعليق يدّعي التوقيع بلا توقيع)
+    assert SignatureVerifier(ring).verify_event(rot_event).status == VerificationStatus.VERIFIED
 
 
 def test_keyring_stats(isolated_keyring):

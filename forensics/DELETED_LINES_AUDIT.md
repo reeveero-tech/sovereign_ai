@@ -1689,3 +1689,28 @@ Ed25519/HMAC + ملفات الحارس + تجهيز النشر — ملفات ف
 | `backend/memory/core.py` (−15) | **مُبرر # DELETION-JUSTIFIED:** إعادة هيكلة مسار التحقق الداخلي (فرع ed25519 بالمفتاح العام + فرع HMAC التاريخي كما هو) وفرع التوقيع حسب نوع المفتاح — أمر المالك R-698. لا حذف وظائف: كل مسارات HMAC التاريخية محفوظة حرفيًا داخل الفرع الجديد. |
 | `backend/sovereign/keys/rotation.py` (−3) | **مُبرر # DELETION-JUSTIFIED:** استبدال سطر إنشاء المفتاح بفرع النوع الصريح (hmac/ed25519) — أمر المالك. |
 | `.dockerignore` (−1)، `fly.toml` (−1)، `docs/CHANGELOG.md` (−1)، `docs/PROJECT_STATE.md` (−1) | **مُبرر # DELETION-JUSTIFIED:** استبدال سطر memory_mb غير الصالب في fly.toml، وإعادة تنظيم كتلة استثناءات .dockerignore، وأسطر ترويسات «آخر تحديث» المتقادمة — تصويب تجهيز النشر وتحديث ترويسة، لا حذف محتوى. |
+
+## R-698 — التزام التصويب الأمني: KEY_ROTATED وسلسلة prev_hash (2026-10-20)
+
+التزام تصويب واحد فوق `71fa4dd` بأمر المالك (الخيار ١) — لا amend ولا
+rebase ولا force-push. التفصيل: `forensics/R-698_ED25519.md` §٦.
+
+- `backend/memory/core.py`: +37 / −0
+- `backend/sovereign/keys/rotation.py`: +51 / −11
+- `backend/tests/invariants/test_ed25519_migration.py`: +3 / −3
+- `backend/tests/invariants/test_key_rotation_ledger_chain.py`: +152 / −0 (ملف جديد)
+- `docs/CHANGELOG.md`: +10 / −1
+- `docs/DEPLOYMENT_READY.md`: +12 / −0
+- `docs/PROJECT_STATE.md`: +3 / −2
+- `forensics/R-698_ED25519.md`: +108 / −0
+- `tests/test_sovereign_keys.py`: +8 / −2
+- `forensics/DELETED_LINES_AUDIT.md`: +25 / −0 (مدخل هذا الالتزام نفسه)
+
+الإجمالي: 409 إضافةً / 19 حذفًا في 10 ملفات.
+
+| المحذوف | المبرر |
+|---|---|
+| `backend/sovereign/keys/rotation.py` (−11) | **مُبرر # DELETION-JUSTIFIED:** إزالة الإلحاق الخام المعيب لـKEY_ROTATED (`open(..., "a")` + `json.dumps` لسطر بلا سلسلة ولا توقيع + حقول علوية خارج التجزئة) واستبداله بالكتابة عبر `SovereignCore.append_event` — هذا هو إصلاح الثغرة نفسه؛ وتحديث docstring/توقيع `__init__` ليشمل `core`. لا حذف وظيفة: `rotate()` و`get_rotation_history()` كما هما. |
+| `tests/test_sovereign_keys.py` (−2) | **مُبرر # DELETION-JUSTIFIED:** تأكيدا `rot_event["old_key_id"]` و`rot_event["reason"]` كانا يثبّتان الصيغة المعيبة (حقول علوية غير موثقة) — نُقلا حرفيًا بمعناهما إلى قراءة blob الموقّع، وأُضيف تأكيد `new_key_id` وتأكيد VERIFIED. لا إضعاف للاختبار. |
+| `backend/tests/invariants/test_ed25519_migration.py` (−3) | **مُبرر # DELETION-JUSTIFIED:** تعليق متقادم يصف السلوك المعيب «لا تغيير» — استُبدل بوصف الحالة بعد التصويب مع الإحالة لاختبار ledger النواة. لا تغيير في أي تأكيد. |
+| `docs/CHANGELOG.md` (−1)، `docs/PROJECT_STATE.md` (−2) | **مُبرر # DELETION-JUSTIFIED:** ترويستا «آخر تحديث» المتقادمتان، وبادئة بند R-698 في PROJECT_STATE (✅ → ⏳ مع إفصاح «أُعلن مكتملًا قبل أوانه») — تصويب حالة لا حذف محتوى. |

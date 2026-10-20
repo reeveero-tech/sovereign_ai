@@ -1,7 +1,16 @@
 # CHANGELOG.md — سجل التغييرات
 
 > كل تغيير يُسجل هنا (قاعدة الدفعة الذرية).
-> آخر تحديث: 2026-10-20 (R-698 — Ed25519 + تجهيز ملفات التشغيل والنشر)
+> آخر تحديث: 2026-10-20 (R-698 — التزام التصويب الأمني: KEY_ROTATED وسلسلة prev_hash)
+
+---
+
+## [R-698 — التزام التصويب الأمني] — 2026-10-20 — KEY_ROTATED لا يكسر سلسلة prev_hash
+
+- **الثغرة**: `KeyRotation._write_rotation_event` كان يُلحق سطرًا خامًا (بلا hash/prev_hash/blob/signature) في ledger النواة الافتراضي → `verify_content_integrity` = CORRUPTED عند أول دوران؛ والحدث غير موقّع رغم ادعاء التعليق، وحقوله (old_key_id/reason) خارج التجزئة. مُثبتة تجريبيًا في المرحلة صفر على `71fa4dd`.
+- **الإصلاح**: KEY_ROTATED عبر `SovereignCore.append_event` — حدث سلسلة موقّع بالمفتاح النشط الجديد (HMAC أو Ed25519)، المحتوى داخل blob الموقّع؛ نواة محقونة اختيارية `KeyRotation(kr, core=...)` تُرفض إن اختلفت حلقة المفاتيح. `append_event` يعيد مزامنة آخر تجزئة من ذيل الملف تحت القفل (مسار كسر ثانٍ: تجزئة الذاكرة القديمة).
+- **الاختبارات**: `backend/tests/invariants/test_key_rotation_ledger_chain.py` (5) — RED-1: 5 فشل ضد 71fa4dd؛ RED-2: 2 فشل بعد إصلاح الدوران وحده (يثبت المسار الثاني)؛ GREEN: 5 نجاح. `test_key_rotation_full_cycle`: قراءة old_key_id/reason من blob الموقّع + تأكيد VERIFIED. الحزمة: **697 passed / 1 deselected** (692+5).
+- **إفصاح**: السلف أعلن R-698 «مكتملة» مع الثغرة معلقة — تصويب موثق. السجلات المكسورة سابقًا لا تُصلح (قرار المالك). `DEPLOYMENT_READY.md` نال تنبيهًا أمنيًا. **إغلاق R-698 معلق على CI + verify.sh --full لهذا الالتزام.** التفصيل: `forensics/R-698_ED25519.md` §٦.
 
 ---
 

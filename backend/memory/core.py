@@ -590,6 +590,32 @@ class SovereignCore:
                 pass
         
         return 'GENESIS'
+    def _tail_last_hash(self) -> Optional[str]:
+        """R-698 (تصويب): آخر تجزئة من ذيل الملف على القرص (قراءة عكسية
+        بأجزاء — لا مسح كامل). يُعيد "GENESIS" لملف غائب/فارغ، وNone إن
+        تعذّرت القراءة أو كان السطر الأخير بلا تجزئة (يُبقي المستدعي قيمته)."""
+        try:
+            if not self.log_file.exists():
+                return "GENESIS"
+            with open(self.log_file, 'rb') as f:
+                f.seek(0, 2)
+                pos = f.tell()
+                buf = b""
+                while pos > 0:
+                    step = min(65536, pos)
+                    pos -= step
+                    f.seek(pos)
+                    buf = f.read(step) + buf
+                    lines = [l for l in buf.split(b"\n") if l.strip()]
+                    # سطر كامل مضمون: إما وصلنا البداية أو يوجد سطران فأكثر
+                    if lines and (pos == 0 or len(lines) >= 2):
+                        return json.loads(lines[-1].decode('utf-8')).get('hash')
+                return "GENESIS"
+        # TOLERATED: tail read failure → caller keeps its cached hash (R-698)
+        except Exception as e:
+            logger.warning(f"R-698: tail last-hash read failed: {e}")
+            return None
+
     def _load_genesis_status(self) -> bool:
         """التحقق من وجود حدث البداية"""
         if self.meta_file.exists():
@@ -769,6 +795,17 @@ class SovereignCore:
             payload_bytes = payload_json.encode('utf-8')
             blob_hash = self.blob_store.put(payload_bytes, compress=True)
             
+            # 1.5) R-698 (تصويب): مزامنة آخر تجزئة من القرص تحت القفل — كاتب
+            # آخر (مثل KeyRotation أو نسخة نواة أخرى) قد ألحق حدثًا موسلسلًا؛
+            # البناء على تجزئة الذاكرة القديمة كان يكسر سلسلة prev_hash.
+            _disk_last = self._tail_last_hash()
+            if _disk_last is not None and _disk_last != self._last_hash:
+                logger.info(
+                    f"R-698: ledger advanced by another writer — resync "
+                    f"{self._last_hash[:12]}… → {_disk_last[:12]}…"
+                )
+                self._last_hash = _disk_last
+
             # 2) تحديد الوقت الحالي
             event_time = utc_now_iso()
             

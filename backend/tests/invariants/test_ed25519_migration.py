@@ -232,9 +232,9 @@ def test_rotation_from_hmac_to_ed25519_preserves_history(tmp_path):
     assert old_event["key_id"] == old_key.key_id
     assert "sig_type" not in old_event
 
-    # الدوران عبر المسار العام — إلى Ed25519 (ledger الدوران منفصل —
-    # KEY_ROTATED ليس حدث سلسلة hash وسلوكه القائم يُكسر سلامة سلسلة
-    # النواة إن كُتب في ملفها — ملاحظة موثقة في تقرير الجولة، لا تغيير)
+    # الدوران عبر المسار العام — إلى Ed25519 (ledger الدوران منفصل هنا
+    # لعزل فحص التاريخ. R-698 تصويب أمني: KEY_ROTATED صار حدث سلسلة موقّعًا
+    # — حالة ledger النواة نفسه مغطاة في test_key_rotation_ledger_chain.py)
     rotation = KeyRotation(kr, ledger_path=tmp_path / "rotation_ledger.jsonl")
     new_key = rotation.rotate(reason="r698-hmac-to-ed25519", key_type="ed25519")
     assert new_key is not None
