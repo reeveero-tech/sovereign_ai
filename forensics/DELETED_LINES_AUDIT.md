@@ -1809,3 +1809,21 @@ rebase ولا force-push. التفصيل: `forensics/R-698_ED25519.md` §٦.
 | `docs/OPERATIONS.md` (−1) | **مُبرر # DELETION-JUSTIFIED:** ترويسة «آخر تحديث» المتقادمة (2026-10-13). |
 | `docs/CHANGELOG.md` (−1) | **مُبرر # DELETION-JUSTIFIED:** ترويسة «آخر تحديث» المتقادمة. |
 | `docs/PROJECT_STATE.md` (−1) | **مُبرر # DELETION-JUSTIFIED:** ترويسة «آخر تحديث» المتقادمة. |
+
+---
+
+## B-1 — المرحلة ب الدفعة ١: إصلاح الاختبارات الزائفة الأربعة (2026-10-20)
+
+التزام ذري واحد فوق `e8165903` بأمر المالك (بنود ١، ٢، ٥، ٦ من تقرير التدقيق الشامل `forensics/EXHAUSTIVE_AUDIT_2026-10-20.md`). التفصيل: `forensics/B1_VACUOUS_TESTS_FIX_2026-10-20.md`.
+
+- `tests/test_api_key_rotation_gate1.py`: +140 / −35
+- `docs/CHANGELOG.md`: +13 / −1
+- `docs/PROJECT_STATE.md`: +4 / −2
+
+الإجمالي: 157 إضافةً / 38 حذفًا في 3 ملفات (لا كود إنتاج؛ ملفا الوثائق تحديث ترويسة وحالة).
+
+| المحذوف | المبرر |
+|---|---|
+| `tests/test_api_key_rotation_gate1.py` (−35) | **مُبرر # DELETION-JUSTIFIED:** أربعة اختبارات زائفة أُعيدت كتابتها بأمر المالك — `assert new_key == new_key` التوكيد الزائف (بند ١)؛ `pytest.skip` عند فشل العملية الفرعية (بند ٢)؛ مقارنات `old_key != new_key` بلا استدعاء كود تطبيق (بند ٥)؛ كتلة `result_with_broken_hmac` الميتة بلا assert (بند ٦)؛ وأسطر مساعد العملية الفرعية القديم أُعيدت صياغتها في `_run_app_auth_subprocess` الموحد. كل عروض RED (حقن عيوب مضبوطة على نسخ scratch) فشلت كما يجب قبل GREEN — الحرفية في تقرير الجولة. |
+| `docs/CHANGELOG.md` (−1) | **مُبرر # DELETION-JUSTIFIED:** ترويسة «آخر تحديث» المتقادمة (R-703) — استُبدلت بمدخل B-1. |
+| `docs/PROJECT_STATE.md` (−2) | **مُبرر # DELETION-JUSTIFIED:** ترويسة «آخر تحديث» المتقادمة + خلية عدد الاختبارات المتقادمة في §1 («715») — استُبدلت بمدخل B-1 والعدد المثبت 727. |
