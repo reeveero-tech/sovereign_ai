@@ -1,7 +1,7 @@
 # PROJECT_STATE.md — حالة المشروع
 
 > أين نحن الآن؟ هذه الوثيقة تُحدَّث في **كل دفعة** (قاعدة الدفعة الذرية).
-> آخر تحديث: 2026-10-20 — 743 اختبارًا — R-711 ((ب-٢-أ) البند المعماري في score.py: مسح واحد) — HEAD: e15c036 + التزام هذه الجولة
+> آخر تحديث: 2026-10-20 — 743 اختبارًا — R-712 ((ب-٢-ب) الدفعة التوثيقية: README + PROJECT_STATE §4 + agent_ledger + تصويب 155) — HEAD: 5b963a3 + التزام هذه الجولة
 
 ---
 
@@ -21,6 +21,7 @@
 
 ## 2) ما الذي يعمل (مُتحقق منه في هذه الدفعة)
 
+- ✅ **R-712 — (ب-٢-ب) الدفعة التوثيقية (بأمر المالك)**: تصويب README (بند ٧: Railway→fly.io، حذف «Google للتخزين المشفر» بلا مقابل كود، 15→20 ملف docs، حذف archive/ — وبند ١٢ معه)، تصويب PROJECT_STATE §4 (بند ٨: حذف memory/ وinfrastructure/ وattached_assets/ والملفات الجذرية الشاذة غير الموجودة، 204→10 guardian، 2233→4 data)، سطر تسوية agent_ledger (بند ٩)، تصويب 157→155 في DELETED_LINES_AUDIT (مثبت بـ git numstat). لا كود. **الإغلاق معلق على CI + verify.sh --full.**
 - ✅ **R-711 — (ب-٢-أ) البند المعماري في score.py (بأمر المالك)**: مسح mocks_outside_tests_count مرة واحدة لكل حساب بدل مرتين (البند ٣ من التدقيق) — RED→GREEN مثبت باختبارين جديدين، دلالات العدادات لم تتغير. الحزمة 743. **الإغلاق معلق على CI + verify.sh --full.**
 - ✅ **R-706 — التصميم المعماري: القلب واللسان (بأمر المالك)**: `docs/OLLAMA_INTEGRATION_DESIGN.md` يوثق المنفَّذ في R-704 (العميل/الدمج/الوضعان procedural/auto) ويصمم غير المنفَّذ (الوضع الصارم llm، context_builder بحد حجم وسياج بيانات، safety_bridge) مع 8 مخاطر وتخفيفها وجداول اختبارات RED→GREEN — التزام توثيقي، لا كود، الحزمة 741 بلا تغيير. **الإغلاق معلق على CI + verify.sh --full.** أدلة التحقق (إثبات غياب tongue/، الملفات الفعلية كاملة، الفروق، قبل/بعد العناوين) في `forensics/R-706_DESIGN_REPORT.md`.
 - ✅ **R-705 — تصحيحي عاجل (بأمر المالك)**: تسريب HIST-03 (عنوان خادم المالك في 3 أسطر بملفين من R-704) أُصلح وصيغ مقنّعة؛ حارس دائم `tests/test_no_private_ips_in_git.py` يفشل البناء عند أي عنوان خاص في أي ملف متتبع (RED: 13 موضعًا في 8 ملفات → GREEN؛ كشف أيضًا بيانات تجريبية قديمة بملفات defense استُبدلت بنطاق RFC 5737)؛ إحصاء R-704 صُوّب إلى 727+13=740؛ الحزمة 741. **الإغلاق معلق على CI + verify.sh --full.** التفصيل: `forensics/R-705_HIST03_LEAKS_FIX.md`.
@@ -115,16 +116,12 @@ sovereign_ai/
 │   └── biological/     # حزمة backend/biological المكررة أُرشفت في R-303; النشط في memory/biological
 ├── frontend/         # واجهة عربية RTL (index.html + 122 ملف JS + css + ui)
 ├── nexus/            # منصة NexusCore — 71 ملف، مدمجة بالنواة ومكشوفة عبر /components/nexus
-├── guardian/         # نظام طوارئ/نسخ احتياطي (204 ملف) — يحتوي قفل SYSTEM_LOCKED
-├── data/             # بيانات وقت التشغيل (11MB، 2233 ملف متتبع — blobs مشفرة zlib)
-├── memory/           # ⚠️ نسخة مكررة قديمة من backend/memory/defense/polymorphic.py
+├── guardian/         # نظام طوارئ/نسخ احتياطي (10 ملفات متتبعة) — يحتوي قفل SYSTEM_LOCKED
+├── data/             # بيانات وقت التشغيل (4 ملفات متتبعة)
 ├── nexus_data/       # nexus.db (SQLite — فارغ: 0 أحداث، 0 مفاتيح)
-├── infrastructure/   # ⚠️ Dockerfile + requirements.txt فارغان (بايت واحد)
-├── attached_assets/  # ⚠️ ملفان نصيان يحويان تعليمات AI (ليسا كوداً)
-├── Fff, IDs.py, encryption.py, investigation.py, Mr.py  # ⚠️ ملفات جذر شاذة (راجع أدناه)
 ├── main.py           # نقطة تشغيل بديلة (يجب تشغيله من backend)
 ├── Dockerfile, fly.toml, start.sh, .replit, requirements.txt
-└── docs/             # 🆕 وثائق الحوكمة (أُنشئت في هذه الدفعة)
+└── docs/             # وثائق الحوكمة (20 ملفاً متتبعة)
 ```
 
 ---
@@ -275,7 +272,7 @@ sovereign_ai/
 
 - **الحالة**: كاملة (موجودة وعاملة) — فحص هذه الجولة على الكود لا الوثائق: راجع `forensics/PHASE1_STATUS.md`.
 - **الدليل**: كل مكونات المرحلة ١ (keys/__init__.py، keyring.py بكل الحقول، verifier.py بالتفريق الصارم UNVERIFIABLE_MISSING_KEY/INVALID، rotation.py بواجهة rotate(reason)، data/keys/HISTORY.jsonl المحمي باختبار ثابت) + 50 اختبارًا ناجحًا (تصويح رقمي 2026-10-16: وُثق سابقًا 33 خطأً — راجع قسم التصويح في `forensics/PHASE1_STATUS.md`).
-- **المرحلة ٦ (سجل إجراءات الوكيل)**: بدأت — `forensics/agent_ledger.jsonl` (سطر لكل إجراء: ts/phase/action/files_touched/before_hash/after_hash/reason/verified_by).
+- **المرحلة ٦ (سجل إجراءات الوكيل)**: بدأت — `forensics/agent_ledger.jsonl` (سطر لكل إجراء: ts/phase/action/files_touched/before_hash/after_hash/reason/verified_by). **تصويب R-712:** التسجيل توقف عمليًا بعد 2026-10-16 (آخر سطر حينها) — جولات R-685..R-711 لم تُسجل لحظيًا وموثقها المرجعي `docs/CHANGELOG.md` و`forensics/`؛ أُلحق سطر تسوية صريح في السجل بهذه الجولة (لا اختلاق تاريخ).
 
 ---
 
