@@ -75,6 +75,15 @@ class IntegrityStatus(str, Enum):
     NOT_CHECKED = "not_checked"
 
 
+# R-699: قيم مفتاح جذر علنية (فارغ، أو افتراضيات مكتوبة في الكود) — لا تصلح
+# مفتاح تحقق: أي أحد يحسب HMAC بها. وجودها = لا مفتاح تاريخي (fail-closed).
+_PUBLIC_WEAK_ROOT_KEYS = frozenset({
+    b'',
+    b'you_must_change_this_key_immediately',
+    b'new_generated_key_here',
+    'يجب_تغيير_هذا_المفتاح_فوراً'.encode('utf-8'),
+})
+
 # إعدادات التشفير
 HASH_ALGORITHM = hashlib.sha256
 HASH_SIZE = 32  # بايت
@@ -459,10 +468,18 @@ class SovereignCore:
         # مفتاح التوقيع — R-697: LEGACY-ROOT-KEY (read-only). هذا المفتاح لا يوقّع
         # أحداثًا جديدة قطعًا (التوقيع الجديد fail-closed عبر KeyRing — R-626)؛ يُستخدم
         # فقط في التحقق من أحداث ledger التاريخية الموقعة بالجذر قبل R-697.
-        self.signing_key = sovereign_key.encode('utf-8') if sovereign_key else b''
-        if not self.signing_key or self.signing_key == b'you_must_change_this_key_immediately':
-            # توليد مفتاح جديد إذا كان افتراضياً
-            self.signing_key = b'new_generated_key_here'
+        # R-699 (fail-closed): مفتاح جذر فارغ أو قيمة افتراضية علنية من الكود →
+        # لا مفتاح تحقق تاريخي إطلاقًا (None). كان يُستبدل بثابت علني
+        # فيُعلن verify_integrity حدثًا تاريخيًا مزوّرًا VERIFIED.
+        _root = sovereign_key.encode('utf-8') if sovereign_key else b''
+        if _root in _PUBLIC_WEAK_ROOT_KEYS:
+            logger.warning(
+                "R-699: لا مفتاح جذر تاريخي حقيقي — الأحداث التاريخية (بلا key_id) "
+                "لن تُعلن VERIFIED (PARTIAL)"
+            )
+            self.signing_key = None
+        else:
+            self.signing_key = _root
 
         # R-618/R-629: KeyRing — ربط الأحداث الجديدة بمفتاحها في KeyRing
         # (حتى تكون قابلة للتحقق لاحقًا، بدل unverifiable_missing_key)
@@ -1203,6 +1220,14 @@ class SovereignCore:
                                 return IntegrityStatus.CORRUPTED
                     else:
                         # صيغة تاريخية — تحقق بالمفتاح القديم
+                        # R-699: بلا مفتاح جذر حقيقي لا تحقق ممكن — PARTIAL (لا VERIFIED
+                        # ولا ادعاء تلاعب). HMAC بمفتاح فارغ/علني يحسبه أي أحد.
+                        if self.signing_key is None:
+                            logger.error(
+                                f"❌ السطر {line_num}: حدث تاريخي ولا مفتاح جذر حقيقي "
+                                f"للتحقق — R-699: PARTIAL"
+                            )
+                            return IntegrityStatus.PARTIAL
                         if not verify_hmac(
                             f"{event['hash']}|{event['prev_hash']}|{event['blob']}|{event['time']}|{event['type']}".encode('utf-8'),
                             self.signing_key,

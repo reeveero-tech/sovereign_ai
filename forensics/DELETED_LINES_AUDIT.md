@@ -1714,3 +1714,22 @@ rebase ولا force-push. التفصيل: `forensics/R-698_ED25519.md` §٦.
 | `tests/test_sovereign_keys.py` (−2) | **مُبرر # DELETION-JUSTIFIED:** تأكيدا `rot_event["old_key_id"]` و`rot_event["reason"]` كانا يثبّتان الصيغة المعيبة (حقول علوية غير موثقة) — نُقلا حرفيًا بمعناهما إلى قراءة blob الموقّع، وأُضيف تأكيد `new_key_id` وتأكيد VERIFIED. لا إضعاف للاختبار. |
 | `backend/tests/invariants/test_ed25519_migration.py` (−3) | **مُبرر # DELETION-JUSTIFIED:** تعليق متقادم يصف السلوك المعيب «لا تغيير» — استُبدل بوصف الحالة بعد التصويب مع الإحالة لاختبار ledger النواة. لا تغيير في أي تأكيد. |
 | `docs/CHANGELOG.md` (−1)، `docs/PROJECT_STATE.md` (−2) | **مُبرر # DELETION-JUSTIFIED:** ترويستا «آخر تحديث» المتقادمتان، وبادئة بند R-698 في PROJECT_STATE (✅ → ⏳ مع إفصاح «أُعلن مكتملًا قبل أوانه») — تصويب حالة لا حذف محتوى. |
+
+## R-699 — مفتاح الجذر التاريخي fail-closed (2026-10-20)
+
+التزام ذري فوق `3ec945b` بتفويض المالك — لا amend ولا rebase ولا force-push. التفصيل: `forensics/R-699_LEGACY_ROOT_KEY.md`.
+
+- `backend/memory/core.py`: +29 / −4
+- `backend/tests/invariants/test_legacy_root_key_fail_closed.py`: +116 / −0
+- `docs/CHANGELOG.md`: +10 / −1
+- `docs/PROJECT_STATE.md`: +2 / −1
+- `forensics/DELETED_LINES_AUDIT.md`: +19 / −0 (مدخل هذا الالتزام نفسه)
+- `forensics/R-699_LEGACY_ROOT_KEY.md`: +71 / −0
+
+الإجمالي: 247 إضافةً / 6 حذفًا في 6 ملفات.
+
+| المحذوف | المبرر |
+|---|---|
+| `backend/memory/core.py` (−4) | **مُبرر # DELETION-JUSTIFIED:** أربعة أسطر: الاستبدال المعيب بالثابت العلني `b'new_generated_key_here'` وتعليقه («توليد مفتاح جديد إذا كان افتراضيًا» — لم يكن توليدًا بل ثابتًا علنيًا) — استُبدلت بالرفض المغلق (`signing_key=None`). هذا هو إصلاح الثغرة نفسه. |
+| `docs/CHANGELOG.md` (−1) | **مُبرر # DELETION-JUSTIFIED:** ترويسة «آخر تحديث» المتقادمة — استُبدلت بترويسة هذه الجولة. |
+| `docs/PROJECT_STATE.md` (−1) | **مُبرر # DELETION-JUSTIFIED:** ترويسة «آخر تحديث» المتقادمة — استُبدلت بترويسة هذه الجولة. |
