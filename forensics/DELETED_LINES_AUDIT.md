@@ -1990,3 +1990,10 @@ rebase ولا force-push. التفصيل: `forensics/R-698_ED25519.md` §٦.
 | سطر نتيجة الحزمة في GETTING_STARTED §١٠ («بعد GS-2: 745») | **مُبرر # DELETION-JUSTIFIED:** عدد يتقادم مع كل جولة — أُحيل إلى PROJECT_STATE بدل تكراره. |
 | خلية تنفيذ د.٣ في سجل قرارات OWNER_DECISIONS_PENDING («رقعة منفصلة (معروضة)») | **مُبرر # DELETION-JUSTIFIED:** «معروض» → «منفذ GS-3». |
 | ترويستا «آخر تحديث» في CHANGELOG وPROJECT_STATE (نسخة GS-2) | **مُبرر # DELETION-JUSTIFIED:** متقادمتان — استُبدلتا بمدخل GS-3. |
+
+## SEC-1 — تحفظ HIST-01 وقبول HIST-03 موثقًا (2026-10-20)
+
+| المحذوف (المُستبدَل) | المبرر |
+|---|---|
+| ترويسة «آخر تحديث» في SECURITY.md (نسخة R-705) | **مُبرر # DELETION-JUSTIFIED:** متقادمة — استُبدلت بمدخل SEC-1. |
+| ترويستا «آخر تحديث» في CHANGELOG وPROJECT_STATE (نسخة GS-3) | **مُبرر # DELETION-JUSTIFIED:** متقادمتان — استُبدلتا بمدخل SEC-1. |
