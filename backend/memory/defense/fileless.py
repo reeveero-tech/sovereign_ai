@@ -826,7 +826,7 @@ if __name__ == "__main__":
     
     # 5) أثر مضلل
     print("\n👣 إنشاء أثر مضلل...")
-    trail_id = phantom.create_fake_trail("login_attempt", {"user": "admin", "ip": "192.168.1.100"})
+    trail_id = phantom.create_fake_trail("login_attempt", {"user": "admin", "ip": "203.0.113.100"})
     print(f"   المعرف: {trail_id[:16]}...")
     
     # 6) استنساخ ظل

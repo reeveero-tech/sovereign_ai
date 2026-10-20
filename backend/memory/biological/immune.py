@@ -1036,8 +1036,8 @@ if __name__ == "__main__":
     print("🦠 اكتشاف تهديدات...")
     
     threats = [
-        {"source": "192.168.1.100", "action": "port_scan", "vector": "tcp"},
-        {"source": "10.0.0.50", "action": "bruteforce", "attempts": 1000},
+        {"source": "203.0.113.100", "action": "port_scan", "vector": "tcp"},
+        {"source": "203.0.113.50", "action": "bruteforce", "attempts": 1000},
         {"source": "unknown", "action": "injection", "payload": "DROP TABLE users;"},
         {"source": "malicious.com", "action": "malware", "type": "ransomware"}
     ]

@@ -1849,3 +1849,26 @@ rebase ولا force-push. التفصيل: `forensics/R-698_ED25519.md` §٦.
 | `backend/config.py` (−1) | **مُبرر # DELETION-JUSTIFIED:** سطر ترويسة القسم («6. إعدادات النواة الذكية») — أُعيد ترقيمه إلى ٧ لإدراج قسم Ollama قبله. |
 | `docs/CHANGELOG.md` (−1) | **مُبرر # DELETION-JUSTIFIED:** ترويسة «آخر تحديث» المتقادمة (B-1) — استُبدلت بمدخل R-704. |
 | `docs/PROJECT_STATE.md` (−2) | **مُبرر # DELETION-JUSTIFIED:** ترويسة «آخر تحديث» المتقادمة + خلية عدد الاختبارات في §1 («727») — استُبدلت بمدخل R-704 والعدد المثبت 740. |
+
+---
+
+## R-705 — التزام تصحيحي: تسريب HIST-03 + تصويب إحصاء + حارس (2026-10-20)
+
+بأمر المالك المباشر («إصلاح التسريبات»)، التزام ذري واحد فوق `d7cf4a9` — لا amend.
+
+| المحذوف | المبرر |
+|---|---|
+- `backend/config.py`: +1 / −1
+- `backend/memory/biological/immune.py`: +2 / −2
+- `backend/memory/defense/fileless.py`: +1 / −1
+- `backend/memory/defense/polymorphic.py`: +1 / −1
+- `docs/CHANGELOG.md`: +12 / −3
+- `docs/PROJECT_STATE.md`: +4 / −3
+- `docs/SECURITY.md`: +29 / −1
+- `forensics/R-704_OLLAMA_BRAIN.md`: +3 / −3
+- `tests/test_ollama_config.py`: +4 / −4
+- ملفات جديدة (+0 حذف): `tests/test_no_private_ips_in_git.py`، `forensics/R-705_HIST03_LEAKS_FIX.md`
+
+الإجمالي: 19 حذفًا — كلها أسطر معدّلة (استبدال)، لا حذف وظائف.
+
+| المحذوف | المبرر | **مُبرر # DELETION-JUSTIFIED:** أسطر معدّلة ضمن ثلاث إصلاحات بأمر المالك — (١) إزالة عنوان الشبكة الداخلية المسرب (3 أسطر: CHANGELOG + تقرير R-704 ×2) واستبداله بصيغ مقنّعة/توثيق HIST-03 في SECURITY.md؛ (٢) استبدال عناوين داخلية في بيانات تجريبية وأمثلة (immune/fileless/polymorphic/config/اختبارات Ollama) بنطاق RFC 5737 وعناوين loopback — بلا تغيير منطق؛ (٣) تصويب إحصاء R-704 («10» → «13»، الأساس 727+13=740). لا حذف وظائف. |

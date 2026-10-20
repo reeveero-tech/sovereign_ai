@@ -265,7 +265,7 @@ def _ollama_env(name: str, default=None):
 OLLAMA_ENABLED = _ollama_env("OLLAMA_ENABLED", "false").lower() == "true"
 
 # عنوان خادم Ollama — المنفذ 11434 هو منفذ Ollama المعياري.
-# مثال لخادم على شبكة محلية (في .env المستثنى من git): OLLAMA_BASE_URL=http://10.0.0.5:11434
+# مثال لخادم على شبكة محلية (في .env المستثنى من git): OLLAMA_BASE_URL=http://ollama-server:11434
 OLLAMA_BASE_URL = _ollama_env("OLLAMA_BASE_URL", "http://127.0.0.1:11434")
 
 # النموذج صريح لا افتراضي — لا يُفترض نموذج غير مثبت على خادم المالك

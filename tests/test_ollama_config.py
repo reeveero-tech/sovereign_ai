@@ -73,11 +73,11 @@ def test_ollama_defaults(tmp_path):
 def test_ollama_base_url_from_env(tmp_path):
     """العنوان يُقرأ من البيئة — خادم على الشبكة المحلية مثالًا (محايد)."""
     env = _base_env(tmp_path)
-    env["OLLAMA_BASE_URL"] = "http://10.0.0.5:11434"
+    env["OLLAMA_BASE_URL"] = "http://127.0.0.1:11499"
     result = _run_config(env)
     assert result.returncode == 0, f"config run failed: {result.stderr}"
     _, base_url, _, _ = result.stdout.strip().splitlines()
-    assert base_url == "http://10.0.0.5:11434", (
+    assert base_url == "http://127.0.0.1:11499", (
         "OLLAMA_BASE_URL must be overridable via environment"
     )
 
@@ -99,7 +99,7 @@ def test_ollama_reads_env_file(tmp_path):
     env_file = tmp_path / "ollama.env"
     env_file.write_text(
         "OLLAMA_ENABLED=true\n"
-        "OLLAMA_BASE_URL=http://10.0.0.7:11434\n"
+        "OLLAMA_BASE_URL=http://127.0.0.1:11498\n"
         "OLLAMA_MODEL=qwen2.5:7b\n",
         encoding="utf-8",
     )
@@ -109,7 +109,7 @@ def test_ollama_reads_env_file(tmp_path):
     assert result.returncode == 0, f"config run failed: {result.stderr}"
     enabled, base_url, model, _ = result.stdout.strip().splitlines()
     assert enabled == "True", "OLLAMA_ENABLED must load from env file"
-    assert base_url == "http://10.0.0.7:11434", "OLLAMA_BASE_URL must load from env file"
+    assert base_url == "http://127.0.0.1:11498", "OLLAMA_BASE_URL must load from env file"
     assert model == "qwen2.5:7b", "OLLAMA_MODEL must load from env file"
 
 
