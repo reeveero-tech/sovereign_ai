@@ -1972,3 +1972,13 @@ rebase ولا force-push. التفصيل: `forensics/R-698_ED25519.md` §٦.
 | خلية ملاحظة س-15 في OWNER_DECISIONS_PENDING («نُقل للأرشيف (R-201) ثم حُذف (R-685)») | **مُبرر # DELETION-JUSTIFIED:** واقعة خاطئة — الحذف في `75a0b62` (M2) بدليل `git log --diff-filter=D`. |
 | خلية ملاحظة س-4 في OWNER_DECISIONS_PENDING («R-101») | **مُبرر # DELETION-JUSTIFIED:** مرجع خاطئ — الإغلاق في M6/R-608 بحسب OPEN_QUESTIONS. |
 | جملة «R-713 معروضة على المالك غير ملتزمة» في سطر GS-1 بـ PROJECT_STATE | **مُبرر # DELETION-JUSTIFIED:** متقادمة بعد الاعتماد. |
+
+## GS-2 — مخرجات الحارس المحلي مستثناة (2026-10-20)
+
+| المحذوف (المُستبدَل) | المبرر |
+|---|---|
+| تنبيه «أثر جانبي» في GETTING_STARTED §٦ (سطران) | **مُبرر # DELETION-JUSTIFIED:** متقادم بعد الاستثناء — استُبدل بوصف الحالة الجديدة. |
+| بند `git status` في GETTING_STARTED §٩ | **مُبرر # DELETION-JUSTIFIED:** متقادم — `git status` صار نظيفًا. |
+| سطرا النتائج في GETTING_STARTED §١٠ (743) | **مُبرر # DELETION-JUSTIFIED:** نُسبت النتيجة لـ GS-1 صراحة + عدد GS-2 (745). |
+| صف د.٤ في سجل قرارات OWNER_DECISIONS_PENDING | **مُبرر # DELETION-JUSTIFIED:** «معروض» → «منفذ». |
+| ترويستا «آخر تحديث» في CHANGELOG وPROJECT_STATE (نسخة R-713) | **مُبرر # DELETION-JUSTIFIED:** متقادمتان — استُبدلتا بمدخل GS-2. |

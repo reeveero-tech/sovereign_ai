@@ -1,7 +1,16 @@
 # CHANGELOG.md — سجل التغييرات
 
 > كل تغيير يُسجل هنا (قاعدة الدفعة الذرية).
-> آخر تحديث: 2026-10-20 (R-713 — تصويبات توثيقية، لا كود)
+> آخر تحديث: 2026-10-20 (GS-2 — .gitignore لمخرجات الحارس المحلي)
+
+---
+
+## [GS-2] — 2026-10-20 — مخرجات الحارس المحلي مستثناة من git (قرار المالك د.٤ — التزام ذري مستقل)
+
+- **السبب**: تشغيل `python -m backend.supervisor_daemon` محليًا (دليل التجربة §٦) يُنشئ `data/supervisor/` (status.json، monitor_log.jsonl) و`data/awareness/` (project_map.json) — بيانات تشغيل حية ظهرت في `git status` غير متتبعة (مثبت في جولة GS-1). لا ملف متتبع تحتهما.
+- **.gitignore**: إضافة `data/supervisor/` و`data/awareness/` مع تعليق السبب.
+- **RED→GREEN**: `tests/test_gitignore_supervisor_outputs.py` (اختباران) — RED قبل التعديل: 1 failed / 1 passed (رمز خروج 1)؛ GREEN بعده: 2 passed (رمز خروج 0).
+- GETTING_STARTED §٦ و§٩ و§١٠ + OWNER_DECISIONS_PENDING (د.٤ منفذ). الحزمة 743 → 745.
 
 ---
 

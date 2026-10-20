@@ -212,8 +212,8 @@ curl -s -w "\nHTTP %{http_code}\n" http://127.0.0.1:8000/supervisor/status
 أعد الأمر نفسه: `python -m backend.supervisor_daemon --interval 2`.
 **الفعلي:** بعد ~5 ثوانٍ عاد `/supervisor/status` إلى HTTP 200 و`"supervisor":"up"` بنبض جديد.
 
-> **أثر جانبي:** تشغيل الحارس يُنشئ `data/supervisor/` و`data/awareness/` — يظهران في `git status` كملفات
-> غير متتبعة (غير مستثناة في `.gitignore`). لا تلتزمهما. (إضافتهما إلى `.gitignore` معروضة كقرار.)
+> **أثر جانبي:** تشغيل الحارس يُنشئ `data/supervisor/` و`data/awareness/` — بيانات تشغيل حية. منذ GS-2
+> (قرار المالك د.٤) هما مستثنيان في `.gitignore` فلا يظهران في `git status`.
 
 ---
 
@@ -280,7 +280,7 @@ curl -s -w "\nHTTP %{http_code}\n" http://127.0.0.1:8000/supervisor/status
 ## ٩) الإيقاف والتنظيف
 
 - `Ctrl+C` في طرفية الخادم وطرفية الحارس.
-- `git status` يجب أن يعرض فقط `data/supervisor/` و`data/awareness/` (إن شغّلت الحارس) — احذفهما إن أردت:
+- `git status` يجب أن يكون نظيفًا (مخرجات الحارس مستثناة منذ GS-2). لحذفها يدويًا إن أردت:
   `rm -rf data/supervisor data/awareness`.
 - لإلغاء Ollama: احذف `.env` أو اضبط `OLLAMA_ENABLED=false` وأعد التشغيل.
 
@@ -290,8 +290,8 @@ curl -s -w "\nHTTP %{http_code}\n" http://127.0.0.1:8000/supervisor/status
 
 ```bash
 pytest tests/ backend/tests/ -q -m "not operational"
-# الفعلي: 743 passed, 1 deselected (~4 دقائق)
+# الفعلي عند GS-1: 743 passed, 1 deselected (~4 دقائق)؛ بعد GS-2: 745
 
 bash verify.sh --full
-# الفعلي: رمز خروج 0 — تطابق ثلاثي (محلي = CI = استنساخ نظيف) 743/0/0
+# الفعلي: رمز خروج 0 — تطابق ثلاثي (محلي = CI = استنساخ نظيف) — 743/0/0 عند GS-1
 ```
