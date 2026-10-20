@@ -1827,3 +1827,25 @@ rebase ولا force-push. التفصيل: `forensics/R-698_ED25519.md` §٦.
 | `tests/test_api_key_rotation_gate1.py` (−35) | **مُبرر # DELETION-JUSTIFIED:** أربعة اختبارات زائفة أُعيدت كتابتها بأمر المالك — `assert new_key == new_key` التوكيد الزائف (بند ١)؛ `pytest.skip` عند فشل العملية الفرعية (بند ٢)؛ مقارنات `old_key != new_key` بلا استدعاء كود تطبيق (بند ٥)؛ كتلة `result_with_broken_hmac` الميتة بلا assert (بند ٦)؛ وأسطر مساعد العملية الفرعية القديم أُعيدت صياغتها في `_run_app_auth_subprocess` الموحد. كل عروض RED (حقن عيوب مضبوطة على نسخ scratch) فشلت كما يجب قبل GREEN — الحرفية في تقرير الجولة. |
 | `docs/CHANGELOG.md` (−1) | **مُبرر # DELETION-JUSTIFIED:** ترويسة «آخر تحديث» المتقادمة (R-703) — استُبدلت بمدخل B-1. |
 | `docs/PROJECT_STATE.md` (−2) | **مُبرر # DELETION-JUSTIFIED:** ترويسة «آخر تحديث» المتقادمة + خلية عدد الاختبارات المتقادمة في §1 («715») — استُبدلت بمدخل B-1 والعدد المثبت 727. |
+
+---
+
+## R-704 — عقل Ollama المحلي: LLM في مسار الرد (2026-10-20)
+
+بطلب المالك المباشر («نفّذ الدمج الكامل»)، التزام ذري واحد فوق `091bdae`. التفصيل: `forensics/R-704_OLLAMA_BRAIN.md`.
+
+- `backend/app.py`: +4 / −1
+- `backend/config.py`: +44 / −1
+- `backend/sovereign_response.py`: +34 / −0
+- `docs/CHANGELOG.md`: +11 / −1
+- `docs/PROJECT_STATE.md`: +3 / −2
+- ملفات جديدة (+0 حذف): `backend/ollama_client.py`، `tests/test_ollama_config.py`، `tests/test_ollama_brain.py`، `forensics/R-704_OLLAMA_BRAIN.md`
+
+الإجمالي: 5 حذوفات فقط — لا حذف وظائف.
+
+| المحذوف | المبرر |
+|---|---|
+| `backend/app.py` (−1) | **مُبرر # DELETION-JUSTIFIED:** سطر استدعاء `build_reply` المتزامن — استُبدل بالاستدعاء عبر `asyncio.to_thread` (الوظيفة نفسها بلا حجب حلقة الأحداث). |
+| `backend/config.py` (−1) | **مُبرر # DELETION-JUSTIFIED:** سطر ترويسة القسم («6. إعدادات النواة الذكية») — أُعيد ترقيمه إلى ٧ لإدراج قسم Ollama قبله. |
+| `docs/CHANGELOG.md` (−1) | **مُبرر # DELETION-JUSTIFIED:** ترويسة «آخر تحديث» المتقادمة (B-1) — استُبدلت بمدخل R-704. |
+| `docs/PROJECT_STATE.md` (−2) | **مُبرر # DELETION-JUSTIFIED:** ترويسة «آخر تحديث» المتقادمة + خلية عدد الاختبارات في §1 («727») — استُبدلت بمدخل R-704 والعدد المثبت 740. |

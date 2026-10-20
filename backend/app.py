@@ -830,9 +830,12 @@ async def chat(message: ChatMessage, background_tasks: BackgroundTasks):
         intent_name = nexus_perception.get("intent", {}).get("name", "")
         
         # R-614: محرك الردود السيادي — يبني الرد من حالة النظام الحية
+        # R-704: الاستدعاء في خيط عام — توليد عقل Ollama (HTTP) لا يحجب حلقة الأحداث
         try:
             from sovereign_response import build_reply
-            reply = build_reply(intent_name, message.text, result, orchestrator=orchestrator)
+            reply = await asyncio.to_thread(
+                build_reply, intent_name, message.text, result, orchestrator=orchestrator
+            )
         except Exception as e:
             logger.warning(f"sovereign_response failed, falling back: {e}")
             if source == "nexus_intent" and intent_name:

@@ -236,7 +236,50 @@ if DRIVE_ENABLED and not DRIVE_ENCRYPTION_KEY and DRIVE_ENCRYPTION_ENABLED:
         warnings.warn("⚠️ Drive مفعل ولكن لا يوجد مفتاح تشفير")
 
 # ============================================================
-# 6. إعدادات النواة الذكية (Core Model)
+# 6. إعدادات Ollama (خادم LLM محلي — عقل السيادي R-704)
+# ============================================================
+
+def _ollama_env(name: str, default=None):
+    """قراءة إعداد Ollama: متغير البيئة أولًا ثم ملف .env (القراءة مخصصة
+    لإعدادات Ollama ولا تغيّر قواعد مفتاح السيد). مسار الملف قابل للعزل
+    عبر OLLAMA_ENV_FILE للاختبارات. البيئة تعلو على الملف دائمًا."""
+    val = os.getenv(name)
+    if val is not None:
+        return val
+    env_file = os.getenv("OLLAMA_ENV_FILE") or (BASE_DIR / ".env")
+    try:
+        if os.path.exists(env_file):
+            with open(env_file, "r", encoding="utf-8") as f:
+                for line in f:
+                    if line.startswith(name + "="):
+                        v = line.split("=", 1)[1].strip().strip('"').strip("'")
+                        if v:
+                            return v
+    # TOLERATED: ملف .env غير موجود/غير مقروء — القيمة الافتراضية (نمط R-680)
+    except Exception:
+        pass
+    return default
+
+
+# العقل معطل افتراضيًا — يُفعّل صراحة في إعداد التشغيل (لا اتصال ضمني في الاختبارات)
+OLLAMA_ENABLED = _ollama_env("OLLAMA_ENABLED", "false").lower() == "true"
+
+# عنوان خادم Ollama — المنفذ 11434 هو منفذ Ollama المعياري.
+# مثال لخادم على شبكة محلية (في .env المستثنى من git): OLLAMA_BASE_URL=http://10.0.0.5:11434
+OLLAMA_BASE_URL = _ollama_env("OLLAMA_BASE_URL", "http://127.0.0.1:11434")
+
+# النموذج صريح لا افتراضي — لا يُفترض نموذج غير مثبت على خادم المالك
+# (مثال: OLLAMA_MODEL=qwen2.5:7b — مناسب للعربية).
+OLLAMA_MODEL = _ollama_env("OLLAMA_MODEL", None)
+
+# مفتاح API اختياري — Ollama المحلي لا يتطلب توثيقًا (يبقى None).
+OLLAMA_API_KEY = _ollama_env("OLLAMA_API_KEY", None)
+
+# مهلة توليد الرد بالثواني — بعدها سقوط آمن للمحرك القالبي
+OLLAMA_TIMEOUT_SECONDS = float(_ollama_env("OLLAMA_TIMEOUT_SECONDS", "60"))
+
+# ============================================================
+# 7. إعدادات النواة الذكية (Core Model)
 # ============================================================
 
 CORE_MODEL_NAME = os.getenv("CORE_MODEL_NAME", "microsoft/Phi-3-mini-4k-instruct")

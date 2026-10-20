@@ -12,6 +12,7 @@ Sovereign Response Engine (R-614 / S-9)
 - gather_evidence() → لقطة من الحالة الحالية (ذاكرة + تنبؤ + مخاطر + محاكاة + سيادة)
 """
 
+import json
 import logging
 import time
 from typing import Any, Dict, List, Optional
@@ -171,6 +172,33 @@ def _risk_label(level) -> str:
     return str(level)
 
 
+def _llm_reply(intent_name: str, text: str, ev: Dict[str, Any]) -> Optional[str]:
+    """R-704: الرد عبر عقل Ollama المحلي إن كان مفعّلًا — سقوط آمن للقوالب.
+
+    النموذج يولّد النص فقط: يُرسل له سياق مسموح (النية المكتشفة + لقطة
+    الحالة الحية المدمجة أدناه) — لا كائن المنسق ولا أي صلاحية تنفيذ.
+    معطل افتراضيًا (OLLAMA_ENABLED=False) — لا اتصال ضمني إلا بضبط صريح.
+    """
+    try:
+        import config as _config
+        if not (_config.OLLAMA_ENABLED and _config.OLLAMA_MODEL):
+            return None
+        import ollama_client
+        system_prompt = (
+            "أنت 'الذكاء السيادي' — مساعد شخصي ذاتي الاستضافة لمالكك. "
+            "ردّ بلغة رسالة السيد (العربية غالبًا) بإيجاز ووضوح. "
+            "استند فقط إلى حالة النظام الحية أدناه ولا تدّعي بيانات أو قدرات ليست فيها. "
+            f"النية المكتشفة للرسالة: {intent_name or 'غير محددة'}."
+        )
+        system_prompt += "\nحالة النظام الحية (JSON):\n" + json.dumps(
+            ev, ensure_ascii=False, default=str
+        )
+        return ollama_client.chat(system_prompt, text)
+    except Exception:
+        # العقل مكمّل لا أساس — أي خلل يعيد القوالب القائمة
+        return None
+
+
 def build_reply(
     intent_name: str, text: str, orchestrator_result: Any = None,
     orchestrator: Any = None,
@@ -197,6 +225,12 @@ def build_reply(
         # TOLERATED: known-safe fallback — non-fatal diagnostic path (R-680)
         except Exception:
             pass
+
+    # R-704: عقل Ollama المحلي إن فُعّل — نص النموذج هو الرد؛
+    # عند التعطل أو التعطيل تسقط المسارات القالبية القائمة أدناه كما هي
+    llm = _llm_reply(intent_name, text, ev)
+    if llm:
+        return llm
 
     # --- تحية: رد شخصي بحالة النظام ---
     if intent_name == "greet":
