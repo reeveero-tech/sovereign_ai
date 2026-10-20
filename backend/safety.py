@@ -5,6 +5,7 @@
 import json
 import time
 import hashlib
+import hmac
 import secrets
 from datetime import datetime
 from pathlib import Path
@@ -15,7 +16,6 @@ from config import (
     SOVEREIGN_REQUESTS_DIR,
     SOVEREIGN_RESPONSES_DIR,
     DATA_DIR,
-    SOVEREIGN_KEY  # LEGACY-ROOT-KEY (read-only): التحقق من التواقيع التاريخية فقط
 )
 try:
     from backend.sovereign.keys.derivation import derive_key
@@ -448,28 +448,28 @@ class SafetyGuard:
         return action_type in critical_actions
     
     def _verify_signature(self, signature: str, action_id: str) -> bool:
-        """التحقق من توقيع السيد للأوامر الخطيرة — R-697: مفتاح مشتق (signing)،
-        مع قبول تواقيع الجذر التاريخية للقراءة فقط (لا توليد جديد بها)."""
-        expected = hashlib.sha256(
-            action_id.encode() + derive_key("signing")
-        ).hexdigest()[:16]
-        if signature == expected:
-            return True
-        legacy_expected = hashlib.sha256(
-            f"{action_id}{SOVEREIGN_KEY}".encode()  # LEGACY-ROOT-KEY (read-only)
-        ).hexdigest()[:16]
-        return signature == legacy_expected
+        """التحقق من توقيع السيد للأوامر الخطيرة.
+
+        R-703: HMAC-SHA256 بمفتاح مشتق (signing)، بطول كامل 256 بت (64 حرفًا
+        ست عشريًا)، ومقارنة `hmac.compare_digest` ثابتة الزمن. أُزيل قبول
+        التواقيع القديمة المقطوعة إلى 64 بت (مشتقة أو جذرية). هي تواقيع
+        موافقة مؤقتة لكل أمر، ولا بيانات دائمة تعتمد عليها.
+        """
+        if not isinstance(signature, str):
+            return False
+        expected = self.generate_signature(action_id)
+        return hmac.compare_digest(signature.encode("utf-8"),
+                                   expected.encode("utf-8"))
     
     # ============================================================
     # إنشاء توقيع للسيد (للاستخدام في الواجهة)
     # ============================================================
     
     def generate_signature(self, action_id: str) -> str:
-        """توليد توقيع للسيد لاستخدامه في الأوامر الخطيرة — R-697: مفتاح مشتق فقط،
-        لا توليد بالمفتاح الجذر أبدًا (D-033)."""
-        return hashlib.sha256(
-            action_id.encode() + derive_key("signing")
-        ).hexdigest()[:16]
+        """توليد توقيع للسيد للأوامر الخطيرة: HMAC-SHA256 كامل (256 بت) بمفتاح
+        مشتق للغرض signing فقط، ولا توليد بالمفتاح الجذر أبدًا (D-033، R-703)."""
+        return hmac.new(derive_key("signing"), action_id.encode("utf-8"),
+                        hashlib.sha256).hexdigest()
     
     # ============================================================
     # تسجيل التجارب والأحداث

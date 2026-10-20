@@ -1775,3 +1775,37 @@ rebase ولا force-push. التفصيل: `forensics/R-698_ED25519.md` §٦.
 | `backend/memory/core.py` (−1) | **مُبرر # DELETION-JUSTIFIED:** سطر الترويسة «جاهز للإنتاج، لا تجريبي» — ادعاء غير مثبت يخالف الأمر الدائم §٤؛ استُبدل بوصف دقيق. |
 | `docs/PROJECT_STATE.md` (−5) | **مُبرر # DELETION-JUSTIFIED:** ترويسة «آخر تحديث» + ثلاثة صفوف من جدول §1 (المرحلة، الاختبارات «71»، الحالة العامة «لا عوائق نشر») + سطر §8 «لا عائق نشر» — ادعاءات متقادمة/خاطئة استُبدلت بالحالة المثبتة؛ السجل التاريخي في §2/§9/CHANGELOG لم يُمس. |
 | `docs/CHANGELOG.md` (−1) | **مُبرر # DELETION-JUSTIFIED:** ترويسة «آخر تحديث» المتقادمة. |
+
+## R-703 — كشف بلا تحرك آلي + توقيع 256 بت (2026-10-20)
+
+التزام ذري فوق `d5f2ea5` بأمر المالك — لا amend ولا rebase ولا force-push. التفصيل: `forensics/R-703_SAFETY_RECOVERY.md`.
+
+- `OWNER_REQUIRED.md`: +10 / −0
+- `backend/memory/biological/drives.py`: +11 / −1
+- `backend/memory/biological/instincts.py`: +41 / −8
+- `backend/memory/defense/automation_guard.py`: +101 / −0
+- `backend/memory/defense/ransomware.py`: +12 / −2
+- `backend/memory/defense/watcher.py`: +9 / −1
+- `backend/safety.py`: +17 / −17
+- `backend/sovereign/controller.py`: +16 / −0
+- `backend/tests/invariants/test_r703_safety_recovery.py`: +254 / −0
+- `docs/CHANGELOG.md`: +11 / −1
+- `docs/OPERATIONS.md`: +56 / −1
+- `docs/PROJECT_STATE.md`: +2 / −1
+- `docs/ROADMAP_V3.md`: +14 / −3
+- `forensics/DELETED_LINES_AUDIT.md`: +34 / −0 (مدخل هذا الالتزام نفسه)
+- `forensics/R-703_SAFETY_RECOVERY.md`: +109 / −0
+
+الإجمالي: 697 إضافةً / 35 حذفًا في 15 ملفات.
+
+| المحذوف | المبرر |
+|---|---|
+| `backend/memory/biological/instincts.py` (−8) | **مُبرر # DELETION-JUSTIFIED:** ثمانية أسطر: شرط `if not self.core.verify_integrity():` المعيب (العيب نفسه) + سبعة أسطر التخفي/phoenix غير المشروطة في `enforce_absolute_security` أُعيد وضعها بإزاحة داخل فرع `else` للحاجز (المحتوى نفسه، لا حذف وظيفة). |
+| `backend/memory/biological/drives.py` (−1) | **مُبرر # DELETION-JUSTIFIED:** سطر `integrity_score = 1.0 if core_integrity else 0.0` المعيب — استُبدل بحكم القيمة الصريحة. |
+| `backend/memory/defense/watcher.py` (−1) | **مُبرر # DELETION-JUSTIFIED:** شرط `if not self.core.verify_integrity():` المعيب — استُبدل بحكم القيمة الصريحة. |
+| `backend/memory/defense/ransomware.py` (−2) | **مُبرر # DELETION-JUSTIFIED:** سطرا البذرة الآلية والتحذير في `_watch_for_threats` — أُعيد وضعهما بإزاحة خلف الحاجز (المحتوى نفسه). |
+| `backend/safety.py` (−17) | **مُبرر # DELETION-JUSTIFIED:** التوقيع المقطوع 64 بت (`hexdigest()[:16]`) ومقارنة `==` وقبول تواقيع الجذر القديمة واستيراد `SOVEREIGN_KEY` الذي لم يعد مستعملًا + docstringان — استُبدلت بـHMAC-SHA256 كامل و`hmac.compare_digest` بأمر المالك. |
+| `docs/ROADMAP_V3.md` (−3) | **مُبرر # DELETION-JUSTIFIED:** ثلاثة أسطر حالة متقادمة (البند ١ «قيد التنفيذ»، البند ٢ «بانتظار موافقة المالك»، ملاحظة «البنود ٢-٦ بانتظار المالك») — صُححت بأمر المالك. |
+| `docs/OPERATIONS.md` (−1) | **مُبرر # DELETION-JUSTIFIED:** ترويسة «آخر تحديث» المتقادمة (2026-10-13). |
+| `docs/CHANGELOG.md` (−1) | **مُبرر # DELETION-JUSTIFIED:** ترويسة «آخر تحديث» المتقادمة. |
+| `docs/PROJECT_STATE.md` (−1) | **مُبرر # DELETION-JUSTIFIED:** ترويسة «آخر تحديث» المتقادمة. |

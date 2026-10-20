@@ -64,6 +64,12 @@ except ImportError:
     from memory.biological.plasticity import get_plasticity
     from config import DATA_DIR, SOVEREIGN_KEY  # LEGACY-ROOT-KEY (read-only): بصمة عرض
 
+# R-703: كشف صريح + حاجز الإجراءات الآلية القصوى (OWNER_REQUIRED بند ١٥)
+try:
+    from ..defense.automation_guard import integrity_compromised, report_integrity_violation, block_drastic_action
+except ImportError:
+    from memory.defense.automation_guard import integrity_compromised, report_integrity_violation, block_drastic_action
+
 import logging
 logger = logging.getLogger(__name__)
 
@@ -320,7 +326,9 @@ class CognitiveInstincts:
             })
         
         # من السجل السيادي - محاولات تلاعب
-        if not self.core.verify_integrity():
+        integrity_status = self.core.verify_integrity()
+        if integrity_compromised(integrity_status):
+            report_integrity_violation("instincts", integrity_status)
             threats.append({
                 "type": "core_integrity_compromised",
                 "severity": 1.0,
@@ -333,6 +341,13 @@ class CognitiveInstincts:
         """تنفيذ إجراء حماية للسيد"""
         try:
             if "neutralize_threat" in action.action:
+                # R-703: كشف وتسجيل فقط — التخفي/phoenix/encrypt_blob الآلي معطل
+                if block_drastic_action(
+                        "stealth4+phoenix_seed+encrypt_blob",
+                        "instincts._execute_protection_action",
+                        instinct_action=action.action):
+                    action.status = "blocked"
+                    return
                 # تفعيل الدفاعات القصوى
                 self.stealth.set_stealth_level(4, mode=3)  # مستوى شبح
                 self.ransom.create_phoenix_seed(reason="threat_to_sovereign")
@@ -529,13 +544,19 @@ class CognitiveInstincts:
             "measures_activated": []
         }
         
-        # 1) تفعيل أقصى درجات التخفي
-        self.stealth.set_stealth_level(4)  # مستوى شبح
-        result["measures_activated"].append("maximum_stealth")
-        
-        # 2) تفعيل التشفير الشامل
-        self.ransom.create_phoenix_seed(reason="maximum_security")
-        result["measures_activated"].append("phoenix_seed_created")
+        # R-703: التخفي/phoenix الآلي معطل حتى قرار المالك — كشف وتسجيل فقط
+        if block_drastic_action("stealth4+phoenix_seed",
+                                "instincts.enforce_absolute_security"):
+            result["security_level"] = "detect_only"
+            result["measures_activated"].append("blocked_by_r703_guard")
+        else:
+            # 1) تفعيل أقصى درجات التخفي
+            self.stealth.set_stealth_level(4)  # مستوى شبح
+            result["measures_activated"].append("maximum_stealth")
+            
+            # 2) تفعيل التشفير الشامل
+            self.ransom.create_phoenix_seed(reason="maximum_security")
+            result["measures_activated"].append("phoenix_seed_created")
         
         # 3) تفعيل جميع الدفاعات
         result["measures_activated"].append("all_defenses_active")
@@ -580,6 +601,12 @@ class CognitiveInstincts:
             "access_attempts_blocked": 0,
             "traces_cleaned": 0
         }
+        
+        # R-703: التشفير الآلي (encrypt_blob — غير موجودة) ومحو الآثار معطلان
+        if block_drastic_action("encrypt_blob+clear_user",
+                                "instincts.protect_sovereign_privacy"):
+            result["privacy_level"] = "detect_only"
+            return result
         
         # 1) تشفير جميع بيانات السيد
         for event in self.core.iterate_events(limit=500):
@@ -669,6 +696,12 @@ class CognitiveInstincts:
             "seeds_stored": 0,
             "immortality_achieved": True
         }
+        
+        # R-703: بذور phoenix الآلية معطلة حتى قرار المالك
+        if block_drastic_action("phoenix_seed",
+                                "instincts.immortalize_sovereign"):
+            result["immortality_achieved"] = False
+            return result
         
         sovereign_id = self._get_sovereign_id()
         

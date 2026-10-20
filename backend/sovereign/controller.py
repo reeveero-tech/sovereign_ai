@@ -51,6 +51,16 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+def _r703_blocked(action: str, action_type: str) -> bool:
+    """R-703: حاجز الإجراءات الآلية القصوى. يمنع ويسجل ما لم يقرر المالك غير ذلك."""
+    try:
+        from ..memory.defense.automation_guard import block_drastic_action
+    except ImportError:
+        from memory.defense.automation_guard import block_drastic_action
+    return block_drastic_action(action, "controller._execute_action",
+                                action_type=action_type)
+
+
 # ============================================================
 # الثوابت وإعدادات المتحكم
 # ============================================================
@@ -653,6 +663,9 @@ class SovereignController:
             
         elif action_type == "activate_maximum_protection":
             # تفعيل أقصى درجات الحماية
+            # R-703: التخفي الآلي معطل حتى قرار المالك
+            if _r703_blocked("stealth4", action_type):
+                return
             try:
                 from ..memory.defense.stealth import get_stealth_defense
                 stealth = get_stealth_defense()
@@ -667,6 +680,9 @@ class SovereignController:
             
         elif action_type == "create_emergency_backup":
             # إنشاء نسخة احتياطية طارئة
+            # R-703: بذرة phoenix الآلية معطلة حتى قرار المالك
+            if _r703_blocked("phoenix_seed", action_type):
+                return
             try:
                 from ..memory.defense.ransomware import get_ransomware_defense
                 ransomware = get_ransomware_defense()

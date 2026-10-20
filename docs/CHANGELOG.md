@@ -1,7 +1,17 @@
 # CHANGELOG.md — سجل التغييرات
 
 > كل تغيير يُسجل هنا (قاعدة الدفعة الذرية).
-> آخر تحديث: 2026-10-20 (R-702 — دقة الحالة المعلنة ورفع بنود للمالك)
+> آخر تحديث: 2026-10-20 (R-703 — كشف بلا تحرك آلي + توقيع 256 بت)
+
+---
+
+## [R-703] — 2026-10-20 — كشف تلف السجل بلا تحرك آلي + توقيع HMAC-SHA256 كامل
+
+- **الكشف**: `instincts._detect_threats_to_sovereign` و`watcher._detect_integrity_attack` و`drives.update_survival_drive` كانت تختبر الصدق المنطقي لـ`IntegrityStatus` (تعداد نصي، دائمًا صادق) فلا ترى CORRUPTED أبدًا → `integrity_compromised()` بالقيمة + تسجيل CRITICAL.
+- **الحجب**: وحدة `backend/memory/defense/automation_guard.py`؛ `AUTOMATED_DRASTIC_ACTIONS_ENABLED = False` (ثابت كود)؛ 6 مسارات آلية (instincts ×4، ransomware `_watch_for_threats`، controller الطوارئ) لا تنفذ تخفيًا/phoenix/`encrypt_blob`/محو آثار — تسجل `R-703 [SAFETY]` فقط. الواجهات اليدوية وتجديد البذور الدوري لم تُمس (مُفصح).
+- **safety.py**: `generate_signature` = HMAC-SHA256 كامل (64 hex)؛ التحقق بـ`hmac.compare_digest`؛ التواقيع المقطوعة 64 بت (مشتقة وجذرية) مرفوضة. إثبات ثبات الزمن بنيوي (لا اختبار ساعة — متذبذب في CI؛ مُفصح).
+- **ROADMAP_V3**: البندان ١ و٢ منجزان + جدول بنود OWNER_REQUIRED ١٥/١٦/١٧. **OPERATIONS.md** §11.
+- **الاختبارات**: `backend/tests/invariants/test_r703_safety_recovery.py` (12) — RED 10 فشل / 2 نجاح؛ GREEN 12. الحزمة **727 passed / 1 deselected**.
 
 ---
 

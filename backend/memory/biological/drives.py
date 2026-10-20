@@ -54,6 +54,12 @@ except ImportError:
     from memory.biological.instincts import get_instincts
     from config import DATA_DIR
 
+# R-703: كشف صريح + حاجز الإجراءات الآلية القصوى (OWNER_REQUIRED بند ١٥)
+try:
+    from ..defense.automation_guard import integrity_compromised, report_integrity_violation
+except ImportError:
+    from memory.defense.automation_guard import integrity_compromised, report_integrity_violation
+
 import logging
 logger = logging.getLogger(__name__)
 
@@ -304,7 +310,11 @@ class SovereignDrives:
         """
         # قياس سلامة النظام
         core_integrity = self.core.verify_integrity()
-        integrity_score = 1.0 if core_integrity else 0.0
+        if integrity_compromised(core_integrity):
+            report_integrity_violation("drives", core_integrity)
+            integrity_score = 0.0
+        else:
+            integrity_score = 1.0
         
         # مستوى التهديد
         defense_status = self.watcher.get_status()

@@ -37,6 +37,12 @@ except ImportError:
     from dynamic import get_dynamic_memory
     from encoding import get_encoder
 
+# R-703: كشف صريح + حاجز الإجراءات الآلية القصوى (OWNER_REQUIRED بند ١٥)
+try:
+    from .automation_guard import integrity_compromised, report_integrity_violation
+except ImportError:
+    from memory.defense.automation_guard import integrity_compromised, report_integrity_violation
+
 import logging
 logger = logging.getLogger(__name__)
 
@@ -471,7 +477,9 @@ class MemoryWatcher:
     
     def _detect_integrity_attack(self) -> Optional[AnomalyRecord]:
         """كشف هجوم على سلامة السجل"""
-        if not self.core.verify_integrity():
+        integrity_status = self.core.verify_integrity()
+        if integrity_compromised(integrity_status):
+            report_integrity_violation("watcher", integrity_status)
             return AnomalyRecord(
                 id=f"anom_{int(time.time())}_int",
                 type=ThreatType.INTEGRITY_VIOLATION.value,

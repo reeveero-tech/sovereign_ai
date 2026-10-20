@@ -1,7 +1,7 @@
 # OPERATIONS.md — التشغيل والنشر
 
 > كيف يُشغَّل المشروع ويُنشر؟ الحالة الفعلية كما رُصدت.
-> آخر تحديث: 2026-10-13 (الدفعة M6 — R-603)
+> آخر تحديث: 2026-10-20 (R-703 — وضع «كشف بلا تحرك» + توقيع 256 بت)
 
 ---
 
@@ -154,3 +154,58 @@ backend.supervisor_daemon --url http://app:8080` عبر شبكة Compose —
 - فشل قراءة التطبيق لا يوقف الحارس — يُسجل الخطأ ويستمر (المراقب لا يموت
   مع المراقَب).
 - خريطة الوعي: أول فحص عند الإقلاع ثم كل 60 ثانية (`--map-interval`).
+
+## 11) وضع «كشف بلا تحرك» للدفاع الآلي (R-703 — أمر المالك)
+
+**الحالة الحالية: كل إجراء آلي قصوي معطل.** النظام يكتشف تلف السجل ويسجله،
+ولا ينفذ أي استجابة آلية.
+
+### الكشف (يعمل)
+ثلاثة مواضع تفحص `core.verify_integrity()` بالقيمة الصريحة عبر
+`integrity_compromised()` (في `backend/memory/defense/automation_guard.py`):
+
+| الموضع | أثر الكشف |
+|---|---|
+| `instincts._detect_threats_to_sovereign` | تهديد `core_integrity_compromised` (شدة 1.0) + حدث `instinct::threat_to_sovereign` |
+| `watcher._detect_integrity_attack` | شذوذ `integrity_violation` بمستوى حرج |
+| `drives.update_survival_drive` | درجة السلامة 0.0 (يرتفع دافع البقاء 0.4) |
+
+كل كشف يُسجل بمستوى CRITICAL:
+`R-703 [INTEGRITY]: تلف في سلسلة السجل السيادي اكتشفه <المصدر> ...`.
+`PARTIAL` (مفتاح التوقيع غائب) ليس تلفًا ولا يُطلق إنذارًا.
+
+### الحواجز (تمنع)
+`AUTOMATED_DRASTIC_ACTIONS_ENABLED = False` ثابت في الكود، وليس متغير بيئة.
+كل مسار آلي يتفاعل مع التهديد يمر أولًا بـ`block_drastic_action()`:
+
+| المسار | ما يُمنع |
+|---|---|
+| `instincts._execute_protection_action` | تخفٍّ بالمستوى 4، وبذرة phoenix، و`encrypt_blob` |
+| `instincts.enforce_absolute_security` (حلقة التهديد كل 10 ثوانٍ) | تخفٍّ بالمستوى 4، وبذرة phoenix |
+| `instincts.protect_sovereign_privacy` | `encrypt_blob`، ومحو `working.clear_user` |
+| `instincts.immortalize_sovereign` | بذور phoenix |
+| `ransomware._watch_for_threats` (تهديد ≥3) | بذرة phoenix |
+| `controller._execute_action` (أمر الطوارئ) | تخفٍّ بالمستوى 4، وبذرة phoenix |
+
+كل منع يُسجل بمستوى WARNING:
+`R-703 [SAFETY]: إجراء آلي قصوي مُنع: <الإجراء> (المصدر=...، المرات=N)`.
+يُكتب سطر واحد لكل (إجراء، مصدر) في الدقيقة، والعدّ مستمر. سجل المنع في
+الذاكرة متاح من `automation_guard.blocked_actions()` (آخر 500).
+
+### ما لا يمسه الحاجز
+- الاستدعاء اليدوي الصريح لواجهات الدفاع (مثل `create_phoenix_seed` يستدعيها
+  المالك مباشرة).
+- تجديد البذور الدوري (`ransomware` seed renewal)، فهو صيانة وليس ردة فعل على
+  تهديد.
+- `bootkit.war_boot` و`initiate_death`: لا مستدعي آليًا لهما في الكود.
+
+### إعادة التفعيل
+قرار مالك. يتم بالتزام صريح يغيّر الثابت، **بعد** حسم `encrypt_blob` (غير
+موجودة في `ransomware.py`). لا يتم من البيئة، ولا يتم صامتًا. التفصيل في
+`forensics/R-703_SAFETY_RECOVERY.md`.
+
+### توقيع الأوامر الخطيرة (`safety.py`)
+`generate_signature(action_id)` تعيد HMAC-SHA256 كاملًا (64 حرفًا ست عشريًا،
+أي 256 بت) بمفتاح مشتق `derive_key("signing")`. التحقق يتم بـ
+`hmac.compare_digest`. **التواقيع القديمة بطول 16 حرفًا تُرفض.** أي ملف رد
+موافقة في `sovereign_responses/` يجب أن يحمل التوقيع الجديد.
