@@ -1,0 +1,10 @@
+#!/bin/sh
+# hook محلي pre-commit — حارس العناوين الخاصة (قرار المالك د.٣، 2026-10-20).
+# يفحص محتوى الفهرس (ما سيُلتزم فعلًا) قبل إنشاء الالتزام، بالنواة نفسها التي
+# يستخدمها اختبار CI. التفعيل مرة واحدة لكل استنساخ:
+#     git config core.hooksPath .githooks
+# حدّ معلن: hook محلي يمكن تجاوزه (--no-verify)؛ البوابة الصلبة تبقى CI.
+ROOT="$(git rev-parse --show-toplevel)" || exit 2
+PY="${PYTHON:-python3}"
+command -v "$PY" >/dev/null 2>&1 || PY=python
+exec "$PY" "$ROOT/tools/private_ip_guard.py" --staged

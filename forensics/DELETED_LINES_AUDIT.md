@@ -1982,3 +1982,11 @@ rebase ولا force-push. التفصيل: `forensics/R-698_ED25519.md` §٦.
 | سطرا النتائج في GETTING_STARTED §١٠ (743) | **مُبرر # DELETION-JUSTIFIED:** نُسبت النتيجة لـ GS-1 صراحة + عدد GS-2 (745). |
 | صف د.٤ في سجل قرارات OWNER_DECISIONS_PENDING | **مُبرر # DELETION-JUSTIFIED:** «معروض» → «منفذ». |
 | ترويستا «آخر تحديث» في CHANGELOG وPROJECT_STATE (نسخة R-713) | **مُبرر # DELETION-JUSTIFIED:** متقادمتان — استُبدلتا بمدخل GS-2. |
+
+## GS-3 — توسيع جزئي لحارس العناوين (2026-10-20)
+
+| المحذوف (المُستبدَل) | المبرر |
+|---|---|
+| سطر نتيجة الحزمة في GETTING_STARTED §١٠ («بعد GS-2: 745») | **مُبرر # DELETION-JUSTIFIED:** عدد يتقادم مع كل جولة — أُحيل إلى PROJECT_STATE بدل تكراره. |
+| خلية تنفيذ د.٣ في سجل قرارات OWNER_DECISIONS_PENDING («رقعة منفصلة (معروضة)») | **مُبرر # DELETION-JUSTIFIED:** «معروض» → «منفذ GS-3». |
+| ترويستا «آخر تحديث» في CHANGELOG وPROJECT_STATE (نسخة GS-2) | **مُبرر # DELETION-JUSTIFIED:** متقادمتان — استُبدلتا بمدخل GS-3. |

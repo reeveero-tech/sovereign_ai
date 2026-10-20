@@ -48,6 +48,7 @@ EXIT_ALLOWED_ENTRY_POINTS = {
     "scripts/verify_operational_auth.py",
     "scripts/verify_new_key.py",
     "tools/action_log.py",
+    "tools/private_ip_guard.py",  # GS-3: CLI للـhook — رمز الخروج 0/1/2 هو عقده مع git
 }
 
 BANNED_STRING = "max_tamper_attempts"

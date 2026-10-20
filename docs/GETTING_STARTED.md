@@ -290,7 +290,7 @@ curl -s -w "\nHTTP %{http_code}\n" http://127.0.0.1:8000/supervisor/status
 
 ```bash
 pytest tests/ backend/tests/ -q -m "not operational"
-# الفعلي عند GS-1: 743 passed, 1 deselected (~4 دقائق)؛ بعد GS-2: 745
+# الفعلي عند GS-1: 743 passed, 1 deselected (~4 دقائق) — العدد الحالي في docs/PROJECT_STATE.md
 
 bash verify.sh --full
 # الفعلي: رمز خروج 0 — تطابق ثلاثي (محلي = CI = استنساخ نظيف) — 743/0/0 عند GS-1

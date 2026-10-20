@@ -40,6 +40,9 @@ KNOWN_ENTRY_POINTS = {
 SCRIPT_ENTRY_POINTS = {
     "scripts/verify_new_key.py",
     "scripts/verify_operational_auth.py",
+    # GS-3 (قرار المالك د.٣): نواة حارس العناوين — CLI يشغّله .githooks/pre-commit
+    # (`--staged`)، ويُحمَّل في tests/test_private_ip_guard_ipv6.py بـ spec_from_file_location
+    "tools/private_ip_guard.py",
 }
 
 # الجولة <2> (اعتراض المراجع بصير): ملفات تُحمّل ديناميكيًا عبر
