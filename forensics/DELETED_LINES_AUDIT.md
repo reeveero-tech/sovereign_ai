@@ -1753,3 +1753,25 @@ rebase ولا force-push. التفصيل: `forensics/R-698_ED25519.md` §٦.
 | `backend/memory/core.py` (−10) | **مُبرر # DELETION-JUSTIFIED:** عشرة أسطر في ثلاثة مواضع، كلها إصلاح العيوب نفسها: (أ) كتلة المزامنة التي تقبل أي ذيل (ارتداد 3ec945b) → مزامنة للأمام فقط؛ (ب) فرع الذاكرة المؤقتة «تطابق _last_hash → إعادة بلا مهلة» → المهلة وحدها؛ (ج) شرط «آخر تجزئة = _last_hash» وسطر خطئه → شرط العضوية. لا حذف وظيفة. |
 | `docs/CHANGELOG.md` (−1) | **مُبرر # DELETION-JUSTIFIED:** ترويسة «آخر تحديث» المتقادمة — استُبدلت بترويسة هذه الجولة. |
 | `docs/PROJECT_STATE.md` (−1) | **مُبرر # DELETION-JUSTIFIED:** ترويسة «آخر تحديث» المتقادمة — استُبدلت بترويسة هذه الجولة. |
+
+## R-702 — دقة الحالة المعلنة (2026-10-20)
+
+التزام ذري فوق `5eea2ba` بتفويض المالك — لا amend ولا rebase ولا force-push. التفصيل: `forensics/R-702_STATE_ACCURACY.md`.
+
+- `.gitignore`: +2 / −1
+- `OWNER_REQUIRED.md`: +45 / −0
+- `backend/memory/core.py`: +1 / −1
+- `docs/CHANGELOG.md`: +9 / −1
+- `docs/PROJECT_STATE.md`: +6 / −5
+- `forensics/DELETED_LINES_AUDIT.md`: +22 / −0 (مدخل هذا الالتزام نفسه)
+- `forensics/R-702_STATE_ACCURACY.md`: +52 / −0
+- `tests/test_gitignore_tracked_source.py`: +43 / −0
+
+الإجمالي: 180 إضافةً / 8 حذفًا في 8 ملفات.
+
+| المحذوف | المبرر |
+|---|---|
+| `.gitignore` (−1) | **مُبرر # DELETION-JUSTIFIED:** النمط `memory/` الذي أخفى 25 ملفًا مصدريًا متتبعًا — استُبدل بـ`/memory/` (الجذر فقط) + تعليق. هذا هو الإصلاح نفسه. |
+| `backend/memory/core.py` (−1) | **مُبرر # DELETION-JUSTIFIED:** سطر الترويسة «جاهز للإنتاج، لا تجريبي» — ادعاء غير مثبت يخالف الأمر الدائم §٤؛ استُبدل بوصف دقيق. |
+| `docs/PROJECT_STATE.md` (−5) | **مُبرر # DELETION-JUSTIFIED:** ترويسة «آخر تحديث» + ثلاثة صفوف من جدول §1 (المرحلة، الاختبارات «71»، الحالة العامة «لا عوائق نشر») + سطر §8 «لا عائق نشر» — ادعاءات متقادمة/خاطئة استُبدلت بالحالة المثبتة؛ السجل التاريخي في §2/§9/CHANGELOG لم يُمس. |
+| `docs/CHANGELOG.md` (−1) | **مُبرر # DELETION-JUSTIFIED:** ترويسة «آخر تحديث» المتقادمة. |
