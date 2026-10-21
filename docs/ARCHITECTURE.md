@@ -92,11 +92,11 @@
 
 | الملف | الحقيقة | الحالة |
 |---|---|---|
-| `Fff` (28KB) | نص تعليمات AI | ✅ مؤرشف → `archive/root_strays/Fff.txt` (R-110) |
-| `IDs.py` (61KB) | كود TypeScript/JS بامتداد .py | ✅ مؤرشف → `archive/root_strays/IDs.js` (R-110) |
-| `encryption.py` (74KB) | "موسوعة تشفير" Python | ✅ مؤرشف → `archive/root_strays/encryption.py` (R-110) |
-| `investigation.py` (103KB) | نظام CIKMS استخباراتي | ✅ مؤرشف → `archive/root_strays/investigation.py` (R-110) |
-| `Mr.py` (44KB) | "محرك ولاء" + بروتوكول موت ذاتي | ⚠️ أُبقي في مكانه (خطر تدمير ذاتي، D-005) |
+| `Fff` (28KB) | نص تعليمات AI | ✅ حُذف نهائيًا مع الأرشيف (R-685، بأمر المالك — نسخة احتياطية عند المالك + تاريخ git) |
+| `IDs.py` (61KB) | كود TypeScript/JS بامتداد .py | ✅ حُذف نهائيًا مع الأرشيف (R-685) |
+| `encryption.py` (74KB) | "موسوعة تشفير" Python | ✅ حُذف نهائيًا مع الأرشيف (R-685) |
+| `investigation.py` (103KB) | نظام CIKMS استخباراتي | ✅ حُذف نهائيًا مع الأرشيف (R-685) |
+| `Mr.py` | "محرك ولاء" | ✅ نُزع فتيله في R-686 (بأمر المالك): `LoyaltyContract` معقّم — `death_paths=0`، حارس AST، غير مربوط بـapp.py (تصويب R-714) |
 | `main.py` (41KB) | نقطة تشغيل بديلة | نشط (أُصلح في R-105) |
 | `memory/` | نسخة قديمة من polymorphic.py | ✅ أُرشف (R-110) + أُزيلت البقايا (R-201) |
 | `infrastructure/` | Dockerfile + requirements فارغان | ✅ أُرشف (R-110) |
