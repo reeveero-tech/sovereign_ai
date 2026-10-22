@@ -28,6 +28,15 @@ if not os.environ.get("SOVEREIGN_DATA_ROOT"):
     _test_data_root = _tempfile.mkdtemp(prefix="sovereign_test_data_")
     os.environ["SOVEREIGN_DATA_ROOT"] = _test_data_root
 
+# R-720: عقل Ollama معطل في الاختبارات بالبناء — مبدأ R-704 «لا اتصال ضمني
+# في الاختبارات» كان محفوظًا بالصدفة (لا ملف .env)؛ بتفعيل المالك للعقل عبر
+# backend/.env (خادم على شبكته المحلية) كان أي اختبار يمر في build_reply
+# سيستدعي النموذج الحقيقي (بطيء + شبكي + يكسر عقود الردود المنظمة).
+# المتغير البيئي يعلو على .env بحكم _ollama_env نفسها — فالتطبيق الفعلي
+# يقرأ .env ويعمل عقله، والاختبارات معزولة. الحارس:
+# tests/test_ollama_test_isolation.py
+os.environ["OLLAMA_ENABLED"] = "false"
+
 # R-634: إنشاء KeyRing معزول مع مفتاح نشط (في الجذر المعزول)
 # — بديل fallback للحقيقي (R-621 معطل). هذا يضمن أن SovereignCore()
 # في بيئة الاختبار يجد مفتاحًا نشطًا (فشل مُغلق يمنع الاختبارات
