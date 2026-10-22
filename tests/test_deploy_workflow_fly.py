@@ -141,3 +141,12 @@ def test_smoke_window_covers_dns_ttl():
     assert window >= 600, (
         f"نافذة الفحص {window}s قصيرة — DNS TTL لسجل fly.dev يصل 300s؛ المطلوب ≥ 600s"
     )
+
+
+def test_ips_read_failure_not_treated_as_absence():
+    """R-721 (تصويبي — مراجعة): فشل قراءة ips list ليس دليل غياب العناوين —
+    `|| echo "[]"` يحوّل فشل القراءة إلى تخصيص أعمى. يجب ألا يكون في الملف."""
+    text, _, _ = _load()
+    assert "|| echo \"[]\"" not in text, (
+        "فشل قراءة ips list يجب ألا يعامل كغياب عناوين (تخصيص أعمى)"
+    )

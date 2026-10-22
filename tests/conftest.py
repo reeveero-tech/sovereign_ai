@@ -37,6 +37,12 @@ if not os.environ.get("SOVEREIGN_DATA_ROOT"):
 # tests/test_ollama_test_isolation.py
 os.environ["OLLAMA_ENABLED"] = "false"
 
+# R-719/R-721: عزل قرص Supabase عن الاختبارات — كان ضمنيًا في رأس ملف
+# test_supabase_disk.py (setdefault) فانتقل إلى conftest ليكون صريحًا
+# وبعيدًا عن ترتيب الاستيراد: أي إعداد حقيقي في .env لا يلمس الاختبارات.
+# الحارس: tests/test_supabase_disk.py::test_cloud_disk_disabled_in_test_session
+os.environ.setdefault("SUPABASE_ENV_FILE", "/nonexistent-R719.env")
+
 # R-634: إنشاء KeyRing معزول مع مفتاح نشط (في الجذر المعزول)
 # — بديل fallback للحقيقي (R-621 معطل). هذا يضمن أن SovereignCore()
 # في بيئة الاختبار يجد مفتاحًا نشطًا (فشل مُغلق يمنع الاختبارات

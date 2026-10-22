@@ -47,13 +47,25 @@ def test_config_in_test_session_sees_brain_disabled():
 
 
 def test_ollama_client_is_best_effort_on_unreachable(monkeypatch, tmp_path):
-    """خادم بعيد/غير موجود → سقوط آمن للمحرك القالبي (لا استثناء يكسر الرد)
-    — أفضل جهد لا fail-closed، بلا اتصال فعلي (عنوان غير قابل للتوجيه)."""
+    """خادم بعيد/غير موجود → سقوط آمن للمحرك القالبي (لا استثناء يكسر الرد) —
+    أفضل جهد لا fail-closed. R-721 (تصويبي): محاكاة فشل الاتصال بلا شبكة
+    حقيقية (حقن ConnectError في httpx.Client — المراجع: لا اتصال ضمني في
+    الاختبارات حتى للفشل)."""
+    import httpx
     sys.path.insert(0, str(BACKEND_DIR))
     monkeypatch.setattr("config.OLLAMA_ENABLED", True)
     monkeypatch.setattr("config.OLLAMA_MODEL", "qwen2.5:7b")
     monkeypatch.setattr("config.OLLAMA_BASE_URL", "http://ollama-unreachable.invalid")
     monkeypatch.setattr("config.OLLAMA_TIMEOUT_SECONDS", 0.2)
+
+    class _FailingClient:
+        def __init__(self, *a, **k): pass
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+        def post(self, *a, **k):
+            raise httpx.ConnectError("simulated unreachable (no real network)")
+
+    monkeypatch.setattr(httpx, "Client", _FailingClient)
     import ollama_client
     reply = ollama_client.chat("أنت مساعد", "مرحبا")
     # عقد السقوط الموثق (R-704): لا استثناء أبدًا — None تعني «استخدم القوالب»

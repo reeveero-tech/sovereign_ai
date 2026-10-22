@@ -411,6 +411,7 @@ class SolidMemoryStore:
         # تحميل البيانات الموجودة
         self._data: Dict[str, Dict[str, BaseMemoryItem]] = {}
         self._lock = threading.RLock()
+        self._cloud_lock = threading.Lock()  # R-721: ترتيب المرايا دون حجب المحلي
         
         for kind in MemoryKind:
             self._data[kind.value] = {}
@@ -535,12 +536,15 @@ class SolidMemoryStore:
     
     def _cloud_mirror(self, kind: str, items_data: list):
         """R-719 — رفع النسخة (المشفرة أصلًا — AES-256-GCM قبل الوصول) إلى القرص
-        السحابي (جدول disk، namespace=memory). عزل صارم: أي فشل يُسجّل ولا يُرمى."""
+        السحابي (جدول disk، namespace=memory). عزل صارم: أي فشل يُسجّل ولا يُرمى.
+        R-721 (تصويبي): قفل مرآة مخصص — يراعي ترتيب الوصول (نسخة أقدم لا
+        تصل بعد أحدث) دون حجب كتابة المخزن المحلي (الشبكة خارج قفل _lock)."""
         try:
             disk = _get_cloud_disk()
             if disk is None:
                 return
-            disk.save_blob("memory", kind, {"kind": kind, "items": items_data})
+            with self._cloud_lock:
+                disk.save_blob("memory", kind, {"kind": kind, "items": items_data})
         except Exception as e:  # noqa: BLE001 — السحابة لا تكسر المخزن أبدًا
             logger.warning(f"R-719 [DISK]: فشل مرآة {kind} إلى القرص السحابي: {e}")
     

@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import httpx
@@ -29,15 +30,21 @@ logger = logging.getLogger(__name__)
 
 import os
 
+# R-721 (تصويبي): ملف الإعداد الافتراضي هو .env بجذر المشروع — كما يوثق
+# .env.example (كان الكود يقرأ SUPABASE_ENV_FILE فقط — تناقض وثقه المراجع).
+# قابل للحقن في الاختبارات عبر monkeypatch لهذا المسار.
+_DOTENV_PATH = Path(__file__).resolve().parents[2] / ".env"
+
 
 def _supabase_env(name: str, default: Optional[str] = None) -> Optional[str]:
-    """قراءة إعداد Supabase: متغير البيئة أولًا ثم ملف .env (القراءة مخصصة
-    عبر SUPABASE_ENV_FILE للاختبارات. البيئة تعلو على الملف دائمًا)."""
+    """قراءة إعداد Supabase: متغير البيئة أولًا ثم ملف الإعداد (SUPABASE_ENV_FILE
+    للعزل في الاختبارات، وإلا .env بجذر المشروع — كما في Ollama R-704).
+    البيئة تعلو على الملف دائمًا."""
     value = os.getenv(name)
     if value:
         return value
-    env_file = os.getenv("SUPABASE_ENV_FILE") or None
-    if env_file and os.path.isfile(env_file):
+    env_file = os.getenv("SUPABASE_ENV_FILE") or _DOTENV_PATH
+    if env_file and Path(env_file).is_file():
         try:
             with open(env_file, "r", encoding="utf-8") as f:
                 for line in f:
@@ -67,16 +74,25 @@ def key_fingerprint(secret: str) -> str:
 
 
 def get_cloud_disk() -> Optional["SupabaseDisk"]:
-    """المثيل المفرد للطبقة، أو None إذا كانت معطلة (نمط get_* في المشروع)."""
+    """المثيل المخزن للطبقة، أو None إذا كانت معطلة (نمط get_* في المشروع).
+
+    R-721 (تصويبي): المثيل يُخزَّن — لا عميل httpx جديد لكل استدعاء (تسريب
+    اتصالات وثّقه المراجع). يتجدد المثيل فقط إذا تغير الإعداد."""
+    global _CACHED_DISK, _CACHED_SIG
     url = _supabase_env("SUPABASE_URL")
     key = _supabase_env("SUPABASE_SECRET_KEY")
     if not (url and key):
         return None
-    return SupabaseDisk(
-        base_url=url,
-        service_key=key,
-        timeout=float(_supabase_env("SUPABASE_TIMEOUT_SECONDS", "10")),
-    )
+    sig = (url, key, float(_supabase_env("SUPABASE_TIMEOUT_SECONDS", "10")))
+    if _CACHED_DISK is not None and _CACHED_SIG == sig:
+        return _CACHED_DISK
+    _CACHED_DISK = SupabaseDisk(base_url=sig[0], service_key=sig[1], timeout=sig[2])
+    _CACHED_SIG = sig
+    return _CACHED_DISK
+
+
+_CACHED_DISK: Optional["SupabaseDisk"] = None
+_CACHED_SIG: Optional[tuple] = None
 
 
 # ---------- العميل ----------

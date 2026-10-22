@@ -123,21 +123,24 @@ jobs:
             flyctl machine start -a "$FLY_APP" "$MID"
           done
 
-      # R-718 (السبب الجذري الثالث — تشغيل 39754774743): الآلة started وفحص
-      # صحة Fly نفسه نجح، لكن سجل fly.dev DNS غائب كليًا (NODATA عند ns1.flydns.net).
-      # التشخيص الموثق (مجتمع Fly): تطبيق بلا IPv4 عام لا تُنشر سجلات fly.dev
-      # الخاصة به — الحل allocate-v4 --shared. الخطوة تقرأ الحالة أولًا ولا
-      # تخصص إلا عند الغياب (لا تغيير إن كان العنوان موجودًا).
+      # R-718 (السبب الجذري الثالث — فرضية قوية قيد الاختبار، تشغيل 39754774743): الآلة
+      # started وفحص صحة Fly نفسه نجح، لكن سجل fly.dev DNS غائب كليًا (NODATA عند
+      # ns1.flydns.net). التشخيص المرجعي (مجتمع Fly): تطبيق بلا IPv4 عام لا تُنشر سجلات
+      # fly.dev الخاصة به — الحل المرجح allocate-v4 --shared. R-721 (تصويبي): فشل قراءة
+      # ips list ليس دليل غياب — لا تخصيص على أساس فشل قراءة.
       - name: 'R-718: Ensure public IPs (fly.dev DNS prerequisite)'
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
         run: |
-          IPS=$(flyctl ips list -a "$FLY_APP" --json 2>/dev/null || echo "[]")
+          if ! IPS=$(flyctl ips list -a "$FLY_APP" --json 2>/dev/null); then
+            echo "⚠️ تعذر قراءة ips list — فشل القراءة ليس دليل غياب؛ لا تخصيص أعمى (تحقق يدوي)"
+            exit 0
+          fi
           echo "$IPS"
           V4=$(echo "$IPS" | jq '[.[] | ((.Type // .type) // "")] | map(select(. == "public_v4")) | length')
           V6=$(echo "$IPS" | jq '[.[] | ((.Type // .type) // "")] | map(select(. == "public_v6")) | length')
           if [ "$V4" -eq 0 ]; then
-            echo "لا IPv4 عام — تخصيص مشترك (جذر سجل fly.dev DNS)"
+            echo "لا IPv4 عام ظاهرًا — تخصيص مشترك (فرضية جذر سجل fly.dev DNS)"
             flyctl ips allocate-v4 --shared -a "$FLY_APP"
           else
             echo "IPv4 عام موجود ($V4)"
@@ -152,8 +155,9 @@ jobs:
       - name: 'Smoke: /health on public URL'
         run: |
           URL="https://${FLY_APP}.fly.dev/health"
-          # نافذة 10 دقائق: سجل fly.dev الجديد يحتاج نشر DNS (TTL يصل 5 دقائق
-          # وفق توثيق Fly) — 3 دقائق السابقة لم تكفِ (تشغيل 39754774743).
+          # نافذة 10 دقائق: سجل fly.dev الجديد قد يحتاج وقت نشر DNS (TTL يصل
+          # 5 دقائق وفق توثيق Fly) — نافذة 3 دقائق السابقة لم تكفِ (تشغيل
+          # 39754774743 لم يستجب خلالها — لا يثبت أن الانتظار الأطول يحلها).
           for i in $(seq 1 60); do
             BODY=$(curl -s -m 10 "$URL" || true)
             if echo "$BODY" | grep -q '"status":"healthy"'; then

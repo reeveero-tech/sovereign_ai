@@ -15,7 +15,6 @@ import os
 import httpx
 import pytest
 
-os.environ.setdefault("SUPABASE_ENV_FILE", "/nonexistent-R719.env")
 
 
 # -------------------------
@@ -227,3 +226,116 @@ def test_disk_status_endpoint_enabled_no_secret_leak(monkeypatch):
         assert data["key_fingerprint"] == "abc123def456"
         assert "sb_secret" not in r.text
         assert "SUPABASE_SECRET_KEY" not in r.text
+
+
+# -------------------------
+# R-721 (تصويبي) — مراجعة المراجع: عزل، ذاكرة клиент، استرجاع غير فارغ
+# -------------------------
+
+def test_supabase_env_falls_back_to_repo_root_dotenv(monkeypatch, tmp_path):
+    """توثيق .env.example يقول إن .env بجذر المشروع يفعّل الطبقة — الكود كان
+    يقرأ SUPABASE_ENV_FILE فقط (تناقض وثّقه المراجع). يجب أن يعود للجذر."""
+    import backend.sovereign.cloud_disk as cloud_disk_mod
+    monkeypatch.delenv("SUPABASE_URL", raising=False)
+    monkeypatch.delenv("SUPABASE_SECRET_KEY", raising=False)
+    monkeypatch.delenv("SUPABASE_ENV_FILE", raising=False)
+    envfile = tmp_path / ".env"
+    envfile.write_text(
+        "SUPABASE_URL=https://from-dotenv.supabase.co\n"
+        'SUPABASE_SECRET_KEY="sb_secret_dotenv"\n', encoding="utf-8")
+    monkeypatch.setattr(cloud_disk_mod, "_DOTENV_PATH", envfile)
+    disk = cloud_disk_mod.get_cloud_disk()
+    assert disk is not None, "يجب أن يقرأ .env بجذر المشروع (كما يوثق .env.example)"
+    assert disk.base_url == "https://from-dotenv.supabase.co"
+    assert disk.service_key == "sb_secret_dotenv"
+
+
+def test_cloud_disk_disabled_in_test_session(monkeypatch):
+    """عزل بالبناء (نمط R-720 لـOllama): conftest يفرض SUPABASE_ENV_FILE على
+    مسار غير موجود — حتى لو مُلئ .env الحقيقي بإعدادات المالك، الاختبارات
+    لا تلمس السحابة الحقيقية أبدًا."""
+    import os
+    import backend.sovereign.cloud_disk as cloud_disk_mod
+    monkeypatch.delenv("SUPABASE_URL", raising=False)
+    monkeypatch.delenv("SUPABASE_SECRET_KEY", raising=False)
+    env_file = os.environ.get("SUPABASE_ENV_FILE")
+    assert env_file, "conftest يجب أن يفرض SUPABASE_ENV_FILE (عزل الاختبارات)"
+    assert not os.path.exists(env_file), (
+        "مسار العزل يجب أن يكون غير موجود — ملف إعداد حقيقي هنا يعني أن "
+        "الاختبارات تستطيع لمس سحابة المالك"
+    )
+    assert cloud_disk_mod.get_cloud_disk() is None, (
+        "داخل جلسة الاختبار الطبقة يجب أن تكون معطلة مهذا كان في .env"
+    )
+
+
+def test_get_cloud_disk_caches_client(monkeypatch):
+    """المراجع: مثيل جديد لكل استدعاء = تسريب اتصالات httpx. يجب تخزين
+    المثيل (يتجدد فقط عند تغير الإعداد)."""
+    import backend.sovereign.cloud_disk as cloud_disk_mod
+    monkeypatch.setenv("SUPABASE_URL", "https://cache-test.supabase.co")
+    monkeypatch.setenv("SUPABASE_SECRET_KEY", "sb_secret_cache")
+    d1 = cloud_disk_mod.get_cloud_disk()
+    d2 = cloud_disk_mod.get_cloud_disk()
+    assert d1 is d2, "المثيل يجب أن يكون مخزنًا (لا عميل httpx جديد لكل استدعاء)"
+    # تغير الإعداد → مثيل جديد
+    monkeypatch.setenv("SUPABASE_URL", "https://other.supabase.co")
+    d3 = cloud_disk_mod.get_cloud_disk()
+    assert d3 is not d1 and d3.base_url == "https://other.supabase.co"
+
+
+def test_store_roundtrip_via_cloud_nonempty(monkeypatch, tmp_path):
+    """المراجع: استرجاع بقائمة فارغة لا يثبت استعادة ذاكرة مفيدة. الدورة
+    الكاملة: حفظ حقيقي (مشفر) → المرآة ترفعه → مخزن جديد بجذر محلي فارغ
+    يسترجعه → العنصر يُحمّل ويُفك تشفيره ويُسترجع فعلًا."""
+    import json as _json
+    from backend.memory import store as store_mod
+    captured: dict = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/rest/v1/disk" and request.method == "POST":
+            body = _json.loads(request.content)
+            captured[body["key"]] = body["payload"]
+            return httpx.Response(201)
+        if request.url.path == "/rest/v1/disk" and request.method == "GET":
+            key = request.url.params.get("key", "").removeprefix("eq.")
+            if key in captured:
+                return httpx.Response(200, json=[{"payload": captured[key]}])
+            return httpx.Response(200, json=[])
+        return httpx.Response(200, json=[])
+
+    def _fresh_map():
+        return {k: tmp_path / f"{k}.json" for k in (
+            "procedural", "semantic", "episodic", "spatial",
+            "emotional", "associative", "index", "backup")}
+
+    # ١) حفظ حقيقي في مخزن أول — المرآة تلتقط الحمولة المشفرة
+    monkeypatch.setattr(store_mod, "FILE_MAP", _fresh_map())
+    monkeypatch.setattr(store_mod, "_get_cloud_disk", lambda: _make_disk(handler))
+    st1 = store_mod.SolidMemoryStore()
+    st1.save("semantic", {"concept": "القرص", "definition": "دائم عبر السحابة"})
+    assert "semantic" in captured, "المرآة يجب أن ترفع نوع الذاكرة"
+    item_ids = [it["id"] for it in captured["semantic"]["items"]]
+    assert item_ids, "الحمولة المرفوعة يجب أن تحوي عنصرًا فعليًا (غير فارغة)"
+    # الحمولة مشفرة: لا نص صريح للتعريف داخل الحمولة المرفوعة
+    dumped = _json.dumps(captured["semantic"], ensure_ascii=False)
+    assert "دائم عبر السحابة" not in dumped, "الحمولة يجب أن تكون مشفرة قبل الرفع"
+
+    # ٢) مخزن جديد بجذر محلي فارغ (قرص ضاع) — الاسترجاع من السحابة
+    empty_dir = tmp_path / "fresh"
+    empty_dir.mkdir()
+    monkeypatch.setattr(store_mod, "FILE_MAP", {
+        k: empty_dir / f"{k}.json" for k in store_mod.FILE_MAP})
+    monkeypatch.setattr(store_mod, "_get_cloud_disk", lambda: _make_disk(handler))
+    st2 = store_mod.SolidMemoryStore()
+    loaded = st2._data.get("semantic", {})
+    assert item_ids[0] in loaded, (
+        "العنصر المحفوظ في المخزن الأول يجب أن يُسترجع في المخزن الجديد "
+        "(_data مفهرسة بمعرف العنصر)"
+    )
+    # ٣) فك التشفير يعمل: العنصر المسترجع يقرأ قيمته الأصلية
+    item = loaded[item_ids[0]]
+    payload = st2._decrypt_payload(item.encrypted_payload, "semantic")
+    assert payload["definition"] == "دائم عبر السحابة", (
+        "الاسترجاع يجب أن يعيد القيمة الأصلية بعد فك التشفير"
+    )
