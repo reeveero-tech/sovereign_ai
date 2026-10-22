@@ -67,7 +67,11 @@ def test_ollama_client_is_best_effort_on_unreachable(monkeypatch, tmp_path):
 
     monkeypatch.setattr(httpx, "Client", _FailingClient)
     import ollama_client
+    calls = []
+    _FailingClient.post = staticmethod(lambda self, *a, **k: calls.append(1) or
+                                      (_ for _ in ()).throw(httpx.ConnectError("simulated")))
     reply = ollama_client.chat("أنت مساعد", "مرحبا")
-    # عقد السقوط الموثق (R-704): لا استثناء أبدًا — None تعني «استخدم القوالب»
-    # في build_reply (المتكامل لا الأساس)، أو نص الرد إن نجح.
-    assert reply is None or isinstance(reply, str)
+    # عقد السقوط الموثق (R-704): لا استثناء أبدًا — None تحديدًا تعني «استخدم
+    # القوالب» في build_reply. والمحاكاة استُدعيت فعلًا (المسار مُختبر لا مفترض).
+    assert calls, "المحاكاة يجب أن تُستدعى فعلًا"
+    assert reply is None, "فشل الخادم يجب أن يعيد None (سقوط للقوالب) تحديدًا"
