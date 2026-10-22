@@ -87,8 +87,12 @@ def test_starts_stopped_machines_after_deploy():
 def test_resumes_suspended_app_before_starting_machines():
     """R-718 (تكملة): بدء الآلة وحده لم يكفِ — الآلة بدأت (سجل التشغيل 39749764649:
     «d891e26ea24d38 has been started») وبقي التطبيق بلا سجل DNS بعد 8 دقائق.
-    تطبيق suspended (حالة موثقة في R-717) لا يُخدم حتى يُستأنف:
-    خطوة استئناف مشروطة بالحالة قبل بدء الآلات."""
+    تطبيق suspended (حالة موثقة في R-717) لا يُخدم حتى يُستأنف.
+    التشغيل الثالث (39752410556) أثبت أن `flyctl apps resume` مهجور في flyctl 0.4.120
+    («Command resume is deprecated, use fly scale count instead») — الخطوة تستخدم
+    الأمر البديل الحديث `flyctl scale count` المشروط بقراءة الحالة قبل بدء الآلات."""
     text, _, _ = _load()
-    assert "flyctl apps resume" in text, \
-        "لا توجد خطوة استئناف التطبيق المعلق (دليل التشغيل 39749764649 — الآلة بدأت وبقي بلا DNS)"
+    assert "flyctl scale count" in text, \
+        "لا توجد خطوة استئناف التطبيق المعلق بالأمر الحديث (دليل التشغيلين 39749764649 و39752410556)"
+    assert "flyctl apps resume" not in text, \
+        "flyctl apps resume مهجور في flyctl 0.4.120 — فشل به في التشغيل 39752410556"""

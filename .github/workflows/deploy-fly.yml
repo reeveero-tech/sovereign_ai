@@ -88,8 +88,8 @@ jobs:
           STATUS_JSON=$(flyctl status -a "$FLY_APP" --json || true)
           echo "$STATUS_JSON" | head -c 600
           if echo "$STATUS_JSON" | grep -qi 'suspended'; then
-            echo "التطبيق معلق — استئناف..."
-            flyctl apps resume -a "$FLY_APP"
+            echo "التطبيق معلق — استئناف (scale count 1 — بديل resume المهجور)..."
+            flyctl scale count 1 -a "$FLY_APP"
           else
             echo "التطبيق ليس معلقًا (أو الحالة غير واضحة) — لا استئناف"
           fi

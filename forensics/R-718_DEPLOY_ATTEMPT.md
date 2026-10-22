@@ -90,6 +90,11 @@ Updating existing machines in 'sovereign-ai-k20elq' with rolling strategy
   تقرأ `flyctl status --json` وتستأنف فقط إن ظهرت حالة suspended (لا تغيير أعمى) — قبل خطوة بدء الآلات.
   RED: `test_resumes_suspended_app_before_starting_machines` فشل قبل الإضافة (1 failed، 7 passed) ←
   GREEN (8/8). الحزمة 783→784.
+- **التشغيل الثالث (39752410556 — 09:03:06Z):** خطوة الاستئناف فشلت بالدليل الحرفي:
+  `Command "resume" is deprecated, use \`fly scale count\` instead` + `Error: unknown shorthand flag: 'a'`
+  — `flyctl apps resume` مهجور في flyctl 0.4.120. **الإصلاح الثالث:** استُبدل بـ`flyctl scale count 1`
+  (البديل الموثق في رسالة الخطأ نفسها) — RED (الحارس طالب بالأمر الجديد: 1 failed) ← GREEN (8/8).
+  الحزمة 784 كما هي (تعديل حارس قائم، لا إضافة).
 - **ملاحظة تشغيلية (للجولات اللاحقة):** `gh` داخل `verify.sh` يمر بوسيط مصادقة بيئة الوكيل؛ بعد عطل الوسيط
   (401) يصلح تشغيله بـ `env -u GH_ENTERPRISE_TOKEN GH_HOST=github.com GH_TOKEN=<رمز>`.
 - **ملاحظة تشغيلية ٢ (مثبتة بالتشغيل):** تشغيل الحزمة يلوّث `forensics/pytest_results.xml` المتتبع
@@ -101,6 +106,7 @@ Updating existing machines in 'sovereign-ai-k20elq' with rolling strategy
 ## ٩) دورة الإغلاق الكاملة (محدثة)
 
 1. دفع التزام التكملة ← انتظار CI فعليًا على SHA المدفوع.
-2. `verify.sh --full` من SHA المدفوع (بإصلاح بيئة `gh` أعلاه) ← تطابق ثلاثي (الحزمة 784).
+2. `verify.sh --full` من SHA المدفوع (بإصلاحَي بيئة `gh` وإلغاء إعادة كتابة github.com في gitconfig —
+   مثبتان في هذه الجولة) ← تطابق ثلاثي (الحزمة 784).
 3. إعادة تشغيل `deploy-fly.yml` ← دليل `/health` العام يغلق بند ٥ (ROADMAP_V3).
 4. توثيق نتيجة النشر النهائية في جولة/التزام لاحق (لا ادعاء قبل الدليل).
