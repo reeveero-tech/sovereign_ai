@@ -39,7 +39,11 @@ def test_python_syntax():
 def test_js_syntax():
     """كل ملفات frontend سليمة نحوياً"""
     files = list(_js_files())
-    assert len(files) > 100, f"متوقع >100 ملف JS، وجد {len(files)}"
+    # R-724/R-725 (بند ١.٢): أزيلت 22 وحدة زخرفية (111→~100 ملف) — أرضية
+    # العدد خُفّت من >100 إلى >=70. الحماية الحقيقية من الانكماش الصامت
+    # انتقلت إلى حارس الجرد tests/test_frontend_inventory.py (كل وحدة
+    # يجب أن تكون مجرودة، وأي وحدة محذوفة تعود = رفض).
+    assert len(files) >= 70, f"متوقع >=70 ملف JS، وجد {len(files)}"
     for f in files:
         result = subprocess.run(
             ["node", "--check", f],
