@@ -2039,3 +2039,11 @@ rebase ولا force-push. التفصيل: `forensics/R-698_ED25519.md` §٦.
 | `frontend/js/modules/dialogue-engine.js` و`live-ai-engine.js` — حلقة «حرف واحد لكل إطار» (`textContent += text[index]; index++`) | **مُبرر # DELETION-JUSTIFIED:** عند 9 FPS يستغرق رد طويل >30 ث ويتوقف في الخلفية؛ استُبدلت بتقدم زمني (≤1.2 ث). |
 | `frontend/css/responsive.css` — سطر `@media (prefers-color-scheme: light) {` | **مُبرر # DELETION-JUSTIFIED:** استُبدل بـ`@media not all {` (الكتلة محفوظة كما هي، لا تُطبَّق): عكس جزئي ينتج نصًا داكنًا على أزرار داكنة، ويناقض `<meta name="color-scheme" content="dark">`. |
 | ترويسات «آخر تحديث» في CHANGELOG/PROJECT_STATE/ROADMAP/API، وعدد الاختبارات 768 في PROJECT_STATE §1، وصف `/ws/{user_id}` في API.md | **مُبرر # DELETION-JUSTIFIED:** متقادمة — استُبدلت بمدخل R-715 و776 (مُثبت بالتشغيل) وعقد WS الموثق. |
+
+## R-716 — تصويب ترويسة CONTRACT_EXCEPTION_1.md + إغلاق Issue #8 (2026-10-22)
+
+> الوكيل الجديد (جولة توثيقية — لا كود). الأدلة الكاملة: `forensics/R-716_CONTRACT_EXCEPTION_HEADER.md`.
+
+| المحذوف (المُستبدَل) | المبرر |
+|---|---|
+| سطر الترويسة «**التصنيف:** BLOCKED — بانتظار قرار المالك» في `forensics/CONTRACT_EXCEPTION_1.md` (سطر واحد) | **مُبرر # DELETION-JUSTIFIED:** متقادم ومناقض للحالة النهائية داخل الملف نفسه — المالك وقّع الاعتماد في Issue #8 (2026-10-16) والملف يوثّقه في قسمه الأخير، والمستودع يوثّق إغلاق دورة R-682 كاملة. استُبدل بالحالة النهائية (اعتماد + وثيقة المخالفة الدائمة) مع سطر تصويح يشرح ما كان قبل التعديل. كل الأقسام التاريخية للملف بقيت كما هي بقرار المالك. |
