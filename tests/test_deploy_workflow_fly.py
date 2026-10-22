@@ -73,3 +73,12 @@ def test_targets_fly_toml_app_and_checks_health():
     app = _fly_app_name()
     assert f"-a {app}" in text or f"--app {app}" in text, f"النشر لا يستهدف تطبيق fly.toml ({app})"
     assert "/health" in text, "لا فحص /health بعد النشر"
+
+
+def test_starts_stopped_machines_after_deploy():
+    """R-718: سجل النشر الفاشل أثبت أن flyctl deploy يحدّث الآلة ويتركها stopped
+    (d891e26ea24d38 «reached stopped state») — خطوة صريحة تبدأ الآلات المتوقفة
+    قبل فحص الدخان، وإلا بقي التطبيق بلا سجل DNS وفشل الفحص دومًا."""
+    text, _, _ = _load()
+    assert "flyctl machine start" in text, \
+        "لا توجد خطوة تشغيل الآلات المتوقفة بعد النشر (دليل R-718 — الآلة انتهت stopped)"

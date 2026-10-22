@@ -74,6 +74,23 @@ jobs:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
         run: flyctl deploy -a sovereign-ai-k20elq --remote-only --ha=false --wait-timeout 5m0s
 
+      # R-718: سجل التشغيل 39746031804 أثبت أن flyctl deploy يحدّث الآلة ويتركها
+      # stopped (d891e26ea24d38 «reached stopped state») — بلا خطوة تشغيل صريحة
+      # يبقى التطبيق بلا سجل DNS ويفشل فحص الدخان دومًا.
+      - name: 'R-718: Start machines (deploy may leave them stopped)'
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          STOPPED=$(flyctl machine list -a "$FLY_APP" --json | jq -r '.[] | select(.state == "stopped") | .id')
+          if [ -z "$STOPPED" ]; then
+            echo "لا آلات متوقفة — لا شيء لبدئه"
+            exit 0
+          fi
+          for MID in $STOPPED; do
+            echo "بدء الآلة المتوقفة: $MID"
+            flyctl machine start -a "$FLY_APP" "$MID"
+          done
+
       - name: 'Smoke: /health on public URL'
         run: |
           URL="https://${FLY_APP}.fly.dev/health"
