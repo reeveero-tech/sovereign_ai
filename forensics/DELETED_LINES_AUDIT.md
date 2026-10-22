@@ -2140,3 +2140,28 @@ rebase ولا force-push. التفصيل: `forensics/R-698_ED25519.md` §٦.
 | أسطر اختبار السقوط القديمة في test_ollama_test_isolation.py (طلب شبكة حقيقي) | **# DELETION-JUSTIFIED:** استُبدلت بمحاكاة حقن ConnectError (لا شبكة في الاختبارات) |
 | أسطر خطوة Ensure public IPs القديمة في deploy-fly.yml (`\|\| echo "[]"`) | **# DELETION-JUSTIFIED:** فشل قراءة ips ليس دليل غياب — صُلحت (ملاحظة المراجع) |
 | ترويسات «آخر تحديث» في CHANGELOG/PROJECT_STATE + صف العداد + صف البند ٥ (5 أسطر) | **# DELETION-JUSTIFIED:** تحديث الترويسات والعداد (801→806) وحالة البند ٥ (منجز بالدليل) |
+
+
+## R-724 — إزالة 11 وحدة واجهة زخرفية (البند ١.٢ — بأمر المالك 2026-10-22)
+
+**# DELETION-JUSTIFIED:** أمر المالك الصريح («ابدأ تنفيذ البند ١.٢ وإزالة
+الوحدات الزخرفية») + جرد ١.١ (R-723) صنّفها «زخرفية بحتة: لا API ولا
+أحداث — حركة بلا بيانات» + تحليل الاستدعاءات العكسية أثبت لا استدعاء فعليًا
+لأي منها (المراجع تعليقات وسلاسل نصية فقط) + فحص ما بعد الإزالة: الواجهة
+سليمة (112 وسم script متوازنًا، لا مراجع مكسورة). الحارس
+`test_removed_decorative_modules_stay_removed` يمنع عودتها بلا أمر المالك.
+
+| الملف المحذوف | الأسطر | المبرر المحدد |
+|---|---|---|
+| `frontend/js/modules/dialogue-engine.js` | كامل الملف | زخرفي بحت — مرجعه الوحيد تعليق مغلق في live-ai-engine |
+| `frontend/js/modules/legacy-cleanup.js` | كامل الملف | زخرفي بحت — لا مستدعٍ |
+| `frontend/js/modules/neural-animation-engine.js` | كامل الملف | زخرفي بحت — لا مستدعٍ |
+| `frontend/js/modules/render-engine.js` | كامل الملف | زخرفي بحت — لا مستدعٍ |
+| `frontend/js/modules/runtime-access.js` | كامل الملف | زخرفي بحت — المرجع ظهور لفظي فقط |
+| `frontend/js/modules/runtime-cache.js` | كامل الملف | زخرفي بحت — اسم في قائمة نصية فقط |
+| `frontend/js/modules/runtime-execution-sandboxes.js` | كامل الملف | زخرفي بحت — لا مستدعٍ (sandbox حقيقي في القسم الثالث ٣.٣) |
+| `frontend/js/modules/runtime-migration-manager.js` | كامل الملف | زخرفي بحت — لا مستدعٍ |
+| `frontend/js/modules/runtime-queue-intelligence.js` | كامل الملف | زخرفي بحت — getQueueIntelligence دالة ذاتية في المستدعي |
+| `frontend/js/modules/runtime-scheduler.js` | كامل الملف | زخرفي بحت — اسم في قائمة نصية فقط |
+| `frontend/js/modules/runtime-unified-registry.js` | كامل الملف | زخرفي بحت — لا مستدعٍ |
+| أسطر سوم التحميل في `frontend/index.html` | ~11 سطرًا | جزء من الإزالة ذاتها |

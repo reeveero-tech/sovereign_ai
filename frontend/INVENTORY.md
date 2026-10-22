@@ -113,7 +113,25 @@
 | `cognitive-input.js` | وسيطة — تدقيق ١.٢ | وسيطة — تدقيق ١.٢ |
 ### الوحدات الزخرفية البحتة — 11 وحدة
 
-لا API ولا أحداث — حركة بلا بيانات. المرشح الأول للإزالة في البند ١.٢ (بحذف مبرر وموثق).
+لا API ولا أحداث — حركة بلا بيانات. **أزيلت بأمر المالك (البند ١.٢ — R-724):**
+حُذفت ملفاتها وسوم تحميلها من index.html بعد تحليل آلي أثبت أنه لا يوجد
+استدعاء فعلي لها من أي وحدة (المراجع الظاهرة كانت تعليقات وسلاسل نصية
+فقط). حارس `test_removed_decorative_modules_stay_removed` يمنع عودتها
+بلا أمر المالك. الملفات المحذوفة موثقة في DELETED_LINES_AUDIT.
+
+| الوحدة (أزيلت — R-724) | الحكم |
+|---|---|
+| `dialogue-engine.js` | أزيلت |
+| `legacy-cleanup.js` | أزيلت |
+| `neural-animation-engine.js` | أزيلت |
+| `render-engine.js` | أزيلت |
+| `runtime-access.js` | أزيلت |
+| `runtime-cache.js` | أزيلت |
+| `runtime-execution-sandboxes.js` | أزيلت |
+| `runtime-migration-manager.js` | أزيلت |
+| `runtime-queue-intelligence.js` | أزيلت |
+| `runtime-scheduler.js` | أزيلت |
+| `runtime-unified-registry.js` | أزيلت |
 
 | الوحدة | التصنيف | الحكم |
 |---|---|---|

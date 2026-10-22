@@ -36,3 +36,29 @@ def test_inventory_has_honest_verdict_counts():
     text = INVENTORY.read_text(encoding="utf-8")
     for label in ("تستهلك API مباشرة", "تعمل بالأحداث", "زخرفية بحتة", "المجموع"):
         assert label in text, f"الجرد ينقصه تصنيف «{label}» — الجرد بلا حكم صادق ناقص"
+
+
+# -------------------------
+# R-724 (البند ١.٢): الوحدات الزخرفية البحتة أزيلت — لا عودة للوهم
+# -------------------------
+
+REMOVED_DECORATIVE = [
+    "dialogue-engine.js", "legacy-cleanup.js", "neural-animation-engine.js",
+    "render-engine.js", "runtime-access.js", "runtime-cache.js",
+    "runtime-execution-sandboxes.js", "runtime-migration-manager.js",
+    "runtime-queue-intelligence.js", "runtime-scheduler.js",
+    "runtime-unified-registry.js",
+]
+
+
+def test_removed_decorative_modules_stay_removed():
+    """الـ11 الزخرفية البحتة (جرد ١.١) أزيلت بأمر المالك (١.٢) — لا تحميل
+    من index.html ولا وجود للملفات. إعادتها تحتاج أمر المالك وتوثيقًا."""
+    idx = (FRONTEND / "index.html").read_text(encoding="utf-8", errors="ignore")
+    for name in REMOVED_DECORATIVE:
+        assert name not in idx, (
+            f"{name} عاد للتحميل من index.html — وحدة زخرفية أزيلت بأمر المالك (١.٢)"
+        )
+        assert not (FRONTEND / "js/modules" / name).exists(), (
+            f"ملف {name} عاد للوجود — إعادة وحدة زخرفية تحتاج أمر المالك وتوثيقًا"
+        )
