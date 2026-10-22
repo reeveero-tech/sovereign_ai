@@ -25,7 +25,12 @@
 | `live-ai-engine.js` | حقيقية | حقيقية |
 | `websocket-runtime.js` | حقيقية | حقيقية |
 | `websocket.js` | حقيقية | حقيقية |
-### الوحدات الوسيطة (تعمل بالأحداث) — 80 وحدة
+### الوحدات الوسيطة (تعمل بالأحداث) — 80 وحدة (منها 11 «ناشرون اصطناعيون» أزيلت في R-725 — 69 متبقية)
+
+> R-725 (١.٢ مرحلة ٢): الناشرون الاصطناعيون (مؤقتات/عشوائية + نشر أحداث — بلا أي
+> استخدام فعلي من الكود المتبقي، والوحدات الحقيقية الأربع لا تلمسهم) أزيلت.
+> العارضون المتبقون سيهدأون طبيعيًا (لا مصدر لأحداثهم المصطنعة) ويُعاد
+> تقييمهم في ١.٣/١.٤ مع الربط الحي.
 
 تشترك أو تنشر أحداثًا. حكمها النهائي يتحدد في البند ١.٢ بتتبع مصدر كل حدث: حقيقي (من الوحدات الأربع) أم مصطنع (self-generated).
 
@@ -132,6 +137,17 @@
 | `runtime-queue-intelligence.js` | أزيلت |
 | `runtime-scheduler.js` | أزيلت |
 | `runtime-unified-registry.js` | أزيلت |
+| `runtime-adaptive-scheduler.js` | أزيلت (R-725) |
+| `runtime-analytics.js` | أزيلت (R-725) |
+| `runtime-bus.js` | أزيلت (R-725) |
+| `runtime-domain-router.js` | أزيلت (R-725) |
+| `runtime-execution-scheduler.js` | أزيلت (R-725) |
+| `runtime-intelligence.js` | أزيلت (R-725) |
+| `runtime-kernel.js` | أزيلت (R-725) |
+| `runtime-lifecycle.js` | أزيلت (R-725) |
+| `runtime-policy-engine.js` | أزيلت (R-725) |
+| `runtime-session-policies.js` | أزيلت (R-725) |
+| `runtime-signals.js` | أزيلت (R-725) |
 
 | الوحدة | التصنيف | الحكم |
 |---|---|---|

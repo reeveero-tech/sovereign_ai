@@ -48,6 +48,13 @@ REMOVED_DECORATIVE = [
     "runtime-execution-sandboxes.js", "runtime-migration-manager.js",
     "runtime-queue-intelligence.js", "runtime-scheduler.js",
     "runtime-unified-registry.js",
+    # R-725 (١.٢ مرحلة ٢): ناشرون اصطناعيون (مؤقتات/عشوائية + نشر أحداث، بلا
+    # أي استخدام فعلي من الكود المتبقي — مسارح نشاط ذاتية)
+    "runtime-adaptive-scheduler.js", "runtime-analytics.js", "runtime-bus.js",
+    "runtime-domain-router.js", "runtime-execution-scheduler.js",
+    "runtime-intelligence.js", "runtime-kernel.js", "runtime-lifecycle.js",
+    "runtime-policy-engine.js", "runtime-session-policies.js",
+    "runtime-signals.js",
 ]
 
 

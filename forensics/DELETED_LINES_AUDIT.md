@@ -2165,3 +2165,17 @@ rebase ولا force-push. التفصيل: `forensics/R-698_ED25519.md` §٦.
 | `frontend/js/modules/runtime-scheduler.js` | كامل الملف | زخرفي بحت — اسم في قائمة نصية فقط |
 | `frontend/js/modules/runtime-unified-registry.js` | كامل الملف | زخرفي بحت — لا مستدعٍ |
 | أسطر سوم التحميل في `frontend/index.html` | ~11 سطرًا | جزء من الإزالة ذاتها |
+
+
+## R-725 — إزالة 11 ناشرًا اصطناعيًا (١.٢ مرحلة ٢ — بأمر المالك «ابدا» 2026-10-22)
+
+**# DELETION-JUSTIFIED:** تكملة أمر المالك للبند ١.٢ + التدقيق أثبت أنها مسارح
+نشاط ذاتية: مؤقتات/عشوائية + نشر أحداث، صفر استخدام فعلي من الكود المتبقي
+(فحص الاستدعاء الفعلي والكلمات المجردة)، والوحدات الحقيقية الأربع لا تستخدم
+Bus إطلاقًا. الواجهة سليمة بعد الإزالة (101 وسم متوازنًا، لا مراجع مكسورة).
+
+الملفات الأحد عشر: `runtime-adaptive-scheduler.js`، `runtime-analytics.js`،
+`runtime-bus.js`، `runtime-domain-router.js`، `runtime-execution-scheduler.js`،
+`runtime-intelligence.js`، `runtime-kernel.js`، `runtime-lifecycle.js`،
+`runtime-policy-engine.js`، `runtime-session-policies.js`، `runtime-signals.js`
+(+ سوم تحميلها من index.html).
