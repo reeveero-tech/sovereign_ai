@@ -2088,3 +2088,9 @@ rebase ولا force-push. التفصيل: `forensics/R-698_ED25519.md` §٦.
 | المحذوف (المُستبدَل) | المبرر |
 |---|---|
 | سطر `flyctl apps resume -a "$FLY_APP"` في `deploy-fly.yml` + توصيف الحارس `test_resumes_suspended_app_before_starting_machines` وصيغ الأرقام في الوثائق | **# DELETION-JUSTIFIED:** التشغيل الثالث (39752410556) أثبت بالدليل الحرفي أن الأمر مهجور في flyctl 0.4.120 («use fly scale count instead») — استُبدل بالبديل الموثق في رسالة الخطأ نفسها |
+
+## R-719 — Supabase قرصًا وذاكرة + R-718 (تكملة ٣) ضمان IPv4 العام (2026-10-22)
+
+| المحذوف (المُستبدَل) | المبرر |
+|---|---|
+| أسطر حلقة فحص الدخان القديمة في `.github/workflows/deploy-fly.yml` (`seq 1 18` — 3 دقائق) | **# DELETION-JUSTIFIED:** استُبدلت بحلقة 60×10s (10 دقائق) — سجل fly.dev الجديد يحتاج نشر DNS (TTL يصل 5 دقائق وفق توثيق Fly؛ 3 دقائق أثبتت قصرها في التشغيل 39754774743) |

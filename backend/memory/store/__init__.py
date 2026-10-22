@@ -63,6 +63,16 @@ def _derive_key(purpose: str) -> bytes:
     return derive_key_from_module(purpose, globals())
 
 
+def _get_cloud_disk():
+    """R-719 (بأمر المالك): استيراد كسول لطبقة القرص السحابي — قطع الدوائر
+    السبكية عند التحميل (نمط _derive_key نفسه). الاستيراد عند الاستدعاء لا
+    عند تحميل الوحدة؛ يعيد None إذا كانت الطبقة معطلة (الافتراضي)."""
+    try:
+        from backend.sovereign.cloud_disk import get_cloud_disk
+    except ImportError:
+        from sovereign.cloud_disk import get_cloud_disk
+    return get_cloud_disk()
+
 
 
 # ============================================================
@@ -474,7 +484,11 @@ class SolidMemoryStore:
         """تحميل نوع معين من الذاكرة من القرص"""
         path = FILE_MAP.get(kind)
         if not path or not path.exists():
-            return
+            # R-719 (بأمر المالك): قرص فارغ (إعادة نشر) + نسخة سحابية موجودة
+            # → استرجاع قبل التحميل — هذا ما يجعل Supabase «القرص الدائم».
+            self._cloud_restore(kind, path)
+            if not path or not path.exists():
+                return
         
         try:
             with open(path, 'r', encoding='utf-8') as f:
@@ -514,6 +528,39 @@ class SolidMemoryStore:
             with open(tmp_path, 'w', encoding='utf-8') as f:
                 json.dump(items_data, f, ensure_ascii=False, indent=2)
             tmp_path.replace(path)
+        
+        # R-719 (بأمر المالك): مرآة سحابية بعد نجاح الكتابة المحلية — best-effort:
+        # فشل السحابة لا يكسر المحلي أبدًا (تحذير مسموع داخل الطبقة).
+        self._cloud_mirror(kind, items_data)
+    
+    def _cloud_mirror(self, kind: str, items_data: list):
+        """R-719 — رفع النسخة (المشفرة أصلًا — AES-256-GCM قبل الوصول) إلى القرص
+        السحابي (جدول disk، namespace=memory). عزل صارم: أي فشل يُسجّل ولا يُرمى."""
+        try:
+            disk = _get_cloud_disk()
+            if disk is None:
+                return
+            disk.save_blob("memory", kind, {"kind": kind, "items": items_data})
+        except Exception as e:  # noqa: BLE001 — السحابة لا تكسر المخزن أبدًا
+            logger.warning(f"R-719 [DISK]: فشل مرآة {kind} إلى القرص السحابي: {e}")
+    
+    def _cloud_restore(self, kind: str, path) -> None:
+        """R-719 — استرجاع من القرص السحابي عند غياب النسخة المحلية فقط
+        (إعادة نشر بقرص فارغ). لا يمس نسخة محلية موجودة أبدًا."""
+        try:
+            if path is None:
+                return
+            disk = _get_cloud_disk()
+            if disk is None:
+                return
+            payload = disk.load_blob("memory", kind)
+            if not payload or not isinstance(payload.get("items"), list):
+                return
+            with open(path, 'w', encoding='utf-8') as f:
+                json.dump(payload["items"], f, ensure_ascii=False, indent=2)
+            logger.info(f"☁️ R-719: استرجاع {kind} من القرص السحابي ({len(payload['items'])} عنصر)")
+        except Exception as e:  # noqa: BLE001 — فشل الاسترجاع لا يمنع الإقلاع
+            logger.warning(f"R-719 [DISK]: فشل استرجاع {kind}: {e}")
     
     def _store_payload_key(self) -> bytes:
         """مفتاح تشفير حمولات المخزن — R-697: مشتق بغرض encryption (D-033)، لا الجذر الخام.

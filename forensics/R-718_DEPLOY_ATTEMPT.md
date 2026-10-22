@@ -110,3 +110,22 @@ Updating existing machines in 'sovereign-ai-k20elq' with rolling strategy
    مثبتان في هذه الجولة) ← تطابق ثلاثي (الحزمة 784).
 3. إعادة تشغيل `deploy-fly.yml` ← دليل `/health` العام يغلق بند ٥ (ROADMAP_V3).
 4. توثيق نتيجة النشر النهائية في جولة/التزام لاحق (لا ادعاء قبل الدليل).
+
+## ١٠) التشغيل الرابع (39754774743 — على `852ce06`): السبب الجذري الثالث
+
+- **الحصيلة:** كل الخطوات نجحت (Deploy + استئناف مشروط + بدء الآلات) — الآلة
+  `d891e26ea24d38` بحالة `started` بالصورة الجديدة
+  (`deployment-01M5HEMTQY5ZZH68F4JS7SH85V`)، و**فحص صحة Fly نفسه نجح**
+  («Machine d891e26ea24d38 is now in a good state») — التطبيق يعمل على 8080.
+- **لكن:** فحص الدخان فشل (٣ دقائق) — والفحص المباشر من بيئة الوكيل أثبت أن
+  `sovereign-ai-k20elq.fly.dev` **بلا أي سجل DNS** (استعلام A وAAAA وCNAME عند
+  محلل Google → NOERROR/NODATA؛ سلطوية fly.dev هي `ns1.flydns.net`).
+- **التشخيص (موثق من مجتمع Fly):** تطبيق بلا عنوان IPv4 عام لا تُنشر له سجلات
+  `fly.dev` — الحل `flyctl ips allocate-v4 --shared`. (خيوط مرجعية:
+  community.fly.io/t/23900 وt/18807).
+- **الإصلاح (R-718 تكملة ٣ — RED→GREEN):** خطوة `R-718: Ensure public IPs`
+  تقرأ `flyctl ips list` وتخصص `allocate-v4 --shared` عند غياب IPv4 العام
+  (و`allocate-v6` للشهادات) — لا تغيير إن كان العنوان موجودًا. ونافذة فحص
+  الدخان ٣→١٠ دقائق (سجل fly.dev الجديد يحتاج نشر DNS — TTL يصل ٥ دقائق
+  وفق توثيق Fly). حارس: 3 اختبارات جديدة في `tests/test_deploy_workflow_fly.py`
+  (8→11). التفصيل الكامل للجولة: `forensics/R-719_CLOUD_DISK.md`.

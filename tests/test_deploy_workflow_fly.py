@@ -96,3 +96,48 @@ def test_resumes_suspended_app_before_starting_machines():
         "لا توجد خطوة استئناف التطبيق المعلق بالأمر الحديث (دليل التشغيلين 39749764649 و39752410556)"
     assert "flyctl apps resume" not in text, \
         "flyctl apps resume مهجور في flyctl 0.4.120 — فشل به في التشغيل 39752410556"""
+
+
+# -------------------------
+# R-718 (السبب الجذري الثالث) + R-719 — توسعة الحارس
+# -------------------------
+
+def test_ensure_public_ips_step_present():
+    """R-718: تطبيق بلا IPv4 عام لا ينشر سجل fly.dev (مجتمع Fly — الحل
+    allocate-v4 --shared). الحارس يثبت وجود خطوة تقرأ ips list وتخصص عند
+    الغياب — لا افتراض أن العنوان موجود."""
+    text, _, _ = _load()
+    assert "flyctl ips list" in text, "خطوة ضمان عناوين IP العامة يجب أن تقرأ ips list"
+    assert "flyctl ips allocate-v4 --shared" in text, (
+        "الخطوة يجب أن تخصص IPv4 مشترك عند غيابه (جذر سجل fly.dev DNS)"
+    )
+
+
+def test_supabase_secrets_sync_step_conditional():
+    """R-719 (بأمر المالك: Supabase قرص المشروع وذاكرته): خطوة مزامنة أسرار
+    Supabase إلى Fly — مشروطة بوجودهما في أسرار المستودع (تخطي صامت عند
+    الغياب — الطبقة تبقى معطلة افتراضيًا، لا فشل للنشر)."""
+    text, _, _ = _load()
+    assert "secrets.SUPABASE_URL" in text and "secrets.SUPABASE_SECRET_KEY" in text, (
+        "الأسرار يجب أن تأتي من secrets.SUPABASE_URL/SUPABASE_SECRET_KEY"
+    )
+    assert "flyctl secrets set" in text, "المزامنة عبر flyctl secrets set"
+    # مشروطة: فحص فراغ قبل المزامنة (لا فشل نشر عند غياب الأسرار)
+    assert re.search(r'\[ -z "\$SUPABASE_URL" \]', text), (
+        "المزامنة يجب أن تتخطى عند غياب الأسرار (الطبقة معطلة افتراضيًا)"
+    )
+
+
+def test_smoke_window_covers_dns_ttl():
+    """R-718: فحص الدخان كان ينتظر 3 دقائق فقط — سجل fly.dev الجديد يحتاج
+    وقت نشر DNS (TTL 5 دقائق وفق توثيق Fly). النافذة يجب أن تغطي ≥ 10 دقائق."""
+    text, _, _ = _load()
+    m = re.search(r"for i in \$\(seq 1 (\d+)\); do", text)
+    assert m, "حلقة فحص الدخان (seq) غير موجودة"
+    attempts = int(m.group(1))
+    m2 = re.search(r"sleep (\d+)", text)
+    assert m2, "مهلة النوم داخل الحلقة غير موجودة"
+    window = attempts * int(m2.group(1))
+    assert window >= 600, (
+        f"نافذة الفحص {window}s قصيرة — DNS TTL لسجل fly.dev يصل 300s؛ المطلوب ≥ 600s"
+    )

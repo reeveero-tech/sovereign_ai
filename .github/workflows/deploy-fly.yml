@@ -74,6 +74,21 @@ jobs:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
         run: flyctl deploy -a sovereign-ai-k20elq --remote-only --ha=false --wait-timeout 5m0s
 
+      # R-719 (بأمر المالك 2026-10-22: «قاعدة البيانات قرص للمشروع وذاكرة له»):
+      # مزامنة أسرار Supabase إلى Fly — مشروطة بوجودهما في أسرار المستودع.
+      # الغياب ليس خطأً: الطبقة معطلة افتراضيًا (نمط Ollama R-704).
+      - name: 'R-719: Sync Supabase secrets to Fly (disk/memory)'
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+        run: |
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_SECRET_KEY" ]; then
+            echo "أسرار Supabase غير مضبوطة — تخطي (الطبقة معطلة على Fly، لا فشل)"
+            exit 0
+          fi
+          flyctl secrets set -a "$FLY_APP" SUPABASE_URL="$SUPABASE_URL" SUPABASE_SECRET_KEY="$SUPABASE_SECRET_KEY"
+
       # R-718: سجل التشغيل 39746031804 أثبت أن flyctl deploy يحدّث الآلة ويتركها
       # stopped (d891e26ea24d38 «reached stopped state») — بلا خطوة تشغيل صريحة
       # يبقى التطبيق بلا سجل DNS ويفشل فحص الدخان دومًا.
@@ -108,10 +123,38 @@ jobs:
             flyctl machine start -a "$FLY_APP" "$MID"
           done
 
+      # R-718 (السبب الجذري الثالث — تشغيل 39754774743): الآلة started وفحص
+      # صحة Fly نفسه نجح، لكن سجل fly.dev DNS غائب كليًا (NODATA عند ns1.flydns.net).
+      # التشخيص الموثق (مجتمع Fly): تطبيق بلا IPv4 عام لا تُنشر سجلات fly.dev
+      # الخاصة به — الحل allocate-v4 --shared. الخطوة تقرأ الحالة أولًا ولا
+      # تخصص إلا عند الغياب (لا تغيير إن كان العنوان موجودًا).
+      - name: 'R-718: Ensure public IPs (fly.dev DNS prerequisite)'
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          IPS=$(flyctl ips list -a "$FLY_APP" --json 2>/dev/null || echo "[]")
+          echo "$IPS"
+          V4=$(echo "$IPS" | jq '[.[] | ((.Type // .type) // "")] | map(select(. == "public_v4")) | length')
+          V6=$(echo "$IPS" | jq '[.[] | ((.Type // .type) // "")] | map(select(. == "public_v6")) | length')
+          if [ "$V4" -eq 0 ]; then
+            echo "لا IPv4 عام — تخصيص مشترك (جذر سجل fly.dev DNS)"
+            flyctl ips allocate-v4 --shared -a "$FLY_APP"
+          else
+            echo "IPv4 عام موجود ($V4)"
+          fi
+          if [ "$V6" -eq 0 ]; then
+            echo "لا IPv6 عام — تخصيص (مطلوب للشهادات)"
+            flyctl ips allocate-v6 -a "$FLY_APP" || echo "تعذر IPv6 — نكمل (A يكفي لـ fly.dev)"
+          else
+            echo "IPv6 عام موجود ($V6)"
+          fi
+
       - name: 'Smoke: /health on public URL'
         run: |
           URL="https://${FLY_APP}.fly.dev/health"
-          for i in $(seq 1 18); do
+          # نافذة 10 دقائق: سجل fly.dev الجديد يحتاج نشر DNS (TTL يصل 5 دقائق
+          # وفق توثيق Fly) — 3 دقائق السابقة لم تكفِ (تشغيل 39754774743).
+          for i in $(seq 1 60); do
             BODY=$(curl -s -m 10 "$URL" || true)
             if echo "$BODY" | grep -q '"status":"healthy"'; then
               echo "✅ $URL healthy"; echo "$BODY" | head -c 300; exit 0

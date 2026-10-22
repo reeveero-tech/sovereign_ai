@@ -732,6 +732,23 @@ async def supervisor_status():
     }
 
 
+@app.get("/disk/status")
+async def disk_status():
+    """حالة القرص السحابي (R-719 — بأمر المالك: Supabase قرص المشروع وذاكرته).
+
+    قراءة فقط. المعطّل (الافتراضي — لا SUPABASE_URL/SUPABASE_SECRET_KEY) يعيد
+    enabled=False بلا أي تفاصيل. المفعّل يعيد الحالة ببصمة المفتاح فقط —
+    لا سر في المخرجات أبدًا (نمط بصمة /api-key — R-614)."""
+    try:
+        from backend.sovereign.cloud_disk import get_cloud_disk  # استيراد كسول — نمط المتجر
+    except ImportError:
+        from sovereign.cloud_disk import get_cloud_disk
+    disk = get_cloud_disk()
+    if disk is None:
+        return {"cloud_disk": "disabled", "enabled": False}
+    return {"cloud_disk": "enabled", **disk.status()}
+
+
 @app.get("/status", response_model=SystemStatusResponse)
 async def system_status():
     """
