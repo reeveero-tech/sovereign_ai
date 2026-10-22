@@ -77,6 +77,23 @@ jobs:
       # R-718: سجل التشغيل 39746031804 أثبت أن flyctl deploy يحدّث الآلة ويتركها
       # stopped (d891e26ea24d38 «reached stopped state») — بلا خطوة تشغيل صريحة
       # يبقى التطبيق بلا سجل DNS ويفشل فحص الدخان دومًا.
+      # R-718 (تكملة): بدء الآلة وحده لم يكفِ — الآلة بدأت (تشغيل 39749764649:
+      # «d891e26ea24d38 has been started») وبقي التطبيق بلا سجل DNS بعد 8 دقائق.
+      # تطبيق suspended (حالة موثقة في R-717) لا يُخدم حتى يُستأنف — الاستئناف
+      # مشروط بقراءة الحالة (لا تغيير إن لم يكن معلقًا).
+      - name: 'R-718: Resume app if suspended (read state first)'
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          STATUS_JSON=$(flyctl status -a "$FLY_APP" --json || true)
+          echo "$STATUS_JSON" | head -c 600
+          if echo "$STATUS_JSON" | grep -qi 'suspended'; then
+            echo "التطبيق معلق — استئناف..."
+            flyctl apps resume -a "$FLY_APP"
+          else
+            echo "التطبيق ليس معلقًا (أو الحالة غير واضحة) — لا استئناف"
+          fi
+
       - name: 'R-718: Start machines (deploy may leave them stopped)'
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}

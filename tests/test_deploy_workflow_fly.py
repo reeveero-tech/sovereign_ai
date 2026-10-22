@@ -82,3 +82,13 @@ def test_starts_stopped_machines_after_deploy():
     text, _, _ = _load()
     assert "flyctl machine start" in text, \
         "لا توجد خطوة تشغيل الآلات المتوقفة بعد النشر (دليل R-718 — الآلة انتهت stopped)"
+
+
+def test_resumes_suspended_app_before_starting_machines():
+    """R-718 (تكملة): بدء الآلة وحده لم يكفِ — الآلة بدأت (سجل التشغيل 39749764649:
+    «d891e26ea24d38 has been started») وبقي التطبيق بلا سجل DNS بعد 8 دقائق.
+    تطبيق suspended (حالة موثقة في R-717) لا يُخدم حتى يُستأنف:
+    خطوة استئناف مشروطة بالحالة قبل بدء الآلات."""
+    text, _, _ = _load()
+    assert "flyctl apps resume" in text, \
+        "لا توجد خطوة استئناف التطبيق المعلق (دليل التشغيل 39749764649 — الآلة بدأت وبقي بلا DNS)"
