@@ -203,6 +203,21 @@ class SovereignWebSocketRuntime {
 
                     break;
 
+                /* R-715: الخادم يرد على ping بـ pong (بلا دورة) */
+                case 'pong':
+
+                    break;
+
+                /* R-715: أخطاء الخادم تُعرض للمستخدم بدل إسقاطها صامتة */
+                case 'error':
+
+                    window.SOVEREIGN_DIALOGUE
+                        ?.addAIMessage(
+                            '⚠️ ' + (data.message || 'خطأ من الخادم')
+                        );
+
+                    break;
+
                 default:
 
                     console.log(

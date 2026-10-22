@@ -755,6 +755,54 @@ async def system_status():
     )
 
 
+async def _compose_chat_reply(text: str, result, orchestrator, default: str) -> str:
+    """
+    R-715: تركيب الرد المشترك بين POST /chat و WebSocket.
+    منقول حرفيًا من /chat (R-614/S-9، R-704) — لا تغيير سلوكي لـ /chat.
+    """
+    reply = default
+    intent_name = ""
+    if result.decision:
+        action = result.decision.get('action', 'continue')
+        source = result.decision.get('source', 'orchestrator')
+        
+        # فهم NexusCore: لغة + مشاعر + نية
+        nexus_perception = (result.perception or {}).get("nexus", {})
+        sentiment_label = nexus_perception.get("sentiment", {}).get("label", "")
+        intent_name = nexus_perception.get("intent", {}).get("name", "")
+        
+        # R-614: محرك الردود السيادي — يبني الرد من حالة النظام الحية
+        # R-704: الاستدعاء في خيط عام — توليد عقل Ollama (HTTP) لا يحجب حلقة الأحداث
+        try:
+            from sovereign_response import build_reply
+            reply = await asyncio.to_thread(
+                build_reply, intent_name, text, result, orchestrator=orchestrator
+            )
+        except Exception as e:
+            logger.warning(f"sovereign_response failed, falling back: {e}")
+            if source == "nexus_intent" and intent_name:
+                intent_ar = {
+                    "greet": "تحية",
+                    "help": "مساعدة",
+                    "status": "حالة النظام",
+                    "analyze": "تحليل",
+                    "forecast": "تنبؤ",
+                    "alert": "تنبيه",
+                    "stop": "إيقاف",
+                }.get(intent_name, intent_name)
+                reply = f"فهمت — نيتك: {intent_ar}. القرار: {action}."
+            elif source == "sovereign_controller":
+                reply = f"قرار المتحكم السيادي: {action}."
+            else:
+                reply = f"تم تنفيذ القرار: {action}."
+        
+        # إضافة فهم المشاعر إن وُجد (فقط إن لم يضفها المحرك)
+        if sentiment_label and sentiment_label != "neutral" and "مشاعرك" not in reply:
+            sentiment_ar = {"positive": "إيجابية", "negative": "سلبية"}.get(sentiment_label, sentiment_label)
+            reply += f" (مشاعرك: {sentiment_ar})"
+    return reply
+
+
 @app.post(
     "/chat",
     response_model=ChatResponse,
@@ -818,46 +866,11 @@ async def chat(message: ChatMessage, background_tasks: BackgroundTasks):
     processing_time = (time.time() - start_time) * 1000
     
     # استخراج الرد من النتيجة — R-614/S-9: رد حقيقي مبني على حالة النظام الحية
-    reply = "تم استلام رسالتك. أنا الذكاء السيادي، جاهز لخدمتك."
-    intent_name = ""
-    if result.decision:
-        action = result.decision.get('action', 'continue')
-        source = result.decision.get('source', 'orchestrator')
-        
-        # فهم NexusCore: لغة + مشاعر + نية
-        nexus_perception = (result.perception or {}).get("nexus", {})
-        sentiment_label = nexus_perception.get("sentiment", {}).get("label", "")
-        intent_name = nexus_perception.get("intent", {}).get("name", "")
-        
-        # R-614: محرك الردود السيادي — يبني الرد من حالة النظام الحية
-        # R-704: الاستدعاء في خيط عام — توليد عقل Ollama (HTTP) لا يحجب حلقة الأحداث
-        try:
-            from sovereign_response import build_reply
-            reply = await asyncio.to_thread(
-                build_reply, intent_name, message.text, result, orchestrator=orchestrator
-            )
-        except Exception as e:
-            logger.warning(f"sovereign_response failed, falling back: {e}")
-            if source == "nexus_intent" and intent_name:
-                intent_ar = {
-                    "greet": "تحية",
-                    "help": "مساعدة",
-                    "status": "حالة النظام",
-                    "analyze": "تحليل",
-                    "forecast": "تنبؤ",
-                    "alert": "تنبيه",
-                    "stop": "إيقاف",
-                }.get(intent_name, intent_name)
-                reply = f"فهمت — نيتك: {intent_ar}. القرار: {action}."
-            elif source == "sovereign_controller":
-                reply = f"قرار المتحكم السيادي: {action}."
-            else:
-                reply = f"تم تنفيذ القرار: {action}."
-        
-        # إضافة فهم المشاعر إن وُجد (فقط إن لم يضفها المحرك)
-        if sentiment_label and sentiment_label != "neutral" and "مشاعرك" not in reply:
-            sentiment_ar = {"positive": "إيجابية", "negative": "سلبية"}.get(sentiment_label, sentiment_label)
-            reply += f" (مشاعرك: {sentiment_ar})"
+    # R-715: منطق التركيب نُقل كما هو إلى _compose_chat_reply ليشترك فيه /chat و WebSocket
+    reply = await _compose_chat_reply(
+        message.text, result, orchestrator,
+        default="تم استلام رسالتك. أنا الذكاء السيادي، جاهز لخدمتك.",
+    )
     
     return ChatResponse(
         reply=reply,
@@ -1301,6 +1314,57 @@ class ConnectionManager:
 manager = ConnectionManager()
 
 
+_WS_PING_TYPES = {"ping", "heartbeat"}
+_WS_CHAT_TYPES = {"chat_message", "chat"}
+_WS_SOVEREIGN_TYPES = {"sovereign_command"}
+
+
+def _parse_ws_frame(raw: str) -> dict:
+    """
+    R-715: تصنيف إطار WebSocket الوارد.
+
+    - مغلّف الواجهة: {"type": "...", "payload": {...}}
+      * ping/heartbeat ← kind=ping (بلا دورة)
+      * chat_message ← kind=chat (النص من payload.text)
+      * sovereign_command ← kind=sovereign_refused (يتطلب مفتاح السيد عبر HTTP)
+      * غير ذلك (hello، run_cycle، ...) ← kind=ignored (بلا دورة)
+    - الصيغة القديمة: {"text": "..."} ← kind=chat (envelope=False)
+    - نص خام غير JSON ← kind=chat (سلوك سابق محفوظ)
+    - JSON ليس كائنًا ← kind=invalid
+    """
+    try:
+        obj = json.loads(raw)
+    except (ValueError, TypeError):
+        text = (raw or "").strip()
+        if not text:
+            return {"kind": "invalid", "reason": "رسالة فارغة."}
+        return {"kind": "chat", "text": text, "envelope": False}
+
+    if not isinstance(obj, dict):
+        return {"kind": "invalid", "reason": "صيغة الإطار غير صالحة: يُتوقع كائن JSON."}
+
+    if "type" in obj:
+        frame_type = str(obj.get("type") or "")
+        payload = obj.get("payload") if isinstance(obj.get("payload"), dict) else {}
+        if frame_type in _WS_PING_TYPES:
+            return {"kind": "ping"}
+        if frame_type in _WS_SOVEREIGN_TYPES:
+            return {"kind": "sovereign_refused"}
+        if frame_type in _WS_CHAT_TYPES:
+            text = payload.get("text", obj.get("text", ""))
+            text = text.strip() if isinstance(text, str) else ""
+            if not text:
+                return {"kind": "invalid", "reason": "رسالة فارغة."}
+            return {"kind": "chat", "text": text, "envelope": True}
+        return {"kind": "ignored", "received_type": frame_type[:64]}
+
+    text = obj.get("text", "")
+    text = text.strip() if isinstance(text, str) else ""
+    if not text:
+        return {"kind": "invalid", "reason": "رسالة فارغة."}
+    return {"kind": "chat", "text": text, "envelope": False}
+
+
 @app.websocket("/ws/{user_id}")
 async def websocket_endpoint(websocket: WebSocket, user_id: str):
     """
@@ -1308,7 +1372,9 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str):
     
     الاتصال: `ws://localhost:8000/ws/{user_id}`
     
-    إرسال رسالة: `{"text": "مرحباً"}`
+    إرسال رسالة: `{"text": "مرحباً"}` (يُرد بالنوع "reply")
+    أو مغلّف الواجهة: `{"type": "chat_message", "payload": {"text": "مرحباً"}}`
+    (يُرد بالنوع "chat_reply"). ping ← pong بلا دورة (R-715).
     """
     session_id = await manager.connect(websocket, user_id)
     
@@ -1327,11 +1393,45 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str):
             # استقبال رسالة
             data = await websocket.receive_text()
             
-            try:
-                message_data = json.loads(data)
-                text = message_data.get("text", "")
-            except:
-                text = data
+            # R-715: فك الإطار — يدعم مغلّف الواجهة {"type","payload"} والصيغة القديمة {"text"}
+            frame = _parse_ws_frame(data)
+            kind = frame["kind"]
+            
+            if kind == "ping":
+                # نبض الواجهة كل بضع ثوانٍ — لا دورة منسّق
+                await manager.send_message(session_id, json.dumps({
+                    "type": "pong", "timestamp": time.time()
+                }))
+                continue
+            
+            if kind == "ignored":
+                await manager.send_message(session_id, json.dumps({
+                    "type": "system",
+                    "event": "ignored",
+                    "received_type": frame["received_type"],
+                    "message": "نوع الإطار لا يُعالَج عبر WebSocket — لم تُشغَّل دورة.",
+                    "timestamp": time.time()
+                }))
+                continue
+            
+            if kind == "sovereign_refused":
+                await manager.send_message(session_id, json.dumps({
+                    "type": "error",
+                    "message": "الأوامر السيادية لا تُقبل عبر WebSocket. استخدم POST /sovereign/command مع مفتاح السيد.",
+                    "timestamp": time.time()
+                }))
+                continue
+            
+            if kind == "invalid":
+                await manager.send_message(session_id, json.dumps({
+                    "type": "error",
+                    "message": frame["reason"],
+                    "timestamp": time.time()
+                }))
+                continue
+            
+            text = frame["text"]
+            reply_type = "chat_reply" if frame["envelope"] else "reply"
             
             # معالجة الرسالة
             input_data = {
@@ -1350,8 +1450,9 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str):
                     "reason": safety_block[:100]
                 })
                 await manager.send_message(session_id, json.dumps({
-                    "type": "reply",
+                    "type": reply_type,
                     "message": safety_block,
+                    "payload": {"text": safety_block},
                     "blocked": True,
                     "cycle_id": "safety-block",
                     "timestamp": time.time()
@@ -1360,33 +1461,16 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str):
             
             result = orchestrator.run_cycle(input_data)
             
-            # إرسال الرد — R-612: رد حقيقي مبني على فهم النص
-            reply = f"تم استلام رسالتك: '{text}'. أنا الذكاء السيادي."
-            if result.decision:
-                action = result.decision.get('action', 'continue')
-                source = result.decision.get('source', 'orchestrator')
-                nexus_perception = (result.perception or {}).get("nexus", {})
-                intent_name = nexus_perception.get("intent", {}).get("name", "")
-                sentiment_label = nexus_perception.get("sentiment", {}).get("label", "")
-                
-                if source == "nexus_intent" and intent_name:
-                    intent_ar = {
-                        "greet": "تحية", "help": "مساعدة", "status": "حالة النظام",
-                        "analyze": "تحليل", "forecast": "تنبؤ", "alert": "تنبيه", "stop": "إيقاف",
-                    }.get(intent_name, intent_name)
-                    reply = f"فهمت — نيتك: {intent_ar}. القرار: {action}."
-                elif source == "sovereign_controller":
-                    reply = f"قرار المتحكم السيادي: {action}."
-                else:
-                    reply = f"تم تنفيذ القرار: {action}."
-                
-                if sentiment_label and sentiment_label != "neutral":
-                    sentiment_ar = {"positive": "إيجابية", "negative": "سلبية"}.get(sentiment_label, sentiment_label)
-                    reply += f" (مشاعرك: {sentiment_ar})"
+            # R-715: نفس محرك الردود الذي يستخدمه POST /chat (build_reply/Ollama)
+            reply = await _compose_chat_reply(
+                text, result, orchestrator,
+                default=f"تم استلام رسالتك: '{text}'. أنا الذكاء السيادي.",
+            )
             
             await manager.send_message(session_id, json.dumps({
-                "type": "reply",
+                "type": reply_type,
                 "message": reply,
+                "payload": {"text": reply},
                 "cycle_id": result.cycle_id,
                 "timestamp": time.time()
             }))

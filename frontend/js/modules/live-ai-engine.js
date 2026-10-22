@@ -112,16 +112,31 @@ class SovereignLiveAI {
 
         container.appendChild(message);
 
+        /* R-715: تقدّم بالزمن لا بالإطار (انظر dialogue-engine.streamText) */
+
         let index = 0;
+
+        const total = text.length;
+
+        const startedAt = performance.now();
+
+        const durationMs = Math.min(1200, Math.max(200, total * 15));
 
         const stream = () => {
 
-            if (index < text.length) {
+            index = document.hidden
+                ? total
+                : Math.min(
+                    total,
+                    Math.max(
+                        index + 1,
+                        Math.ceil(total * (performance.now() - startedAt) / durationMs)
+                    )
+                );
 
-                content.textContent +=
-                    text[index];
+            content.textContent = text.slice(0, index);
 
-                index++;
+            if (index < total) {
 
                 requestAnimationFrame(stream);
 

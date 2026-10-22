@@ -172,18 +172,36 @@ class SovereignDialogueEngine {
         text
     ) {
 
+        /* R-715: كان يكتب حرفًا واحدًا لكل إطار ⇒ عند 9 FPS يستغرق رد من
+           300 حرف أكثر من 30 ثانية، ويتوقف نهائيًا إن كان التبويب في
+           الخلفية. الآن: التقدّم بالزمن (يكتمل خلال ~1.2 ثانية مهما كان
+           معدّل الإطارات)، والنص كاملًا فورًا إن كانت الصفحة مخفية. */
+
         let index = 0;
+
+        const total = text.length;
+
+        const startedAt = performance.now();
+
+        const durationMs = Math.min(1200, Math.max(200, total * 15));
 
         const stream = () => {
 
+            if (document.hidden) {
+                index = total;
+            } else {
+                const elapsed = performance.now() - startedAt;
+                index = Math.min(
+                    total,
+                    Math.max(index + 1, Math.ceil(total * elapsed / durationMs))
+                );
+            }
+
+            element.textContent = text.slice(0, index);
+
             if (
-                index < text.length
+                index < total
             ) {
-
-                element.textContent +=
-                    text[index];
-
-                index++;
 
                 requestAnimationFrame(
                     stream

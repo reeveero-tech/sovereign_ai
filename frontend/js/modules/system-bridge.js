@@ -125,16 +125,19 @@ class SovereignSystemBridge {
     handleModernChat(text) {
 
         /* =========================================
-           Dialogue
+           R-715: أظهر تبويب الحوار حيث يُعرض الرد
+           (كان الرد يُلحق بتبويب مخفي ⇒ "لا استجابة")
         ========================================= */
 
-        window.SOVEREIGN_DIALOGUE
-            ?.addUserMessage(
-                text
-            );
+        if (typeof window.switchTab === 'function') {
+            window.switchTab('dialogue');
+        }
 
         /* =========================================
            AI Runtime
+           R-715: رسالة المستخدم تُضاف مرة واحدة —
+           SOVEREIGN_SOCKET.sendChat يضيفها بنفسه،
+           فلا نضيفها هنا إلا في مسار HTTP.
         ========================================= */
 
         if (
@@ -148,6 +151,11 @@ class SovereignSystemBridge {
                 );
 
         } else {
+
+            window.SOVEREIGN_DIALOGUE
+                ?.addUserMessage(
+                    text
+                );
 
             window.SOVEREIGN_AI
                 ?.sendMessage(

@@ -66,8 +66,33 @@ class SovereignNotificationRuntime {
         duration = 4000
     ) {
 
+        /* R-715: منع تكدّس الإشعارات فوق الأزرار —
+           (١) لا تكرار لنفس الرسالة وهي ظاهرة،
+           (٢) حد أقصى للظاهر في نفس الوقت،
+           (٣) النقر يغلق الإشعار فورًا. */
+
+        const key = `${type}::${message}`;
+
+        const existing = [...this.container.children]
+            .find(el => el.dataset && el.dataset.key === key);
+
+        if (existing) return;
+
+        while (this.container.children.length >= 3) {
+            this.container.firstElementChild.remove();
+        }
+
         const notification =
             document.createElement('div');
+
+        notification.dataset.key = key;
+
+        notification.title = 'انقر للإغلاق';
+
+        notification.addEventListener(
+            'click',
+            () => this.hide(notification)
+        );
 
         notification.className =
             `
@@ -87,6 +112,7 @@ class SovereignNotificationRuntime {
             font-size: 14px;
             line-height: 1.6;
             pointer-events: auto;
+            cursor: pointer;
             opacity: 0;
             transform:
                 translateY(-20px)
@@ -115,13 +141,16 @@ class SovereignNotificationRuntime {
                     ${this.getIcon(type)}
                 </div>
 
-                <div style="
+                <div class="sovereign-notification-text" style="
                     flex:1;
-                ">
-                    ${message}
-                </div>
+                "></div>
             </div>
         `;
+
+        /* R-715: نص الرسالة كنص لا HTML (قد يحمل نصًا من الخادم) */
+        notification
+            .querySelector('.sovereign-notification-text')
+            .textContent = String(message);
 
         this.container.appendChild(
             notification
@@ -159,6 +188,13 @@ class SovereignNotificationRuntime {
     ======================================================== */
 
     hide(notification) {
+
+        if (notification.dataset.hiding) return;
+
+        notification.dataset.hiding = '1';
+
+        /* R-715: لا يُحسب الإشعار المختفي في منع التكرار */
+        delete notification.dataset.key;
 
         notification.style.opacity = '0';
 

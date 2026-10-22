@@ -93,10 +93,23 @@ class SovereignRuntimeHooks {
             'performance:critical',
             () => {
 
-                window.SOVEREIGN_NOTIFY
-                    ?.warning(
-                        'Critical Performance Detected'
-                    );
+                /* R-715: كان الحدث يُطلق مرارًا فيكدّس إشعارات متطابقة
+                   فوق لوحة الأوامر — مرة واحدة كل دقيقة على الأكثر. */
+
+                const now = Date.now();
+
+                if (
+                    !this._lastCriticalNotice ||
+                    now - this._lastCriticalNotice > 60000
+                ) {
+
+                    this._lastCriticalNotice = now;
+
+                    window.SOVEREIGN_NOTIFY
+                        ?.warning(
+                            'Critical Performance Detected'
+                        );
+                }
 
                 document.body.classList.add(
                     'runtime-critical'

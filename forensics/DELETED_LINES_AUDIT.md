@@ -2020,3 +2020,22 @@ rebase ولا force-push. التفصيل: `forensics/R-698_ED25519.md` §٦.
 | صفوف «مؤرشفة → archive/root_strays/…» في PROJECT_STATE §5 وARCHITECTURE §7 | **مُبرر # DELETION-JUSTIFIED:** الأرشيف حُذف بأمر المالك في R-685 (`41936cc`) — الحالة الموثقة لم تعد صحيحة. استُبدلت بالحالة النهائية (حُذف نهائيًا؛ النسخة عند المالك + تاريخ git). |
 | عنوان PROJECT_STATE §5 «(قرارات مفتوحة)» | **مُبرر # DELETION-JUSTIFIED:** القرارات أُغلقت (R-685/R-686) — استُبدل بـ«حالة تاريخية — أُغلقت». |
 | ترويسات «آخر تحديث» في SECURITY وAPI وCHANGELOG وPROJECT_STATE | **مُبرر # DELETION-JUSTIFIED:** متقادمة — استُبدلت بمدخل R-714. (تصويب الالتزام التصحيحي: النسخة الأولى من هذا المدخل ادّعت استبدال ترويستي RISKS وARCHITECTURE أيضًا — لم يُستبدل في RISKS سوى صف RK-05 وفي ARCHITECTURE صفوف الجداول فقط) |
+
+## R-715 — الواجهة: عقد WebSocket، التراكبات، العناصر الوهمية (2026-10-22)
+
+> بلاغ المالك (الواجهة لا تستجيب/تراكبات/عناصر وهمية). الأدلة الكاملة: `forensics/R-715_UI_INTERACTION.md`.
+> لا حذف ملفات. كل سطر محذوف أدناه إما نُقل أو استُبدل بسلوك مُختبر.
+
+| المحذوف (المُستبدَل) | المبرر |
+|---|---|
+| `backend/app.py` — كتلة تركيب الرد داخل `chat()` (~36 سطرًا: `reply = "تم استلام رسالتك…"` حتى إضافة المشاعر) | **مُبرر # DELETION-JUSTIFIED:** **نُقلت حرفيًا** إلى `_compose_chat_reply()` ليشترك فيها `/chat` وWebSocket؛ الاختلاف الوحيد `message.text`←المعامل `text` والنص الافتراضي←المعامل `default` (يُمرَّر نفس النص). سلوك `/chat` بلا تغيير (الحزمة كاملة خضراء). |
+| `backend/app.py` — فك إطار WS القديم (`message_data.get("text","")` داخل `try/except:` عارٍ) | **مُبرر # DELETION-JUSTIFIED:** هو السبب الجذري: لا يقرأ `payload.text` من مغلّف الواجهة ⇒ نص فارغ دائمًا (RED: المنسّق استلم `['']`)، ويعامل ping/hello كرسائل. استُبدل بـ`_parse_ws_frame()` (8 اختبارات). |
+| `backend/app.py` — قالب رد WS القديم (`intent_ar`/«فهمت — نيتك…»/«تم تنفيذ القرار…» داخل حلقة WS) ونوع الرد الثابت `"reply"` | **مُبرر # DELETION-JUSTIFIED:** نسخة متقادمة من منطق `/chat` لا تمر بمحرك الردود (`build_reply`/Ollama)؛ استُبدلت باستدعاء `_compose_chat_reply()` نفسه. النوع صار `chat_reply` للمغلّف و`reply` للصيغة القديمة (توافق R-609 محفوظ ومُختبر). |
+| `backend/app.py` — سطر docstring «إرسال رسالة: `{"text": "مرحباً"}`» | **مُبرر # DELETION-JUSTIFIED:** استُبدل بوصف الصيغتين ونوعي الرد وping←pong. |
+| `frontend/js/modules/system-bridge.js` — `SOVEREIGN_DIALOGUE.addUserMessage(text)` في رأس `handleModernChat` | **مُبرر # DELETION-JUSTIFIED:** كان يكرر رسالة المستخدم (`SOVEREIGN_SOCKET.sendChat` يضيفها أيضًا) — نُقل إلى فرع HTTP فقط. |
+| `frontend/ui/cognitive-input.js` — `this.addToDialogue(thought)` في `submitThought` | **مُبرر # DELETION-JUSTIFIED:** كان يوهم بالإرسال (إضافة محلية فقط؛ `cognitive:thought` بلا مشترك). استُبدل بمسار `SOVEREIGN_BRIDGE.handleModernChat`؛ `addToDialogue` باقٍ كبديل مع إشعار صريح «لم يُرسل» إن غاب المسار. |
+| `frontend/js/modules/notification-runtime.js` — `${message}` داخل `innerHTML` | **مُبرر # DELETION-JUSTIFIED:** استُبدل بـ`textContent` (قد يحمل نصًا من الخادم — لا حقن HTML). |
+| `frontend/js/modules/runtime-hooks.js` — استدعاء `SOVEREIGN_NOTIFY.warning('Critical Performance Detected')` غير المشروط | **مُبرر # DELETION-JUSTIFIED:** أُعيدت كتابته داخل شرط تبريد 60 ثانية (كان يكدّس إشعارات متطابقة فوق لوحة الأوامر). |
+| `frontend/js/modules/dialogue-engine.js` و`live-ai-engine.js` — حلقة «حرف واحد لكل إطار» (`textContent += text[index]; index++`) | **مُبرر # DELETION-JUSTIFIED:** عند 9 FPS يستغرق رد طويل >30 ث ويتوقف في الخلفية؛ استُبدلت بتقدم زمني (≤1.2 ث). |
+| `frontend/css/responsive.css` — سطر `@media (prefers-color-scheme: light) {` | **مُبرر # DELETION-JUSTIFIED:** استُبدل بـ`@media not all {` (الكتلة محفوظة كما هي، لا تُطبَّق): عكس جزئي ينتج نصًا داكنًا على أزرار داكنة، ويناقض `<meta name="color-scheme" content="dark">`. |
+| ترويسات «آخر تحديث» في CHANGELOG/PROJECT_STATE/ROADMAP/API، وعدد الاختبارات 768 في PROJECT_STATE §1، وصف `/ws/{user_id}` في API.md | **مُبرر # DELETION-JUSTIFIED:** متقادمة — استُبدلت بمدخل R-715 و776 (مُثبت بالتشغيل) وعقد WS الموثق. |

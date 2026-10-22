@@ -126,6 +126,8 @@
             this.element = document.createElement('div');
             this.element.className = 'sovra-cognitive-container';
             this.element.setAttribute('data-state', 'collapsed');
+            /* R-715: يبدأ مصغّرًا (فقاعة 🧠) كي لا يغطي المحتوى؛ النقر يفتحه */
+            this.element.setAttribute('data-minimized', 'true');
             
             /* منطقة الإدخال الرئيسية */
             const inputArea = document.createElement('div');
@@ -136,6 +138,7 @@
             presenceIcon.className = 'sovra-cognitive-presence';
             presenceIcon.innerHTML = '🧠';
             presenceIcon.setAttribute('data-active', 'false');
+            presenceIcon.title = 'انقر للفتح/الإخفاء — اسحب للتحريك';
             
             /* حقل الإدخال */
             this.input = document.createElement('textarea');
@@ -163,9 +166,16 @@
             clearBtn.innerHTML = '🗑️ مسح';
             clearBtn.setAttribute('aria-label', 'مسح الحقل');
             
+            /* R-715: زر إخفاء — الحاوية كانت ثابتة فوق المحتوى بلا إغلاق ولا تحريك */
+            const minimizeBtn = document.createElement('button');
+            minimizeBtn.className = 'sovra-cognitive-minimize';
+            minimizeBtn.innerHTML = '➖ إخفاء';
+            minimizeBtn.setAttribute('aria-label', 'إخفاء الحقل');
+            
             actionBar.appendChild(submitBtn);
             actionBar.appendChild(expandBtn);
             actionBar.appendChild(clearBtn);
+            actionBar.appendChild(minimizeBtn);
             
             /* لوحة الاقتراحات */
             this.suggestionsPanel = document.createElement('div');
@@ -233,6 +243,28 @@
                 .sovra-cognitive-container:hover {
                     border-color: rgba(100, 150, 255, 0.6);
                     box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4), 0 0 30px rgba(100, 150, 255, 0.2);
+                }
+                
+                /* R-715: وضع مصغّر — فقاعة صغيرة فقط */
+                .sovra-cognitive-container[data-minimized="true"] {
+                    width: auto;
+                    border-radius: 50%;
+                }
+                .sovra-cognitive-container[data-minimized="true"] .sovra-cognitive-input-area {
+                    padding: 8px;
+                }
+                .sovra-cognitive-container[data-minimized="true"] .sovra-cognitive-input,
+                .sovra-cognitive-container[data-minimized="true"] .sovra-cognitive-actions,
+                .sovra-cognitive-container[data-minimized="true"] .sovra-cognitive-suggestions,
+                .sovra-cognitive-container[data-minimized="true"] .sovra-cognitive-context,
+                .sovra-cognitive-container[data-minimized="true"] .sovra-cognitive-particles {
+                    display: none !important;
+                }
+                .sovra-cognitive-presence {
+                    touch-action: none;
+                }
+                .sovra-cognitive-container.sovra-dragging {
+                    transition: none;
                 }
                 
                 .sovra-cognitive-container[data-state="expanded"] {
@@ -303,6 +335,7 @@
                 }
                 
                 .sovra-cognitive-submit,
+                .sovra-cognitive-minimize,
                 .sovra-cognitive-expand,
                 .sovra-cognitive-clear {
                     background: rgba(100, 150, 255, 0.15);
@@ -462,6 +495,13 @@
                 });
             }
             
+            /* R-715: إخفاء/إظهار + سحب من أيقونة الحضور */
+            const minimizeBtn = this.element.querySelector('.sovra-cognitive-minimize');
+            if (minimizeBtn) {
+                minimizeBtn.addEventListener('click', () => this.setMinimized(true));
+            }
+            this.bindDrag();
+            
             /* مسح الحقل */
             const clearBtn = this.element.querySelector('.sovra-cognitive-clear');
             if (clearBtn) {
@@ -483,6 +523,61 @@
                     this.toggleExpand();
                 }
             });
+        }
+
+        /* ====================================================
+           R-715: MINIMIZE / DRAG
+        ==================================================== */
+
+        setMinimized(minimized) {
+            this.element.setAttribute('data-minimized', minimized ? 'true' : 'false');
+            if (!minimized && this.input) {
+                this.input.focus();
+            }
+        }
+
+        bindDrag() {
+            const handle = this.element.querySelector('.sovra-cognitive-presence');
+            if (!handle) return;
+            let start = null;
+            let moved = false;
+
+            handle.addEventListener('pointerdown', (e) => {
+                const r = this.element.getBoundingClientRect();
+                start = { x: e.clientX, y: e.clientY, left: r.left, top: r.top };
+                moved = false;
+                handle.setPointerCapture?.(e.pointerId);
+            });
+
+            handle.addEventListener('pointermove', (e) => {
+                if (!start) return;
+                const dx = e.clientX - start.x;
+                const dy = e.clientY - start.y;
+                if (!moved && Math.abs(dx) + Math.abs(dy) < 6) return;
+                moved = true;
+                this.element.classList.add('sovra-dragging');
+                const w = this.element.offsetWidth;
+                const h = this.element.offsetHeight;
+                const left = Math.max(0, Math.min(window.innerWidth - w, start.left + dx));
+                const top = Math.max(0, Math.min(window.innerHeight - h, start.top + dy));
+                this.element.style.left = left + 'px';
+                this.element.style.top = top + 'px';
+                this.element.style.right = 'auto';
+                this.element.style.bottom = 'auto';
+            });
+
+            const end = (e) => {
+                if (!start) return;
+                handle.releasePointerCapture?.(e.pointerId);
+                this.element.classList.remove('sovra-dragging');
+                if (!moved) {
+                    const isMin = this.element.getAttribute('data-minimized') === 'true';
+                    this.setMinimized(!isMin);
+                }
+                start = null;
+            };
+            handle.addEventListener('pointerup', end);
+            handle.addEventListener('pointercancel', end);
         }
 
         /* ====================================================
@@ -533,8 +628,14 @@
                 }, 500);
             }
             
-            /* إضافة إلى واجهة المحادثة إذا كانت موجودة */
-            this.addToDialogue(thought);
+            /* R-715: كان الحقل يضيف النص محليًا فقط (لا مشترك في cognitive:thought)
+               ⇒ يبدو أنه أُرسل ولم يصل للخادم. الآن يمر بمسار المحادثة الحقيقي. */
+            if (window.SOVEREIGN_BRIDGE && typeof window.SOVEREIGN_BRIDGE.handleModernChat === 'function') {
+                window.SOVEREIGN_BRIDGE.handleModernChat(thought);
+            } else {
+                this.addToDialogue(thought);
+                window.SOVEREIGN_NOTIFY?.warning?.('لم يُرسل: مسار المحادثة غير متاح');
+            }
             
             /* مسح الحقل */
             this.clearInput();
