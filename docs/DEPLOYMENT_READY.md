@@ -37,6 +37,14 @@ fly secrets set CORS_ORIGINS="https://your-domain.example"
   - ledger (`data/sovereign_core/ledger.jsonl`) — نفس القرار: حجم دائم أو
     بداية نظيفة (قرار تشغيلي للمالك).
 
+## ٢-ب) النشر عبر GitHub Actions (R-717 — بأمر المالك 2026-10-22)
+
+الملف `.github/workflows/deploy-fly.yml` — **يدوي فقط** (Actions ← «Deploy — Fly.io (manual)» ← Run workflow،
+مع كتابة اسم التطبيق للتأكيد). بواباته: تشغيل CI ناجح على نفس SHA، وجود سر المستودع `FLY_API_TOKEN`
+(رمز نشر خاص بالتطبيق وحده: `fly tokens create deploy -a sovereign-ai-k20elq`)، ثم `flyctl deploy --remote-only`
+وفحص `/health` على الرابط العام. أسرار التطبيق (`SOVEREIGN_KEY` و`CORS_ORIGINS`) تبقى في Fly لا في GitHub.
+حارسه: `tests/test_deploy_workflow_fly.py`. بيئة الوكيل لا تبني الصورة (بنّاء Fly يتصل بغير HTTPS) — لذلك هذا الطريق.
+
 ## ٣) خطوات النشر
 
 ```bash

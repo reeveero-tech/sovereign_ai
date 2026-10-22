@@ -1,7 +1,17 @@
 # CHANGELOG.md — سجل التغييرات
 
 > كل تغيير يُسجل هنا (قاعدة الدفعة الذرية).
-> آخر تحديث: 2026-10-22 (R-716 — تصويب ترويسة CONTRACT_EXCEPTION_1.md + إغلاق Issue #8 — توثيقي، لا كود)
+> آخر تحديث: 2026-10-22 (R-717 — ملف النشر اليدوي على Fly.io عبر GitHub Actions + حارسه)
+
+---
+
+## [R-717] — 2026-10-22 — النشر على Fly.io عبر GitHub Actions (بأمر المالك)
+
+- **السبب:** أمر المالك بالنشر. بيئة الوكيل ضبطت أسرار التطبيق على Fly (`SOVEREIGN_KEY` و`CORS_ORIGINS` — مرحلية) لكنها لا تبني الصورة: بنّاء Fly (Depot/WireGuard) يتصل بغير HTTPS — `error building: unavailable: Forbidden` (مثبت بسجل debug). اختار المالك GitHub Actions.
+- **الملف:** `.github/workflows/deploy-fly.yml` — `workflow_dispatch` فقط + تأكيد اسم التطبيق، صلاحيات `contents: read` و`actions: read`، بوابة CI ناجح على نفس SHA، بوابة وجود `FLY_API_TOKEN`، `setup-flyctl` مثبت على SHA (1.6) وflyctl 0.4.120، `flyctl deploy --remote-only --ha=false`، فحص `/health` العام. الاسم لا يحوي «CI» (لا يلتقطه `ci_run_selection`).
+- **RED→GREEN:** `tests/test_deploy_workflow_fly.py` — 6 فشل قبل الملف (غيابه) → 6/6 بعده. الحزمة 776 → 782.
+- **الرمز:** رمز نشر خاص بالتطبيق يُنشأ من حساب Fly ويوضع مباشرة في سر المستودع — لا يُطبع ولا يُلتزم.
+- التفصيل: `forensics/R-717_FLY_DEPLOY_WORKFLOW.md`.
 
 ---
 

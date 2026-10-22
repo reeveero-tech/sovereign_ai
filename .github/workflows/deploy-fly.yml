@@ -1,0 +1,87 @@
+# R-717 — النشر على Fly.io (يدوي فقط — بأمر المالك 2026-10-22)
+#
+# لماذا هنا لا من بيئة الوكيل؟ بنّاء Fly البعيد يتصل بغير HTTPS، وبيئة الوكيل لا تسمح بذلك.
+# الحارس: tests/test_deploy_workflow_fly.py (يدوي فقط، رمز من الأسرار، صلاحيات مقيدة،
+# بوابة CI ناجح على نفس SHA، فحص /health).
+#
+# المتطلبات (مرة واحدة):
+#   - سر المستودع FLY_API_TOKEN: رمز نشر خاص بالتطبيق (fly tokens create deploy -a <app>).
+#   - أسرار التطبيق على Fly: SOVEREIGN_KEY و CORS_ORIGINS (fly secrets set) — الإقلاع يرفض بدونهما.
+# الاسم لا يحوي حرفي «C» و«I» متتاليين كبيرين حتى لا يلتقطه اختيار التشغيل المرجعي في verify.sh.
+
+name: Deploy — Fly.io (manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_app:
+        description: 'اكتب اسم التطبيق للتأكيد (sovereign-ai-k20elq)'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: fly-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy to Fly.io
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      FLY_APP: sovereign-ai-k20elq
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Confirm target app
+        env:
+          CONFIRM: ${{ inputs.confirm_app }}
+        run: |
+          if [ "$CONFIRM" != "$FLY_APP" ]; then
+            echo "❌ التأكيد لا يطابق اسم التطبيق ($FLY_APP)"; exit 1
+          fi
+
+      - name: 'Gate: green CI push run on the same SHA'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          RESULT=$(gh run list --repo "${{ github.repository }}" --commit "${{ github.sha }}" \
+            --event push --limit 20 --json workflowName,status,conclusion \
+            --jq '[.[] | select(.workflowName | startswith("CI"))] | first | (.status + "/" + .conclusion)')
+          echo "CI on ${{ github.sha }}: ${RESULT:-none}"
+          if [ "$RESULT" != "completed/success" ]; then
+            echo "❌ لا نشر: لا يوجد تشغيل CI ناجح مكتمل على هذا الالتزام"; exit 1
+          fi
+
+      - name: 'Gate: deploy token present'
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          if [ -z "$FLY_API_TOKEN" ]; then
+            echo "❌ سر المستودع FLY_API_TOKEN غير مضبوط"; exit 1
+          fi
+
+      - uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1  # 1.6
+        with:
+          version: 0.4.120
+
+      - name: Deploy
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: flyctl deploy -a sovereign-ai-k20elq --remote-only --ha=false --wait-timeout 5m0s
+
+      - name: 'Smoke: /health on public URL'
+        run: |
+          URL="https://${FLY_APP}.fly.dev/health"
+          for i in $(seq 1 18); do
+            BODY=$(curl -s -m 10 "$URL" || true)
+            if echo "$BODY" | grep -q '"status":"healthy"'; then
+              echo "✅ $URL healthy"; echo "$BODY" | head -c 300; exit 0
+            fi
+            sleep 10
+          done
+          echo "❌ $URL لم يصبح healthy"; echo "$BODY" | head -c 500; exit 1
