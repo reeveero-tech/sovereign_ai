@@ -523,7 +523,7 @@
                             </div>
 
                             <div class="metric-sub">
-                                المحرك التنبؤي (/status)
+                                المحرك التنبؤي · حالة حية
                             </div>
 
                         </article>
@@ -537,25 +537,23 @@
                         >
 
                             <div class="metric-icon">
-                                <i class="fas fa-bolt"></i>
+                                <i class="fas fa-heart-pulse"></i>
                             </div>
 
                             <div class="metric-label">
-                                الطاقة
+                                سلامة المكونات
                             </div>
 
                             <div
-                                id="metric-field-energy"
+                                id="metric-components-health"
                                 class="metric-value"
-                                title="لا مصدر حي في backend بعد (R-730)"
-                                data-live="experimental"
-                                data-live-reason="لا مصدر حي في الخادم"
+                                title="السليمة/الكل من /health (R-733)"
                             >
-                                غير مربوط
+                                —
                             </div>
 
                             <div class="metric-sub">
-                                لا مصدر حي بعد
+                                من نقطة الصحة · كل 10 ثوانٍ
                             </div>
 
                         </article>
@@ -573,8 +571,7 @@
 
                         <canvas
                             id="performanceChart"
-                            data-live="experimental"
-                            data-live-reason="لوحة رسم بلا بيانات — تنتظر البند ٢.٧"
+                            title="المكونات السليمة + زمن استجابة /health المقاس فعلًا (R-733)"
                         ></canvas>
 
                     </div>
@@ -1281,6 +1278,7 @@
 <script src="js/modules/memory-viewer.js"></script>
 <script src="js/modules/live-system-status.js"></script>
 <script src="js/modules/experimental-badges.js"></script>
+<script src="js/modules/live-health-chart.js"></script>
 </body>
 
 </html>

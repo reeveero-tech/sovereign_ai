@@ -2246,3 +2246,11 @@ Bus إطلاقًا. الواجهة سليمة بعد الإزالة (101 وسم 
 - **تصويب R-727 (المادة الأولى):** مدخل R-727 أعلاه يذكر استبدال «صف ١.٣ في ROADMAP_V4»، و`git show 45a86d9 -- docs/ROADMAP_V4.md` فارغ، فالصف لم يُستبدل قط. صُحّح في R-732.
 - الحارس: `tests/test_scheduler.py`. التفصيل: `forensics/R-732_SCHEDULER.md`.
 
+## 2026-10-23 — R-733 (توسيع ١.٤): ربط الخانة واللوحة
+- **# DELETION-JUSTIFIED** — `frontend/index.html`: خانة «الطاقة» (`metric-field-energy`، لا مفهوم لها في backend) استُبدلت بخانة «سلامة المكونات» (`metric-components-health`) من `/health`. وأُزيل `data-live="experimental"` وسببه عن `performanceChart` لأنه صار مربوطًا. ونصا «من /health…» و«(/status)» أعيدت صياغتهما لانقلاب ثنائي الاتجاه.
+- **# DELETION-JUSTIFIED** — `frontend/css/runtime.css`: قاعدة `#monitor-extra { display: none; }` حُذفت. شرط R-715 نفسه («يُعاد إظهاره عند ربط رسم بياني حقيقي») تحقق في هذا الالتزام.
+- **# DELETION-JUSTIFIED** — `tests/test_live_bindings.py`: سطرا فحص «غير مربوط» لمعرّف الطاقة المحذوف استُبدلا بفحص عام لكل خانة قيمة غير مربوطة. الحماية نفسها، أوسع.
+- **# DELETION-JUSTIFIED** — `frontend/LIVE_BINDINGS.json`: مدخلا `metric-field-energy` و`performanceChart` من `unbound` (صار الثاني مربوطًا وحُذف الأول).
+- **# DELETION-JUSTIFIED** — الوثائق: صفا ١.٤ و٢.٧، وترويستا «آخر تحديث»، وسطر العدّاد. تحديث حالة.
+- الحارس: `tests/test_live_health_chart.py`. التفصيل: `forensics/R-733_LIVE_HEALTH_CHART.md`.
+

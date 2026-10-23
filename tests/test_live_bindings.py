@@ -181,8 +181,11 @@ def test_unbound_elements_are_honest_and_unwritten():
             # الأقسام يعرضها الموجّه بلافتة «قيد الربط» — لا كاتب بيانات
             writers = [w for w in writers if w != "js/modules/section-router.js"]
         assert not writers, f"{el} غير مربوط لكن تكتبه: {writers}"
-    m = re.search(r'id="metric-field-energy"[^>]*>\s*([^<]*?)\s*<', INDEX, re.S)
-    assert m and m.group(1).strip() == "غير مربوط", "metric-field-energy يجب أن يعلن «غير مربوط»"
+    # R-733: كل خانة قيمة غير مربوطة (metric-value) تعلن «غير مربوط» نصًا
+    for u in MANIFEST["unbound"]:
+        tag = re.search(r'<[a-z]+\b[^>]*id="' + re.escape(u["element"]) + r'"[^>]*>\s*([^<]*?)\s*<', INDEX, re.S)
+        if tag and 'class="metric-value"' in tag.group(0):
+            assert tag.group(1).strip() == "غير مربوط", f"{u['element']} يجب أن يعلن «غير مربوط»"
 
 
 def test_no_hardcoded_live_claims_in_header():

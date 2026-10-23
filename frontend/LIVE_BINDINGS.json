@@ -141,6 +141,23 @@
         "js/modules/command-runtime.js"
       ],
       "note": "صدى أوامر المالك + ردود /sovereign/command (تتطلب مفتاح السيد — لا فحص حقل)"
+    },
+    {
+      "element": "metric-components-health",
+      "endpoint": "GET /health",
+      "field": "components",
+      "writers": [
+        "js/modules/live-health-chart.js"
+      ]
+    },
+    {
+      "element": "performanceChart",
+      "endpoint": "GET /health",
+      "field": "components",
+      "writers": [
+        "js/modules/live-health-chart.js"
+      ],
+      "note": "سلسلة زمنية: المكونات السليمة + زمن استجابة /health المقاس في المتصفح؛ الفشل فجوة معلنة"
     }
   ],
   "client": [
@@ -215,16 +232,8 @@
   ],
   "unbound": [
     {
-      "element": "metric-field-energy",
-      "reason": "لا مصدر حي في backend لـ«طاقة الحقل» — كان يُغذى بموجة جيبية (metrics-engine) وعشوائية (main.js) أزيلتا في R-730"
-    },
-    {
       "element": "sovereign-section-evolution",
       "reason": "القسم الرابع (التطور الذاتي) لم يُبنَ — يعرض «قيد الربط» بصدق"
-    },
-    {
-      "element": "performanceChart",
-      "reason": "لوحة رسم فارغة — لا وحدة ترسم فيها ولا مصدر بيانات (موثقة في R-715 «مستطيل رسم بياني فارغ»)؛ تبقى فارغة بصدق حتى البند ٢.٧"
     }
   ]
 }
