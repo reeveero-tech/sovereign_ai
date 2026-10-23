@@ -38,6 +38,9 @@ KNOWN_ENTRY_POINTS = {
 # وغير مُدرج = يتيم يُكشف). القائمة القديمة كانت تخفي أي يتيم يُزرع هناك
 # (مسبار عدائي مُثبت: test_guard_catches_stray_script).
 SCRIPT_ENTRY_POINTS = {
+    # R-738: خادم MCP وهمي يُشغَّل كسكربت عملية فرعية في
+    # tests/test_mcp_gateway.py (python3 tests/helpers/fake_mcp_server.py)
+    "tests/helpers/fake_mcp_server.py",
     "scripts/verify_new_key.py",
     "scripts/verify_operational_auth.py",
     # GS-3 (قرار المالك د.٣): نواة حارس العناوين — CLI يشغّله .githooks/pre-commit

@@ -958,6 +958,9 @@ class ToolInvokeRequest(BaseModel):
     أثرًا إلزاميًا في السجل السيادي (TOOL_INVOKED) أو يُرفض (fail-closed)."""
     tool: str = Field(..., min_length=1, max_length=100, description="اسم الأداة المسجلة")
     api_key: Optional[str] = Field(None, description="مفتاح API للسيد — غيابه رفض 401")
+    inputs: Dict[str, str] = Field(default_factory=dict, description=(
+        "R-738: مدخلات الأداة — المفاتيح المعلنة في السجل حصرًا "
+        "(مفتاح غير معلن → استدعاء فاشل مُسجل ولا تنفيذ)"))
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -991,7 +994,8 @@ async def tools_invoke(request: ToolInvokeRequest):
         )
     from tool_registry import get_registry, UnknownToolError
     try:
-        return get_registry().invoke(request.tool, caller="owner")
+        return get_registry().invoke(request.tool, caller="owner",
+                                      inputs=request.inputs)
     except UnknownToolError:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -1043,6 +1047,55 @@ def _register_real_tools() -> None:
         outputs="brain/enabled/reply_source/model",
         handler=_brain_status_payload,
     ))
+    # ============================================================
+    # R-738 (بأمر المالك «ترسانة عالمية»): أدوات الويب والاستدلال والمنسّق
+    # ============================================================
+    def _tool_research_run(goal):
+        import research_orchestrator
+        return research_orchestrator.run_research(goal)
+
+    registry.register(ToolSpec(
+        name="web.search",
+        description="بحث ويب حي (searxng محلي أو tavily) — نتائج مستشهدة بمصادر",
+        inputs={"query": "سؤال البحث"}, outputs="results[] (title/url/snippet)",
+        handler=lambda query: __import__("web_tools").search(query)))
+    registry.register(ToolSpec(
+        name="web.fetch",
+        description="جلب صفحة وتحويلها لنص — محروس ضد SSRF (قفزات وحجم وأنواع)",
+        inputs={"url": "عنوان الصفحة"}, outputs="url/title/text/content_type",
+        handler=lambda url: __import__("web_tools").fetch(url)))
+    registry.register(ToolSpec(
+        name="web.summarize",
+        description="استخلاص نص عبر عقل المنشور — بلا اختراع",
+        inputs={"text": "النص المطلوب تلخيصه"}, outputs="summary",
+        handler=lambda text: __import__("web_tools").summarize(text)))
+    for _rname, _rdesc, _rinputs in (
+        ("extract", "استخراج منظّم: نص → JSON بالحقول المطلوبة",
+         {"text": "النص", "schema": "وصف الحقول"}),
+        ("infer", "استنتاج: وقائع → استنتاجات صريحة",
+         {"premises": "الوقائع (نص أو قائمة)"}),
+        ("deduce", "استنباط: فرضيات واستنتاجات ضمنية من السياق",
+         {"question": "السؤال", "context": "السياق (اختياري)"}),
+        ("verify", "تنقيح: حكم على ادعاء مقابل دليل",
+         {"claim": "الادعاء", "evidence": "الدليل"}),
+        ("reason", "استدلال: خطوات منطقية وصولًا إلى استنتاج",
+         {"question": "السؤال", "context": "السياق (اختياري)"}),
+    ):
+        def _make_reasoning_handler(fn_name):
+            def _handler(**kwargs):
+                import reasoning_tools
+                return getattr(reasoning_tools, fn_name)(**kwargs)
+            return _handler
+        registry.register(ToolSpec(
+            name=f"reasoning.{_rname}", description=_rdesc,
+            inputs=_rinputs, outputs="حسب الأداة",
+            handler=_make_reasoning_handler(_rname)))
+    registry.register(ToolSpec(
+        name="research.run",
+        description="المنسّق: هدف → بحث ← قراءة مصادر ← استخراج ← استدلال ← تقرير مستشهد",
+        inputs={"goal": "هدف البحث"}, outputs="report/sources/facts/steps",
+        handler=_tool_research_run))
+
     registry.register(ToolSpec(
         name="sovereignty.score",
         description="تقرير درجة السيادة الكامل (نفس منطق /sovereignty/score)",
@@ -1933,3 +1986,13 @@ if __name__ == "__main__":
 # R-729 (البند ٣.١): تسجيل الأدوات الحقيقية — في نهاية الملف لأن دوال الحمولة
 # المشتركة (آخرها _memory_stats_payload) معرّفة قبل هذا السطر.
 _register_real_tools()
+
+# R-738: بوابة MCP — تسجيل ديناميكي لأدوات خوادم MCP إن فعلها المالك
+# (MCP_ENABLED) — فشل خادم يُسجل تحذيرًا صادقًا ويُتخطى (لا اتصال ضمني)
+try:
+    import mcp_gateway
+    mcp_gateway.sync_into_registry(get_registry())
+except Exception as _mcp_exc:  # لا يكسر الإقلاع أبدًا — تحذير صادق فقط
+    logging.getLogger("sovereign.mcp").warning(
+        "R-738 [MCP]: تعذر تسجيل أدوات MCP (%s) — تُعاد المحاولة عند "
+        "إعادة الإقلاع", type(_mcp_exc).__name__)

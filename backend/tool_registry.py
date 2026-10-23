@@ -64,19 +64,29 @@ class ToolRegistry:
             for s in self._tools.values()
         ]
 
-    def invoke(self, name: str, caller: str = "owner") -> Dict[str, Any]:
+    def invoke(self, name: str, caller: str = "owner",
+               inputs: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """تنفيذ أداة مسجلة مع أثر سيادي إلزامي.
 
+        المدخلات (R-738) تُمرر كوسائط مسماة للمُنفذ — المفاتيح المعلنة في
+        spec.inputs حصرًا: مفتاح غير معلن → استدعاء فاشل مُسجل ولا تنفيذ.
         يرفع UnknownToolError إن لم تكن مسجلة، وRuntimeError (fail-closed
         بنمط R-635) إن تعذر توقيع السجل — لا أثر = لا تنفيذ.
         """
         spec = self._tools.get(name)
         if spec is None:
             raise UnknownToolError(name)
+        inputs = dict(inputs or {})
         start = time.perf_counter()
         ok, result, error = True, None, None
         try:
-            result = spec.handler()
+            unknown = sorted(set(inputs) - set(spec.inputs))
+            if unknown:
+                # لا تنفيذ بمفاتيح غير معلنة — استدعاء فاشل مُسجل (نمط فشل
+                # الأداة: يوثق ولا يكسر الأثر)
+                raise ValueError(
+                    f"مدخلات غير معلنة في الأداة: {unknown}")
+            result = spec.handler(**inputs)
         except Exception as exc:  # فشل الأداة يوثق ولا يكسر الأثر
             ok, result, error = False, None, f"{type(exc).__name__}: {exc}"[:200]
             logger.exception("R-729: فشل أداة %s — يوثق في الأثر", name)

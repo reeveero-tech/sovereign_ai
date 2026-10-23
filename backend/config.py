@@ -305,6 +305,32 @@ STT_TIMEOUT_SECONDS = float(_ollama_env("STT_TIMEOUT_SECONDS", "60"))
 STT_MAX_AUDIO_BYTES = int(_ollama_env("STT_MAX_AUDIO_BYTES", str(25 * 1024 * 1024)))
 
 # ============================================================
+# R-738 (البند ٣.٢ + ٢.٥ — بأمر المالك «ترسانة عالمية»): أدوات الويب
+# والاستدلال وبوابة MCP والمنسّق
+# ============================================================
+# معطل افتراضيًا (نمط R-704/R-736/R-737 — لا اتصال ضمني)
+WEB_TOOLS_ENABLED = _ollama_env("WEB_TOOLS_ENABLED", "false").lower() == "true"
+# مزود البحث: searxng (ذاتي الاستضافة — افتراضي) أو tavily (سحابي)
+SEARCH_PROVIDER = _ollama_env("SEARCH_PROVIDER", "searxng")
+SEARCH_BASE_URL = _ollama_env("SEARCH_BASE_URL", "http://127.0.0.1:8888")
+SEARCH_API_KEY = _ollama_env("SEARCH_API_KEY", None)
+SEARCH_TIMEOUT_SECONDS = float(_ollama_env("SEARCH_TIMEOUT_SECONDS", "30"))
+SEARCH_MAX_RESULTS = int(_ollama_env("SEARCH_MAX_RESULTS", "5"))
+# جلب الصفحات: مهلة وحد حجم وسقف تحويلات (حارس SSRF داخل web_tools)
+WEB_FETCH_TIMEOUT_SECONDS = float(_ollama_env("WEB_FETCH_TIMEOUT_SECONDS", "30"))
+WEB_FETCH_MAX_BYTES = int(_ollama_env("WEB_FETCH_MAX_BYTES", str(2 * 1024 * 1024)))
+WEB_FETCH_MAX_REDIRECTS = int(_ollama_env("WEB_FETCH_MAX_REDIRECTS", "3"))
+# المنسّق (research.run): عدد المصادر التي تُقرأ في كل دورة بحث
+RESEARCH_MAX_SOURCES = int(_ollama_env("RESEARCH_MAX_SOURCES", "3"))
+
+# بوابة MCP — وصول منظومة آلاف أدوات الصناعة بعقد واحد (stdio/http).
+# معطلة افتراضيًا؛ الخوادم بصيغة JSON في MCP_SERVERS:
+# [{"name":"fs","transport":"stdio","command":"npx","args":[...]},
+#  {"name":"remote","transport":"http","url":"https://..."}]
+MCP_ENABLED = _ollama_env("MCP_ENABLED", "false").lower() == "true"
+MCP_SERVERS = _ollama_env("MCP_SERVERS", "[]")
+
+# ============================================================
 # 7. إعدادات النواة الذكية (Core Model)
 # ============================================================
 

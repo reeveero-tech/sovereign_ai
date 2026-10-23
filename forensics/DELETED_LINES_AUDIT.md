@@ -2286,3 +2286,8 @@ Bus إطلاقًا. الواجهة سليمة بعد الإزالة (101 وسم 
 ## 2026-10-23 — R-737 (البند ٢.٣): أذنان — /stt
 - **# DELETION-JUSTIFIED** — لا حذف شيفرة (كلها إلحاق: stt_client.py جديد، نقطتان جديدتان، إعدادات جديدة، اختبارات جديدة). المحدوفات أسطر توثيق حالة استُبدلت: صف ٢.٣ في ROADMAP_V4 (لم يبدأ → منجز بحدود)، ترويستا «آخر تحديث» (CHANGELOG + PROJECT_STATE)، سطر العدّاد (895→909)، وأسطر بداية §2/§8 في PROJECT_STATE (إدخال R-737).
 - الحارس: `tests/test_stt.py` (14 اختبارًا). التفصيل: `forensics/R-737_STT.md`.
+
+
+## 2026-10-23 — R-738 (البندان ٣.٢ و٢.٥): ترسانة البحث والاستدلال + بوابة MCP + المنسّق
+- **# DELETION-JUSTIFIED** — لا حذف شيفرة (كلها إلحاق: web_tools.py وreasoning_tools.py وmcp_gateway.py وresearch_orchestrator.py جديدة + توسيع invoke في tool_registry.py). المحدوفات: (١) صفوف ٢.٥/٣.٢/٣.٤ في ROADMAP_V4 (لم يبدأ → منجز بحدود/جزئي متقدم — استبدال حالة)، (٢) ترويستا «آخر تحديث» (CHANGELOG + PROJECT_STATE)، (٣) سطر العدّاد (909→946)، (٤) أسطر بداية §2/§8 في PROJECT_STATE (إدخال R-738)، (٥) سطر def في حارس اليتامى (إضافة نقطة دخول موثقة للسكرِبت المساعد — استبدال سطر قائمة قائمة بامتدادها).
+- الحارس: `tests/test_web_tools.py` + `tests/test_reasoning_tools.py` + `tests/test_mcp_gateway.py` + `tests/test_orchestrator.py` (37 اختبارًا). التفصيل: `forensics/R-738_RESEARCH_ARSENAL.md`.
