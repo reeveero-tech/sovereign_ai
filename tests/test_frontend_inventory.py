@@ -58,6 +58,24 @@ REMOVED_DECORATIVE = [
 ]
 
 
+# -------------------------
+# R-729 (البند ٣.١): سجل القدرات الزخرفي استُبدل بسجل backend حقيقي
+# -------------------------
+
+
+def test_fake_capability_registry_stays_replaced():
+    """runtime-capability-registry.js (كان يسجل «قدرات» وهمية بلا استهلاك
+    حقيقي — جرد ١.١) استُبدل بأمر المالك بسجل backend حقيقي (البند ٣.١:
+    /tools/list + /tools/invoke + حدث TOOL_INVOKED) — لا عودة للوهم."""
+    idx = (FRONTEND / "index.html").read_text(encoding="utf-8", errors="ignore")
+    assert "runtime-capability-registry.js" not in idx, (
+        "السجل الزخرفي القديم عاد للتحميل — ٣.١ استبدال لا إضافة"
+    )
+    assert not (FRONTEND / "js/modules" / "runtime-capability-registry.js").exists(), (
+        "runtime-capability-registry.js عاد للوجود — إعادته تحتاج أمر المالك وتوثيقًا"
+    )
+
+
 def test_removed_decorative_modules_stay_removed():
     """الـ11 الزخرفية البحتة (جرد ١.١) أزيلت بأمر المالك (١.٢) — لا تحميل
     من index.html ولا وجود للملفات. إعادتها تحتاج أمر المالك وتوثيقًا."""

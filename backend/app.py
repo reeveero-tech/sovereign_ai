@@ -507,6 +507,12 @@ async def sovereignty_score():
     R-680: يُعيد جدول المؤشرات الأولية (primitives) + المقياس
     المُركّب (composite) في آخر سطر مع علامة "قابل للجدل".
     """
+    return _sovereignty_score_payload()
+
+
+def _sovereignty_score_payload() -> Dict[str, Any]:
+    """حمولة /sovereignty/score — تخدم النقطة وأداة السجل sovereignty.score
+    (R-729 — البند ٣.١) بنفس المنطق: مصدر واحد لا نسختين تتباعدان."""
     from backend.sovereign.score import SovereigntyScorer
     from backend.sovereign.primitives import Primitives
     from backend.sovereign.composite import Composite
@@ -631,6 +637,12 @@ async def health_check():
     """
     فحص صحة النظام - يستخدمه مراقبو الخدمات (Kubernetes, Docker, etc.)
     """
+    return _health_payload()
+
+
+def _health_payload() -> Dict[str, Any]:
+    """حمولة /health الحقيقية — تخدم النقطة وأداة السجل health.snapshot
+    (R-729 — البند ٣.١) بنفس المنطق: مصدر واحد لا نسختين تتباعدان."""
     orchestrator = app.state.orchestrator
     
     # التحقق من صحة المكونات الرئيسية
@@ -739,6 +751,11 @@ async def disk_status():
     قراءة فقط. المعطّل (الافتراضي — لا SUPABASE_URL/SUPABASE_SECRET_KEY) يعيد
     enabled=False بلا أي تفاصيل. المفعّل يعيد الحالة ببصمة المفتاح فقط —
     لا سر في المخرجات أبدًا (نمط بصمة /api-key — R-614)."""
+    return _disk_status_payload()
+
+
+def _disk_status_payload() -> Dict[str, Any]:
+    """حمولة /disk/status — تخدم النقطة وأداة السجل disk.status (R-729)."""
     try:
         from backend.sovereign.cloud_disk import get_cloud_disk  # استيراد كسول — نمط المتجر
     except ImportError:
@@ -756,6 +773,11 @@ async def brain_status():
     شفافية صريحة لا انتحال: يعاد enabled=False مع reply_source="templates"
     عندما لا عقل — المالك يرى بالضبط ماذا يجيبه: قوالب أم نموذج.
     لا سر في المخرجات أبدًا (نمط /api-key — R-614)."""
+    return _brain_status_payload()
+
+
+def _brain_status_payload() -> Dict[str, Any]:
+    """حمولة /brain/status — تخدم النقطة وأداة السجل brain.status (R-729)."""
     import config as _config
     enabled = bool(_config.OLLAMA_ENABLED and _config.OLLAMA_MODEL)
     if not enabled:
@@ -769,6 +791,107 @@ async def brain_status():
         "base_url": str(_config.OLLAMA_BASE_URL),
         "timeout_seconds": _config.OLLAMA_TIMEOUT_SECONDS,
     }
+
+
+class ToolInvokeRequest(BaseModel):
+    """R-729 (البند ٣.١): طلب استدعاء أداة من سجل الأدوات الحقيقي.
+
+    الاستدعاء أمر مالك — يتطلب مفتاح API (نمط /sovereign/command) ويترك
+    أثرًا إلزاميًا في السجل السيادي (TOOL_INVOKED) أو يُرفض (fail-closed)."""
+    tool: str = Field(..., min_length=1, max_length=100, description="اسم الأداة المسجلة")
+    api_key: Optional[str] = Field(None, description="مفتاح API للسيد — غيابه رفض 401")
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {"tool": "health.snapshot", "api_key": "<مفتاح السيد>"}
+        }
+    )
+
+
+@app.get("/tools/list")
+async def tools_list():
+    """R-729 (البند ٣.١ — بأمر المالك): سجل الأدوات الحقيقي.
+
+    يُعيد الأدوات المسجلة فعلًا في backend (اسم/وصف/مدخلات/مخرجات/صلاحية)
+    — لا معالجات ولا أسرار في المخرجات (المادة ٩). هذا هو الاستبدال
+    الحقيقي لـruntime-capability-registry.js الزخرفي: بيانات من النظام لا
+    قدرات وهمية مزروعة."""
+    from tool_registry import get_registry
+    tools = get_registry().list_tools()
+    return {"tools": tools, "count": len(tools)}
+
+
+@app.post("/tools/invoke")
+async def tools_invoke(request: ToolInvokeRequest):
+    """R-729 (البند ٣.١): استدعاء أداة مسجلة — أمر مالك (مفتاح API) وأثر
+    إلزامي في السجل السيادي: كل استدعاء يترك حدث TOOL_INVOKED ببصمة
+    النتيجة، أو يُرفض كاملًا (fail-closed بنمط R-635 — لا أثر = لا تنفيذ)."""
+    if not verify_api_key(request.api_key or ""):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="مفتاح API غير صحيح"
+        )
+    from tool_registry import get_registry, UnknownToolError
+    try:
+        return get_registry().invoke(request.tool, caller="owner")
+    except UnknownToolError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"أداة غير مسجلة في السجل: {request.tool}"
+        )
+    except RuntimeError as exc:
+        # fail-closed (R-635): السجل السيادي لا يوقّع — لا أثر = لا تنفيذ
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"السجل السيادي لا يوقّع — الاستدعاء مرفوض (fail-closed): {exc}"
+        )
+
+
+def _register_real_tools() -> None:
+    """R-729 (البند ٣.١): تسجيل القدرات الحقيقية الموجودة فعلًا في النظام.
+
+    لا وهم: كل معالج يستدعي نفس منطق النقاط الحية (مصدر واحد — دوال
+    الحمولة المشتركة). الأدوات الجديدة (بحث/تنفيذ كود/موصلات — ٣.٢+)
+    تُسجل هنا عند بنائها، فيصبح هذا السجل مصدر الحقيقة الوحيد للقدرات."""
+    from tool_registry import ToolSpec, get_registry
+    registry = get_registry()
+    if registry.list_tools():
+        return  # مسجلة فعلًا (إعادة استيراد) — لا ازدواج
+    registry.register(ToolSpec(
+        name="health.snapshot",
+        description="لقطة صحة النظام الكاملة (نفس منطق /health)",
+        inputs={},
+        outputs="status/version/timestamp/uptime/components",
+        handler=_health_payload,
+    ))
+    registry.register(ToolSpec(
+        name="memory.stats",
+        description="إحصاءات الذاكرة الثلاث (نفس منطق /components/memory)",
+        inputs={},
+        outputs="core/dynamic/store/timestamp",
+        handler=_memory_stats_payload,
+    ))
+    registry.register(ToolSpec(
+        name="disk.status",
+        description="حالة القرص السحابي Supabase (نفس منطق /disk/status)",
+        inputs={},
+        outputs="cloud_disk/enabled/…",
+        handler=_disk_status_payload,
+    ))
+    registry.register(ToolSpec(
+        name="brain.status",
+        description="حالة عقل Ollama ومصدر الرد (نفس منطق /brain/status)",
+        inputs={},
+        outputs="brain/enabled/reply_source/model",
+        handler=_brain_status_payload,
+    ))
+    registry.register(ToolSpec(
+        name="sovereignty.score",
+        description="تقرير درجة السيادة الكامل (نفس منطق /sovereignty/score)",
+        inputs={},
+        outputs="roadmap_v2/total_score/axes/primitives/composite",
+        handler=_sovereignty_score_payload,
+    ))
 
 
 @app.get("/status", response_model=SystemStatusResponse)
@@ -1142,18 +1265,22 @@ async def get_consciousness_status():
 async def get_memory_status():
     """الحصول على حالة الذاكرة"""
     try:
-        core = get_core()
-        dynamic = get_dynamic_memory()
-        store = get_store()
-        
-        return {
-            "core": core.get_statistics() if core else None,
-            "dynamic": dynamic.statistics() if dynamic else None,
-            "store": store.get_statistics() if store else None,
-            "timestamp": time.time()
-        }
+        return _memory_stats_payload()
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+def _memory_stats_payload() -> Dict[str, Any]:
+    """حمولة /components/memory — تخدم النقطة وأداة السجل memory.stats (R-729)."""
+    core = get_core()
+    dynamic = get_dynamic_memory()
+    store = get_store()
+    return {
+        "core": core.get_statistics() if core else None,
+        "dynamic": dynamic.statistics() if dynamic else None,
+        "store": store.get_statistics() if store else None,
+        "timestamp": time.time()
+    }
 
 
 @app.get("/components/predictive")
@@ -1643,3 +1770,8 @@ if __name__ == "__main__":
         reload=True,
         log_level="info"
     )
+
+
+# R-729 (البند ٣.١): تسجيل الأدوات الحقيقية — في نهاية الملف لأن دوال الحمولة
+# المشتركة (آخرها _memory_stats_payload) معرّفة قبل هذا السطر.
+_register_real_tools()

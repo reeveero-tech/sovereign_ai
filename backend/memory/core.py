@@ -65,6 +65,7 @@ class EventType(str, Enum):
     REPLICATION = "replication"      # حدث توزيع
     VERIFICATION = "verification"    # حدث تحقق
     GENESIS = "genesis"              # الحدث الأول
+    TOOL_INVOKED = "tool_invoked"    # R-729 (البند ٣.١): استدعاء أداة مسجلة
 
 
 class IntegrityStatus(str, Enum):
