@@ -144,7 +144,7 @@ class SovereignRuntimeInit {
 
         window.SOVEREIGN_NOTIFY
             ?.success(
-                'Sovereign Runtime Online'
+                'وحدات الواجهة جاهزة (محليًا — حالة الخادم في لوحة الحالة)'
             );
 
         window.SOVEREIGN_CINEMA
@@ -250,8 +250,8 @@ class SovereignRuntimeInit {
         }
 
         window.SOVEREIGN_NOTIFY
-            ?.ai(
-                'Neural Intelligence Active'
+            ?.info(
+                'أُرسلت الرسالة — مصدر الرد يظهر في لوحة الحالة'
             );
     }
 

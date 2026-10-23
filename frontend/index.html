@@ -548,6 +548,8 @@
                                 id="metric-field-energy"
                                 class="metric-value"
                                 title="لا مصدر حي في backend بعد (R-730)"
+                                data-live="experimental"
+                                data-live-reason="لا مصدر حي في الخادم"
                             >
                                 غير مربوط
                             </div>
@@ -571,6 +573,8 @@
 
                         <canvas
                             id="performanceChart"
+                            data-live="experimental"
+                            data-live-reason="لوحة رسم بلا بيانات — تنتظر البند ٢.٧"
                         ></canvas>
 
                     </div>
@@ -1272,10 +1276,11 @@
 <section id="sovereign-section-chat"></section>
 <section id="sovereign-section-memory" data-sovereign-placeholder="قيد الربط — لا بيانات وهمية"></section>
 <section id="sovereign-section-tools"></section>
-<section id="sovereign-section-evolution" data-sovereign-placeholder="قيد الربط — لا بيانات وهمية"></section>
+<section id="sovereign-section-evolution" data-sovereign-placeholder="قيد الربط — لا بيانات وهمية" data-live="experimental" data-live-reason="قسم التطور الذاتي لم يُبنَ بعد (القسم ٤) — لا بيانات"></section>
 <script src="js/modules/section-router.js"></script>
 <script src="js/modules/memory-viewer.js"></script>
 <script src="js/modules/live-system-status.js"></script>
+<script src="js/modules/experimental-badges.js"></script>
 </body>
 
 </html>

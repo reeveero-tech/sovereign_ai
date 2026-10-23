@@ -218,14 +218,19 @@ function createMessageElement(msg, type) {
     
     const meta = document.createElement('div');
     meta.className = 'message-meta';
-    meta.innerHTML = `
-        <span class="message-type">${msg.label || msg.type || 'نظام'}</span>
-        <span class="message-time">${msg.time || formatTime(Date.now())}</span>
-    `;
+    // R-731: نص لا HTML — كان نص المستخدم وردود الخادم يُحقنان innerHTML (ثغرة حقن)
+    const typeSpan = document.createElement('span');
+    typeSpan.className = 'message-type';
+    typeSpan.textContent = msg.label || msg.type || 'نظام';
+    const timeSpan = document.createElement('span');
+    timeSpan.className = 'message-time';
+    timeSpan.textContent = msg.time || formatTime(Date.now());
+    meta.appendChild(typeSpan);
+    meta.appendChild(timeSpan);
     
     const content = document.createElement('div');
     content.className = 'message-content';
-    content.innerHTML = msg.text || msg.content || msg.message || '';
+    content.textContent = msg.text || msg.content || msg.message || '';
     
     messageDiv.appendChild(meta);
     messageDiv.appendChild(content);
@@ -268,15 +273,18 @@ function renderGrouped(messages, container, baseTitle, groupSize = CONFIG.GROUP_
 // 6. إدارة الرسائل
 // ============================================================
 
-function addDialogueMessage(text, sender, isUser = true) {
+function addDialogueMessage(text, sender, isUser = true, opts = {}) {
+    // R-731 (البند ١.٥): التسمية من المرسل الفعلي (كانت كل رسالة غير المستخدم
+    // تُنسب للذكاء حتى أخطاء الاتصال)، والرسائل الثابتة المحلية موسومة «تجريبي».
     const now = Date.now();
+    const local = Boolean(opts && opts.local);
     const message = {
         id: `msg_${now}_${Math.random()}`,
         text: text,
         time: formatTime(now),
         timestamp: now,
-        label: isUser ? 'السيد' : 'الذكاء السيادي',
-        className: isUser ? 'message-type-user' : 'message-type-ai',
+        label: isUser ? 'السيد' : (sender || 'النظام') + (local ? ' — تجريبي: رسالة محلية ثابتة لا من الخادم' : ''),
+        className: (isUser ? 'message-type-user' : 'message-type-ai') + (local ? ' sovereign-local-message' : ''),
         type: isUser ? 'user' : 'ai'
     };
     
@@ -601,27 +609,26 @@ async function sendSovereignCommand(command, params = {}) {
 }
 
 function handleLocalCommand(command, params) {
+    // R-731 (البند ١.٥): بلا مفتاح السيد لا يُرسل الأمر للخادم — يُعلن ذلك بصدق.
+    // كان «mode» يكتب وضعًا مزيفًا في حقل وضع التشغيل (المربوط بـ/status) ويدّعي
+    // ادعاء تغيير الوضع، والافتراضي يدّعي أن الخادم استلم الأمر. إدخال المفتاح في
+    // الواجهة قرار أمني للمالك (R-715) — لم يُمس.
     const cmdLower = command.toLowerCase();
-    
+    const notSent = 'لم يُنفذ على الخادم — يتطلب مفتاح السيد';
+
     switch(cmdLower) {
         case 'status':
+            // قراءة حقيقية من /status و/health (لا تتطلب مفتاحًا)
             updateMetrics();
-            addDecisionMessage('تم تحديث حالة النظام', 'approved');
+            addDecisionMessage('أُعيدت قراءة الحالة من الخادم (/status)', 'approved');
             break;
         case 'reset':
             resetLocalState();
-            addDecisionMessage('تم إعادة تهيئة النظام محلياً', 'approved');
-            break;
-        case 'mode':
-            const mode = params.mode || params;
-            if (mode) {
-                systemState.mode = mode;
-                if (runtimeMode) runtimeMode.textContent = `وضع التشغيل: ${mode}`;
-                addDecisionMessage(`تم تغيير الوضع إلى ${mode}`, 'approved');
-            }
+            addDecisionMessage('أُعيد ضبط الواجهة محليًا فقط — الخادم لم يُمس', 'pending');
             break;
         default:
-            addDecisionMessage(`تم استلام الأمر: ${command}`, 'pending');
+            addDecisionMessage(`${notSent}: ${command}`, 'rejected');
+            addCommand(command, notSent, false);
             break;
     }
 }
@@ -683,11 +690,11 @@ async function sendChatMessage(text) {
                 // يمكن استخدام وقت المعالجة في المقاييس
             }
         } else {
-            addDialogueMessage('عذراً، حدث خطأ في معالجة رسالتك. يرجى المحاولة مرة أخرى.', 'الذكاء السيادي', false);
+            addDialogueMessage('عذراً، حدث خطأ في معالجة رسالتك. يرجى المحاولة مرة أخرى.', 'النظام', false);
             addHistoryEvent('error', `خطأ في معالجة الرسالة: ${data.reply || 'غير معروف'}`);
         }
     } catch (error) {
-        addDialogueMessage('عذراً، لا يمكن الاتصال بالخادم. يرجى التحقق من الاتصال.', 'الذكاء السيادي', false);
+        addDialogueMessage('عذراً، لا يمكن الاتصال بالخادم. يرجى التحقق من الاتصال.', 'النظام', false);
         addHistoryEvent('error', `فشل الاتصال: ${error.message}`);
     }
 }
@@ -1031,7 +1038,7 @@ function init() {
     }, 500);
     
     // رسالة ترحيب
-    addDialogueMessage('مرحباً أيها السيد. أنا الذكاء السيادي، جاهز لأوامرك.', 'الذكاء السيادي', false);
+    addDialogueMessage('مرحباً أيها السيد. أنا الذكاء السيادي، جاهز لأوامرك.', 'الواجهة', false, { local: true });
 }
 
 // بدء التشغيل

@@ -164,8 +164,8 @@ class SovereignInterfaceRuntime {
                         );
 
                     window.SOVEREIGN_NOTIFY
-                        ?.success(
-                            'Runtime Cycle Executed'
+                        ?.info(
+                            'طُلبت دورة من الخادم — النتيجة الفعلية في تبويب القرارات'
                         );
                 }
             );

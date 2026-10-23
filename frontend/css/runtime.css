@@ -431,3 +431,21 @@ body.fx-reduced .liquid-bg::after {
 #monitor-extra {
     display: none;
 }
+
+/* R-731 (البند ١.٥): شارة «تجريبي» المرئية للعناصر غير المربوطة بمصدر حي */
+.sovereign-experimental-badge {
+    display: inline-block;
+    margin: 6px 4px;
+    padding: 2px 8px;
+    border: 1px dashed #f5b301;
+    border-radius: 6px;
+    background: rgba(245, 179, 1, 0.12);
+    color: #ffd666;
+    font-size: 0.75rem;
+    font-weight: 600;
+    line-height: 1.5;
+    white-space: normal;
+}
+.sovereign-local-message .message-content {
+    opacity: 0.85;
+}

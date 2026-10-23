@@ -168,8 +168,8 @@ class SovereignSystemBridge {
         ========================================= */
 
         window.SOVEREIGN_NOTIFY
-            ?.ai(
-                'Neural Processing Active'
+            ?.info(
+                'أُرسلت الرسالة — مصدر الرد يظهر في لوحة الحالة'
             );
     }
 

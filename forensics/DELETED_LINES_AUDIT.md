@@ -2234,3 +2234,9 @@ Bus إطلاقًا. الواجهة سليمة بعد الإزالة (101 وسم 
 - **تصويب R-729 (المادة الأولى):** وثّقت R-729 اسم الحارس `…stay_removed` والاسم الفعلي `test_fake_capability_registry_stays_replaced` (صُحّح أعلاه وفي R-729_TOOL_REGISTRY.md). ولم يُدرج R-729 هنا أسطر الوثائق المستبدلة (ترويستا «آخر تحديث» وصف ٣.١ وسطر العدّاد)، فأُدرجت الآن: تحديث حالة روتيني إلى R-729. سابقة التصويب: R-725 وR-726.
 - الحارس: `tests/test_live_bindings.py`. التفصيل: `forensics/R-730_LIVE_BINDINGS.md`.
 
+## 2026-10-23 — R-731 (البند ١.٥): إزالة الانتحال المرئي
+- **# DELETION-JUSTIFIED** — `frontend/js/main.js`: فرع `mode` في `handleLocalCommand` (كتب وضعًا مزيفًا في `runtime-mode` وادّعى تغييره) والفرع الافتراضي (ادّعى «تم استلام الأمر») استُبدلا بإعلان «لم يُنفذ على الخادم». و`label` الثابت «الذكاء السيادي» صار المرسل الفعلي. ونسبة رسالتي الخطأ تغيرت من الذكاء إلى النظام. و`meta.innerHTML/content.innerHTML` في `createMessageElement` استُبدلا بـ`textContent` (ثغرة حقن).
+- **# DELETION-JUSTIFIED** — الإشعارات: `'Runtime Cycle Executed'` (success) في interface-runtime.js، و`'Neural Processing Active'` (ai) في system-bridge.js، و`'Neural Intelligence Active'` (ai) و`'Sovereign Runtime Online'` في runtime-init.js. نصوص منتحلة استُبدلت بنصوص صادقة من نوع info.
+- **# DELETION-JUSTIFIED** — الوثائق: ترويستا «آخر تحديث» (CHANGELOG + PROJECT_STATE)، وصفا ١.٤ و١.٥ في ROADMAP_V4، وسطر عدّاد الاختبارات. تحديث حالة روتيني إلى R-731.
+- الحارس: `tests/test_experimental_mode.py`. التفصيل: `forensics/R-731_EXPERIMENTAL_MODE.md`.
+
