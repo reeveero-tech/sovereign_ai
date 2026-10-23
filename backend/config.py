@@ -323,6 +323,17 @@ WEB_FETCH_MAX_REDIRECTS = int(_ollama_env("WEB_FETCH_MAX_REDIRECTS", "3"))
 # المنسّق (research.run): عدد المصادر التي تُقرأ في كل دورة بحث
 RESEARCH_MAX_SOURCES = int(_ollama_env("RESEARCH_MAX_SOURCES", "3"))
 
+# ============================================================
+# R-739 (البند ٢.٢ — عينان): إعدادات الرؤية (تحليل الصور)
+# ============================================================
+# معطل افتراضيًا (نمط R-704/R-736/R-737 — لا اتصال ضمني).
+VISION_ENABLED = _ollama_env("VISION_ENABLED", "false").lower() == "true"
+# نموذج متعدد الوسائط (رؤية) — منفصل عن نموذج المحادثة؛ أمثلة:
+# llava / qwen2.5vl (محلي)، أو نموذج رؤية لدى مزود متوافق OpenAI.
+VISION_MODEL = _ollama_env("VISION_MODEL", None)
+# حد حجم الصورة المرفوعة (10MiB) — لا قراءة اعتباطية
+VISION_MAX_IMAGE_BYTES = int(_ollama_env("VISION_MAX_IMAGE_BYTES", str(10 * 1024 * 1024)))
+
 # بوابة MCP — وصول منظومة آلاف أدوات الصناعة بعقد واحد (stdio/http).
 # معطلة افتراضيًا؛ الخوادم بصيغة JSON في MCP_SERVERS:
 # [{"name":"fs","transport":"stdio","command":"npx","args":[...]},

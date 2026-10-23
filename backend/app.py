@@ -96,6 +96,8 @@ from safety import SafetyGuard, ActionType
 chat_rate_limiter = SlidingWindowRateLimiter(MAX_USER_MESSAGES_PER_MINUTE)
 # R-737 (البند ٢.٣): حد السمع بحد المحادثة نفسه لكل IP — الرفع باهظ فلا باب مفتوح
 stt_rate_limiter = SlidingWindowRateLimiter(MAX_USER_MESSAGES_PER_MINUTE)
+# R-739 (البند ٢.٢): حد الرؤية بحد المحادثة نفسه لكل IP — الرفع باهظ فلا باب مفتوح
+vision_rate_limiter = SlidingWindowRateLimiter(MAX_USER_MESSAGES_PER_MINUTE)
 
 # ============================================================
 # طبقة الأمان السيادية (R-608) — إحياء safety.py
@@ -948,6 +950,91 @@ async def stt_status():
         "base_url": safe_base,
         "timeout_seconds": config.STT_TIMEOUT_SECONDS,
         "max_audio_bytes": config.STT_MAX_AUDIO_BYTES,
+    }
+
+
+# ============================================================
+# R-739 (البند ٢.٢ — بأمر المالك «ابدأ»): عينان — تحليل الصور
+# ============================================================
+# قائمة أنواع صور صارمة — لا قبول ملفات اعتباطية
+VISION_ALLOWED_CONTENT_TYPES = {
+    "image/png", "image/jpeg", "image/webp", "image/gif", "image/bmp",
+}
+
+
+@app.post("/vision")
+async def vision(request: Request, file: UploadFile = File(...)):
+    """R-739 (البند ٢.٢): صورة → وصف نصي موثق (معيار الإغلاق في الخارطة).
+
+    fail-closed بصدق في كل حالة: معطل → 503 بالسبب، فشل الخدمة → 502،
+    حجم زائد → 413، نوع غير صورة → 415، تجاوز المعدل → 429. لا وصف
+    مختلق ولا نجاح كاذب (المادة ١).
+    """
+    # حد المعدل (حد /chat نفسه لكل IP مباشر — لا ثقة بترويسات التمرير)
+    client_host = request.client.host if request.client else "unknown"
+    retry_after = vision_rate_limiter.check(client_host)
+    if retry_after is not None:
+        return JSONResponse(
+            status_code=429,
+            headers={"Retry-After": str(retry_after)},
+            content={"error": "rate_limited",
+                     "reason": "تم تجاوز حد طلبات الرؤية؛ أعد المحاولة لاحقًا"},
+        )
+    import config
+    if not (config.VISION_ENABLED and config.VISION_MODEL):
+        return JSONResponse(
+            status_code=503,
+            content={"error": "vision_disabled",
+                     "reason": "الرؤية معطلة افتراضيًا — التفعيل بيد المالك "
+                              "(VISION_ENABLED + VISION_MODEL عبر أسرار المنصة)"},
+        )
+    if file.content_type not in VISION_ALLOWED_CONTENT_TYPES:
+        return JSONResponse(
+            status_code=415,
+            content={"error": "unsupported_media_type",
+                     "reason": f"النوع المسموح صور فقط — وصل: {file.content_type}"},
+        )
+    # قراءة بحد + 1 بايت: لا قراءة اعتباطية في الذاكرة (حد 10MiB افتراضيًا)
+    data = await file.read(config.VISION_MAX_IMAGE_BYTES + 1)
+    if len(data) > config.VISION_MAX_IMAGE_BYTES:
+        return JSONResponse(
+            status_code=413,
+            content={"error": "image_too_large",
+                     "reason": f"الحد {config.VISION_MAX_IMAGE_BYTES} بايت"},
+        )
+    import vision_client
+    description = vision_client.describe(data, file.content_type)
+    if description is None:
+        return JSONResponse(
+            status_code=502,
+            content={"error": "vision_failed",
+                     "reason": "خدمة الرؤية لم تُرجع وصفًا (نموذج غير متاح أو "
+                              "فاشل) — لا وصف مختلق"},
+        )
+    return {"description": description}
+
+
+@app.get("/vision/status")
+async def vision_status():
+    """R-739: حالة الرؤية — لا سر أبدًا (العنوان معقّم بنمط /brain/status)."""
+    import config
+    from urllib.parse import urlsplit
+    enabled = bool(config.VISION_ENABLED and config.VISION_MODEL)
+    raw = urlsplit(str(config.OLLAMA_BASE_URL))
+    netloc = raw.hostname or ""
+    try:
+        if raw.port is not None:
+            netloc = f"{netloc}:{raw.port}"
+        scheme = f"{raw.scheme}://" if (raw.scheme and netloc) else ""
+        safe_base = f"{scheme}{netloc}{raw.path}"
+    except ValueError:
+        safe_base = "<عنوان مضبوط غير قابل للعرض>"
+    return {
+        "enabled": enabled,
+        "model": config.VISION_MODEL,
+        "base_url": safe_base,
+        "timeout_seconds": config.OLLAMA_TIMEOUT_SECONDS,
+        "max_image_bytes": config.VISION_MAX_IMAGE_BYTES,
     }
 
 

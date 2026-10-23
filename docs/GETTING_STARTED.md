@@ -254,6 +254,9 @@ curl -s -w "\nHTTP %{http_code}\n" http://127.0.0.1:8000/supervisor/status
    وبوابة MCP (اختياري): `MCP_ENABLED=true` + `MCP_SERVERS` (JSON: خوادم stdio/http).
    أدوات الاستدلال (reasoning.*) تعمل متى فُعل العقل (R-736) — الدليل:
    `forensics/R-738_RESEARCH_ARSENAL.md`.
+   R-739 (البند ٢.٢): الرؤية (`/vision`) — `VISION_ENABLED=true` +
+   `VISION_MODEL` (نموذج رؤية مثل llava) على أساس العقل نفسه — الدليل:
+   `forensics/R-739_VISION.md`.
 5. **أعد تشغيل الخادم** (`Ctrl+C` ثم أمر §٣) — الإعدادات تُقرأ عند الإقلاع.
 6. **أرسل رسالة** `/chat` كما في §٤.
 
