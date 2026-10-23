@@ -39,3 +39,14 @@ def test_sections_declared_in_inventory():
     """بنية الأقسام موثقة في جرد الواجهة (لا هيكل صامت)."""
     inv = (REPO_ROOT / "frontend/INVENTORY.md").read_text(encoding="utf-8")
     assert "section-router.js" in inv, "الموجّه غير مجرود"
+
+
+def test_memory_section_bound_to_real_api():
+    """R-728 (١.٣ توسيع): قسم الذاكرة مربوط فعليًا بنقطة /components/memory —
+    إحصاءات حقيقية (core/dynamic/store) لا بيانات وهمية (بند ١.٥)."""
+    mod = REPO_ROOT / "frontend/js/modules/memory-viewer.js"
+    assert mod.exists(), "عارض الذاكرة مفقود"
+    c = mod.read_text(encoding="utf-8")
+    assert "/components/memory" in c, "العارض لا يستهلك نقطة API الفعلية"
+    idx = IDX.read_text(encoding="utf-8")
+    assert "memory-viewer.js" in idx, "العارض غير محمل من index.html"
