@@ -749,6 +749,28 @@ async def disk_status():
     return {"cloud_disk": "enabled", **disk.status()}
 
 
+@app.get("/brain/status")
+async def brain_status():
+    """حالة عقل Ollama ومصدر الردود (R-726 — البند ١.٦ بأمر المالك).
+
+    شفافية صريحة لا انتحال: يعاد enabled=False مع reply_source="templates"
+    عندما لا عقل — المالك يرى بالضبط ماذا يجيبه: قوالب أم نموذج.
+    لا سر في المخرجات أبدًا (نمط /api-key — R-614)."""
+    import config as _config
+    enabled = bool(_config.OLLAMA_ENABLED and _config.OLLAMA_MODEL)
+    if not enabled:
+        return {"brain": "disabled", "enabled": False,
+                "reply_source": "templates"}
+    return {
+        "brain": "enabled",
+        "enabled": True,
+        "reply_source": "ollama",
+        "model": _config.OLLAMA_MODEL,
+        "base_url": str(_config.OLLAMA_BASE_URL),
+        "timeout_seconds": _config.OLLAMA_TIMEOUT_SECONDS,
+    }
+
+
 @app.get("/status", response_model=SystemStatusResponse)
 async def system_status():
     """
