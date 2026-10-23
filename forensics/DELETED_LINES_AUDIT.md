@@ -2240,3 +2240,9 @@ Bus إطلاقًا. الواجهة سليمة بعد الإزالة (101 وسم 
 - **# DELETION-JUSTIFIED** — الوثائق: ترويستا «آخر تحديث» (CHANGELOG + PROJECT_STATE)، وصفا ١.٤ و١.٥ في ROADMAP_V4، وسطر عدّاد الاختبارات. تحديث حالة روتيني إلى R-731.
 - الحارس: `tests/test_experimental_mode.py`. التفصيل: `forensics/R-731_EXPERIMENTAL_MODE.md`.
 
+## 2026-10-23 — R-732 (البند ٣.٦): المجدول + تصويبات
+- **# DELETION-JUSTIFIED** — `frontend/js/modules/live-system-status.js`: دالة `render` (بناء `el.innerHTML` بقيم من الخادم مثل `brain.model`) استُبدلت ببناء نصي (`textContent`) + سطر المجدول، و`pull` أُضيف لها `/scheduler/status`. النصوص المعروضة نفسها، ولم يُحذف منها شيء.
+- **# DELETION-JUSTIFIED** — الوثائق: صف ١.٣ («لم يبدأ» الخاطئ منذ R-727 → «جزئي»)، وصف ٣.١ (أُضيف تصويب الإنتاج)، وصف ٣.٦ («لم يبدأ» → «جزئي متقدم»)، وترويستا «آخر تحديث»، وسطر العدّاد. تحديث حالة.
+- **تصويب R-727 (المادة الأولى):** مدخل R-727 أعلاه يذكر استبدال «صف ١.٣ في ROADMAP_V4»، و`git show 45a86d9 -- docs/ROADMAP_V4.md` فارغ، فالصف لم يُستبدل قط. صُحّح في R-732.
+- الحارس: `tests/test_scheduler.py`. التفصيل: `forensics/R-732_SCHEDULER.md`.
+

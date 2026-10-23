@@ -104,6 +104,16 @@
       ]
     },
     {
+      "element": "live-system-status",
+      "created_by_writer": true,
+      "endpoint": "GET /scheduler/status",
+      "field": "enabled",
+      "writers": [
+        "js/modules/live-system-status.js",
+        "js/modules/section-router.js"
+      ]
+    },
+    {
       "element": "sovereign-tools-registry",
       "created_by_writer": true,
       "endpoint": "GET /tools/list",

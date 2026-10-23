@@ -225,11 +225,18 @@ async def lifespan(app: FastAPI):
         await ensure_nexus_running_async()
     except Exception as _nexus_lifecycle_err:
         logger.warning(f"⚠️ NexusCore lifecycle: {_nexus_lifecycle_err}")
+
+    # R-732 (البند ٣.٦): المجدول — يُبنى من البيئة عند كل إقلاع (معطل افتراضيًا)
+    from scheduler import build_from_env as _build_scheduler
+    app.state.scheduler = _build_scheduler()
+    app.state.scheduler.start()
+    logger.info(f"⏱️ المجدول: {app.state.scheduler.reason}")
     
     yield
     
     # إيقاف التشغيل
     logger.info("🛑 إيقاف خادم Sovereign AI...")
+    await app.state.scheduler.stop()
     app.state.orchestrator.stop()
     logger.info("✅ تم إيقاف الخادم")
 
@@ -312,6 +319,16 @@ from backend.compat import (
 from backend.compat.nexus_router_compat import register_compat_router
 
 # إضافة نقطة /guardian/status — إحياء guardian/ بشكل قابل للتشخيص دون تفعيل EmergencyBreaker
+@app.get("/scheduler/status")
+async def scheduler_status():
+    """R-732 (البند ٣.٦): حالة المجدول — تفعيل/سبب/مهام/آخر تشغيل وبصمته (لا سر)."""
+    sched = getattr(app.state, "scheduler", None)
+    if sched is None:
+        return {"enabled": False, "running": False,
+                "reason": "المجدول لم يُبنَ بعد (الخادم لم يكمل الإقلاع)", "tasks": []}
+    return sched.status()
+
+
 @app.get("/guardian/status")
 async def guardian_status():
     """حالة نظام الحارس (قراءة فقط) — إحياء guardian/ عبر طبقة توافق"""
