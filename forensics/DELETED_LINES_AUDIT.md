@@ -2254,3 +2254,7 @@ Bus إطلاقًا. الواجهة سليمة بعد الإزالة (101 وسم 
 - **# DELETION-JUSTIFIED** — الوثائق: صفا ١.٤ و٢.٧، وترويستا «آخر تحديث»، وسطر العدّاد. تحديث حالة.
 - الحارس: `tests/test_live_health_chart.py`. التفصيل: `forensics/R-733_LIVE_HEALTH_CHART.md`.
 
+## 2026-10-23 — R-734 (البند ٢.٧): الموارد وأخطاء المكونات
+- **# DELETION-JUSTIFIED** — الوثائق فقط: صف ٢.٧ في ROADMAP_V4 («جزئي» → «منجز بحدود موثقة»)، وترويستا «آخر تحديث» (CHANGELOG + PROJECT_STATE)، وسطر العدّاد. تحديث حالة. لم يُحذف سطر من الشيفرة: الإضافات في `live-health-chart.js` و`app.py` إلحاقية، وسطر رسالة «لا أخطاء» الجديد كُتب في هذا الالتزام نفسه.
+- الحارس: `tests/test_system_resources.py`. التفصيل: `forensics/R-734_SYSTEM_RESOURCES.md`.
+

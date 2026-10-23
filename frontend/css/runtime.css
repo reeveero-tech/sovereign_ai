@@ -454,3 +454,12 @@ body.fx-reduced .liquid-bg::after {
 .sovereign-local-message .message-content {
     opacity: 0.85;
 }
+
+/* R-734 (٢.٧): سطرا الموارد وأخطاء المكونات تحت الرسم الحي */
+.live-health-row {
+    margin-top: 8px;
+    font-size: 0.8rem;
+    color: #cfd8ff;
+    line-height: 1.6;
+    word-break: break-word;
+}

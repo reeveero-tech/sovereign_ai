@@ -158,6 +158,25 @@
         "js/modules/live-health-chart.js"
       ],
       "note": "سلسلة زمنية: المكونات السليمة + زمن استجابة /health المقاس في المتصفح؛ الفشل فجوة معلنة"
+    },
+    {
+      "element": "live-resources",
+      "created_by_writer": true,
+      "endpoint": "GET /system/resources",
+      "field": "process.rss_mb",
+      "writers": [
+        "js/modules/live-health-chart.js"
+      ]
+    },
+    {
+      "element": "live-component-errors",
+      "created_by_writer": true,
+      "endpoint": "GET /health",
+      "field": "components",
+      "writers": [
+        "js/modules/live-health-chart.js"
+      ],
+      "note": "error_count + last_error لكل مكون"
     }
   ],
   "client": [

@@ -319,6 +319,25 @@ from backend.compat import (
 from backend.compat.nexus_router_compat import register_compat_router
 
 # إضافة نقطة /guardian/status — إحياء guardian/ بشكل قابل للتشخيص دون تفعيل EmergencyBreaker
+def _resources_disk_path():
+    """R-734: مجلد البيانات الفعلي (config.DATA_DIR) — يُقاس قرصه؛ إن لم يوجد
+    بعد يُقاس أقرب أصل موجود (نفس نظام الملفات)."""
+    from pathlib import Path as _Path
+    from config import DATA_DIR
+    path = _Path(DATA_DIR)
+    while not path.exists() and path != path.parent:
+        path = path.parent
+    return path
+
+
+@app.get("/system/resources")
+async def system_resources_endpoint():
+    """R-734 (البند ٢.٧): موارد النظام مقاسة من نظام التشغيل — لا تقدير ولا سر،
+    ولا مسار مطلق (تسمية «data» فقط)."""
+    import system_resources
+    return system_resources.snapshot(disk_path=_resources_disk_path(), disk_label="data")
+
+
 @app.get("/scheduler/status")
 async def scheduler_status():
     """R-732 (البند ٣.٦): حالة المجدول — تفعيل/سبب/مهام/آخر تشغيل وبصمته (لا سر)."""

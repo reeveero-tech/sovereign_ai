@@ -7,6 +7,9 @@
  *   خط المكونات السليمة + خط زمن استجابة /health المقاس فعلًا بـperformance.now.
  * - فشل الجلب = فجوة معلنة (null) و«غير متصل» — لا نقطة مختلقة ولا تكرار لآخر قيمة.
  * - رسم Canvas 2D مباشر — لا اعتماد على مكتبة خارجية من CDN.
+ * - R-734 (٢.٧): سطران تحت الرسم — الموارد من /system/resources (ذاكرة/معالج/
+ *   حمل/قرص — مقاسة من نظام التشغيل، null = «غير متاح» لا رقم) وأخطاء المكونات
+ *   من /health (error_count + last_error لكل مكون).
  */
 (function () {
     "use strict";
@@ -33,6 +36,60 @@
             el.textContent = "غير متصل";
         } else {
             el.textContent = sample.healthy + "/" + sample.total;
+        }
+    }
+
+    function ensureRow(id) {
+        var el = document.getElementById(id);
+        if (el) return el;
+        var canvas = document.getElementById("performanceChart");
+        if (!canvas || !canvas.parentNode) return null;
+        el = document.createElement("div");
+        el.id = id;
+        el.className = "live-health-row";
+        canvas.parentNode.appendChild(el);
+        return el;
+    }
+
+    function fmt(v, unit) {
+        return (v === null || v === undefined) ? "غير متاح" : v + unit;
+    }
+
+    function renderErrors(components) {
+        var el = ensureRow("live-component-errors");
+        if (!el) return;
+        if (!components) { el.textContent = "أخطاء المكونات: غير متصل"; return; }
+        var withErrors = [];
+        Object.keys(components).forEach(function (n) {
+            var c = components[n];
+            if (c && typeof c === "object" && (c.error_count || 0) > 0) {
+                withErrors.push(n + " (" + c.error_count + ")" + (c.last_error ? ": " + String(c.last_error).slice(0, 80) : ""));
+            }
+        });
+        el.textContent = withErrors.length
+            ? "أخطاء المكونات: " + withErrors.length + " — " + withErrors.join(" · ")
+            : "أخطاء المكونات: لا خطأ مسجل في أي مكون";
+    }
+
+    function renderResources(res) {
+        var el = ensureRow("live-resources");
+        if (!el) return;
+        if (!res) { el.textContent = "الموارد: غير متصل"; return; }
+        var p = res.process || {}, h = res.host || {}, d = res.disk || {};
+        el.textContent =
+            "الموارد — الذاكرة: " + fmt(p.rss_mb, " م.ب") +
+            " · المعالج: " + fmt(p.cpu_percent, "٪") +
+            " · الحمل: " + fmt(h.load_avg_1m, "") + " على " + (h.cpu_count || "؟") + " نواة" +
+            " · القرص الحر: " + fmt(d.free_gb, " ج.ب") + (d.used_percent != null ? " (مستخدم " + d.used_percent + "٪)" : "");
+    }
+
+    async function pullResources() {
+        try {
+            var r = await fetch("/system/resources", { cache: "no-store" });
+            if (!r.ok) throw new Error("HTTP " + r.status);
+            renderResources(await r.json());
+        } catch (e) {
+            renderResources(null);
         }
     }
 
@@ -101,9 +158,12 @@
             var latency = performance.now() - t0;
             var c = countHealthy(data.components);
             s = { t: Date.now(), healthy: c.healthy, total: c.total, latency: latency };
+            renderErrors(data.components);
         } catch (e) {
             s = { t: Date.now(), healthy: null, total: null, latency: null };
+            renderErrors(null);
         }
+        pullResources();
         samples.push(s);
         if (samples.length > MAX_POINTS) samples.shift();
         renderCard(s);
