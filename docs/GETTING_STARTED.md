@@ -245,6 +245,10 @@ curl -s -w "\nHTTP %{http_code}\n" http://127.0.0.1:8000/supervisor/status
    و`OLLAMA_API_KEY` — الدليل الكامل للمصادر الأربعة:
    `forensics/R-736_BRAIN_PROTOCOLS.md`.
    (ملاحظة: Ollama Cloud الرسمي يستخدم بروتوكول ollama نفسه — راجع الدليل.)
+   R-737 (البند ٢.٣): السمع (`/stt`) بنمط المعطيات نفسها: `STT_ENABLED=true`
+   + `STT_BASE_URL` (افتراضي خادم whisper.cpp المحلي: `http://127.0.0.1:8080/v1`؛
+   أو سحابيًا `https://api.groq.com/openai/v1` + `STT_MODEL=whisper-large-v3`
+   + `STT_API_KEY`) — الدليل: `forensics/R-737_STT.md`.
 5. **أعد تشغيل الخادم** (`Ctrl+C` ثم أمر §٣) — الإعدادات تُقرأ عند الإقلاع.
 6. **أرسل رسالة** `/chat` كما في §٤.
 

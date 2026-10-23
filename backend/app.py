@@ -33,7 +33,7 @@ import pathlib
 
 from fastapi import (
     FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect, Depends,
-    status, BackgroundTasks, Query, Header,
+    status, BackgroundTasks, Query, Header, File, UploadFile,
 )
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.gzip import GZipMiddleware
@@ -94,6 +94,8 @@ from rate_limit import SlidingWindowRateLimiter
 from safety import SafetyGuard, ActionType
 
 chat_rate_limiter = SlidingWindowRateLimiter(MAX_USER_MESSAGES_PER_MINUTE)
+# R-737 (البند ٢.٣): حد السمع بحد المحادثة نفسه لكل IP — الرفع باهظ فلا باب مفتوح
+stt_rate_limiter = SlidingWindowRateLimiter(MAX_USER_MESSAGES_PER_MINUTE)
 
 # ============================================================
 # طبقة الأمان السيادية (R-608) — إحياء safety.py
@@ -859,6 +861,93 @@ def _brain_status_payload() -> Dict[str, Any]:
         "base_url": safe_base,
         "timeout_seconds": _config.OLLAMA_TIMEOUT_SECONDS,
         "last_call": outcome,
+    }
+
+
+# ============================================================
+# R-737 (البند ٢.٣ — بأمر المالك «ابدأ»): أذنان — تحويل الكلام لنص
+# ============================================================
+# قائمة أنواع صوتية صارمة — لا قبول ملفات اعتباطية
+STT_ALLOWED_CONTENT_TYPES = {
+    "audio/wav", "audio/x-wav", "audio/webm", "audio/mpeg", "audio/mp4",
+    "audio/x-m4a", "audio/ogg", "application/ogg",
+}
+
+
+@app.post("/stt")
+async def stt(request: Request, file: UploadFile = File(...)):
+    """R-737 (البند ٢.٣): مقطع صوتي → نص (معيار الإغلاق في الخارطة).
+
+    fail-closed بصدق في كل حالة: معطل → 503 بالسبب، فشل الخدمة → 502،
+    حجم زائد → 413، نوع غير صوتي → 415، تجاوز المعدل → 429. لا نص مختلق
+    ولا نجاح كاذب (المادة ١).
+    """
+    # حد المعدل (حد /chat نفسه لكل IP مباشر — لا ثقة بترويسات التمرير)
+    client_host = request.client.host if request.client else "unknown"
+    retry_after = stt_rate_limiter.check(client_host)
+    if retry_after is not None:
+        return JSONResponse(
+            status_code=429,
+            headers={"Retry-After": str(retry_after)},
+            content={"error": "rate_limited",
+                     "reason": "تم تجاوز حد طلبات السمع؛ أعد المحاولة لاحقًا"},
+        )
+    import config
+    if not config.STT_ENABLED:
+        return JSONResponse(
+            status_code=503,
+            content={"error": "stt_disabled",
+                     "reason": "السمع معطل افتراضيًا — التفعيل بيد المالك "
+                              "(STT_ENABLED عبر أسرار المنصة)"},
+        )
+    if file.content_type not in STT_ALLOWED_CONTENT_TYPES:
+        return JSONResponse(
+            status_code=415,
+            content={"error": "unsupported_media_type",
+                     "reason": f"النوع المسموح صوتي فقط — وصل: {file.content_type}"},
+        )
+    # قراءة بحد + 1 بايت: لا قراءة اعتباطية في الذاكرة (حد 25MiB افتراضيًا)
+    data = await file.read(config.STT_MAX_AUDIO_BYTES + 1)
+    if len(data) > config.STT_MAX_AUDIO_BYTES:
+        return JSONResponse(
+            status_code=413,
+            content={"error": "audio_too_large",
+                     "reason": f"الحد {config.STT_MAX_AUDIO_BYTES} بايت"},
+        )
+    import stt_client
+    text = stt_client.transcribe(data, file.filename or "audio",
+                                 file.content_type)
+    if text is None:
+        return JSONResponse(
+            status_code=502,
+            content={"error": "transcription_failed",
+                     "reason": "خدمة السمع لم تُرجع نصًا (معطلة لديها أو فاشلة) — "
+                              "لا نص مختلق"},
+        )
+    return {"text": text}
+
+
+@app.get("/stt/status")
+async def stt_status():
+    """R-737: حالة السمع — لا سر أبدًا (العنوان معقّم بنمط /brain/status)."""
+    import config
+    from urllib.parse import urlsplit
+    enabled = bool(config.STT_ENABLED)
+    raw = urlsplit(str(config.STT_BASE_URL))
+    netloc = raw.hostname or ""
+    try:
+        if raw.port is not None:
+            netloc = f"{netloc}:{raw.port}"
+        scheme = f"{raw.scheme}://" if (raw.scheme and netloc) else ""
+        safe_base = f"{scheme}{netloc}{raw.path}"
+    except ValueError:
+        safe_base = "<عنوان مضبوط غير قابل للعرض>"
+    return {
+        "enabled": enabled,
+        "model": config.STT_MODEL,
+        "base_url": safe_base,
+        "timeout_seconds": config.STT_TIMEOUT_SECONDS,
+        "max_audio_bytes": config.STT_MAX_AUDIO_BYTES,
     }
 
 

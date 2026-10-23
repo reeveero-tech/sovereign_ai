@@ -287,6 +287,24 @@ OLLAMA_API_KEY = _ollama_env("OLLAMA_API_KEY", None)
 OLLAMA_TIMEOUT_SECONDS = float(_ollama_env("OLLAMA_TIMEOUT_SECONDS", "60"))
 
 # ============================================================
+# R-737 (البند ٢.٣ — أذنان): إعدادات السمع (تحويل كلام لنص)
+# ============================================================
+# معطل افتراضيًا (نمط Ollama R-704/R-736 — لا اتصال ضمني).
+STT_ENABLED = _ollama_env("STT_ENABLED", "false").lower() == "true"
+# أساس متوافق مع OpenAI لتحويل الكلام — البروتوكول واحد للسحابي والمحلي:
+# POST {base}/audio/transcriptions. مثال سحابي (Groq):
+# https://api.groq.com/openai/v1 — ومثال محلي (خادم whisper.cpp): العنوان
+# الافتراضي أدناه (الخادم يقرر النموذج بنفسه فلا STT_MODEL مطلوب).
+STT_BASE_URL = _ollama_env("STT_BASE_URL", "http://127.0.0.1:8080/v1")
+# النموذج — None للخادم المحلي (يقرر بنفسه)، أو صريح للخدمة السحابية
+# (مثال Groq: whisper-large-v3).
+STT_MODEL = _ollama_env("STT_MODEL", None)
+STT_API_KEY = _ollama_env("STT_API_KEY", None)
+STT_TIMEOUT_SECONDS = float(_ollama_env("STT_TIMEOUT_SECONDS", "60"))
+# حد حجم الرفع (25MiB — حد whisper-large-v3 المعتاد) — لا قراءة اعتباطية
+STT_MAX_AUDIO_BYTES = int(_ollama_env("STT_MAX_AUDIO_BYTES", str(25 * 1024 * 1024)))
+
+# ============================================================
 # 7. إعدادات النواة الذكية (Core Model)
 # ============================================================
 
