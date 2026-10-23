@@ -237,7 +237,14 @@ curl -s -w "\nHTTP %{http_code}\n" http://127.0.0.1:8000/supervisor/status
    OLLAMA_ENABLED=true
    OLLAMA_BASE_URL=http://127.0.0.1:11434
    OLLAMA_MODEL=qwen2.5:7b
+   # OLLAMA_PROTOCOL=ollama   # الافتراضي — بروتوكول Ollama (/api/chat)
    ```
+   R-736 (البند ٢.١): لمزود سحابي متوافق مع OpenAI بدل الخادم المحلي
+   (Groq/OpenRouter وأي مزود متوافق) اضبط `OLLAMA_PROTOCOL=openai` مع
+   `OLLAMA_BASE_URL` بادئة الإصدار كاملة (مثل `https://api.groq.com/openai/v1`)
+   و`OLLAMA_API_KEY` — الدليل الكامل للمصادر الأربعة:
+   `forensics/R-736_BRAIN_PROTOCOLS.md`.
+   (ملاحظة: Ollama Cloud الرسمي يستخدم بروتوكول ollama نفسه — راجع الدليل.)
 5. **أعد تشغيل الخادم** (`Ctrl+C` ثم أمر §٣) — الإعدادات تُقرأ عند الإقلاع.
 6. **أرسل رسالة** `/chat` كما في §٤.
 

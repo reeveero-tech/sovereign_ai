@@ -28,10 +28,13 @@ def test_brain_status_endpoint_disabled(monkeypatch):
 
 def test_brain_status_endpoint_enabled_no_secret_leak(monkeypatch):
     """العقل مفعّل → يعرض النموذج والمصدر بلا أي سر (لا مفتاح ولا عنوان
-    كامل بسر) — شفافية كاملة للمالك."""
+    كامل بسر) — شفافية كاملة للمالك. R-736 (دقة): reply_source «المرصود» —
+    بلا استدلال ناجح موثّق بعد، المصدر «unverified» لا ادعاء «model»."""
     monkeypatch.setattr("config.OLLAMA_ENABLED", True)
     monkeypatch.setattr("config.OLLAMA_MODEL", "qwen2.5:7b")
     monkeypatch.setattr("config.OLLAMA_BASE_URL", "http://ollama-server:11434")
+    import ollama_client
+    ollama_client._LAST_OUTCOME = {"result": "none", "error": None}
     from fastapi.testclient import TestClient
     from app import app
     with TestClient(app) as client:
@@ -40,7 +43,7 @@ def test_brain_status_endpoint_enabled_no_secret_leak(monkeypatch):
         data = r.json()
         assert data["enabled"] is True
         assert data["model"] == "qwen2.5:7b"
-        assert data["reply_source"] == "ollama"
+        assert data["reply_source"] == "unverified"
         assert "OLLAMA_API_KEY" not in r.text
 
 

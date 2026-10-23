@@ -1,0 +1,413 @@
+FFFFFFFFFFFFFF                                                           [100%]
+=================================== FAILURES ===================================
+_____________________ test_client_openai_request_and_parse _____________________
+
+openai_brain = <function openai_brain.<locals>._enable at 0x7fa4fdda65c0>
+
+    def test_client_openai_request_and_parse(openai_brain):
+        """العميل يرسل الطلب الصحيح لمسار /chat/completions ويعيد نص النموذج."""
+        import ollama_client
+        server, seen = _make_fake_openai(content="مرحبا من السحابة")
+        try:
+>           openai_brain(f"http://127.0.0.1:{server.server_address[1]}")
+
+tests/test_brain_openai_protocol.py:103: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+base_url = 'http://127.0.0.1:43651', model = 'cloud-model', api_key = None
+protocol = 'openai'
+
+    def _enable(base_url, model="cloud-model", api_key=None, protocol="openai"):
+        monkeypatch.setattr(config, "OLLAMA_ENABLED", True)
+        monkeypatch.setattr(config, "OLLAMA_MODEL", model)
+        monkeypatch.setattr(config, "OLLAMA_BASE_URL", base_url)
+        monkeypatch.setattr(config, "OLLAMA_API_KEY", api_key)
+>       monkeypatch.setattr(config, "OLLAMA_PROTOCOL", protocol)
+E       AttributeError: <module 'config' from '/home/user/workspace/sovereign_ai/backend/config.py'> has no attribute 'OLLAMA_PROTOCOL'
+
+tests/test_brain_openai_protocol.py:93: AttributeError
+____________________ test_client_openai_bearer_when_key_set ____________________
+
+openai_brain = <function openai_brain.<locals>._enable at 0x7fa4fdda62a0>
+
+    def test_client_openai_bearer_when_key_set(openai_brain):
+        """ترويسة الحامل تُرسل عند وجود مفتاح API (نمط خوادم التوثيق السحابية)."""
+        import ollama_client
+        server, seen = _make_fake_openai()
+        try:
+>           openai_brain(f"http://127.0.0.1:{server.server_address[1]}", api_key="secret-key")
+
+tests/test_brain_openai_protocol.py:125: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+base_url = 'http://127.0.0.1:40215', model = 'cloud-model'
+api_key = 'secret-key', protocol = 'openai'
+
+    def _enable(base_url, model="cloud-model", api_key=None, protocol="openai"):
+        monkeypatch.setattr(config, "OLLAMA_ENABLED", True)
+        monkeypatch.setattr(config, "OLLAMA_MODEL", model)
+        monkeypatch.setattr(config, "OLLAMA_BASE_URL", base_url)
+        monkeypatch.setattr(config, "OLLAMA_API_KEY", api_key)
+>       monkeypatch.setattr(config, "OLLAMA_PROTOCOL", protocol)
+E       AttributeError: <module 'config' from '/home/user/workspace/sovereign_ai/backend/config.py'> has no attribute 'OLLAMA_PROTOCOL'
+
+tests/test_brain_openai_protocol.py:93: AttributeError
+________________ test_client_openai_base_url_with_version_path _________________
+
+openai_brain = <function openai_brain.<locals>._enable at 0x7fa4fdda6160>
+
+    def test_client_openai_base_url_with_version_path(openai_brain):
+        """BASE_URL المنتهية بمسار إصدار (.../openai/v1) يُلحق بها /chat/completions
+        مرة واحدة — لا تكرار لمسار الإصدار (عقد Groq/OpenRouter)."""
+        import ollama_client
+        server, seen = _make_fake_openai()
+        try:
+>           openai_brain(f"http://127.0.0.1:{server.server_address[1]}/openai/v1")
+
+tests/test_brain_openai_protocol.py:139: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+base_url = 'http://127.0.0.1:46569/openai/v1', model = 'cloud-model'
+api_key = None, protocol = 'openai'
+
+    def _enable(base_url, model="cloud-model", api_key=None, protocol="openai"):
+        monkeypatch.setattr(config, "OLLAMA_ENABLED", True)
+        monkeypatch.setattr(config, "OLLAMA_MODEL", model)
+        monkeypatch.setattr(config, "OLLAMA_BASE_URL", base_url)
+        monkeypatch.setattr(config, "OLLAMA_API_KEY", api_key)
+>       monkeypatch.setattr(config, "OLLAMA_PROTOCOL", protocol)
+E       AttributeError: <module 'config' from '/home/user/workspace/sovereign_ai/backend/config.py'> has no attribute 'OLLAMA_PROTOCOL'
+
+tests/test_brain_openai_protocol.py:93: AttributeError
+___________________ test_client_openai_failures_return_none ____________________
+
+openai_brain = <function openai_brain.<locals>._enable at 0x7fa4fdda7e20>
+
+    def test_client_openai_failures_return_none(openai_brain):
+        """أي فشل (خطأ HTTP / استجابة بلا choices / محتوى فارغ) → None لا استثناء."""
+        import ollama_client
+        # خطأ HTTP
+        server, _ = _make_fake_openai(status=500)
+        try:
+>           openai_brain(f"http://127.0.0.1:{server.server_address[1]}")
+
+tests/test_brain_openai_protocol.py:154: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+base_url = 'http://127.0.0.1:43459', model = 'cloud-model', api_key = None
+protocol = 'openai'
+
+    def _enable(base_url, model="cloud-model", api_key=None, protocol="openai"):
+        monkeypatch.setattr(config, "OLLAMA_ENABLED", True)
+        monkeypatch.setattr(config, "OLLAMA_MODEL", model)
+        monkeypatch.setattr(config, "OLLAMA_BASE_URL", base_url)
+        monkeypatch.setattr(config, "OLLAMA_API_KEY", api_key)
+>       monkeypatch.setattr(config, "OLLAMA_PROTOCOL", protocol)
+E       AttributeError: <module 'config' from '/home/user/workspace/sovereign_ai/backend/config.py'> has no attribute 'OLLAMA_PROTOCOL'
+
+tests/test_brain_openai_protocol.py:93: AttributeError
+______________________ test_unknown_protocol_fails_closed ______________________
+
+openai_brain = <function openai_brain.<locals>._enable at 0x7fa4fdc06520>
+
+    def test_unknown_protocol_fails_closed(openai_brain):
+        """قيمة بروتوكول غير معروفة → None بلا أي طلب يخرج من العملية (fail-closed)."""
+        import ollama_client
+        server, seen = _make_fake_openai()
+        try:
+>           openai_brain(f"http://127.0.0.1:{server.server_address[1]}", protocol="weird")
+
+tests/test_brain_openai_protocol.py:179: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+base_url = 'http://127.0.0.1:34077', model = 'cloud-model', api_key = None
+protocol = 'weird'
+
+    def _enable(base_url, model="cloud-model", api_key=None, protocol="openai"):
+        monkeypatch.setattr(config, "OLLAMA_ENABLED", True)
+        monkeypatch.setattr(config, "OLLAMA_MODEL", model)
+        monkeypatch.setattr(config, "OLLAMA_BASE_URL", base_url)
+        monkeypatch.setattr(config, "OLLAMA_API_KEY", api_key)
+>       monkeypatch.setattr(config, "OLLAMA_PROTOCOL", protocol)
+E       AttributeError: <module 'config' from '/home/user/workspace/sovereign_ai/backend/config.py'> has no attribute 'OLLAMA_PROTOCOL'
+
+tests/test_brain_openai_protocol.py:93: AttributeError
+________________________ test_disabled_makes_no_request ________________________
+
+openai_brain = <function openai_brain.<locals>._enable at 0x7fa4fdda6840>
+
+    def test_disabled_makes_no_request(openai_brain):
+        """العقل معطل → لا طلب إطلاقًا (لا اتصال ضمني — نمط R-704/R-720)."""
+        import ollama_client
+        server, seen = _make_fake_openai()
+        try:
+>           openai_brain(f"http://127.0.0.1:{server.server_address[1]}")
+
+tests/test_brain_openai_protocol.py:191: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+base_url = 'http://127.0.0.1:36543', model = 'cloud-model', api_key = None
+protocol = 'openai'
+
+    def _enable(base_url, model="cloud-model", api_key=None, protocol="openai"):
+        monkeypatch.setattr(config, "OLLAMA_ENABLED", True)
+        monkeypatch.setattr(config, "OLLAMA_MODEL", model)
+        monkeypatch.setattr(config, "OLLAMA_BASE_URL", base_url)
+        monkeypatch.setattr(config, "OLLAMA_API_KEY", api_key)
+>       monkeypatch.setattr(config, "OLLAMA_PROTOCOL", protocol)
+E       AttributeError: <module 'config' from '/home/user/workspace/sovereign_ai/backend/config.py'> has no attribute 'OLLAMA_PROTOCOL'
+
+tests/test_brain_openai_protocol.py:93: AttributeError
+______________________ test_build_reply_uses_openai_model ______________________
+
+openai_brain = <function openai_brain.<locals>._enable at 0x7fa4fdc065c0>
+
+    def test_build_reply_uses_openai_model(openai_brain):
+        """build_reply يعيد نص النموذج عبر البروتوكول الجديد — مسار الرد كاملًا."""
+        server, _ = _make_fake_openai(content="رد العقل السحابي الحي")
+        try:
+>           openai_brain(f"http://127.0.0.1:{server.server_address[1]}")
+
+tests/test_brain_openai_protocol.py:203: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+base_url = 'http://127.0.0.1:40781', model = 'cloud-model', api_key = None
+protocol = 'openai'
+
+    def _enable(base_url, model="cloud-model", api_key=None, protocol="openai"):
+        monkeypatch.setattr(config, "OLLAMA_ENABLED", True)
+        monkeypatch.setattr(config, "OLLAMA_MODEL", model)
+        monkeypatch.setattr(config, "OLLAMA_BASE_URL", base_url)
+        monkeypatch.setattr(config, "OLLAMA_API_KEY", api_key)
+>       monkeypatch.setattr(config, "OLLAMA_PROTOCOL", protocol)
+E       AttributeError: <module 'config' from '/home/user/workspace/sovereign_ai/backend/config.py'> has no attribute 'OLLAMA_PROTOCOL'
+
+tests/test_brain_openai_protocol.py:93: AttributeError
+_________________ test_build_reply_falls_back_when_openai_down _________________
+
+openai_brain = <function openai_brain.<locals>._enable at 0x7fa4fdc06b60>
+
+    def test_build_reply_falls_back_when_openai_down(openai_brain):
+        """عطل المزود → القوالب القائمة كما هي (سقوط آمن مُثبت)."""
+>       openai_brain("http://127.0.0.1:1")  # منفذ ميت — رفض اتصال فوري
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_brain_openai_protocol.py:212: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+base_url = 'http://127.0.0.1:1', model = 'cloud-model', api_key = None
+protocol = 'openai'
+
+    def _enable(base_url, model="cloud-model", api_key=None, protocol="openai"):
+        monkeypatch.setattr(config, "OLLAMA_ENABLED", True)
+        monkeypatch.setattr(config, "OLLAMA_MODEL", model)
+        monkeypatch.setattr(config, "OLLAMA_BASE_URL", base_url)
+        monkeypatch.setattr(config, "OLLAMA_API_KEY", api_key)
+>       monkeypatch.setattr(config, "OLLAMA_PROTOCOL", protocol)
+E       AttributeError: <module 'config' from '/home/user/workspace/sovereign_ai/backend/config.py'> has no attribute 'OLLAMA_PROTOCOL'
+
+tests/test_brain_openai_protocol.py:93: AttributeError
+_____________________ test_chat_endpoint_uses_openai_model _____________________
+
+openai_brain = <function openai_brain.<locals>._enable at 0x7fa4fdda6160>
+
+    def test_chat_endpoint_uses_openai_model(openai_brain):
+        """نقطة /chat الفعلية: نص النموذج السحابي يظهر في استجابة HTTP — دمج كامل."""
+        from app import app as fastapi_app, chat_rate_limiter
+        from fastapi.testclient import TestClient
+    
+        server, _ = _make_fake_openai(content="رد العقل السحابي عبر المحادثة")
+        try:
+>           openai_brain(f"http://127.0.0.1:{server.server_address[1]}")
+
+tests/test_brain_openai_protocol.py:225: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+base_url = 'http://127.0.0.1:44249', model = 'cloud-model', api_key = None
+protocol = 'openai'
+
+    def _enable(base_url, model="cloud-model", api_key=None, protocol="openai"):
+        monkeypatch.setattr(config, "OLLAMA_ENABLED", True)
+        monkeypatch.setattr(config, "OLLAMA_MODEL", model)
+        monkeypatch.setattr(config, "OLLAMA_BASE_URL", base_url)
+        monkeypatch.setattr(config, "OLLAMA_API_KEY", api_key)
+>       monkeypatch.setattr(config, "OLLAMA_PROTOCOL", protocol)
+E       AttributeError: <module 'config' from '/home/user/workspace/sovereign_ai/backend/config.py'> has no attribute 'OLLAMA_PROTOCOL'
+
+tests/test_brain_openai_protocol.py:93: AttributeError
+----------------------------- Captured stderr call -----------------------------
+2026-10-23 14:44:35,790 - app - INFO - ✅ NexusCore REST API مفعّل (/nexus/*)
+2026-10-23 14:44:35,797 - backend.compat.nexus_router_compat - INFO - ✅ Nexus recommendations compat middleware registered (original GET /nexus/recommendations now returns live pending)
+2026-10-23 14:44:35,810 - tool_registry - INFO - R-729: أداة مسجلة في السجل — health.snapshot
+2026-10-23 14:44:35,810 - tool_registry - INFO - R-729: أداة مسجلة في السجل — memory.stats
+2026-10-23 14:44:35,810 - tool_registry - INFO - R-729: أداة مسجلة في السجل — disk.status
+2026-10-23 14:44:35,810 - tool_registry - INFO - R-729: أداة مسجلة في السجل — brain.status
+2026-10-23 14:44:35,810 - tool_registry - INFO - R-729: أداة مسجلة في السجل — sovereignty.score
+------------------------------ Captured log call -------------------------------
+INFO     app:app.py:304 ✅ NexusCore REST API مفعّل (/nexus/*)
+INFO     backend.compat.nexus_router_compat:nexus_router_compat.py:142 ✅ Nexus recommendations compat middleware registered (original GET /nexus/recommendations now returns live pending)
+INFO     tool_registry:tool_registry.py:52 R-729: أداة مسجلة في السجل — health.snapshot
+INFO     tool_registry:tool_registry.py:52 R-729: أداة مسجلة في السجل — memory.stats
+INFO     tool_registry:tool_registry.py:52 R-729: أداة مسجلة في السجل — disk.status
+INFO     tool_registry:tool_registry.py:52 R-729: أداة مسجلة في السجل — brain.status
+INFO     tool_registry:tool_registry.py:52 R-729: أداة مسجلة في السجل — sovereignty.score
+________________ test_chat_endpoint_falls_back_when_openai_down ________________
+
+openai_brain = <function openai_brain.<locals>._enable at 0x7fa4f7d52fc0>
+
+    def test_chat_endpoint_falls_back_when_openai_down(openai_brain):
+        """نقطة /chat الفعلية: عطل المزود → رد احتياطي غير فارغ (لا فشل 500)."""
+        from app import app as fastapi_app, chat_rate_limiter
+        from fastapi.testclient import TestClient
+    
+>       openai_brain("http://127.0.0.1:1")
+
+tests/test_brain_openai_protocol.py:242: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+base_url = 'http://127.0.0.1:1', model = 'cloud-model', api_key = None
+protocol = 'openai'
+
+    def _enable(base_url, model="cloud-model", api_key=None, protocol="openai"):
+        monkeypatch.setattr(config, "OLLAMA_ENABLED", True)
+        monkeypatch.setattr(config, "OLLAMA_MODEL", model)
+        monkeypatch.setattr(config, "OLLAMA_BASE_URL", base_url)
+        monkeypatch.setattr(config, "OLLAMA_API_KEY", api_key)
+>       monkeypatch.setattr(config, "OLLAMA_PROTOCOL", protocol)
+E       AttributeError: <module 'config' from '/home/user/workspace/sovereign_ai/backend/config.py'> has no attribute 'OLLAMA_PROTOCOL'
+
+tests/test_brain_openai_protocol.py:93: AttributeError
+_______________ test_brain_status_reports_protocol_and_last_call _______________
+
+openai_brain = <function openai_brain.<locals>._enable at 0x7fa4f7d53380>
+
+    def test_brain_status_reports_protocol_and_last_call(openai_brain):
+        """/brain/status يعلن البروتوكول بصدق + آخر نتيجة استدعاء (مميزان: مفعّل ≠ ناجح)
+        — بلا أي سر في المخرجات (نمط /api-key)."""
+        import ollama_client
+        from fastapi.testclient import TestClient
+        from app import app
+    
+        server, _ = _make_fake_openai(content="رد حي")
+        try:
+>           openai_brain(f"http://127.0.0.1:{server.server_address[1]}")
+
+tests/test_brain_openai_protocol.py:259: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+base_url = 'http://127.0.0.1:43091', model = 'cloud-model', api_key = None
+protocol = 'openai'
+
+    def _enable(base_url, model="cloud-model", api_key=None, protocol="openai"):
+        monkeypatch.setattr(config, "OLLAMA_ENABLED", True)
+        monkeypatch.setattr(config, "OLLAMA_MODEL", model)
+        monkeypatch.setattr(config, "OLLAMA_BASE_URL", base_url)
+        monkeypatch.setattr(config, "OLLAMA_API_KEY", api_key)
+>       monkeypatch.setattr(config, "OLLAMA_PROTOCOL", protocol)
+E       AttributeError: <module 'config' from '/home/user/workspace/sovereign_ai/backend/config.py'> has no attribute 'OLLAMA_PROTOCOL'
+
+tests/test_brain_openai_protocol.py:93: AttributeError
+__________________ test_brain_status_reports_last_call_error ___________________
+
+openai_brain = <function openai_brain.<locals>._enable at 0x7fa4f7d53420>
+
+    def test_brain_status_reports_last_call_error(openai_brain):
+        """فشل الاستدعاء يظهر في last_call بصدق (خطأ معلن لا نجاح كاذب)."""
+        import ollama_client
+        from fastapi.testclient import TestClient
+        from app import app
+    
+>       openai_brain("http://127.0.0.1:1")  # منفذ ميت
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_brain_openai_protocol.py:282: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+base_url = 'http://127.0.0.1:1', model = 'cloud-model', api_key = None
+protocol = 'openai'
+
+    def _enable(base_url, model="cloud-model", api_key=None, protocol="openai"):
+        monkeypatch.setattr(config, "OLLAMA_ENABLED", True)
+        monkeypatch.setattr(config, "OLLAMA_MODEL", model)
+        monkeypatch.setattr(config, "OLLAMA_BASE_URL", base_url)
+        monkeypatch.setattr(config, "OLLAMA_API_KEY", api_key)
+>       monkeypatch.setattr(config, "OLLAMA_PROTOCOL", protocol)
+E       AttributeError: <module 'config' from '/home/user/workspace/sovereign_ai/backend/config.py'> has no attribute 'OLLAMA_PROTOCOL'
+
+tests/test_brain_openai_protocol.py:93: AttributeError
+__________________ test_brain_status_protocol_ollama_default ___________________
+
+openai_brain = <function openai_brain.<locals>._enable at 0x7fa4f7d53060>
+
+    def test_brain_status_protocol_ollama_default(openai_brain):
+        """البروتوكول الافتراضي (ollama) يظل معلنًا كما كان — لا انحدار."""
+        from fastapi.testclient import TestClient
+        from app import app
+    
+>       openai_brain("http://127.0.0.1:11434", protocol="ollama")
+
+tests/test_brain_openai_protocol.py:295: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+base_url = 'http://127.0.0.1:11434', model = 'cloud-model', api_key = None
+protocol = 'ollama'
+
+    def _enable(base_url, model="cloud-model", api_key=None, protocol="openai"):
+        monkeypatch.setattr(config, "OLLAMA_ENABLED", True)
+        monkeypatch.setattr(config, "OLLAMA_MODEL", model)
+        monkeypatch.setattr(config, "OLLAMA_BASE_URL", base_url)
+        monkeypatch.setattr(config, "OLLAMA_API_KEY", api_key)
+>       monkeypatch.setattr(config, "OLLAMA_PROTOCOL", protocol)
+E       AttributeError: <module 'config' from '/home/user/workspace/sovereign_ai/backend/config.py'> has no attribute 'OLLAMA_PROTOCOL'
+
+tests/test_brain_openai_protocol.py:93: AttributeError
+_____________________ test_config_protocol_default_and_env _____________________
+
+tmp_path = PosixPath('/tmp/pytest-of-user/pytest-0/test_config_protocol_default_a0')
+
+    def test_config_protocol_default_and_env(tmp_path):
+        """OLLAMA_PROTOCOL: الافتراضي "ollama"، ويُقرأ من البيئة/الملف بمعزل
+        عن قواعد مفتاح السيد (نمط test_ollama_config — عملية مستقلة)."""
+        env = {k: v for k, v in os.environ.items() if not k.startswith("OLLAMA_")}
+        env["OLLAMA_ENV_FILE"] = str(tmp_path / "absent.env")
+        code = "import config; print(config.OLLAMA_PROTOCOL)"
+        r1 = subprocess.run([sys.executable, "-c", code], cwd="backend",
+                            env=env, capture_output=True, text=True)
+>       assert r1.returncode == 0, r1.stderr
+E       AssertionError: /home/user/workspace/sovereign_ai/backend/config.py:355: UserWarning: ⚠️ CORS مفتوح للجميع — مقبول في التطوير فقط (D-034)
+E           warnings.warn("⚠️ CORS مفتوح للجميع — مقبول في التطوير فقط (D-034)")
+E         Traceback (most recent call last):
+E           File "<string>", line 1, in <module>
+E         AttributeError: module 'config' has no attribute 'OLLAMA_PROTOCOL'
+E         
+E       assert 1 == 0
+E        +  where 1 = CompletedProcess(args=['/home/user/workspace/sovereign_ai/.venv/bin/python', '-c', 'import config; print(config.OLLAMA...t):\n  File "<string>", line 1, in <module>\nAttributeError: module \'config\' has no attribute \'OLLAMA_PROTOCOL\'\n').returncode
+
+tests/test_brain_openai_protocol.py:310: AssertionError
+=============================== warnings summary ===============================
+backend/config.py:355
+tests/test_brain_openai_protocol.py::test_chat_endpoint_uses_openai_model
+  /home/user/workspace/sovereign_ai/backend/config.py:355: UserWarning: ⚠️ CORS مفتوح للجميع — مقبول في التطوير فقط (D-034)
+    warnings.warn("⚠️ CORS مفتوح للجميع — مقبول في التطوير فقط (D-034)")
+
+tests/test_brain_openai_protocol.py::test_chat_endpoint_uses_openai_model
+  /home/user/workspace/sovereign_ai/.venv/lib/python3.11/site-packages/starlette/testclient.py:40: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.
+    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_brain_openai_protocol.py::test_client_openai_request_and_parse
+FAILED tests/test_brain_openai_protocol.py::test_client_openai_bearer_when_key_set
+FAILED tests/test_brain_openai_protocol.py::test_client_openai_base_url_with_version_path
+FAILED tests/test_brain_openai_protocol.py::test_client_openai_failures_return_none
+FAILED tests/test_brain_openai_protocol.py::test_unknown_protocol_fails_closed
+FAILED tests/test_brain_openai_protocol.py::test_disabled_makes_no_request - ...
+FAILED tests/test_brain_openai_protocol.py::test_build_reply_uses_openai_model
+FAILED tests/test_brain_openai_protocol.py::test_build_reply_falls_back_when_openai_down
+FAILED tests/test_brain_openai_protocol.py::test_chat_endpoint_uses_openai_model
+FAILED tests/test_brain_openai_protocol.py::test_chat_endpoint_falls_back_when_openai_down
+FAILED tests/test_brain_openai_protocol.py::test_brain_status_reports_protocol_and_last_call
+FAILED tests/test_brain_openai_protocol.py::test_brain_status_reports_last_call_error
+FAILED tests/test_brain_openai_protocol.py::test_brain_status_protocol_ollama_default
+FAILED tests/test_brain_openai_protocol.py::test_config_protocol_default_and_env
+14 failed, 3 warnings in 5.79s

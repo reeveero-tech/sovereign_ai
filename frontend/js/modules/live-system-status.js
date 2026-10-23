@@ -19,9 +19,20 @@
         var el = ensureContainer();
         if (!el) return;
         var d = disk && disk.enabled ? "☁️ مفعّل" : disk ? "💾 القرص معطل" : "⚠️ غير متصل";
-        var b = brain && brain.enabled ?
-                "🧠 عقل: " + (brain.model || "نموذج؟") :
-                brain ? "📋 ردود القوالب (لا عقل)" : "⚠️ غير متصل";
+        var b;
+        if (!brain) {
+            b = "⚠️ غير متصل";
+        } else if (!brain.enabled) {
+            b = "📋 ردود القوالب (لا عقل)";
+        } else {
+            // R-736 (دقة): المضبوط معروض (النموذج) + المرصود (آخر استدعاء) —
+            // لا ادعاء نجاح قبل أول استدلال فعلي
+            var lastTxt = "لم يُستدعَ بعد";
+            if (brain.last_call && brain.last_call.result === "ok") lastTxt = "ناجح";
+            else if (brain.last_call && brain.last_call.result === "error") lastTxt = "فاشل (سقوط للقوالب)";
+            else if (brain.last_call && brain.last_call.result === "misconfigured") lastTxt = "إعداد غير معروف";
+            b = "🧠 عقل: " + (brain.model || "نموذج؟") + " · آخر استدعاء: " + lastTxt;
+        }
         // R-732 (البند ٣.٦): حالة المجدول من /scheduler/status — عدد التشغيلات الفعلية
         var s;
         if (!sched) {

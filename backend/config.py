@@ -272,6 +272,14 @@ OLLAMA_BASE_URL = _ollama_env("OLLAMA_BASE_URL", "http://127.0.0.1:11434")
 # (مثال: OLLAMA_MODEL=qwen2.5:7b — مناسب للعربية).
 OLLAMA_MODEL = _ollama_env("OLLAMA_MODEL", None)
 
+# R-736 (البند ٢.١ — عقل المنشور): بروتوكول العقل على السلك —
+# "ollama" (الافتراضي: POST {base}/api/chat — النفق المحلي/Ollama Cloud)
+# أو "openai" (متوافق OpenAI: POST {base}/chat/completions — Groq/OpenRouter/
+# أي مزود متوافق). في وضع openai تكون BASE_URL بادئة الإصدار كاملة
+# (مثال: https://api.groq.com/openai/v1 أو https://openrouter.ai/api/v1)
+# ويُلحق بها /chat/completions مرة واحدة. القيمة المجهولة تُغلق fail-closed.
+OLLAMA_PROTOCOL = (_ollama_env("OLLAMA_PROTOCOL", "ollama") or "ollama").strip().lower() or "ollama"
+
 # مفتاح API اختياري — Ollama المحلي لا يتطلب توثيقًا (يبقى None).
 OLLAMA_API_KEY = _ollama_env("OLLAMA_API_KEY", None)
 

@@ -813,19 +813,52 @@ async def brain_status():
 
 
 def _brain_status_payload() -> Dict[str, Any]:
-    """حمولة /brain/status — تخدم النقطة وأداة السجل brain.status (R-729)."""
+    """حمولة /brain/status — تخدم النقطة وأداة السجل brain.status (R-729).
+
+    R-736 (البند ٢.١): يُعلن البروتوكول الضابط (ollama/openai — أو «invalid»
+    لقيمة مجهولة بلا صدى للقيمة الخام) وآخر نتيجة استدعاء (last_call).
+    R-736 (دقة): reply_source «المرصود» لا «المضبوط» — «model» فقط بعد
+    استدلال ناجح فعلاً و«unverified» بعده (لا ادعاء قبل الدليل). والعنوان
+    يُعرض معقّمًا: بلا بيانات اعتماد ولا استعلام ولا شبيه سلسلة (نمط
+    لا-سر في المخرجات — /api-key و/disk/status).
+    """
+    import ollama_client as _brain_client
     import config as _config
+    from urllib.parse import urlsplit
     enabled = bool(_config.OLLAMA_ENABLED and _config.OLLAMA_MODEL)
+    outcome = _brain_client.last_outcome()
     if not enabled:
         return {"brain": "disabled", "enabled": False,
-                "reply_source": "templates"}
+                "reply_source": "templates", "last_call": outcome}
+    protocol = getattr(_config, "OLLAMA_PROTOCOL", "ollama")
+    if protocol not in ("ollama", "openai"):
+        protocol = "invalid"  # لا صدى للقيمة الخام (قد تحمل سرًا)
+    # المرصود: مصدر آخر رد فعلي — لا ادعاء نجاح قبل أول استدلال ناجح
+    if outcome.get("result") == "ok":
+        reply_source = "model"
+    elif outcome.get("result") == "none":
+        reply_source = "unverified"
+    else:
+        reply_source = "templates-fallback"
+    raw = urlsplit(str(_config.OLLAMA_BASE_URL))
+    netloc = raw.hostname or ""
+    try:
+        if raw.port is not None:
+            netloc = f"{netloc}:{raw.port}"
+        scheme = f"{raw.scheme}://" if (raw.scheme and netloc) else ""
+        safe_base = f"{scheme}{netloc}{raw.path}"
+    except ValueError:
+        # منفذ مشوه (مثل :bad) — لا 500 ولا صدى للعنوان الخام أبدًا
+        safe_base = "<عنوان مضبوط غير قابل للعرض>"
     return {
         "brain": "enabled",
         "enabled": True,
-        "reply_source": "ollama",
+        "reply_source": reply_source,
+        "protocol": protocol,
         "model": _config.OLLAMA_MODEL,
-        "base_url": str(_config.OLLAMA_BASE_URL),
+        "base_url": safe_base,
         "timeout_seconds": _config.OLLAMA_TIMEOUT_SECONDS,
+        "last_call": outcome,
     }
 
 

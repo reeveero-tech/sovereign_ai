@@ -161,6 +161,14 @@
         "js/modules/live-health-chart.js"
       ],
       "note": "error_count + last_error لكل مكون"
+    },
+    {
+      "element": "live-system-status",
+      "endpoint": "GET /brain/status",
+      "field": "last_call",
+      "writers": [
+        "js/modules/live-system-status.js"
+      ]
     }
   ],
   "client": [

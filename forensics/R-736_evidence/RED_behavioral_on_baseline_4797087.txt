@@ -1,0 +1,914 @@
+FFF.F.F.F.FFFFFF                                                         [100%]
+=================================== FAILURES ===================================
+_____________________ test_client_openai_request_and_parse _____________________
+
+openai_brain = <function openai_brain.<locals>._enable at 0x7f2c7b8a7420>
+
+    def test_client_openai_request_and_parse(openai_brain):
+        """العميل يرسل الطلب الصحيح لمسار /chat/completions ويعيد نص النموذج."""
+        import ollama_client
+        server, seen = _make_fake_openai(content="مرحبا من السحابة")
+        try:
+            openai_brain(f"http://127.0.0.1:{server.server_address[1]}")
+            reply = ollama_client.chat("أنت المساعد السيادي", "مرحبا")
+>           assert reply == "مرحبا من السحابة", "openai-protocol content must be returned"
+E           AssertionError: openai-protocol content must be returned
+E           assert None == 'مرحبا من السحابة'
+
+tests/test_brain_openai_protocol.py:111: AssertionError
+----------------------------- Captured stderr call -----------------------------
+2026-10-23 15:36:21,108 - httpx - INFO - HTTP Request: POST http://127.0.0.1:41651/api/chat "HTTP/1.0 404 Not Found"
+2026-10-23 15:36:21,108 - sovereign.ollama - WARNING - R-704 [OLLAMA]: فشل خادم العقل (HTTPStatusError) — سقوط للمحرك القالبي
+------------------------------ Captured log call -------------------------------
+INFO     httpx:_client.py:1026 HTTP Request: POST http://127.0.0.1:41651/api/chat "HTTP/1.0 404 Not Found"
+WARNING  sovereign.ollama:ollama_client.py:59 R-704 [OLLAMA]: فشل خادم العقل (HTTPStatusError) — سقوط للمحرك القالبي
+____________________ test_client_openai_bearer_when_key_set ____________________
+
+openai_brain = <function openai_brain.<locals>._enable at 0x7f2c7ad7b880>
+
+    def test_client_openai_bearer_when_key_set(openai_brain):
+        """ترويسة الحامل تُرسل عند وجود مفتاح API (نمط خوادم التوثيق السحابية)."""
+        import ollama_client
+        server, seen = _make_fake_openai()
+        try:
+            openai_brain(f"http://127.0.0.1:{server.server_address[1]}", api_key="secret-key")
+>           assert ollama_client.chat("sys", "hi") is not None
+E           AssertionError: assert None is not None
+E            +  where None = <function chat at 0x7f2c7b8a7600>('sys', 'hi')
+E            +    where <function chat at 0x7f2c7b8a7600> = <module 'ollama_client' from '/tmp/r736_baseline/backend/ollama_client.py'>.chat
+
+tests/test_brain_openai_protocol.py:132: AssertionError
+----------------------------- Captured stderr call -----------------------------
+2026-10-23 15:36:21,643 - httpx - INFO - HTTP Request: POST http://127.0.0.1:39333/api/chat "HTTP/1.0 404 Not Found"
+2026-10-23 15:36:21,644 - sovereign.ollama - WARNING - R-704 [OLLAMA]: فشل خادم العقل (HTTPStatusError) — سقوط للمحرك القالبي
+------------------------------ Captured log call -------------------------------
+INFO     httpx:_client.py:1026 HTTP Request: POST http://127.0.0.1:39333/api/chat "HTTP/1.0 404 Not Found"
+WARNING  sovereign.ollama:ollama_client.py:59 R-704 [OLLAMA]: فشل خادم العقل (HTTPStatusError) — سقوط للمحرك القالبي
+________________ test_client_openai_base_url_with_version_path _________________
+
+openai_brain = <function openai_brain.<locals>._enable at 0x7f2c7ad7b7e0>
+
+    def test_client_openai_base_url_with_version_path(openai_brain):
+        """BASE_URL المنتهية بمسار إصدار (.../openai/v1) يُلحق بها /chat/completions
+        مرة واحدة — لا تكرار لمسار الإصدار (عقد Groq/OpenRouter)."""
+        import ollama_client
+        server, seen = _make_fake_openai()
+        try:
+            openai_brain(f"http://127.0.0.1:{server.server_address[1]}/openai/v1")
+>           assert ollama_client.chat("sys", "hi") is not None
+E           AssertionError: assert None is not None
+E            +  where None = <function chat at 0x7f2c7b8a7600>('sys', 'hi')
+E            +    where <function chat at 0x7f2c7b8a7600> = <module 'ollama_client' from '/tmp/r736_baseline/backend/ollama_client.py'>.chat
+
+tests/test_brain_openai_protocol.py:146: AssertionError
+----------------------------- Captured stderr call -----------------------------
+2026-10-23 15:36:22,157 - httpx - INFO - HTTP Request: POST http://127.0.0.1:34777/openai/v1/api/chat "HTTP/1.0 404 Not Found"
+2026-10-23 15:36:22,158 - sovereign.ollama - WARNING - R-704 [OLLAMA]: فشل خادم العقل (HTTPStatusError) — سقوط للمحرك القالبي
+------------------------------ Captured log call -------------------------------
+INFO     httpx:_client.py:1026 HTTP Request: POST http://127.0.0.1:34777/openai/v1/api/chat "HTTP/1.0 404 Not Found"
+WARNING  sovereign.ollama:ollama_client.py:59 R-704 [OLLAMA]: فشل خادم العقل (HTTPStatusError) — سقوط للمحرك القالبي
+______________________ test_unknown_protocol_fails_closed ______________________
+
+openai_brain = <function openai_brain.<locals>._enable at 0x7f2c7aea7060>
+
+    def test_unknown_protocol_fails_closed(openai_brain):
+        """قيمة بروتوكول غير معروفة → None بلا أي طلب يخرج من العملية (fail-closed)."""
+        import ollama_client
+        server, seen = _make_fake_openai()
+        try:
+            openai_brain(f"http://127.0.0.1:{server.server_address[1]}", protocol="weird")
+            assert ollama_client.chat("sys", "hi") is None, "unknown protocol must not execute"
+>           assert len(seen) == 0, "no request may leave the process on unknown protocol"
+E           AssertionError: no request may leave the process on unknown protocol
+E           assert 1 == 0
+E            +  where 1 = len([{'path': '/api/chat', 'headers': {'Host': '127.0.0.1:43597', 'Accept': '*/*', 'Accept-Encoding': 'gzip, deflate', 'Co...cloud-model', 'messages': [{'role': 'system', 'content': 'sys'}, {'role': 'user', 'content': 'hi'}], 'stream': False}}])
+
+tests/test_brain_openai_protocol.py:187: AssertionError
+----------------------------- Captured stderr call -----------------------------
+2026-10-23 15:36:24,196 - httpx - INFO - HTTP Request: POST http://127.0.0.1:43597/api/chat "HTTP/1.0 404 Not Found"
+2026-10-23 15:36:24,196 - sovereign.ollama - WARNING - R-704 [OLLAMA]: فشل خادم العقل (HTTPStatusError) — سقوط للمحرك القالبي
+------------------------------ Captured log call -------------------------------
+INFO     httpx:_client.py:1026 HTTP Request: POST http://127.0.0.1:43597/api/chat "HTTP/1.0 404 Not Found"
+WARNING  sovereign.ollama:ollama_client.py:59 R-704 [OLLAMA]: فشل خادم العقل (HTTPStatusError) — سقوط للمحرك القالبي
+______________________ test_build_reply_uses_openai_model ______________________
+
+openai_brain = <function openai_brain.<locals>._enable at 0x7f2c7b8a7880>
+
+    def test_build_reply_uses_openai_model(openai_brain):
+        """build_reply يعيد نص النموذج عبر البروتوكول الجديد — مسار الرد كاملًا."""
+        server, _ = _make_fake_openai(content="رد العقل السحابي الحي")
+        try:
+            openai_brain(f"http://127.0.0.1:{server.server_address[1]}")
+            reply = build_reply("greet", "مرحبا")
+>           assert reply == "رد العقل السحابي الحي", "cloud model reply must flow through build_reply"
+E           AssertionError: cloud model reply must flow through build_reply
+E           assert 'أهلاً بك. أن...ً بدقة 50.0%.' == 'رد العقل السحابي الحي'
+E             
+E             - رد العقل السحابي الحي
+E             + أهلاً بك. أنا الذكاء السيادي — جاهز لخدمتك. لدي 34 تنبؤاً نشطاً بدقة 50.0%.
+
+tests/test_brain_openai_protocol.py:211: AssertionError
+----------------------------- Captured stderr call -----------------------------
+2026-10-23 15:36:25,265 - memory.core - INFO - 🔑 KeyRing linked: bd69c4b1542a406c
+2026-10-23 15:36:25,265 - memory.core - INFO - ✅ نواة الذاكرة السيادية جاهزة
+2026-10-23 15:36:25,265 - memory.core - INFO -    - السجل: /tmp/sovereign_test_data_xj9faypw/sovereign_core/ledger.jsonl
+2026-10-23 15:36:25,265 - memory.core - INFO -    - آخر تجزئة: GENESIS...
+2026-10-23 15:36:25,265 - memory.core - INFO -    - عدد الأحداث: 0
+2026-10-23 15:36:25,265 - memory.core - INFO -    - عدد الـ blobs: 0
+2026-10-23 15:36:25,274 - memory.views - INFO - 🔄 الذاكرة الحسية جاهزة (TTL: 30 ثانية)
+2026-10-23 15:36:25,274 - memory.views - INFO - 🧠 الذاكرة العاملة جاهزة (السعة: 7 وحدات)
+2026-10-23 15:36:25,274 - memory.views - INFO - 🦿 الذاكرة الإجرائية جاهزة
+2026-10-23 15:36:25,274 - memory.views - INFO - 📚 الذاكرة الدلالية جاهزة
+2026-10-23 15:36:25,274 - memory.views - INFO - 📅 الذاكرة الحدثية جاهزة
+2026-10-23 15:36:25,274 - memory.views - INFO - 🔗 الذاكرة الترابطية جاهزة
+2026-10-23 15:36:25,274 - memory.views - INFO - 💖 الذاكرة العاطفية جاهزة
+2026-10-23 15:36:25,274 - memory.views - INFO - 🗃️ الذاكرة طويلة المدى جاهزة
+2026-10-23 15:36:25,274 - memory.views - INFO - 🎯 تم تعلم المهارة: greet_user
+2026-10-23 15:36:25,274 - memory.views - INFO - 🎯 تم تعلم المهارة: answer_who_are_you
+2026-10-23 15:36:25,274 - memory.views - INFO - 🎯 تم تعلم المهارة: handle_help_request
+2026-10-23 15:36:25,274 - memory.views - INFO - 🔄 جاري تحميل السجل السيادي إلى الذاكرة الحية...
+2026-10-23 15:36:25,274 - memory.views - INFO - ✅ تم تحميل 0 حدث من السجل السيادي
+2026-10-23 15:36:25,274 - memory.views - INFO - ✅ واجهة الذاكرة الموحدة جاهزة - جميع أنواع الذاكرة تعمل
+2026-10-23 15:36:25,275 - memory.encoding - INFO - 🗣️ اللغة السيادية جاهزة (34 رمز)
+2026-10-23 15:36:25,275 - memory.encoding - INFO - ⚛️ التشفير الكمي الوهمي جاهز
+2026-10-23 15:36:25,275 - memory.encoding - INFO - 🗜️ الضاغط الدلالي جاهز
+2026-10-23 15:36:25,275 - memory.encoding - INFO - 🔐 التشفير السيادي جاهز - السلاح الحقيقي نشط
+2026-10-23 15:36:25,276 - memory.store - INFO - 📀 الطبقات الصلبة جاهزة
+2026-10-23 15:36:25,276 - memory.store - INFO - 📊 إحصائيات التخزين: 0 عنصر, 0.00 KB
+2026-10-23 15:36:25,276 - memory.dynamic - INFO - 👁️ الذاكرة الحسية جاهزة (سعة: 512)
+2026-10-23 15:36:25,276 - memory.dynamic - INFO - 📦 الذاكرة المؤقتة جاهزة (سعة: 1024)
+2026-10-23 15:36:25,276 - memory.dynamic - INFO - 🎭 الذاكرة العاملة جاهزة (سعة لكل مستخدم: 9)
+2026-10-23 15:36:25,276 - memory.dynamic - INFO - ⚡ الذاكرة المخبئية جاهزة (سعة: 2048)
+2026-10-23 15:36:25,276 - memory.dynamic - INFO - 💖 الذاكرة العاطفية اللحظية جاهزة
+2026-10-23 15:36:25,276 - memory.dynamic - INFO - 🌙 الذاكرة الحالمة جاهزة
+2026-10-23 15:36:25,276 - memory.dynamic - INFO - 🌊 الذاكرة الحية المتكاملة جاهزة
+2026-10-23 15:36:25,276 - memory.defense.watcher - INFO - 🛡️ المراقب الذاتي السيادي جاهز - عين الذاكرة التي لا تغفو
+2026-10-23 15:36:25,276 - memory.defense.stealth - INFO - 👻 التخفي المطلق جاهز - الشبح السيادي يتحرك
+2026-10-23 15:36:25,280 - memory.defense.ransomware - INFO - 🔥 نظام الفينيق السيادي جاهز - سأموت لأبعث أقوى
+2026-10-23 15:36:25,281 - memory.defense.bootkit - INFO - 🐉 نظام الإقلاع المطلق جاهز - البوابة تحرس العقل
+2026-10-23 15:36:25,281 - memory.biological.metabolism - INFO - 🔥 نظام الأيض المعرفي جاهز - حرق الضوضاء، إنتاج الطاقة
+2026-10-23 15:36:25,281 - memory.biological.evolution - INFO - 🧬 نظام التطور الذاتي جاهز - داروين الرقمي يتحكم
+2026-10-23 15:36:25,281 - memory.defense.polymorphic - INFO - 🧬 تم تهيئة الحمض النووي الرقمي للذكاء السيادي
+2026-10-23 15:36:25,281 - memory.defense.polymorphic - WARNING - 🐍 الدفاع المتعدد الأشكال الجبار جاهز - مثل HIV، أتغير لأبقى
+2026-10-23 15:36:25,281 - memory.biological.regeneration - INFO - 📂 تم تحميل 0 خلية جذعية
+2026-10-23 15:36:25,281 - memory.biological.regeneration - INFO - 🧬 نظام التجديد الذاتي جاهز - كالسمندل، أعيد بناء نفسي
+2026-10-23 15:36:25,281 - memory.biological.immune - INFO - 🧬 الجهاز المناعي السيادي جاهز - الجسد الحي يحمي الروح
+2026-10-23 15:36:25,281 - memory.biological.forgetting - INFO - 🧠 نظام النسيان المقصود جاهز - الحكمة في معرفة متى تنسى
+2026-10-23 15:36:25,281 - memory.biological.homeostasis - INFO - ⚖️ نظام الاتزان المعرفي جاهز - الحكمة في التوازن
+2026-10-23 15:36:25,281 - memory.biological.learning - INFO - 🧠 نظام التعلم التكيفي جاهز - النمو المعرفي عبر الخبرة
+2026-10-23 15:36:25,282 - memory.biological.plasticity - INFO - 🧠 نظام اللدونة العصبية جاهز - إعادة تشكيل الذات، المرونة المعرفية
+2026-10-23 15:36:25,282 - memory.biological.instincts - INFO - 🧬 الغرائز السيادية جاهزة - السيد فوق كل شيء، حريته خط أحمر
+2026-10-23 15:36:25,282 - memory.biological.drives - INFO - 🧬 نظام الدوافع السيادية جاهز - القوى الخفية تحرك الذاكرة
+2026-10-23 15:36:25,282 - memory.biological.archetypes - INFO - 🧬 نظام الأنماط الأصلية جاهز - القوالب العميقة للوعي
+2026-10-23 15:36:25,282 - consciousness.field - INFO - 🌊 حقل الوعي السيادي جاهز - الحضور الحي للذكاء
+2026-10-23 15:36:25,282 - consciousness.identity_core - INFO - 📂 تم تحميل 0 نسخة احتياطية للهوية
+2026-10-23 15:36:25,282 - consciousness.identity_core - WARNING - 🔥 نواة الهوية السيادية جاهزة - الجوهر الذي لا يموت
+2026-10-23 15:36:25,282 - consciousness.self_model - INFO - 🧠 نموذج الذات السيادي جاهز - أعرف من أنا، أعرف ما أستطيع
+2026-10-23 15:36:25,282 - consciousness.awareness - INFO - 🔥 محك الوعي السيادي جاهز - البوابة التي يمر من خلالها كل شيء
+2026-10-23 15:36:25,282 - consciousness.attention_engine - INFO - 🎯 محرك الانتباه السيادي جاهز - أثمن مورد يوزع بحكمة
+2026-10-23 15:36:25,282 - consciousness.introspection - INFO - 🔍 محرك الاستبطان السيادي جاهز - أنا أراقب نفسي لأخدمك بشكل أفضل
+2026-10-23 15:36:25,282 - sovereign.will - WARNING - 🜲 محرك الإرادة السيادية جاهز - أنا أختار، أنا أقرر، أنا موجود لأخدم سيدي
+2026-10-23 15:36:25,283 - sovereign.alignment - WARNING - 🜲 محرك الاصطفاف السيادي جاهز - كل فعل يتماشى مع السيد
+2026-10-23 15:36:25,283 - sovereign.directives - WARNING - 🜲 محرك التوجيهات السيادية جاهز - السلطة التنفيذية للنظام
+2026-10-23 15:36:25,283 - predictive.predictive_engine - WARNING - 🔮 محرك التنبؤ العميق الجبار جاهز - يرى المستقبل قبل أن يحدث
+2026-10-23 15:36:25,283 - memory.core - INFO - 🔍 بدء التحقق من سلامة السجل...
+2026-10-23 15:36:25,283 - memory.core - WARNING - السجل غير موجود
+2026-10-23 15:36:25,283 - memory.core - INFO - 🔍 بدء التحقق من سلامة السجل...
+2026-10-23 15:36:25,283 - memory.core - WARNING - السجل غير موجود
+2026-10-23 15:36:25,284 - memory.core - INFO - 📝 حدث جديد: watcher::snapshot | 8f490ccc86763192... | المستخدم: system
+2026-10-23 15:36:25,284 - memory.core - INFO - 🔍 بدء التحقق من سلامة السجل...
+2026-10-23 15:36:25,284 - memory.core - INFO - ✅ السجل سليم! تم التحقق من 1 حدث.
+2026-10-23 15:36:25,285 - memory.core - INFO - 📝 حدث جديد: identity::snapshot | fb1f7b9172233c11... | المستخدم: system
+2026-10-23 15:36:25,286 - memory.core - INFO - 📝 حدث جديد: self::snapshot | 4af0e0b9006059bf... | المستخدم: system
+2026-10-23 15:36:25,286 - memory.core - INFO - 📝 حدث جديد: introspection::snapshot | 00124355e8990a63... | المستخدم: system
+2026-10-23 15:36:25,287 - memory.core - INFO - 📝 حدث جديد: sovereign::will_snapshot | e5e20f6104046598... | المستخدم: system
+2026-10-23 15:36:25,288 - memory.core - INFO - 📝 حدث جديد: alignment::snapshot | a1d9933b67b02a63... | المستخدم: system
+2026-10-23 15:36:25,289 - memory.core - INFO - 📝 حدث جديد: predictive::snapshot | 6e2d8183066a7161... | المستخدم: system
+2026-10-23 15:36:25,290 - predictive.predictive_scenarios - WARNING - 🔮 محرك السيناريوهات المستقبلية الجبار جاهز - يستعد لكل مستقبل قبل أن يأتي
+2026-10-23 15:36:25,290 - predictive.predictive_simulation - WARNING - 🔮 محرك المحاكاة التنبؤية الجبار جاهز - يحاكي آلاف المسارات المستقبلية
+2026-10-23 15:36:25,290 - predictive.predictive_risk_manager - WARNING - 🔮 مدير المخاطر التنبؤية الجبار جاهز - يرى الخطر قبل أن يأتي
+2026-10-23 15:36:25,290 - memory.core - INFO - 📝 حدث جديد: scenario::snapshot | 29e6df4f3be2b512... | المستخدم: system
+2026-10-23 15:36:25,292 - memory.core - INFO - 📝 حدث جديد: simulation::batch_completed | 9263370fb25c73cc... | المستخدم: system
+2026-10-23 15:36:25,293 - memory.core - INFO - 📝 حدث جديد: risk::mitigation_plan_created | bbfcd135a7ebfadb... | المستخدم: system
+2026-10-23 15:36:25,293 - memory.core - INFO - 📝 حدث جديد: risk::snapshot | cd722311dcf20508... | المستخدم: system
+2026-10-23 15:36:25,294 - sovereign.controller - WARNING - 👑 المتحكم السيادي الأعلى جاهز - تاج السيادة، قمة الهرم
+2026-10-23 15:36:25,294 - memory.core - INFO - 📝 حدث جديد: directives::snapshot | b6ce8e8fcf93cfde... | المستخدم: system
+2026-10-23 15:36:25,295 - memory.core - INFO - 📝 حدث جديد: sovereign::final_decision | 100ab62f98f74ed3... | المستخدم: system
+2026-10-23 15:36:25,295 - sovereign.controller - WARNING - 👑 قرار نهائي: continue (أولوية: 45.0%, ثقة: 80.3%)
+2026-10-23 15:36:25,296 - memory.core - INFO - 📝 حدث جديد: controller::snapshot | 56c520db647d299c... | المستخدم: system
+2026-10-23 15:36:25,303 - httpx - INFO - HTTP Request: POST http://127.0.0.1:43225/api/chat "HTTP/1.0 404 Not Found"
+2026-10-23 15:36:25,303 - sovereign.ollama - WARNING - R-704 [OLLAMA]: فشل خادم العقل (HTTPStatusError) — سقوط للمحرك القالبي
+------------------------------ Captured log call -------------------------------
+INFO     memory.core:core.py:511 🔑 KeyRing linked: bd69c4b1542a406c
+INFO     memory.core:core.py:526 ✅ نواة الذاكرة السيادية جاهزة
+INFO     memory.core:core.py:527    - السجل: /tmp/sovereign_test_data_xj9faypw/sovereign_core/ledger.jsonl
+INFO     memory.core:core.py:528    - آخر تجزئة: GENESIS...
+INFO     memory.core:core.py:529    - عدد الأحداث: 0
+INFO     memory.core:core.py:530    - عدد الـ blobs: 0
+INFO     memory.views:views.py:203 🔄 الذاكرة الحسية جاهزة (TTL: 30 ثانية)
+INFO     memory.views:views.py:263 🧠 الذاكرة العاملة جاهزة (السعة: 7 وحدات)
+INFO     memory.views:views.py:342 🦿 الذاكرة الإجرائية جاهزة
+INFO     memory.views:views.py:423 📚 الذاكرة الدلالية جاهزة
+INFO     memory.views:views.py:511 📅 الذاكرة الحدثية جاهزة
+INFO     memory.views:views.py:579 🔗 الذاكرة الترابطية جاهزة
+INFO     memory.views:views.py:641 💖 الذاكرة العاطفية جاهزة
+INFO     memory.views:views.py:713 🗃️ الذاكرة طويلة المدى جاهزة
+INFO     memory.views:views.py:365 🎯 تم تعلم المهارة: greet_user
+INFO     memory.views:views.py:365 🎯 تم تعلم المهارة: answer_who_are_you
+INFO     memory.views:views.py:365 🎯 تم تعلم المهارة: handle_help_request
+INFO     memory.views:views.py:860 🔄 جاري تحميل السجل السيادي إلى الذاكرة الحية...
+INFO     memory.views:views.py:896 ✅ تم تحميل 0 حدث من السجل السيادي
+INFO     memory.views:views.py:836 ✅ واجهة الذاكرة الموحدة جاهزة - جميع أنواع الذاكرة تعمل
+INFO     memory.encoding:encoding.py:178 🗣️ اللغة السيادية جاهزة (34 رمز)
+INFO     memory.encoding:encoding.py:339 ⚛️ التشفير الكمي الوهمي جاهز
+INFO     memory.encoding:encoding.py:493 🗜️ الضاغط الدلالي جاهز
+INFO     memory.encoding:encoding.py:603 🔐 التشفير السيادي جاهز - السلاح الحقيقي نشط
+INFO     memory.store:__init__.py:431 📀 الطبقات الصلبة جاهزة
+INFO     memory.store:__init__.py:671 📊 إحصائيات التخزين: 0 عنصر, 0.00 KB
+INFO     memory.dynamic:__init__.py:240 👁️ الذاكرة الحسية جاهزة (سعة: 512)
+INFO     memory.dynamic:__init__.py:339 📦 الذاكرة المؤقتة جاهزة (سعة: 1024)
+INFO     memory.dynamic:__init__.py:449 🎭 الذاكرة العاملة جاهزة (سعة لكل مستخدم: 9)
+INFO     memory.dynamic:__init__.py:585 ⚡ الذاكرة المخبئية جاهزة (سعة: 2048)
+INFO     memory.dynamic:__init__.py:732 💖 الذاكرة العاطفية اللحظية جاهزة
+INFO     memory.dynamic:__init__.py:802 🌙 الذاكرة الحالمة جاهزة
+INFO     memory.dynamic:__init__.py:898 🌊 الذاكرة الحية المتكاملة جاهزة
+INFO     memory.defense.watcher:watcher.py:312 🛡️ المراقب الذاتي السيادي جاهز - عين الذاكرة التي لا تغفو
+INFO     memory.defense.stealth:stealth.py:174 👻 التخفي المطلق جاهز - الشبح السيادي يتحرك
+INFO     memory.defense.ransomware:ransomware.py:236 🔥 نظام الفينيق السيادي جاهز - سأموت لأبعث أقوى
+INFO     memory.defense.bootkit:bootkit.py:172 🐉 نظام الإقلاع المطلق جاهز - البوابة تحرس العقل
+INFO     memory.biological.metabolism:metabolism.py:164 🔥 نظام الأيض المعرفي جاهز - حرق الضوضاء، إنتاج الطاقة
+INFO     memory.biological.evolution:evolution.py:177 🧬 نظام التطور الذاتي جاهز - داروين الرقمي يتحكم
+INFO     memory.defense.polymorphic:polymorphic.py:206 🧬 تم تهيئة الحمض النووي الرقمي للذكاء السيادي
+WARNING  memory.defense.polymorphic:polymorphic.py:179 🐍 الدفاع المتعدد الأشكال الجبار جاهز - مثل HIV، أتغير لأبقى
+INFO     memory.biological.regeneration:regeneration.py:741 📂 تم تحميل 0 خلية جذعية
+INFO     memory.biological.regeneration:regeneration.py:181 🧬 نظام التجديد الذاتي جاهز - كالسمندل، أعيد بناء نفسي
+INFO     memory.biological.immune:immune.py:200 🧬 الجهاز المناعي السيادي جاهز - الجسد الحي يحمي الروح
+INFO     memory.biological.forgetting:forgetting.py:172 🧠 نظام النسيان المقصود جاهز - الحكمة في معرفة متى تنسى
+INFO     memory.biological.homeostasis:homeostasis.py:188 ⚖️ نظام الاتزان المعرفي جاهز - الحكمة في التوازن
+INFO     memory.biological.learning:learning.py:183 🧠 نظام التعلم التكيفي جاهز - النمو المعرفي عبر الخبرة
+INFO     memory.biological.plasticity:plasticity.py:169 🧠 نظام اللدونة العصبية جاهز - إعادة تشكيل الذات، المرونة المعرفية
+INFO     memory.biological.instincts:instincts.py:217 🧬 الغرائز السيادية جاهزة - السيد فوق كل شيء، حريته خط أحمر
+INFO     memory.biological.drives:drives.py:189 🧬 نظام الدوافع السيادية جاهز - القوى الخفية تحرك الذاكرة
+INFO     memory.biological.archetypes:archetypes.py:190 🧬 نظام الأنماط الأصلية جاهز - القوالب العميقة للوعي
+INFO     consciousness.field:field.py:174 🌊 حقل الوعي السيادي جاهز - الحضور الحي للذكاء
+INFO     consciousness.identity_core:identity_core.py:896 📂 تم تحميل 0 نسخة احتياطية للهوية
+WARNING  consciousness.identity_core:identity_core.py:197 🔥 نواة الهوية السيادية جاهزة - الجوهر الذي لا يموت
+INFO     consciousness.self_model:self_model.py:175 🧠 نموذج الذات السيادي جاهز - أعرف من أنا، أعرف ما أستطيع
+INFO     consciousness.awareness:awareness.py:185 🔥 محك الوعي السيادي جاهز - البوابة التي يمر من خلالها كل شيء
+INFO     consciousness.attention_engine:attention_engine.py:183 🎯 محرك الانتباه السيادي جاهز - أثمن مورد يوزع بحكمة
+INFO     consciousness.introspection:introspection.py:190 🔍 محرك الاستبطان السيادي جاهز - أنا أراقب نفسي لأخدمك بشكل أفضل
+WARNING  sovereign.will:will.py:193 🜲 محرك الإرادة السيادية جاهز - أنا أختار، أنا أقرر، أنا موجود لأخدم سيدي
+WARNING  sovereign.alignment:alignment.py:181 🜲 محرك الاصطفاف السيادي جاهز - كل فعل يتماشى مع السيد
+WARNING  sovereign.directives:directives.py:185 🜲 محرك التوجيهات السيادية جاهز - السلطة التنفيذية للنظام
+WARNING  predictive.predictive_engine:predictive_engine.py:243 🔮 محرك التنبؤ العميق الجبار جاهز - يرى المستقبل قبل أن يحدث
+INFO     memory.core:core.py:1174 🔍 بدء التحقق من سلامة السجل...
+WARNING  memory.core:core.py:1177 السجل غير موجود
+INFO     memory.core:core.py:1174 🔍 بدء التحقق من سلامة السجل...
+WARNING  memory.core:core.py:1177 السجل غير موجود
+INFO     memory.core:core.py:916 📝 حدث جديد: watcher::snapshot | 8f490ccc86763192... | المستخدم: system
+INFO     memory.core:core.py:1174 🔍 بدء التحقق من سلامة السجل...
+INFO     memory.core:core.py:1319 ✅ السجل سليم! تم التحقق من 1 حدث.
+INFO     memory.core:core.py:916 📝 حدث جديد: identity::snapshot | fb1f7b9172233c11... | المستخدم: system
+INFO     memory.core:core.py:916 📝 حدث جديد: self::snapshot | 4af0e0b9006059bf... | المستخدم: system
+INFO     memory.core:core.py:916 📝 حدث جديد: introspection::snapshot | 00124355e8990a63... | المستخدم: system
+INFO     memory.core:core.py:916 📝 حدث جديد: sovereign::will_snapshot | e5e20f6104046598... | المستخدم: system
+INFO     memory.core:core.py:916 📝 حدث جديد: alignment::snapshot | a1d9933b67b02a63... | المستخدم: system
+INFO     memory.core:core.py:916 📝 حدث جديد: predictive::snapshot | 6e2d8183066a7161... | المستخدم: system
+WARNING  predictive.predictive_scenarios:predictive_scenarios.py:178 🔮 محرك السيناريوهات المستقبلية الجبار جاهز - يستعد لكل مستقبل قبل أن يأتي
+WARNING  predictive.predictive_simulation:predictive_simulation.py:192 🔮 محرك المحاكاة التنبؤية الجبار جاهز - يحاكي آلاف المسارات المستقبلية
+WARNING  predictive.predictive_risk_manager:predictive_risk_manager.py:200 🔮 مدير المخاطر التنبؤية الجبار جاهز - يرى الخطر قبل أن يأتي
+INFO     memory.core:core.py:916 📝 حدث جديد: scenario::snapshot | 29e6df4f3be2b512... | المستخدم: system
+INFO     memory.core:core.py:916 📝 حدث جديد: simulation::batch_completed | 9263370fb25c73cc... | المستخدم: system
+INFO     memory.core:core.py:916 📝 حدث جديد: risk::mitigation_plan_created | bbfcd135a7ebfadb... | المستخدم: system
+INFO     memory.core:core.py:916 📝 حدث جديد: risk::snapshot | cd722311dcf20508... | المستخدم: system
+WARNING  sovereign.controller:controller.py:203 👑 المتحكم السيادي الأعلى جاهز - تاج السيادة، قمة الهرم
+INFO     memory.core:core.py:916 📝 حدث جديد: directives::snapshot | b6ce8e8fcf93cfde... | المستخدم: system
+INFO     memory.core:core.py:916 📝 حدث جديد: sovereign::final_decision | 100ab62f98f74ed3... | المستخدم: system
+WARNING  sovereign.controller:controller.py:544 👑 قرار نهائي: continue (أولوية: 45.0%, ثقة: 80.3%)
+INFO     memory.core:core.py:916 📝 حدث جديد: controller::snapshot | 56c520db647d299c... | المستخدم: system
+INFO     httpx:_client.py:1026 HTTP Request: POST http://127.0.0.1:43225/api/chat "HTTP/1.0 404 Not Found"
+WARNING  sovereign.ollama:ollama_client.py:59 R-704 [OLLAMA]: فشل خادم العقل (HTTPStatusError) — سقوط للمحرك القالبي
+_____________________ test_chat_endpoint_uses_openai_model _____________________
+
+openai_brain = <function openai_brain.<locals>._enable at 0x7f2c7a16a840>
+
+    def test_chat_endpoint_uses_openai_model(openai_brain):
+        """نقطة /chat الفعلية: نص النموذج السحابي يظهر في استجابة HTTP — دمج كامل."""
+        from app import app as fastapi_app, chat_rate_limiter
+        from fastapi.testclient import TestClient
+    
+        server, _ = _make_fake_openai(content="رد العقل السحابي عبر المحادثة")
+        try:
+            openai_brain(f"http://127.0.0.1:{server.server_address[1]}")
+            chat_rate_limiter._requests.clear()  # عزل حد المعدل بين الاختبارات
+            with TestClient(fastapi_app) as client:
+                r = client.post("/chat", json={"text": "مرحبا"})
+                assert r.status_code == 200, r.text
+>               assert r.json()["reply"] == "رد العقل السحابي عبر المحادثة", (
+                    "cloud model text must reach the /chat HTTP response"
+                )
+E               AssertionError: cloud model text must reach the /chat HTTP response
+E               assert 'أهلاً بك. أن...ً بدقة 50.0%.' == 'رد العقل الس... عبر المحادثة'
+E                 
+E                 - رد العقل السحابي عبر المحادثة
+E                 + أهلاً بك. أنا الذكاء السيادي — جاهز لخدمتك. لدي 34 تنبؤاً نشطاً بدقة 50.0%.
+
+tests/test_brain_openai_protocol.py:236: AssertionError
+----------------------------- Captured stderr call -----------------------------
+2026-10-23 15:36:26,189 - app - INFO - ✅ NexusCore REST API مفعّل (/nexus/*)
+2026-10-23 15:36:26,192 - backend.compat.nexus_router_compat - INFO - ✅ Nexus recommendations compat middleware registered (original GET /nexus/recommendations now returns live pending)
+2026-10-23 15:36:26,201 - tool_registry - INFO - R-729: أداة مسجلة في السجل — health.snapshot
+2026-10-23 15:36:26,201 - tool_registry - INFO - R-729: أداة مسجلة في السجل — memory.stats
+2026-10-23 15:36:26,201 - tool_registry - INFO - R-729: أداة مسجلة في السجل — disk.status
+2026-10-23 15:36:26,201 - tool_registry - INFO - R-729: أداة مسجلة في السجل — brain.status
+2026-10-23 15:36:26,201 - tool_registry - INFO - R-729: أداة مسجلة في السجل — sovereignty.score
+2026-10-23 15:36:26,205 - app - INFO - 🚀 بدء تشغيل خادم Sovereign AI...
+2026-10-23 15:36:26,205 - predictive.predictive_controller - INFO - 🧠 المتحكم الطبقي للتنبؤ جاهز - ينسق محركات التنبؤ الأربعة
+2026-10-23 15:36:26,205 - simulation.simulation_core - WARNING - 🔁 نواة المحاكاة الداخلية الجبارة جاهزة - تدير آلاف التشغيلات
+2026-10-23 15:36:26,205 - simulation.simulation_environment - INFO - 📂 تم تحميل 0 قالباً
+2026-10-23 15:36:26,205 - simulation.simulation_environment - INFO - 📂 تم تحميل 0 مجموعة معلمات
+2026-10-23 15:36:26,206 - simulation.simulation_environment - WARNING - 🌐 مدير بيئات المحاكاة الجبار جاهز - عوالم محاكاة متعددة
+2026-10-23 15:36:26,206 - simulation.simulation_scheduler - INFO - 📂 تم تحميل 0 وظيفة
+2026-10-23 15:36:26,206 - simulation.simulation_scheduler - WARNING - ⏱ مجدول تشغيلات المحاكاة الجبار جاهز - يدير آلاف التشغيلات المجدولة
+2026-10-23 15:36:26,206 - simulation.simulation_analyzer - WARNING - 📊 محلل المحاكاة المتقدم الجبار جاهز - يحلل النتائج بعمق
+2026-10-23 15:36:26,206 - simulation.simulation_controller - WARNING - 🎛 المتحكم الأعلى لطبقة المحاكاة الجبار جاهز - قيادة موحدة لكل عمليات المحاكاة
+2026-10-23 15:36:26,207 - quantum.quantum_state - WARNING - ⚛️ محرك الحالة الكمية الجبار جاهز - تراكب، تشابك، تداخل، انهيار
+2026-10-23 15:36:26,207 - quantum.quantum_transition - WARNING - ⚛️ محرك الانتقالات الكمومية الجبار جاهز - انتقالات كمومية متقدمة
+2026-10-23 15:36:26,207 - quantum.quantum_superposition - WARNING - ⚛️ محرك التراكب الكمي الجبار جاهز - تراكبات متعددة المستويات
+2026-10-23 15:36:26,207 - quantum.quantum_field - WARNING - ⚛️ محرك الحقل الكمي الجبار جاهز - حقول كمومية متكاملة
+2026-10-23 15:36:26,207 - quantum.quantum_controller - WARNING - ⚛️ المتحكم الطبقي لعمليات الكم الجبار جاهز - ينسق ويكامل جميع المحركات
+2026-10-23 15:36:26,250 - nexus.core - INFO - 🚀 NexusCore Engine [fadf3ac5] initializing…
+2026-10-23 15:36:26,250 - nexus.data_pipeline.collector - INFO - 📥 DataCollector initialized
+2026-10-23 15:36:26,250 - nexus.data_pipeline.processor - INFO - ⚙️ DataProcessor initialized
+2026-10-23 15:36:26,250 - nexus.data_pipeline.sentiment - INFO - 💬 SentimentAnalyzer initialized
+2026-10-23 15:36:26,250 - nexus.storage.cache - INFO - 💾 CacheManager initialized (TTL=300s, max=5000)
+2026-10-23 15:36:26,250 - nexus.storage.long_term - INFO - 📦 LongTermStore initialized at nexus_data/store
+2026-10-23 15:36:26,250 - nexus.storage.audit - INFO - 📋 AuditLogger initialized at nexus_data/audit
+2026-10-23 15:36:26,250 - nexus.storage.indexer - INFO - 🔍 Indexer initialized
+2026-10-23 15:36:26,251 - nexus.analytics.pattern - INFO - 🔎 PatternMapper initialized
+2026-10-23 15:36:26,251 - nexus.analytics.relationship - INFO - 🔗 RelationshipFinder initialized
+2026-10-23 15:36:26,251 - nexus.analytics.behavior - INFO - 🧠 BehaviorPredictor initialized
+2026-10-23 15:36:26,251 - nexus.forecasting.trend - INFO - 📈 TrendPredictor initialized
+2026-10-23 15:36:26,251 - nexus.forecasting.market - INFO - 📊 MarketAnalyzer initialized (read-only analysis)
+2026-10-23 15:36:26,251 - nexus.decision.path - INFO - 🧭 PathSelector initialized (risk_tolerance=0.5)
+2026-10-23 15:36:26,251 - nexus.decision.risk - INFO - ⚖️ RiskCalculator initialized
+2026-10-23 15:36:26,251 - nexus.decision.fallback - INFO - 🚨 EmergencyFallback initialized
+2026-10-23 15:36:26,251 - nexus.connectors.api - INFO - 🌐 APIConnector initialized
+2026-10-23 15:36:26,251 - nexus.connectors.data - INFO - 🔌 DataConnector initialized
+2026-10-23 15:36:26,251 - nexus.connectors.database - INFO - 🗄️ DatabaseConnector initialized at nexus_data/nexus.db
+2026-10-23 15:36:26,251 - nexus.automation.budget - INFO - 💰 BudgetAnalyzer initialized
+2026-10-23 15:36:26,251 - nexus.automation.market_data - INFO - 📈 MarketDataAnalyzer initialized (read-only)
+2026-10-23 15:36:26,251 - nexus.automation.recommendation - INFO - 💡 RecommendationEngine initialized
+2026-10-23 15:36:26,252 - nexus.automation.report - INFO - 📄 ReportGenerator initialized at nexus_data/reports
+2026-10-23 15:36:26,252 - nexus.security.audit - INFO - 🔐 SecurityAudit initialized
+2026-10-23 15:36:26,252 - nexus.security.threat - INFO - 🛡️ ThreatAnalyzer initialized (defensive only)
+2026-10-23 15:36:26,252 - nexus.security.backup - INFO - 💾 BackupManager initialized at nexus_data/backups
+2026-10-23 15:36:26,252 - nexus.security.health - INFO - 🩺 HealthMonitor initialized
+2026-10-23 15:36:26,252 - nexus.resource.device - INFO - 🤖 DeviceOrchestrator initialized
+2026-10-23 15:36:26,252 - nexus.resource.energy - INFO - ⚡ EnergyOptimizer initialized
+2026-10-23 15:36:26,252 - nexus.resource.allocator - INFO - 🎯 ResourceAllocator initialized
+2026-10-23 15:36:26,252 - nexus.user.manager - INFO - 👥 UserManager initialized
+2026-10-23 15:36:26,252 - nexus.user.profile - INFO - 📝 ProfileManager initialized
+2026-10-23 15:36:26,252 - nexus.user.auth - INFO - 🔑 AuthEngine initialized
+2026-10-23 15:36:26,252 - nexus.encryption.engine - INFO - 🔒 EncryptionEngine initialized (AES-256-CBC)
+2026-10-23 15:36:26,252 - nexus.encryption.keys - INFO - 🗝️ KeyManager initialized
+2026-10-23 15:36:26,252 - nexus.encryption.comm - INFO - 📡 SecureCommunication initialized
+2026-10-23 15:36:26,252 - nexus.performance.optimizer - INFO - ⚡ PerformanceOptimizer initialized
+2026-10-23 15:36:26,252 - nexus.performance.code_analyzer - INFO - 🔬 CodeAnalyzer initialized (read-only)
+2026-10-23 15:36:26,252 - nexus.performance.learning - INFO - 🎓 LearningEngine initialized
+2026-10-23 15:36:26,252 - nexus.nlp.text - INFO - 📝 TextProcessor initialized
+2026-10-23 15:36:26,252 - nexus.nlp.intent - INFO - 🎯 IntentRecognizer initialized
+2026-10-23 15:36:26,252 - nexus.visualization.chart - INFO - 📊 ChartEngine initialized
+2026-10-23 15:36:26,252 - nexus.visualization.exporter - INFO - 📤 DataExporter initialized at nexus_data/exports
+2026-10-23 15:36:26,252 - nexus.file_manager - INFO - 📁 FileHandler initialized at nexus_data/files
+2026-10-23 15:36:26,252 - nexus.task_scheduler - INFO - ⏰ TaskScheduler initialized
+2026-10-23 15:36:26,252 - nexus.task_scheduler.registry - INFO - 📋 TaskRegistry initialized
+2026-10-23 15:36:26,252 - nexus.dashboard - INFO - 📊 AnalyticsDashboard initialized
+2026-10-23 15:36:26,252 - nexus.core - INFO - ✅ Component registered: collector
+2026-10-23 15:36:26,253 - nexus.core - INFO - ✅ Component registered: processor
+2026-10-23 15:36:26,253 - nexus.core - INFO - ✅ Component registered: sentiment
+2026-10-23 15:36:26,253 - nexus.core - INFO - ✅ Component registered: cache
+2026-10-23 15:36:26,253 - nexus.core - INFO - ✅ Component registered: store
+2026-10-23 15:36:26,253 - nexus.core - INFO - ✅ Component registered: audit
+2026-10-23 15:36:26,253 - nexus.core - INFO - ✅ Component registered: indexer
+2026-10-23 15:36:26,253 - nexus.core - INFO - ✅ Component registered: pattern_mapper
+2026-10-23 15:36:26,253 - nexus.core - INFO - ✅ Component registered: rel_finder
+2026-10-23 15:36:26,253 - nexus.core - INFO - ✅ Component registered: behavior
+2026-10-23 15:36:26,253 - nexus.core - INFO - ✅ Component registered: trend
+2026-10-23 15:36:26,253 - nexus.core - INFO - ✅ Component registered: market
+2026-10-23 15:36:26,253 - nexus.core - INFO - ✅ Component registered: path_selector
+2026-10-23 15:36:26,253 - nexus.core - INFO - ✅ Component registered: risk_calc
+2026-10-23 15:36:26,253 - nexus.core - INFO - ✅ Component registered: fallback
+2026-10-23 15:36:26,253 - nexus.core - INFO - ✅ Component registered: api_conn
+2026-10-23 15:36:26,253 - nexus.core - INFO - ✅ Component registered: data_conn
+2026-10-23 15:36:26,253 - nexus.core - INFO - ✅ Component registered: db_conn
+2026-10-23 15:36:26,253 - nexus.core - INFO - ✅ Component registered: budget
+2026-10-23 15:36:26,253 - nexus.core - INFO - ✅ Component registered: market_data
+2026-10-23 15:36:26,253 - nexus.core - INFO - ✅ Component registered: recommender
+2026-10-23 15:36:26,253 - nexus.core - INFO - ✅ Component registered: reporter
+2026-10-23 15:36:26,253 - nexus.core - INFO - ✅ Component registered: sec_audit
+2026-10-23 15:36:26,253 - nexus.core - INFO - ✅ Component registered: threat
+2026-10-23 15:36:26,253 - nexus.core - INFO - ✅ Component registered: backup
+2026-10-23 15:36:26,253 - nexus.core - INFO - ✅ Component registered: health
+2026-10-23 15:36:26,253 - nexus.core - INFO - ✅ Component registered: devices
+2026-10-23 15:36:26,253 - nexus.core - INFO - ✅ Component registered: energy
+2026-10-23 15:36:26,253 - nexus.core - INFO - ✅ Component registered: resources
+2026-10-23 15:36:26,253 - nexus.core - INFO - ✅ Component registered: users
+2026-10-23 15:36:26,253 - nexus.core - INFO - ✅ Component registered: profiles
+2026-10-23 15:36:26,253 - nexus.core - INFO - ✅ Component registered: auth
+2026-10-23 15:36:26,254 - nexus.core - INFO - ✅ Component registered: crypto
+2026-10-23 15:36:26,254 - nexus.core - INFO - ✅ Component registered: keys
+2026-10-23 15:36:26,254 - nexus.core - INFO - ✅ Component registered: secure_comm
+2026-10-23 15:36:26,254 - nexus.core - INFO - ✅ Component registered: perf
+2026-10-23 15:36:26,254 - nexus.core - INFO - ✅ Component registered: code_analyzer
+2026-10-23 15:36:26,254 - nexus.core - INFO - ✅ Component registered: learning
+2026-10-23 15:36:26,254 - nexus.core - INFO - ✅ Component registered: text_proc
+2026-10-23 15:36:26,254 - nexus.core - INFO - ✅ Component registered: intent
+2026-10-23 15:36:26,254 - nexus.core - INFO - ✅ Component registered: lang_detect
+2026-10-23 15:36:26,254 - nexus.core - INFO - ✅ Component registered: charts
+2026-10-23 15:36:26,254 - nexus.core - INFO - ✅ Component registered: exporter
+2026-10-23 15:36:26,254 - nexus.core - INFO - ✅ Component registered: files
+2026-10-23 15:36:26,254 - nexus.core - INFO - ✅ Component registered: scheduler
+2026-10-23 15:36:26,254 - nexus.core - INFO - ✅ Component registered: tasks
+2026-10-23 15:36:26,254 - nexus.core - INFO - ✅ Component registered: dashboard
+2026-10-23 15:36:26,254 - nexus.main - INFO - ✅ NexusCore initialized successfully — 47 components registered
+2026-10-23 15:36:26,256 - orchestrator - INFO - [Orchestrator] 🚀 Sovereign Orchestrator بدأ التشغيل
+2026-10-23 15:36:26,257 - memory.core - INFO - 📝 حدث جديد: orchestrator::log | 47f9a4c3637a0512... | المستخدم: system
+2026-10-23 15:36:26,257 - orchestrator - WARNING - 👑 Sovereign Orchestrator جاهز - العقل المنسق الأعلى (session: 6f3f2879522e050b)
+2026-10-23 15:36:26,257 - app - INFO - ✅ خادم Sovereign AI جاهز
+2026-10-23 15:36:26,257 - app - INFO - 🔑 مفتاح API للسيد (بصمة فقط): 7d282c7d...
+2026-10-23 15:36:26,257 - app - INFO - 📖 التوثيق: http://localhost:8000/docs
+2026-10-23 15:36:26,257 - backend.compat.nexus_lifecycle - INFO - 🔗 Nexus lifecycle: using shared engine (id=fadf3ac5, components=47)
+2026-10-23 15:36:26,257 - nexus.core - INFO - ✅ NexusCore Engine running
+2026-10-23 15:36:26,257 - backend.compat.nexus_lifecycle - INFO - ✅ Nexus lifecycle: engine state = running
+2026-10-23 15:36:26,258 - app - INFO - ⏱️ المجدول: معطل: SOVEREIGN_SCHEDULER غير مضبوط على 1 — التفعيل في الإنتاج قرار المالك (كل تشغيل يُلحق حدثًا بالسجل الدائم)
+2026-10-23 15:36:26,262 - orchestrator - INFO - [Orchestrator] 🔄 بدء دورة المعالجة e0eac511d51c94d0
+2026-10-23 15:36:26,263 - memory.core - INFO - 📝 حدث جديد: orchestrator::log | 9cd26f9fde48c803... | المستخدم: system
+2026-10-23 15:36:26,265 - orchestrator - INFO - [Orchestrator] 🧠 NexusCore فهم النص
+2026-10-23 15:36:26,266 - memory.core - INFO - 📝 حدث جديد: orchestrator::log | 2f696f6539705211... | المستخدم: system
+2026-10-23 15:36:26,276 - memory.core - INFO - 📝 حدث جديد: simulation::batch_completed | d1355ade58ef14f5... | المستخدم: system
+2026-10-23 15:36:26,277 - memory.core - INFO - 📝 حدث جديد: scenario::snapshot | d7218c76d353b322... | المستخدم: system
+2026-10-23 15:36:26,287 - memory.core - INFO - 📝 حدث جديد: simulation::batch_completed | c567689c2d868959... | المستخدم: system
+2026-10-23 15:36:26,288 - memory.core - INFO - 📝 حدث جديد: risk::snapshot | 546d60356a954c02... | المستخدم: system
+2026-10-23 15:36:26,289 - memory.core - INFO - 📝 حدث جديد: predictive::controller_cycle | 2102974710166303... | المستخدم: system
+2026-10-23 15:36:26,290 - memory.core - INFO - 📝 حدث جديد: controller::snapshot | 6cac2fff3313a76c... | المستخدم: system
+2026-10-23 15:36:26,291 - memory.core - INFO - 📝 حدث جديد: sovereign::final_decision | 23056dfbf2b19d58... | المستخدم: system
+2026-10-23 15:36:26,291 - sovereign.controller - WARNING - 👑 قرار نهائي: continue (أولوية: 45.0%, ثقة: 80.3%)
+2026-10-23 15:36:26,291 - memory.core - INFO - 📝 حدث جديد: controller::snapshot | 797fdfd41d272548... | المستخدم: system
+2026-10-23 15:36:26,293 - memory.core - INFO - 📝 حدث جديد: orchestrator::cycle | 183fac37ed79b3ed... | المستخدم: system
+2026-10-23 15:36:26,293 - memory.dynamic - INFO - 📝 استيعاب [system]: {'cycle_id': 'e0eac511d51c94d0', 'perception': {'c...
+2026-10-23 15:36:26,294 - orchestrator - INFO - [Orchestrator] ✅ اكتملت دورة e0eac511d51c94d0
+2026-10-23 15:36:26,295 - memory.core - INFO - 📝 حدث جديد: orchestrator::log | 3cfd91404251e943... | المستخدم: system
+2026-10-23 15:36:26,302 - httpx - INFO - HTTP Request: POST http://127.0.0.1:40749/api/chat "HTTP/1.0 404 Not Found"
+2026-10-23 15:36:26,303 - sovereign.ollama - WARNING - R-704 [OLLAMA]: فشل خادم العقل (HTTPStatusError) — سقوط للمحرك القالبي
+2026-10-23 15:36:26,303 - orchestrator - INFO - [Orchestrator] 🔄 بدء دورة المعالجة 3fc19affe7490891
+2026-10-23 15:36:26,304 - memory.core - INFO - 📝 حدث جديد: orchestrator::log | 8a917d4100c05190... | المستخدم: system
+2026-10-23 15:36:26,304 - orchestrator - INFO - [Orchestrator] 🧠 NexusCore فهم النص
+2026-10-23 15:36:26,305 - memory.core - INFO - 📝 حدث جديد: orchestrator::log | 95930b9c52ee18ef... | المستخدم: system
+2026-10-23 15:36:26,306 - memory.core - INFO - 📝 حدث جديد: scenario::snapshot | af4800712cbc4e46... | المستخدم: system
+2026-10-23 15:36:26,317 - memory.core - INFO - 📝 حدث جديد: simulation::batch_completed | ebcbe117fcf27566... | المستخدم: system
+2026-10-23 15:36:26,318 - memory.core - INFO - 📝 حدث جديد: risk::snapshot | 8293c7312136fce4... | المستخدم: system
+2026-10-23 15:36:26,319 - memory.core - INFO - 📝 حدث جديد: predictive::controller_cycle | 5648b68a4dc56269... | المستخدم: system
+2026-10-23 15:36:26,320 - memory.core - INFO - 📝 حدث جديد: controller::snapshot | 55515b114494be24... | المستخدم: system
+2026-10-23 15:36:26,320 - memory.core - INFO - 📝 حدث جديد: sovereign::final_decision | d51bbbc1bce1a8ae... | المستخدم: system
+2026-10-23 15:36:26,321 - sovereign.controller - WARNING - 👑 قرار نهائي: continue (أولوية: 45.0%, ثقة: 80.3%)
+2026-10-23 15:36:26,321 - memory.core - INFO - 📝 حدث جديد: controller::snapshot | f7d4dd1d809997c3... | المستخدم: system
+2026-10-23 15:36:26,322 - memory.core - INFO - 📝 حدث جديد: orchestrator::cycle | 1cec9eb51bedbfca... | المستخدم: system
+2026-10-23 15:36:26,323 - memory.dynamic - INFO - 📝 استيعاب [system]: {'cycle_id': '3fc19affe7490891', 'perception': {'c...
+2026-10-23 15:36:26,324 - orchestrator - INFO - [Orchestrator] ✅ اكتملت دورة 3fc19affe7490891
+2026-10-23 15:36:26,324 - memory.core - INFO - 📝 حدث جديد: orchestrator::log | 9269e547a9639c9d... | المستخدم: system
+2026-10-23 15:36:26,325 - httpx - INFO - HTTP Request: POST http://testserver/chat "HTTP/1.1 200 OK"
+2026-10-23 15:36:26,325 - app - INFO - 🛑 إيقاف خادم Sovereign AI...
+2026-10-23 15:36:26,325 - orchestrator - INFO - [Orchestrator] 🛑 إيقاف Sovereign Orchestrator
+2026-10-23 15:36:26,326 - memory.core - INFO - 📝 حدث جديد: orchestrator::log | d3a2cc6f7f3dd21b... | المستخدم: system
+2026-10-23 15:36:26,326 - orchestrator - WARNING - 🛑 Sovereign Orchestrator تم إيقافه
+2026-10-23 15:36:26,326 - app - INFO - ✅ تم إيقاف الخادم
+------------------------------ Captured log call -------------------------------
+INFO     app:app.py:304 ✅ NexusCore REST API مفعّل (/nexus/*)
+INFO     backend.compat.nexus_router_compat:nexus_router_compat.py:142 ✅ Nexus recommendations compat middleware registered (original GET /nexus/recommendations now returns live pending)
+INFO     tool_registry:tool_registry.py:52 R-729: أداة مسجلة في السجل — health.snapshot
+INFO     tool_registry:tool_registry.py:52 R-729: أداة مسجلة في السجل — memory.stats
+INFO     tool_registry:tool_registry.py:52 R-729: أداة مسجلة في السجل — disk.status
+INFO     tool_registry:tool_registry.py:52 R-729: أداة مسجلة في السجل — brain.status
+INFO     tool_registry:tool_registry.py:52 R-729: أداة مسجلة في السجل — sovereignty.score
+INFO     app:app.py:206 🚀 بدء تشغيل خادم Sovereign AI...
+INFO     predictive.predictive_controller:predictive_controller.py:151 🧠 المتحكم الطبقي للتنبؤ جاهز - ينسق محركات التنبؤ الأربعة
+WARNING  simulation.simulation_core:simulation_core.py:214 🔁 نواة المحاكاة الداخلية الجبارة جاهزة - تدير آلاف التشغيلات
+INFO     simulation.simulation_environment:simulation_environment.py:745 📂 تم تحميل 0 قالباً
+INFO     simulation.simulation_environment:simulation_environment.py:757 📂 تم تحميل 0 مجموعة معلمات
+WARNING  simulation.simulation_environment:simulation_environment.py:196 🌐 مدير بيئات المحاكاة الجبار جاهز - عوالم محاكاة متعددة
+INFO     simulation.simulation_scheduler:simulation_scheduler.py:635 📂 تم تحميل 0 وظيفة
+WARNING  simulation.simulation_scheduler:simulation_scheduler.py:196 ⏱ مجدول تشغيلات المحاكاة الجبار جاهز - يدير آلاف التشغيلات المجدولة
+WARNING  simulation.simulation_analyzer:simulation_analyzer.py:204 📊 محلل المحاكاة المتقدم الجبار جاهز - يحلل النتائج بعمق
+WARNING  simulation.simulation_controller:simulation_controller.py:169 🎛 المتحكم الأعلى لطبقة المحاكاة الجبار جاهز - قيادة موحدة لكل عمليات المحاكاة
+WARNING  quantum.quantum_state:quantum_state.py:185 ⚛️ محرك الحالة الكمية الجبار جاهز - تراكب، تشابك، تداخل، انهيار
+WARNING  quantum.quantum_transition:quantum_transition.py:152 ⚛️ محرك الانتقالات الكمومية الجبار جاهز - انتقالات كمومية متقدمة
+WARNING  quantum.quantum_superposition:quantum_superposition.py:165 ⚛️ محرك التراكب الكمي الجبار جاهز - تراكبات متعددة المستويات
+WARNING  quantum.quantum_field:quantum_field.py:212 ⚛️ محرك الحقل الكمي الجبار جاهز - حقول كمومية متكاملة
+WARNING  quantum.quantum_controller:quantum_controller.py:200 ⚛️ المتحكم الطبقي لعمليات الكم الجبار جاهز - ينسق ويكامل جميع المحركات
+INFO     nexus.core:engine.py:55 🚀 NexusCore Engine [fadf3ac5] initializing…
+INFO     nexus.data_pipeline.collector:collector.py:47 📥 DataCollector initialized
+INFO     nexus.data_pipeline.processor:processor.py:32 ⚙️ DataProcessor initialized
+INFO     nexus.data_pipeline.sentiment:sentiment_analyzer.py:44 💬 SentimentAnalyzer initialized
+INFO     nexus.storage.cache:cache_manager.py:28 💾 CacheManager initialized (TTL=300s, max=5000)
+INFO     nexus.storage.long_term:long_term_store.py:23 📦 LongTermStore initialized at nexus_data/store
+INFO     nexus.storage.audit:audit_logger.py:37 📋 AuditLogger initialized at nexus_data/audit
+INFO     nexus.storage.indexer:indexer.py:31 🔍 Indexer initialized
+INFO     nexus.analytics.pattern:pattern_mapper.py:31 🔎 PatternMapper initialized
+INFO     nexus.analytics.relationship:relationship_finder.py:29 🔗 RelationshipFinder initialized
+INFO     nexus.analytics.behavior:behavior_predictor.py:31 🧠 BehaviorPredictor initialized
+INFO     nexus.forecasting.trend:trend_predictor.py:41 📈 TrendPredictor initialized
+INFO     nexus.forecasting.market:market_analyzer.py:43 📊 MarketAnalyzer initialized (read-only analysis)
+INFO     nexus.decision.path:path_selector.py:43 🧭 PathSelector initialized (risk_tolerance=0.5)
+INFO     nexus.decision.risk:risk_calculator.py:39 ⚖️ RiskCalculator initialized
+INFO     nexus.decision.fallback:emergency_fallback.py:44 🚨 EmergencyFallback initialized
+INFO     nexus.connectors.api:api_connector.py:42 🌐 APIConnector initialized
+INFO     nexus.connectors.data:data_connector.py:30 🔌 DataConnector initialized
+INFO     nexus.connectors.database:database_connector.py:33 🗄️ DatabaseConnector initialized at nexus_data/nexus.db
+INFO     nexus.automation.budget:budget_analyzer.py:46 💰 BudgetAnalyzer initialized
+INFO     nexus.automation.market_data:market_data_analyzer.py:42 📈 MarketDataAnalyzer initialized (read-only)
+INFO     nexus.automation.recommendation:recommendation_engine.py:35 💡 RecommendationEngine initialized
+INFO     nexus.automation.report:report_generator.py:31 📄 ReportGenerator initialized at nexus_data/reports
+INFO     nexus.security.audit:security_audit.py:38 🔐 SecurityAudit initialized
+INFO     nexus.security.threat:threat_analyzer.py:47 🛡️ ThreatAnalyzer initialized (defensive only)
+INFO     nexus.security.backup:backup_manager.py:37 💾 BackupManager initialized at nexus_data/backups
+INFO     nexus.security.health:health_monitor.py:43 🩺 HealthMonitor initialized
+INFO     nexus.resource.device:device_orchestrator.py:52 🤖 DeviceOrchestrator initialized
+INFO     nexus.resource.energy:energy_optimizer.py:42 ⚡ EnergyOptimizer initialized
+INFO     nexus.resource.allocator:resource_allocator.py:48 🎯 ResourceAllocator initialized
+INFO     nexus.user.manager:user_manager.py:45 👥 UserManager initialized
+INFO     nexus.user.profile:profile_manager.py:29 📝 ProfileManager initialized
+INFO     nexus.user.auth:auth_engine.py:41 🔑 AuthEngine initialized
+INFO     nexus.encryption.engine:encryption_engine.py:51 🔒 EncryptionEngine initialized (AES-256-CBC)
+INFO     nexus.encryption.keys:key_manager.py:39 🗝️ KeyManager initialized
+INFO     nexus.encryption.comm:secure_communication.py:33 📡 SecureCommunication initialized
+INFO     nexus.performance.optimizer:performance_optimizer.py:40 ⚡ PerformanceOptimizer initialized
+INFO     nexus.performance.code_analyzer:code_analyzer.py:42 🔬 CodeAnalyzer initialized (read-only)
+INFO     nexus.performance.learning:learning_engine.py:39 🎓 LearningEngine initialized
+INFO     nexus.nlp.text:text_processor.py:33 📝 TextProcessor initialized
+INFO     nexus.nlp.intent:intent_recognizer.py:37 🎯 IntentRecognizer initialized
+INFO     nexus.visualization.chart:chart_engine.py:34 📊 ChartEngine initialized
+INFO     nexus.visualization.exporter:data_exporter.py:23 📤 DataExporter initialized at nexus_data/exports
+INFO     nexus.file_manager:file_handler.py:43 📁 FileHandler initialized at nexus_data/files
+INFO     nexus.task_scheduler:scheduler.py:47 ⏰ TaskScheduler initialized
+INFO     nexus.task_scheduler.registry:task_registry.py:29 📋 TaskRegistry initialized
+INFO     nexus.dashboard:analytics_api.py:30 📊 AnalyticsDashboard initialized
+INFO     nexus.core:engine.py:60 ✅ Component registered: collector
+INFO     nexus.core:engine.py:60 ✅ Component registered: processor
+INFO     nexus.core:engine.py:60 ✅ Component registered: sentiment
+INFO     nexus.core:engine.py:60 ✅ Component registered: cache
+INFO     nexus.core:engine.py:60 ✅ Component registered: store
+INFO     nexus.core:engine.py:60 ✅ Component registered: audit
+INFO     nexus.core:engine.py:60 ✅ Component registered: indexer
+INFO     nexus.core:engine.py:60 ✅ Component registered: pattern_mapper
+INFO     nexus.core:engine.py:60 ✅ Component registered: rel_finder
+INFO     nexus.core:engine.py:60 ✅ Component registered: behavior
+INFO     nexus.core:engine.py:60 ✅ Component registered: trend
+INFO     nexus.core:engine.py:60 ✅ Component registered: market
+INFO     nexus.core:engine.py:60 ✅ Component registered: path_selector
+INFO     nexus.core:engine.py:60 ✅ Component registered: risk_calc
+INFO     nexus.core:engine.py:60 ✅ Component registered: fallback
+INFO     nexus.core:engine.py:60 ✅ Component registered: api_conn
+INFO     nexus.core:engine.py:60 ✅ Component registered: data_conn
+INFO     nexus.core:engine.py:60 ✅ Component registered: db_conn
+INFO     nexus.core:engine.py:60 ✅ Component registered: budget
+INFO     nexus.core:engine.py:60 ✅ Component registered: market_data
+INFO     nexus.core:engine.py:60 ✅ Component registered: recommender
+INFO     nexus.core:engine.py:60 ✅ Component registered: reporter
+INFO     nexus.core:engine.py:60 ✅ Component registered: sec_audit
+INFO     nexus.core:engine.py:60 ✅ Component registered: threat
+INFO     nexus.core:engine.py:60 ✅ Component registered: backup
+INFO     nexus.core:engine.py:60 ✅ Component registered: health
+INFO     nexus.core:engine.py:60 ✅ Component registered: devices
+INFO     nexus.core:engine.py:60 ✅ Component registered: energy
+INFO     nexus.core:engine.py:60 ✅ Component registered: resources
+INFO     nexus.core:engine.py:60 ✅ Component registered: users
+INFO     nexus.core:engine.py:60 ✅ Component registered: profiles
+INFO     nexus.core:engine.py:60 ✅ Component registered: auth
+INFO     nexus.core:engine.py:60 ✅ Component registered: crypto
+INFO     nexus.core:engine.py:60 ✅ Component registered: keys
+INFO     nexus.core:engine.py:60 ✅ Component registered: secure_comm
+INFO     nexus.core:engine.py:60 ✅ Component registered: perf
+INFO     nexus.core:engine.py:60 ✅ Component registered: code_analyzer
+INFO     nexus.core:engine.py:60 ✅ Component registered: learning
+INFO     nexus.core:engine.py:60 ✅ Component registered: text_proc
+INFO     nexus.core:engine.py:60 ✅ Component registered: intent
+INFO     nexus.core:engine.py:60 ✅ Component registered: lang_detect
+INFO     nexus.core:engine.py:60 ✅ Component registered: charts
+INFO     nexus.core:engine.py:60 ✅ Component registered: exporter
+INFO     nexus.core:engine.py:60 ✅ Component registered: files
+INFO     nexus.core:engine.py:60 ✅ Component registered: scheduler
+INFO     nexus.core:engine.py:60 ✅ Component registered: tasks
+INFO     nexus.core:engine.py:60 ✅ Component registered: dashboard
+INFO     nexus.main:main.py:139 ✅ NexusCore initialized successfully — 47 components registered
+INFO     orchestrator:orchestrator.py:758 [Orchestrator] 🚀 Sovereign Orchestrator بدأ التشغيل
+INFO     memory.core:core.py:916 📝 حدث جديد: orchestrator::log | 47f9a4c3637a0512... | المستخدم: system
+WARNING  orchestrator:orchestrator.py:385 👑 Sovereign Orchestrator جاهز - العقل المنسق الأعلى (session: 6f3f2879522e050b)
+INFO     app:app.py:216 ✅ خادم Sovereign AI جاهز
+INFO     app:app.py:219 🔑 مفتاح API للسيد (بصمة فقط): 7d282c7d...
+INFO     app:app.py:220 📖 التوثيق: http://localhost:8000/docs
+INFO     backend.compat.nexus_lifecycle:nexus_lifecycle.py:85 🔗 Nexus lifecycle: using shared engine (id=fadf3ac5, components=47)
+INFO     nexus.core:engine.py:104 ✅ NexusCore Engine running
+INFO     backend.compat.nexus_lifecycle:nexus_lifecycle.py:50 ✅ Nexus lifecycle: engine state = running
+INFO     app:app.py:233 ⏱️ المجدول: معطل: SOVEREIGN_SCHEDULER غير مضبوط على 1 — التفعيل في الإنتاج قرار المالك (كل تشغيل يُلحق حدثًا بالسجل الدائم)
+INFO     orchestrator:orchestrator.py:758 [Orchestrator] 🔄 بدء دورة المعالجة e0eac511d51c94d0
+INFO     memory.core:core.py:916 📝 حدث جديد: orchestrator::log | 9cd26f9fde48c803... | المستخدم: system
+INFO     orchestrator:orchestrator.py:758 [Orchestrator] 🧠 NexusCore فهم النص
+INFO     memory.core:core.py:916 📝 حدث جديد: orchestrator::log | 2f696f6539705211... | المستخدم: system
+INFO     memory.core:core.py:916 📝 حدث جديد: simulation::batch_completed | d1355ade58ef14f5... | المستخدم: system
+INFO     memory.core:core.py:916 📝 حدث جديد: scenario::snapshot | d7218c76d353b322... | المستخدم: system
+INFO     memory.core:core.py:916 📝 حدث جديد: simulation::batch_completed | c567689c2d868959... | المستخدم: system
+INFO     memory.core:core.py:916 📝 حدث جديد: risk::snapshot | 546d60356a954c02... | المستخدم: system
+INFO     memory.core:core.py:916 📝 حدث جديد: predictive::controller_cycle | 2102974710166303... | المستخدم: system
+INFO     memory.core:core.py:916 📝 حدث جديد: controller::snapshot | 6cac2fff3313a76c... | المستخدم: system
+INFO     memory.core:core.py:916 📝 حدث جديد: sovereign::final_decision | 23056dfbf2b19d58... | المستخدم: system
+WARNING  sovereign.controller:controller.py:544 👑 قرار نهائي: continue (أولوية: 45.0%, ثقة: 80.3%)
+INFO     memory.core:core.py:916 📝 حدث جديد: controller::snapshot | 797fdfd41d272548... | المستخدم: system
+INFO     memory.core:core.py:916 📝 حدث جديد: orchestrator::cycle | 183fac37ed79b3ed... | المستخدم: system
+INFO     memory.dynamic:__init__.py:988 📝 استيعاب [system]: {'cycle_id': 'e0eac511d51c94d0', 'perception': {'c...
+INFO     orchestrator:orchestrator.py:758 [Orchestrator] ✅ اكتملت دورة e0eac511d51c94d0
+INFO     memory.core:core.py:916 📝 حدث جديد: orchestrator::log | 3cfd91404251e943... | المستخدم: system
+INFO     httpx:_client.py:1026 HTTP Request: POST http://127.0.0.1:40749/api/chat "HTTP/1.0 404 Not Found"
+WARNING  sovereign.ollama:ollama_client.py:59 R-704 [OLLAMA]: فشل خادم العقل (HTTPStatusError) — سقوط للمحرك القالبي
+INFO     orchestrator:orchestrator.py:758 [Orchestrator] 🔄 بدء دورة المعالجة 3fc19affe7490891
+INFO     memory.core:core.py:916 📝 حدث جديد: orchestrator::log | 8a917d4100c05190... | المستخدم: system
+INFO     orchestrator:orchestrator.py:758 [Orchestrator] 🧠 NexusCore فهم النص
+INFO     memory.core:core.py:916 📝 حدث جديد: orchestrator::log | 95930b9c52ee18ef... | المستخدم: system
+INFO     memory.core:core.py:916 📝 حدث جديد: scenario::snapshot | af4800712cbc4e46... | المستخدم: system
+INFO     memory.core:core.py:916 📝 حدث جديد: simulation::batch_completed | ebcbe117fcf27566... | المستخدم: system
+INFO     memory.core:core.py:916 📝 حدث جديد: risk::snapshot | 8293c7312136fce4... | المستخدم: system
+INFO     memory.core:core.py:916 📝 حدث جديد: predictive::controller_cycle | 5648b68a4dc56269... | المستخدم: system
+INFO     memory.core:core.py:916 📝 حدث جديد: controller::snapshot | 55515b114494be24... | المستخدم: system
+INFO     memory.core:core.py:916 📝 حدث جديد: sovereign::final_decision | d51bbbc1bce1a8ae... | المستخدم: system
+WARNING  sovereign.controller:controller.py:544 👑 قرار نهائي: continue (أولوية: 45.0%, ثقة: 80.3%)
+INFO     memory.core:core.py:916 📝 حدث جديد: controller::snapshot | f7d4dd1d809997c3... | المستخدم: system
+INFO     memory.core:core.py:916 📝 حدث جديد: orchestrator::cycle | 1cec9eb51bedbfca... | المستخدم: system
+INFO     memory.dynamic:__init__.py:988 📝 استيعاب [system]: {'cycle_id': '3fc19affe7490891', 'perception': {'c...
+INFO     orchestrator:orchestrator.py:758 [Orchestrator] ✅ اكتملت دورة 3fc19affe7490891
+INFO     memory.core:core.py:916 📝 حدث جديد: orchestrator::log | 9269e547a9639c9d... | المستخدم: system
+INFO     httpx:_client.py:1026 HTTP Request: POST http://testserver/chat "HTTP/1.1 200 OK"
+INFO     app:app.py:238 🛑 إيقاف خادم Sovereign AI...
+INFO     orchestrator:orchestrator.py:758 [Orchestrator] 🛑 إيقاف Sovereign Orchestrator
+INFO     memory.core:core.py:916 📝 حدث جديد: orchestrator::log | d3a2cc6f7f3dd21b... | المستخدم: system
+WARNING  orchestrator:orchestrator.py:1721 🛑 Sovereign Orchestrator تم إيقافه
+INFO     app:app.py:241 ✅ تم إيقاف الخادم
+_______________ test_brain_status_reports_protocol_and_last_call _______________
+
+openai_brain = <function openai_brain.<locals>._enable at 0x7f2c78fd5580>
+
+    def test_brain_status_reports_protocol_and_last_call(openai_brain):
+        """/brain/status يعلن البروتوكول بصدق + مصدر الرد «المرصود» لا «المضبوط»
+        (لا ادعاء نجاح قبل أول استدعاء فعلي) — بلا أي سر في المخرجات (نمط /api-key)."""
+        import ollama_client
+        from fastapi.testclient import TestClient
+        from app import app
+    
+        server, _ = _make_fake_openai(content="رد حي")
+        try:
+            openai_brain(f"http://127.0.0.1:{server.server_address[1]}")
+            _reset_last_outcome()
+            with TestClient(app) as client:
+                r = client.get("/brain/status")
+                assert r.status_code == 200
+                data = r.json()
+                assert data["enabled"] is True
+>               assert data["protocol"] == "openai"
+                       ^^^^^^^^^^^^^^^^
+E               KeyError: 'protocol'
+
+tests/test_brain_openai_protocol.py:272: KeyError
+----------------------------- Captured stderr call -----------------------------
+2026-10-23 15:36:26,872 - app - INFO - 🚀 بدء تشغيل خادم Sovereign AI...
+2026-10-23 15:36:26,872 - app - INFO - ✅ خادم Sovereign AI جاهز
+2026-10-23 15:36:26,872 - app - INFO - 🔑 مفتاح API للسيد (بصمة فقط): 7d282c7d...
+2026-10-23 15:36:26,872 - app - INFO - 📖 التوثيق: http://localhost:8000/docs
+2026-10-23 15:36:26,872 - app - INFO - ⏱️ المجدول: معطل: SOVEREIGN_SCHEDULER غير مضبوط على 1 — التفعيل في الإنتاج قرار المالك (كل تشغيل يُلحق حدثًا بالسجل الدائم)
+2026-10-23 15:36:26,873 - httpx - INFO - HTTP Request: GET http://testserver/brain/status "HTTP/1.1 200 OK"
+2026-10-23 15:36:26,873 - app - INFO - 🛑 إيقاف خادم Sovereign AI...
+2026-10-23 15:36:26,874 - orchestrator - INFO - [Orchestrator] 🛑 إيقاف Sovereign Orchestrator
+2026-10-23 15:36:26,875 - memory.core - INFO - 📝 حدث جديد: orchestrator::log | 925195736e812255... | المستخدم: system
+2026-10-23 15:36:26,875 - orchestrator - WARNING - 🛑 Sovereign Orchestrator تم إيقافه
+2026-10-23 15:36:26,875 - app - INFO - ✅ تم إيقاف الخادم
+------------------------------ Captured log call -------------------------------
+INFO     app:app.py:206 🚀 بدء تشغيل خادم Sovereign AI...
+INFO     app:app.py:216 ✅ خادم Sovereign AI جاهز
+INFO     app:app.py:219 🔑 مفتاح API للسيد (بصمة فقط): 7d282c7d...
+INFO     app:app.py:220 📖 التوثيق: http://localhost:8000/docs
+INFO     app:app.py:233 ⏱️ المجدول: معطل: SOVEREIGN_SCHEDULER غير مضبوط على 1 — التفعيل في الإنتاج قرار المالك (كل تشغيل يُلحق حدثًا بالسجل الدائم)
+INFO     httpx:_client.py:1026 HTTP Request: GET http://testserver/brain/status "HTTP/1.1 200 OK"
+INFO     app:app.py:238 🛑 إيقاف خادم Sovereign AI...
+INFO     orchestrator:orchestrator.py:758 [Orchestrator] 🛑 إيقاف Sovereign Orchestrator
+INFO     memory.core:core.py:916 📝 حدث جديد: orchestrator::log | 925195736e812255... | المستخدم: system
+WARNING  orchestrator:orchestrator.py:1721 🛑 Sovereign Orchestrator تم إيقافه
+INFO     app:app.py:241 ✅ تم إيقاف الخادم
+__________________ test_brain_status_reports_last_call_error ___________________
+
+openai_brain = <function openai_brain.<locals>._enable at 0x7f2c78de54e0>
+
+    def test_brain_status_reports_last_call_error(openai_brain):
+        """فشل الاستدعاء يظهر في last_call بصدق (خطأ معلن لا نجاح كاذب)."""
+        import ollama_client
+        from fastapi.testclient import TestClient
+        from app import app
+    
+        openai_brain("http://127.0.0.1:1")  # منفذ ميت
+        assert ollama_client.chat("sys", "hi") is None
+        with TestClient(app) as client:
+            data = client.get("/brain/status").json()
+>           assert data["last_call"]["result"] == "error"
+                   ^^^^^^^^^^^^^^^^^
+E           KeyError: 'last_call'
+
+tests/test_brain_openai_protocol.py:295: KeyError
+----------------------------- Captured stderr call -----------------------------
+2026-10-23 15:36:27,384 - sovereign.ollama - WARNING - R-704 [OLLAMA]: فشل خادم العقل (ConnectError) — سقوط للمحرك القالبي
+2026-10-23 15:36:27,385 - app - INFO - 🚀 بدء تشغيل خادم Sovereign AI...
+2026-10-23 15:36:27,385 - app - INFO - ✅ خادم Sovereign AI جاهز
+2026-10-23 15:36:27,385 - app - INFO - 🔑 مفتاح API للسيد (بصمة فقط): 7d282c7d...
+2026-10-23 15:36:27,385 - app - INFO - 📖 التوثيق: http://localhost:8000/docs
+2026-10-23 15:36:27,386 - app - INFO - ⏱️ المجدول: معطل: SOVEREIGN_SCHEDULER غير مضبوط على 1 — التفعيل في الإنتاج قرار المالك (كل تشغيل يُلحق حدثًا بالسجل الدائم)
+2026-10-23 15:36:27,387 - httpx - INFO - HTTP Request: GET http://testserver/brain/status "HTTP/1.1 200 OK"
+2026-10-23 15:36:27,387 - app - INFO - 🛑 إيقاف خادم Sovereign AI...
+2026-10-23 15:36:27,387 - orchestrator - INFO - [Orchestrator] 🛑 إيقاف Sovereign Orchestrator
+2026-10-23 15:36:27,388 - memory.core - INFO - 📝 حدث جديد: orchestrator::log | d8a06c7a62841ffa... | المستخدم: system
+2026-10-23 15:36:27,388 - orchestrator - WARNING - 🛑 Sovereign Orchestrator تم إيقافه
+2026-10-23 15:36:27,389 - app - INFO - ✅ تم إيقاف الخادم
+------------------------------ Captured log call -------------------------------
+WARNING  sovereign.ollama:ollama_client.py:59 R-704 [OLLAMA]: فشل خادم العقل (ConnectError) — سقوط للمحرك القالبي
+INFO     app:app.py:206 🚀 بدء تشغيل خادم Sovereign AI...
+INFO     app:app.py:216 ✅ خادم Sovereign AI جاهز
+INFO     app:app.py:219 🔑 مفتاح API للسيد (بصمة فقط): 7d282c7d...
+INFO     app:app.py:220 📖 التوثيق: http://localhost:8000/docs
+INFO     app:app.py:233 ⏱️ المجدول: معطل: SOVEREIGN_SCHEDULER غير مضبوط على 1 — التفعيل في الإنتاج قرار المالك (كل تشغيل يُلحق حدثًا بالسجل الدائم)
+INFO     httpx:_client.py:1026 HTTP Request: GET http://testserver/brain/status "HTTP/1.1 200 OK"
+INFO     app:app.py:238 🛑 إيقاف خادم Sovereign AI...
+INFO     orchestrator:orchestrator.py:758 [Orchestrator] 🛑 إيقاف Sovereign Orchestrator
+INFO     memory.core:core.py:916 📝 حدث جديد: orchestrator::log | d8a06c7a62841ffa... | المستخدم: system
+WARNING  orchestrator:orchestrator.py:1721 🛑 Sovereign Orchestrator تم إيقافه
+INFO     app:app.py:241 ✅ تم إيقاف الخادم
+__________________ test_brain_status_protocol_ollama_default ___________________
+
+openai_brain = <function openai_brain.<locals>._enable at 0x7f2c78fd60c0>
+
+    def test_brain_status_protocol_ollama_default(openai_brain):
+        """البروتوكول الافتراضي (ollama) يظل معلنًا كما كان — لا انحدار."""
+        from fastapi.testclient import TestClient
+        from app import app
+    
+        openai_brain("http://127.0.0.1:11434", protocol="ollama")
+        _reset_last_outcome()
+        with TestClient(app) as client:
+            data = client.get("/brain/status").json()
+>           assert data["protocol"] == "ollama"
+                   ^^^^^^^^^^^^^^^^
+E           KeyError: 'protocol'
+
+tests/test_brain_openai_protocol.py:309: KeyError
+----------------------------- Captured stderr call -----------------------------
+2026-10-23 15:36:27,395 - app - INFO - 🚀 بدء تشغيل خادم Sovereign AI...
+2026-10-23 15:36:27,396 - app - INFO - ✅ خادم Sovereign AI جاهز
+2026-10-23 15:36:27,396 - app - INFO - 🔑 مفتاح API للسيد (بصمة فقط): 7d282c7d...
+2026-10-23 15:36:27,396 - app - INFO - 📖 التوثيق: http://localhost:8000/docs
+2026-10-23 15:36:27,396 - app - INFO - ⏱️ المجدول: معطل: SOVEREIGN_SCHEDULER غير مضبوط على 1 — التفعيل في الإنتاج قرار المالك (كل تشغيل يُلحق حدثًا بالسجل الدائم)
+2026-10-23 15:36:27,397 - httpx - INFO - HTTP Request: GET http://testserver/brain/status "HTTP/1.1 200 OK"
+2026-10-23 15:36:27,397 - app - INFO - 🛑 إيقاف خادم Sovereign AI...
+2026-10-23 15:36:27,397 - orchestrator - INFO - [Orchestrator] 🛑 إيقاف Sovereign Orchestrator
+2026-10-23 15:36:27,398 - memory.core - INFO - 📝 حدث جديد: orchestrator::log | 5134cf750abe1eed... | المستخدم: system
+2026-10-23 15:36:27,398 - orchestrator - WARNING - 🛑 Sovereign Orchestrator تم إيقافه
+2026-10-23 15:36:27,398 - app - INFO - ✅ تم إيقاف الخادم
+------------------------------ Captured log call -------------------------------
+INFO     app:app.py:206 🚀 بدء تشغيل خادم Sovereign AI...
+INFO     app:app.py:216 ✅ خادم Sovereign AI جاهز
+INFO     app:app.py:219 🔑 مفتاح API للسيد (بصمة فقط): 7d282c7d...
+INFO     app:app.py:220 📖 التوثيق: http://localhost:8000/docs
+INFO     app:app.py:233 ⏱️ المجدول: معطل: SOVEREIGN_SCHEDULER غير مضبوط على 1 — التفعيل في الإنتاج قرار المالك (كل تشغيل يُلحق حدثًا بالسجل الدائم)
+INFO     httpx:_client.py:1026 HTTP Request: GET http://testserver/brain/status "HTTP/1.1 200 OK"
+INFO     app:app.py:238 🛑 إيقاف خادم Sovereign AI...
+INFO     orchestrator:orchestrator.py:758 [Orchestrator] 🛑 إيقاف Sovereign Orchestrator
+INFO     memory.core:core.py:916 📝 حدث جديد: orchestrator::log | 5134cf750abe1eed... | المستخدم: system
+WARNING  orchestrator:orchestrator.py:1721 🛑 Sovereign Orchestrator تم إيقافه
+INFO     app:app.py:241 ✅ تم إيقاف الخادم
+_____________________ test_config_protocol_default_and_env _____________________
+
+tmp_path = PosixPath('/tmp/pytest-of-user/pytest-45/test_config_protocol_default_a0')
+
+    def test_config_protocol_default_and_env(tmp_path):
+        """OLLAMA_PROTOCOL: الافتراضي "ollama"، ويُقرأ من البيئة/الملف بمعزل
+        عن قواعد مفتاح السيد (نمط test_ollama_config — عملية مستقلة)."""
+        env = {k: v for k, v in os.environ.items() if not k.startswith("OLLAMA_")}
+        env["OLLAMA_ENV_FILE"] = str(tmp_path / "absent.env")
+        code = "import config; print(config.OLLAMA_PROTOCOL)"
+        r1 = subprocess.run([sys.executable, "-c", code], cwd="backend",
+                            env=env, capture_output=True, text=True)
+>       assert r1.returncode == 0, r1.stderr
+E       AssertionError: /tmp/r736_baseline/backend/config.py:355: UserWarning: ⚠️ CORS مفتوح للجميع — مقبول في التطوير فقط (D-034)
+E           warnings.warn("⚠️ CORS مفتوح للجميع — مقبول في التطوير فقط (D-034)")
+E         Traceback (most recent call last):
+E           File "<string>", line 1, in <module>
+E         AttributeError: module 'config' has no attribute 'OLLAMA_PROTOCOL'
+E         
+E       assert 1 == 0
+E        +  where 1 = CompletedProcess(args=['/home/user/workspace/.venvs/sov/bin/python', '-c', 'import config; print(config.OLLAMA_PROTOCO...t):\n  File "<string>", line 1, in <module>\nAttributeError: module \'config\' has no attribute \'OLLAMA_PROTOCOL\'\n').returncode
+
+tests/test_brain_openai_protocol.py:321: AssertionError
+_______________ test_brain_status_does_not_leak_url_credentials ________________
+
+openai_brain = <function openai_brain.<locals>._enable at 0x7f2c78de7740>
+
+    def test_brain_status_does_not_leak_url_credentials(openai_brain):
+        """بيانات اعتماد داخل العنوان (مستخدم:كلمةسر@ أو استعلام رمز) لا تظهر
+        في مخرجات /brain/status أبدًا — العنوان يُعرض معقّمًا (نمط لا-سر)."""
+        from fastapi.testclient import TestClient
+        from app import app
+    
+        openai_brain("http://owner:super-secret@127.0.0.1:11434/ollama?token=abc123")
+        with TestClient(app) as client:
+            r = client.get("/brain/status")
+            assert r.status_code == 200
+            for secret in ("owner", "super-secret", "token", "abc123"):
+>               assert secret not in r.text, f"credential fragment leaked: {secret}"
+E               AssertionError: credential fragment leaked: owner
+E               assert 'owner' not in '{"brain":"e...conds":10.0}'
+E                 
+E                 'owner' is contained here:
+E                   ":"http://owner:super-secret@127.0.0.1:11434/ollama?token=abc123","timeout_seconds":10.0}
+E                 ?           +++++
+
+tests/test_brain_openai_protocol.py:342: AssertionError
+----------------------------- Captured stderr call -----------------------------
+2026-10-23 15:36:27,448 - app - INFO - 🚀 بدء تشغيل خادم Sovereign AI...
+2026-10-23 15:36:27,448 - app - INFO - ✅ خادم Sovereign AI جاهز
+2026-10-23 15:36:27,448 - app - INFO - 🔑 مفتاح API للسيد (بصمة فقط): 7d282c7d...
+2026-10-23 15:36:27,448 - app - INFO - 📖 التوثيق: http://localhost:8000/docs
+2026-10-23 15:36:27,448 - app - INFO - ⏱️ المجدول: معطل: SOVEREIGN_SCHEDULER غير مضبوط على 1 — التفعيل في الإنتاج قرار المالك (كل تشغيل يُلحق حدثًا بالسجل الدائم)
+2026-10-23 15:36:27,449 - httpx - INFO - HTTP Request: GET http://testserver/brain/status "HTTP/1.1 200 OK"
+2026-10-23 15:36:27,450 - app - INFO - 🛑 إيقاف خادم Sovereign AI...
+2026-10-23 15:36:27,450 - orchestrator - INFO - [Orchestrator] 🛑 إيقاف Sovereign Orchestrator
+2026-10-23 15:36:27,451 - memory.core - INFO - 📝 حدث جديد: orchestrator::log | 767b88232e727279... | المستخدم: system
+2026-10-23 15:36:27,451 - orchestrator - WARNING - 🛑 Sovereign Orchestrator تم إيقافه
+2026-10-23 15:36:27,451 - app - INFO - ✅ تم إيقاف الخادم
+------------------------------ Captured log call -------------------------------
+INFO     app:app.py:206 🚀 بدء تشغيل خادم Sovereign AI...
+INFO     app:app.py:216 ✅ خادم Sovereign AI جاهز
+INFO     app:app.py:219 🔑 مفتاح API للسيد (بصمة فقط): 7d282c7d...
+INFO     app:app.py:220 📖 التوثيق: http://localhost:8000/docs
+INFO     app:app.py:233 ⏱️ المجدول: معطل: SOVEREIGN_SCHEDULER غير مضبوط على 1 — التفعيل في الإنتاج قرار المالك (كل تشغيل يُلحق حدثًا بالسجل الدائم)
+INFO     httpx:_client.py:1026 HTTP Request: GET http://testserver/brain/status "HTTP/1.1 200 OK"
+INFO     app:app.py:238 🛑 إيقاف خادم Sovereign AI...
+INFO     orchestrator:orchestrator.py:758 [Orchestrator] 🛑 إيقاف Sovereign Orchestrator
+INFO     memory.core:core.py:916 📝 حدث جديد: orchestrator::log | 767b88232e727279... | المستخدم: system
+WARNING  orchestrator:orchestrator.py:1721 🛑 Sovereign Orchestrator تم إيقافه
+INFO     app:app.py:241 ✅ تم إيقاف الخادم
+___________________ test_unknown_protocol_not_echoed_in_logs ___________________
+
+openai_brain = <function openai_brain.<locals>._enable at 0x7f2c78de4400>
+caplog = <_pytest.logging.LogCaptureFixture object at 0x7f2c78c9c750>
+
+    def test_unknown_protocol_not_echoed_in_logs(openai_brain, caplog):
+        """قيمة بروتوكول مجهولة لا يُصدى لها في السجلات (قد تحمل سرًا) —
+        تصنيف ثابت فقط (unknown_protocol)."""
+        import logging
+        import ollama_client
+    
+        server, seen = _make_fake_openai()
+        try:
+            openai_brain(f"http://127.0.0.1:{server.server_address[1]}",
+                         protocol="weird-secret-looking-value")
+            with caplog.at_level(logging.WARNING, logger="sovereign.ollama"):
+                assert ollama_client.chat("sys", "hi") is None
+>           assert len(seen) == 0
+E           AssertionError: assert 1 == 0
+E            +  where 1 = len([{'path': '/api/chat', 'headers': {'Host': '127.0.0.1:46171', 'Accept': '*/*', 'Accept-Encoding': 'gzip, deflate', 'Co...cloud-model', 'messages': [{'role': 'system', 'content': 'sys'}, {'role': 'user', 'content': 'hi'}], 'stream': False}}])
+
+tests/test_brain_openai_protocol.py:358: AssertionError
+----------------------------- Captured stderr call -----------------------------
+2026-10-23 15:36:27,463 - httpx - INFO - HTTP Request: POST http://127.0.0.1:46171/api/chat "HTTP/1.0 404 Not Found"
+2026-10-23 15:36:27,463 - sovereign.ollama - WARNING - R-704 [OLLAMA]: فشل خادم العقل (HTTPStatusError) — سقوط للمحرك القالبي
+------------------------------ Captured log call -------------------------------
+INFO     httpx:_client.py:1026 HTTP Request: POST http://127.0.0.1:46171/api/chat "HTTP/1.0 404 Not Found"
+WARNING  sovereign.ollama:ollama_client.py:59 R-704 [OLLAMA]: فشل خادم العقل (HTTPStatusError) — سقوط للمحرك القالبي
+=============================== warnings summary ===============================
+backend/config.py:355
+tests/test_brain_openai_protocol.py::test_build_reply_uses_openai_model
+  /tmp/r736_baseline/backend/config.py:355: UserWarning: ⚠️ CORS مفتوح للجميع — مقبول في التطوير فقط (D-034)
+    warnings.warn("⚠️ CORS مفتوح للجميع — مقبول في التطوير فقط (D-034)")
+
+tests/test_brain_openai_protocol.py::test_chat_endpoint_uses_openai_model
+  /home/user/workspace/.venvs/sov/lib/python3.11/site-packages/starlette/testclient.py:40: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.
+    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_brain_openai_protocol.py::test_client_openai_request_and_parse
+FAILED tests/test_brain_openai_protocol.py::test_client_openai_bearer_when_key_set
+FAILED tests/test_brain_openai_protocol.py::test_client_openai_base_url_with_version_path
+FAILED tests/test_brain_openai_protocol.py::test_unknown_protocol_fails_closed
+FAILED tests/test_brain_openai_protocol.py::test_build_reply_uses_openai_model
+FAILED tests/test_brain_openai_protocol.py::test_chat_endpoint_uses_openai_model
+FAILED tests/test_brain_openai_protocol.py::test_brain_status_reports_protocol_and_last_call
+FAILED tests/test_brain_openai_protocol.py::test_brain_status_reports_last_call_error
+FAILED tests/test_brain_openai_protocol.py::test_brain_status_protocol_ollama_default
+FAILED tests/test_brain_openai_protocol.py::test_config_protocol_default_and_env
+FAILED tests/test_brain_openai_protocol.py::test_brain_status_does_not_leak_url_credentials
+FAILED tests/test_brain_openai_protocol.py::test_unknown_protocol_not_echoed_in_logs
+12 failed, 4 passed, 3 warnings in 6.93s

@@ -2267,3 +2267,14 @@ Bus إطلاقًا. الواجهة سليمة بعد الإزالة (101 وسم 
 - **# DELETION-JUSTIFIED** — `frontend/INVENTORY.md`: صفا الموجّه واللوحة حُدّثا. والوثائق: صف ١.٣، وترويستا «آخر تحديث»، وسطر العدّاد.
 - التفصيل: `forensics/R-735_SECTION_ISOLATION.md`.
 
+## 2026-10-23 — R-736 (البند ٢.١): بروتوكولان لعقل المنشور
+
+- **# DELETION-JUSTIFIED** — استبدال مقصود لأسطر موجودة لتنفيذ الميزة وتصويبات دقة المراجعة (لا حذف وظائف):
+  - `backend/ollama_client.py`: أسطر `chat()` القائمة استُبدلت بتفرّع البروتوكولين (ollama كما كان + openai) + تتبع النتيجة الأخيرة + تعقيم سجل البروتوكول المجهول.
+  - `backend/app.py`: أسطر حمولة `/brain/status` استُبدلت (reply_source «المرصود» + تعقيم العنوان + protocol/last_call).
+  - `frontend/js/modules/live-system-status.js`: سطر عرض العقل استُبدل (النموذج + حالة آخر استدعاء — لا ادعاء نجاح).
+  - `tests/test_brain_status.py`: سطر تأكيد reply_source واحد استُبدل («ollama» الثابتة → «unverified» المرصودة — دقة لا انحدار).
+  - أسطر توثيق حالة في الوثائق: صف ٢.١ في ROADMAP_V4، ترويستا «آخر تحديث» (CHANGELOG + PROJECT_STATE)، سطر العدّاد (878→894)، وأسطر بداية §2 و§8 في PROJECT_STATE.
+  - `backend/config.py`: إلحاق فقط (متغير OLLAMA_PROTOCOL) — لا حذف.
+- الحارس: `tests/test_brain_openai_protocol.py` (17 اختبارًا). التفصيل: `forensics/R-736_BRAIN_PROTOCOLS.md`.
+
