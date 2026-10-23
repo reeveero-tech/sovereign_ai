@@ -1260,7 +1260,18 @@
         =========================================================
     -->
 
-    <script src="js/modules/live-system-status.js"></script>
+    <nav id="sovereign-section-nav">
+  <button data-sovereign-section="chat">محادثة</button>
+  <button data-sovereign-section="memory">ذاكرة</button>
+  <button data-sovereign-section="tools">قرص وأدوات</button>
+  <button data-sovereign-section="evolution">تطور ذاتي</button>
+</nav>
+<section id="sovereign-section-chat"></section>
+<section id="sovereign-section-memory" data-sovereign-placeholder="قيد الربط — لا بيانات وهمية"></section>
+<section id="sovereign-section-tools"></section>
+<section id="sovereign-section-evolution" data-sovereign-placeholder="قيد الربط — لا بيانات وهمية"></section>
+<script src="js/modules/section-router.js"></script>
+<script src="js/modules/live-system-status.js"></script>
 </body>
 
 </html>
