@@ -20,25 +20,28 @@ def test_index_has_four_distinct_sections():
         assert f'id="sovereign-section-{sec}"' in c, (
             f"قسم «{sec}» مفقود — الواجهة لا تزال كتلة واحدة"
         )
-    assert 'id="sovereign-section-nav"' in c, "شريط تنقل الأقسام مفقود"
+    # R-735: التنقل عبر الشريط الرئيسي المرئي (لا شريط ثانٍ مخفي أسفل الصفحة)
+    for sec in ("memory", "tools", "evolution"):
+        assert f'data-tab="{sec}"' in c, f"قسم «{sec}» بلا زر في الشريط الرئيسي"
 
 
 def test_section_router_module_real_and_loaded():
-    """الموجّه وحدة حقيقية: يبدّل الأقسام بالنقر عبر بيانات الأقسام —
-    ويحمّلها index.html."""
-    mod = REPO_ROOT / "frontend/js/modules/section-router.js"
-    assert mod.exists(), "موجّه الأقسام مفقود"
-    c = mod.read_text(encoding="utf-8")
-    assert "sovereign-section-" in c, "الموجّه لا يعمل على معرفات الأقسام"
-    assert "addEventListener" in c or "onclick" in c, "الموجّه لا يستجيب للنقر"
+    """R-735: الموجّه المنفصل أزيل — كان يدير شريطًا ثانيًا غير مرئي وينقل حقل
+    المحادثة. التبديل الحقيقي الآن عبر switchTab في main.js (الشريط الرئيسي)،
+    والعزل محروس في tests/test_section_isolation.py."""
+    assert not (REPO_ROOT / "frontend/js/modules/section-router.js").exists()
     idx = IDX.read_text(encoding="utf-8")
-    assert "section-router.js" in idx, "الموجّه غير محمل من index.html"
+    assert "section-router.js" not in idx
+    main = (REPO_ROOT / "frontend/js/main.js").read_text(encoding="utf-8")
+    for pane in ("tab-memory", "tab-tools", "tab-evolution"):
+        assert f"getElementById('{pane}')" in main, f"{pane} غير مسجل في switchTab"
 
 
 def test_sections_declared_in_inventory():
     """بنية الأقسام موثقة في جرد الواجهة (لا هيكل صامت)."""
     inv = (REPO_ROOT / "frontend/INVENTORY.md").read_text(encoding="utf-8")
-    assert "section-router.js" in inv, "الموجّه غير مجرود"
+    assert "section-router.js" in inv, "إزالة الموجّه غير موثقة في الجرد"
+    assert "R-735" in inv
 
 
 def test_memory_section_bound_to_real_api():

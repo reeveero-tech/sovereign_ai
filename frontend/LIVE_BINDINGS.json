@@ -75,42 +75,26 @@
     },
     {
       "element": "live-system-status",
-      "created_by_writer": true,
-      "endpoint": "GET /health",
-      "field": "status",
-      "writers": [
-        "js/modules/live-system-status.js",
-        "js/modules/section-router.js"
-      ]
-    },
-    {
-      "element": "live-system-status",
-      "created_by_writer": true,
       "endpoint": "GET /disk/status",
       "field": "enabled",
       "writers": [
-        "js/modules/live-system-status.js",
-        "js/modules/section-router.js"
+        "js/modules/live-system-status.js"
       ]
     },
     {
       "element": "live-system-status",
-      "created_by_writer": true,
       "endpoint": "GET /brain/status",
       "field": "enabled",
       "writers": [
-        "js/modules/live-system-status.js",
-        "js/modules/section-router.js"
+        "js/modules/live-system-status.js"
       ]
     },
     {
       "element": "live-system-status",
-      "created_by_writer": true,
       "endpoint": "GET /scheduler/status",
       "field": "enabled",
       "writers": [
-        "js/modules/live-system-status.js",
-        "js/modules/section-router.js"
+        "js/modules/live-system-status.js"
       ]
     },
     {
@@ -235,8 +219,7 @@
     "toggle-live-refresh",
     "toggle-holographic",
     "btn-ws-connect",
-    "btn-ws-disconnect",
-    "sovereign-section-nav"
+    "btn-ws-disconnect"
   ],
   "container": [
     "app-root",
@@ -247,12 +230,84 @@
     "tab-proposals",
     "tab-commands",
     "sovereign-section-chat",
-    "sovereign-section-tools"
+    "sovereign-section-tools",
+    "tab-memory",
+    "tab-tools",
+    "tab-evolution"
   ],
   "unbound": [
     {
       "element": "sovereign-section-evolution",
       "reason": "القسم الرابع (التطور الذاتي) لم يُبنَ — يعرض «قيد الربط» بصدق"
     }
-  ]
+  ],
+  "_sections_doc": "R-735 (١.٣): كل قسم = لوحة في الشريط الرئيسي + نقاطه الخاصة + وحداته. الحارس tests/test_section_isolation.py يمنع أي قسم من استهلاك نقاط قسم آخر أو عرض بياناته. الرأس/التذييل إطار عام خارج الأقسام.",
+  "sections": {
+    "monitor": {
+      "pane": "tab-monitor",
+      "endpoints": [
+        "GET /status",
+        "GET /health",
+        "GET /system/resources"
+      ],
+      "modules": [
+        "js/modules/live-health-chart.js"
+      ]
+    },
+    "chat": {
+      "pane": "tab-dialogue",
+      "endpoints": [
+        "POST /chat"
+      ],
+      "modules": [
+        "js/modules/live-ai-engine.js"
+      ]
+    },
+    "commands": {
+      "pane": "tab-commands",
+      "endpoints": [
+        "POST /sovereign/command"
+      ],
+      "modules": [
+        "js/modules/command-runtime.js"
+      ]
+    },
+    "decisions": {
+      "pane": "tab-decisions",
+      "endpoints": [],
+      "modules": []
+    },
+    "proposals": {
+      "pane": "tab-proposals",
+      "endpoints": [],
+      "modules": []
+    },
+    "memory": {
+      "pane": "tab-memory",
+      "endpoints": [
+        "GET /components/memory"
+      ],
+      "modules": [
+        "js/modules/memory-viewer.js"
+      ]
+    },
+    "tools": {
+      "pane": "tab-tools",
+      "endpoints": [
+        "GET /tools/list",
+        "GET /disk/status",
+        "GET /brain/status",
+        "GET /scheduler/status"
+      ],
+      "modules": [
+        "js/modules/tools-registry.js",
+        "js/modules/live-system-status.js"
+      ]
+    },
+    "evolution": {
+      "pane": "tab-evolution",
+      "endpoints": [],
+      "modules": []
+    }
+  }
 }

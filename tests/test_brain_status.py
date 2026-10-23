@@ -50,7 +50,8 @@ def test_live_status_module_binds_real_endpoints():
     mod = REPO_ROOT / "frontend/js/modules/live-system-status.js"
     assert mod.exists(), "وحدة الحالة الحية مفقودة"
     c = mod.read_text(encoding="utf-8")
-    for ep in ("/health", "/disk/status", "/brain/status"):
+    # R-735: /health أُزيلت من هذه اللوحة — الصحة لقسم المراقبة والرأس (عزل الأقسام)
+    for ep in ("/disk/status", "/brain/status"):
         assert ep in c, f"الوحدة يجب أن تستهلك {ep} فعليًا (ربط حي لا وهم)"
     idx = (REPO_ROOT / "frontend/index.html").read_text(encoding="utf-8")
     assert "live-system-status.js" in idx, "الوحدة غير محملة من index.html"

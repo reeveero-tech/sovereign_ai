@@ -463,3 +463,15 @@ body.fx-reduced .liquid-bg::after {
     line-height: 1.6;
     word-break: break-word;
 }
+
+/* R-735 (١.٣): لوحة الحالة داخل قسم الأدوات — لا طافية */
+#live-system-status {
+    margin: 12px 0;
+    padding: 10px 14px;
+    border: 1px solid #2a3a4a;
+    border-radius: 8px;
+    background: rgba(10, 14, 20, 0.6);
+    color: #e8e8e8;
+    font-size: 0.85rem;
+    line-height: 1.7;
+}

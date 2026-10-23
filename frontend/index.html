@@ -415,6 +415,48 @@
 
                     </button>
 
+                    <button
+                        class="
+                            tab
+                            ripple
+                        "
+                        data-tab="memory"
+                    >
+
+                        <i class="fas fa-database"></i>
+
+                        الذاكرة
+
+                    </button>
+
+                    <button
+                        class="
+                            tab
+                            ripple
+                        "
+                        data-tab="tools"
+                    >
+
+                        <i class="fas fa-toolbox"></i>
+
+                        قرص وأدوات
+
+                    </button>
+
+                    <button
+                        class="
+                            tab
+                            ripple
+                        "
+                        data-tab="evolution"
+                    >
+
+                        <i class="fas fa-seedling"></i>
+
+                        تطور ذاتي
+
+                    </button>
+
                 </nav>
 
                 <!-- ========================================= -->
@@ -587,6 +629,7 @@
                     class="tab-content"
                     style="display:none;"
                 >
+                    <section id="sovereign-section-chat">
 
                     <div
                         id="dialogue-groups"
@@ -607,6 +650,8 @@
                         </div>
 
                     </div>
+
+                    </section>
 
                 </section>
 
@@ -695,6 +740,38 @@
 
                     </div>
 
+                </section>
+
+                <!-- R-735 (١.٣): أقسام منفصلة — كل قسم لوحته في الشريط الرئيسي -->
+
+                <section
+                    id="tab-memory"
+                    class="tab-content"
+                    style="display:none;"
+                >
+                    <section id="sovereign-section-memory"></section>
+                </section>
+
+                <section
+                    id="tab-tools"
+                    class="tab-content"
+                    style="display:none;"
+                >
+                    <section id="sovereign-section-tools">
+                        <section id="live-system-status"></section>
+                    </section>
+                </section>
+
+                <section
+                    id="tab-evolution"
+                    class="tab-content"
+                    style="display:none;"
+                >
+                    <section
+                        id="sovereign-section-evolution"
+                        data-live="experimental"
+                        data-live-reason="قسم التطور الذاتي لم يُبنَ بعد (القسم ٤) — لا بيانات"
+                    ></section>
                 </section>
 
             </section>
@@ -1264,17 +1341,7 @@
         =========================================================
     -->
 
-    <nav id="sovereign-section-nav">
-  <button data-sovereign-section="chat">محادثة</button>
-  <button data-sovereign-section="memory">ذاكرة</button>
-  <button data-sovereign-section="tools">قرص وأدوات</button>
-  <button data-sovereign-section="evolution">تطور ذاتي</button>
-</nav>
-<section id="sovereign-section-chat"></section>
-<section id="sovereign-section-memory" data-sovereign-placeholder="قيد الربط — لا بيانات وهمية"></section>
-<section id="sovereign-section-tools"></section>
-<section id="sovereign-section-evolution" data-sovereign-placeholder="قيد الربط — لا بيانات وهمية" data-live="experimental" data-live-reason="قسم التطور الذاتي لم يُبنَ بعد (القسم ٤) — لا بيانات"></section>
-<script src="js/modules/section-router.js"></script>
+
 <script src="js/modules/memory-viewer.js"></script>
 <script src="js/modules/live-system-status.js"></script>
 <script src="js/modules/experimental-badges.js"></script>

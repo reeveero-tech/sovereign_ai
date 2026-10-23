@@ -63,7 +63,11 @@ const tabContents = {
     decisions: document.getElementById('tab-decisions'),
     proposals: document.getElementById('tab-proposals'),
     commands: document.getElementById('tab-commands'),
-    history: document.getElementById('tab-history')
+    history: document.getElementById('tab-history'),
+    // R-735 (١.٣): أقسام منفصلة في الشريط الرئيسي — كل قسم لوحته
+    memory: document.getElementById('tab-memory'),
+    tools: document.getElementById('tab-tools'),
+    evolution: document.getElementById('tab-evolution')
 };
 
 // مناطق العرض

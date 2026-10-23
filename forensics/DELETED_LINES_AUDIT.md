@@ -2258,3 +2258,12 @@ Bus إطلاقًا. الواجهة سليمة بعد الإزالة (101 وسم 
 - **# DELETION-JUSTIFIED** — الوثائق فقط: صف ٢.٧ في ROADMAP_V4 («جزئي» → «منجز بحدود موثقة»)، وترويستا «آخر تحديث» (CHANGELOG + PROJECT_STATE)، وسطر العدّاد. تحديث حالة. لم يُحذف سطر من الشيفرة: الإضافات في `live-health-chart.js` و`app.py` إلحاقية، وسطر رسالة «لا أخطاء» الجديد كُتب في هذا الالتزام نفسه.
 - الحارس: `tests/test_system_resources.py`. التفصيل: `forensics/R-734_SYSTEM_RESOURCES.md`.
 
+## 2026-10-23 — R-735 (البند ١.٣): أقسام منفصلة ومعزولة فعلًا
+- **# DELETION-JUSTIFIED** — `frontend/js/modules/section-router.js` (60 سطرًا، حُذف الملف): كان يدير شريط أقسام ثانيًا تبيّن قياسًا أنه غير مرئي، وينقل `chat-input` من مكانه. التبديل الآن عبر `switchTab` القائم في `main.js`، فلا وظيفة متبقية له.
+- **# DELETION-JUSTIFIED** — `frontend/index.html`: الشريط `sovereign-section-nav` والأقسام الأربعة الفارغة أسفل الصفحة (حلت محلها لوحات في الشريط الرئيسي بنفس المعرفات)، ووسم تحميل الموجّه، وسمة `data-sovereign-placeholder` التي لا يقرؤها أي كود (R-731).
+- **# DELETION-JUSTIFIED** — `frontend/js/modules/live-system-status.js`: إنشاء الحاوية الطافية بموضع ثابت (اللوحة تعرض بيانات قسم الأدوات فوق كل الأقسام)، وسطر «الصحة» وجلب `/health` (بيانات قسم المراقبة، ومعروضة في الرأس العام).
+- **# DELETION-JUSTIFIED** — `frontend/LIVE_BINDINGS.json`: ربط `live-system-status` بـ`GET /health`، و`section-router.js` كاتبًا، و`sovereign-section-nav` من التحكم، و`created_by_writer` عن اللوحة (صارت ثابتة في index.html).
+- **# DELETION-JUSTIFIED** — `tests/test_ui_sections.py`: فحوص تشترط وجود الموجّه وشريطه استُبدلت بفحوص للشريط الرئيسي وإزالة الموجّه. و`tests/test_brain_status.py`: `/health` من قائمة نقاط اللوحة. الحماية انتقلت إلى `test_section_isolation.py` بشكل أشد.
+- **# DELETION-JUSTIFIED** — `frontend/INVENTORY.md`: صفا الموجّه واللوحة حُدّثا. والوثائق: صف ١.٣، وترويستا «آخر تحديث»، وسطر العدّاد.
+- التفصيل: `forensics/R-735_SECTION_ISOLATION.md`.
+
