@@ -227,7 +227,8 @@
     "toggle-live-refresh",
     "toggle-holographic",
     "btn-ws-connect",
-    "btn-ws-disconnect"
+    "btn-ws-disconnect",
+    "btn-tts-toggle"
   ],
   "container": [
     "app-root",

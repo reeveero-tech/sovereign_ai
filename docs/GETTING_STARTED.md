@@ -257,6 +257,8 @@ curl -s -w "\nHTTP %{http_code}\n" http://127.0.0.1:8000/supervisor/status
    R-739 (البند ٢.٢): الرؤية (`/vision`) — `VISION_ENABLED=true` +
    `VISION_MODEL` (نموذج رؤية مثل llava) على أساس العقل نفسه — الدليل:
    `forensics/R-739_VISION.md`.
+   R-740 (البند ٢.٤): النطق (`/tts` + زر «النطق» في الواجهة) — `TTS_ENABLED=true`
+   + `TTS_MODEL` (مثل playai-tts) + `TTS_BASE_URL` — الدليل: `forensics/R-740_TTS.md`.
 5. **أعد تشغيل الخادم** (`Ctrl+C` ثم أمر §٣) — الإعدادات تُقرأ عند الإقلاع.
 6. **أرسل رسالة** `/chat` كما في §٤.
 

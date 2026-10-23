@@ -324,6 +324,22 @@ WEB_FETCH_MAX_REDIRECTS = int(_ollama_env("WEB_FETCH_MAX_REDIRECTS", "3"))
 RESEARCH_MAX_SOURCES = int(_ollama_env("RESEARCH_MAX_SOURCES", "3"))
 
 # ============================================================
+# R-740 (البند ٢.٤ — صوت): إعدادات النطق (TTS)
+# ============================================================
+# معطل افتراضيًا (نمط R-704/R-736/R-737/R-739 — لا اتصال ضمني).
+TTS_ENABLED = _ollama_env("TTS_ENABLED", "false").lower() == "true"
+# عقد OpenAI speech القياسي: POST {base}/audio/speech → بايتات صوت.
+# سحابي (Groq: playai-tts) أو محلي متوافق (piper/kokoro بغلاف OpenAI).
+TTS_BASE_URL = _ollama_env("TTS_BASE_URL", "http://127.0.0.1:8880/v1")
+TTS_MODEL = _ollama_env("TTS_MODEL", None)
+TTS_API_KEY = _ollama_env("TTS_API_KEY", None)
+# صوت اختياري — None: الخادم المحلي يقرر
+TTS_VOICE = _ollama_env("TTS_VOICE", None)
+TTS_TIMEOUT_SECONDS = float(_ollama_env("TTS_TIMEOUT_SECONDS", "60"))
+# حد طول النص المنطوق (2000 حرف) — لا نطق اعتباطي
+TTS_MAX_TEXT_CHARS = int(_ollama_env("TTS_MAX_TEXT_CHARS", "2000"))
+
+# ============================================================
 # R-739 (البند ٢.٢ — عينان): إعدادات الرؤية (تحليل الصور)
 # ============================================================
 # معطل افتراضيًا (نمط R-704/R-736/R-737 — لا اتصال ضمني).

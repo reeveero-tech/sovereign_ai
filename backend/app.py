@@ -37,7 +37,7 @@ from fastapi import (
 )
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.gzip import GZipMiddleware
-from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
+from fastapi.responses import HTMLResponse, JSONResponse, FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field, validator
 import uvicorn
@@ -98,6 +98,8 @@ chat_rate_limiter = SlidingWindowRateLimiter(MAX_USER_MESSAGES_PER_MINUTE)
 stt_rate_limiter = SlidingWindowRateLimiter(MAX_USER_MESSAGES_PER_MINUTE)
 # R-739 (البند ٢.٢): حد الرؤية بحد المحادثة نفسه لكل IP — الرفع باهظ فلا باب مفتوح
 vision_rate_limiter = SlidingWindowRateLimiter(MAX_USER_MESSAGES_PER_MINUTE)
+# R-740 (البند ٢.٤): حد النطق بحد المحادثة نفسه لكل IP — لا باب مفتوح
+tts_rate_limiter = SlidingWindowRateLimiter(MAX_USER_MESSAGES_PER_MINUTE)
 
 # ============================================================
 # طبقة الأمان السيادية (R-608) — إحياء safety.py
@@ -1035,6 +1037,93 @@ async def vision_status():
         "base_url": safe_base,
         "timeout_seconds": config.OLLAMA_TIMEOUT_SECONDS,
         "max_image_bytes": config.VISION_MAX_IMAGE_BYTES,
+    }
+
+
+# ============================================================
+# R-740 (البند ٢.٤ — بأمر المالك «ابدأ»): صوت — نطق الردود (TTS)
+# ============================================================
+
+
+class TtsRequest(BaseModel):
+    """R-740 (البند ٢.٤): طلب نطق نص — نص → مقطع صوتي."""
+    text: str = Field(..., min_length=1, max_length=10000,
+                      description="النص المطلوب نطقه")
+
+
+@app.post("/tts")
+async def tts(request: Request, body: TtsRequest):
+    """R-740 (البند ٢.٤): نص → مقطع صوتي (معيار الإغلاق — النصف الأول).
+
+    fail-closed بصدق في كل حالة: معطل → 503 بالسبب، فشل الخدمة → 502،
+    نص فارغ → 400، تجاوز حد الطول → 413، تجاوز المعدل → 429. لا صوت
+    مختلق ولا نجاح كاذب (المادة ١).
+    """
+    client_host = request.client.host if request.client else "unknown"
+    retry_after = tts_rate_limiter.check(client_host)
+    if retry_after is not None:
+        return JSONResponse(
+            status_code=429,
+            headers={"Retry-After": str(retry_after)},
+            content={"error": "rate_limited",
+                     "reason": "تم تجاوز حد طلبات النطق؛ أعد المحاولة لاحقًا"},
+        )
+    import config
+    if not (config.TTS_ENABLED and config.TTS_MODEL):
+        return JSONResponse(
+            status_code=503,
+            content={"error": "tts_disabled",
+                     "reason": "النطق معطل افتراضيًا — التفعيل بيد المالك "
+                              "(TTS_ENABLED + TTS_MODEL عبر أسرار المنصة)"},
+        )
+    text = (body.text or "").strip()
+    if not text:
+        return JSONResponse(
+            status_code=400,
+            content={"error": "empty_text",
+                     "reason": "نص فارغ — لا نطق"},
+        )
+    if len(text) > config.TTS_MAX_TEXT_CHARS:
+        return JSONResponse(
+            status_code=413,
+            content={"error": "text_too_long",
+                     "reason": f"الحد {config.TTS_MAX_TEXT_CHARS} حرفًا"},
+        )
+    import tts_client
+    spoken = tts_client.speak(text)
+    if spoken is None:
+        return JSONResponse(
+            status_code=502,
+            content={"error": "tts_failed",
+                     "reason": "خدمة النطق لم تُرجع صوتًا (نموذج غير متاح أو "
+                              "فاشل) — لا صوت مختلق"},
+        )
+    audio, ctype = spoken
+    return Response(content=audio, media_type=ctype)
+
+
+@app.get("/tts/status")
+async def tts_status():
+    """R-740: حالة النطق — لا سر أبدًا (العنوان معقّم بنمط /brain/status)."""
+    import config
+    from urllib.parse import urlsplit
+    enabled = bool(config.TTS_ENABLED and config.TTS_MODEL)
+    raw = urlsplit(str(config.TTS_BASE_URL))
+    netloc = raw.hostname or ""
+    try:
+        if raw.port is not None:
+            netloc = f"{netloc}:{raw.port}"
+        scheme = f"{raw.scheme}://" if (raw.scheme and netloc) else ""
+        safe_base = f"{scheme}{netloc}{raw.path}"
+    except ValueError:
+        safe_base = "<عنوان مضبوط غير قابل للعرض>"
+    return {
+        "enabled": enabled,
+        "model": config.TTS_MODEL,
+        "voice": config.TTS_VOICE,
+        "base_url": safe_base,
+        "timeout_seconds": config.TTS_TIMEOUT_SECONDS,
+        "max_text_chars": config.TTS_MAX_TEXT_CHARS,
     }
 
 
