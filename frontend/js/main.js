@@ -30,8 +30,8 @@ const CONFIG = {
         SOVEREIGN_COMMAND: '/sovereign/command',
         STATUS: '/status',
         HEALTH: '/health',
-        COMPONENTS: '/components',
-        HISTORY: '/orchestrator/cycle'
+        HISTORY: '/api/history',
+        CYCLE: '/orchestrator/cycle'
     },
     
     // إعدادات WebSocket
@@ -112,8 +112,6 @@ const metricMemory = document.getElementById('metric-memory');
 const metricPredictive = document.getElementById('metric-predictive');
 const metricSimulation = document.getElementById('metric-simulation');
 const metricSovereign = document.getElementById('metric-sovereign');
-const metricFieldEnergy = document.getElementById('metric-field-energy');
-const metricCoherence = document.getElementById('metric-coherence');
 
 // مؤشرات الحالة
 const statusConnection = document.getElementById('status-connection');
@@ -607,7 +605,7 @@ function handleLocalCommand(command, params) {
     
     switch(cmdLower) {
         case 'status':
-            updateMetricsFromSystem();
+            updateMetrics();
             addDecisionMessage('تم تحديث حالة النظام', 'approved');
             break;
         case 'reset':
@@ -699,75 +697,60 @@ async function sendChatMessage(text) {
 // ============================================================
 
 async function updateMetrics() {
-    if (!toggleLiveRefresh || (toggleLiveRefresh.checked !== false)) {
-        try {
-            const response = await fetch(`${CONFIG.API_BASE_URL}${CONFIG.API_ENDPOINTS.STATUS}`);
-            const data = await response.json();
-            
-            if (data.orchestrator) {
-                // تحديث المقاييس
-                currentMetrics.cycles = data.orchestrator.stats?.total_cycles || 0;
-                currentMetrics.health = data.orchestrator.system_health || 0.75;
-                
-                if (metricCycles) metricCycles.textContent = currentMetrics.cycles;
-                if (metricCyclesBar) metricCyclesBar.style.width = `${Math.min(100, currentMetrics.cycles % 100)}%`;
-                if (systemHealth) systemHealth.textContent = `${(currentMetrics.health * 100).toFixed(0)}%`;
-                
-                // تحديث حالة النظام
-                systemState.mode = data.orchestrator.mode || 'normal';
-                systemState.sessionId = data.orchestrator.session_id;
-                systemState.uptime = data.orchestrator.uptime_seconds || 0;
-                
-                if (runtimeMode) runtimeMode.textContent = `وضع التشغيل: ${systemState.mode}`;
-                if (sessionId) sessionId.textContent = systemState.sessionId || '---';
-                if (uptime) {
-                    const hours = Math.floor(systemState.uptime / 3600);
-                    const minutes = Math.floor((systemState.uptime % 3600) / 60);
-                    uptime.textContent = `${hours}h ${minutes}m`;
-                }
-                if (totalCycles) totalCycles.textContent = currentMetrics.cycles;
-                
-                // تحديث حالة المكونات
-                if (data.components) {
-                    const components = data.components;
-                    let healthy = 0;
-                    let degraded = 0;
-                    let unhealthy = 0;
-                    
-                    Object.values(components).forEach(h => {
-                        if (h === 'healthy') healthy++;
-                        else if (h === 'degraded') degraded++;
-                        else unhealthy++;
-                    });
-                    
-                    if (metricMemory) metricMemory.textContent = degraded > 0 ? 'متدهورة' : healthy > 0 ? 'مستقرة' : 'غير معروفة';
-                    if (metricPredictive) metricPredictive.textContent = components.predictive_engine === 'healthy' ? 'نشط' : 'متدهور';
-                    if (metricSimulation) metricSimulation.textContent = components.simulation_controller === 'healthy' ? 'جاهز' : 'متدهور';
-                    if (metricSovereign) metricSovereign.textContent = components.sovereign_controller === 'healthy' ? 'مستقر' : 'متدهور';
-                }
-            }
-            
-            updateLastUpdateTime();
-        } catch (error) {
-            // في حال عدم وجود خادم، نستخدم بيانات محاكاة
-            simulateMetricsUpdate();
+    // R-730 (البند ١.٤): ربط حي بالشكل الفعلي لاستجابة /status و/health.
+    // لا محاكاة عند الفشل: الحقول تعلن «غير متصل» بصدق بدل أرقام عشوائية.
+    if (toggleLiveRefresh && toggleLiveRefresh.checked === false) return;
+    await updateHeaderFromHealth();
+    try {
+        const response = await fetch(`${CONFIG.API_BASE_URL}${CONFIG.API_ENDPOINTS.STATUS}`);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const data = await response.json();
+        const orch = data.orchestrator || {};
+        const cycles = orch.stats ? orch.stats.total_cycles : null;
+        currentMetrics.cycles = typeof cycles === 'number' ? cycles : 0;
+        if (metricCycles) metricCycles.textContent = typeof cycles === 'number' ? String(cycles) : '—';
+        if (metricCyclesBar) metricCyclesBar.style.width = `${Math.min(100, currentMetrics.cycles % 100)}%`;
+
+        systemState.mode = orch.mode || null;
+        systemState.sessionId = orch.session_id || null;
+        systemState.uptime = typeof data.uptime_seconds === 'number' ? data.uptime_seconds : null;
+        if (runtimeMode) runtimeMode.textContent = systemState.mode ? `وضع التشغيل: ${systemState.mode}` : 'وضع التشغيل: —';
+
+        // حالة المكوّن من الحقل الحقيقي components.<name>.status (كائن لا نص)
+        const comps = data.components || {};
+        const pred = comps.predictive_engine;
+        const predStatus = pred && typeof pred === 'object' ? pred.status : pred;
+        if (metricPredictive) {
+            metricPredictive.textContent = predStatus === 'healthy' ? 'نشط'
+                : predStatus ? `متدهور (${predStatus})` : '—';
         }
+        if (typeof data.timestamp === 'number') {
+            updateLastUpdateTime();
+        }
+    } catch (error) {
+        if (metricCycles) metricCycles.textContent = 'غير متصل';
+        if (metricPredictive) metricPredictive.textContent = 'غير متصل';
+        if (runtimeMode) runtimeMode.textContent = 'وضع التشغيل: غير متصل';
     }
 }
 
-function simulateMetricsUpdate() {
-    currentMetrics.cycles += 1;
-    currentMetrics.health = Math.min(1, currentMetrics.health + 0.01);
-    currentMetrics.fieldEnergy = Math.random() * 100;
-    currentMetrics.coherence = 0.5 + Math.random() * 0.4;
-    
-    if (metricCycles) metricCycles.textContent = currentMetrics.cycles;
-    if (metricCyclesBar) metricCyclesBar.style.width = `${Math.min(100, currentMetrics.cycles % 100)}%`;
-    if (systemHealth) systemHealth.textContent = `${(currentMetrics.health * 100).toFixed(0)}%`;
-    if (metricFieldEnergy) metricFieldEnergy.textContent = currentMetrics.fieldEnergy.toFixed(2);
-    if (metricCoherence) metricCoherence.textContent = `${(currentMetrics.coherence * 100).toFixed(0)}%`;
-    
-    updateLastUpdateTime();
+async function updateHeaderFromHealth() {
+    // R-730: رأس الصفحة من /health الفعلي — بدل «Neural Link Active» وv2.0.0 الثابتين
+    const textEl = document.getElementById('status-connection-text');
+    const pill = document.getElementById('version-pill');
+    try {
+        const response = await fetch(`${CONFIG.API_BASE_URL}${CONFIG.API_ENDPOINTS.HEALTH}`);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const health = await response.json();
+        const ok = health.status === 'healthy';
+        if (textEl) textEl.textContent = ok ? 'متصل — سليم' : `متصل — ${health.status || 'غير معروف'}`;
+        if (statusConnection) statusConnection.classList.toggle('sovereign-pulse-fast', ok);
+        if (pill) pill.textContent = health.version ? `v${health.version}` : '—';
+    } catch (error) {
+        if (textEl) textEl.textContent = 'غير متصل';
+        if (statusConnection) statusConnection.classList.remove('sovereign-pulse-fast');
+        if (pill) pill.textContent = '—';
+    }
 }
 
 // ============================================================
@@ -777,31 +760,32 @@ function simulateMetricsUpdate() {
 async function runSovereignCycle() {
     addHistoryEvent('info', 'تشغيل دورة سيادية');
     addDecisionMessage('تشغيل دورة سيادية جديدة', 'pending');
-    
+
     try {
-        const response = await fetch(`${CONFIG.API_BASE_URL}${CONFIG.API_ENDPOINTS.HISTORY}`, {
+        // الدورة أمر مالك: /orchestrator/cycle يتطلب مفتاح API (كان لا يُرسل → 401 دائمًا)
+        const response = await fetch(`${CONFIG.API_BASE_URL}${CONFIG.API_ENDPOINTS.CYCLE}`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ type: 'manual_cycle', timestamp: Date.now() })
+            body: JSON.stringify({ type: 'manual_cycle', timestamp: Date.now(), api_key: CONFIG.API_KEY })
         });
-        
+
         const data = await response.json();
-        
-        if (data.success) {
+
+        if (response.ok && data.success) {
             addDecisionMessage(`اكتملت الدورة السيادية: ${data.cycle_id || 'غير معروف'}`, 'approved');
             addHistoryEvent('info', `الدورة ${data.cycle_id} اكتملت في ${data.duration?.toFixed(2) || 0}ms`);
             updateMetrics();
         } else {
-            addDecisionMessage('فشلت الدورة السيادية', 'rejected');
-            addHistoryEvent('error', 'فشل تشغيل الدورة السيادية');
+            const reason = data.detail || (data.errors && data.errors.join('، ')) || `HTTP ${response.status}`;
+            addDecisionMessage(`فشلت الدورة السيادية: ${reason}`, 'rejected');
+            addHistoryEvent('error', `فشل تشغيل الدورة السيادية: ${reason}`);
         }
     } catch (error) {
-        // محاكاة محلية
-        addDecisionMessage('تم تشغيل دورة سيادية (محاكاة محلية)', 'approved');
-        addHistoryEvent('info', 'تم تشغيل دورة سيادية محلياً');
-        updateMetrics();
+        // R-730: فشل الاتصال يُعلن كما هو — لا نجاح مُدّعى بلا خادم
+        addDecisionMessage(`تعذر تشغيل الدورة — الخادم غير متاح: ${error.message}`, 'rejected');
+        addHistoryEvent('error', `تعذر الاتصال لتشغيل الدورة: ${error.message}`);
     }
 }
 
@@ -811,21 +795,19 @@ async function runSovereignCycle() {
 
 async function fetchHistory() {
     addHistoryEvent('info', 'جلب سجل الأحداث');
-    
+
     try {
+        // R-730: السجل الفعلي GET /api/history (كان GET على /orchestrator/cycle → 405 صامت)
         const response = await fetch(`${CONFIG.API_BASE_URL}${CONFIG.API_ENDPOINTS.HISTORY}?limit=50`);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const data = await response.json();
-        
-        if (data.history) {
-            data.history.forEach(event => {
-                addHistoryEvent(event.level || 'info', event.message, event.details);
-            });
-        }
+        (Array.isArray(data.data) ? data.data : []).forEach(event => {
+            addHistoryEvent(event.level || 'info', event.message, event.payload);
+        });
     } catch (error) {
-        // إضافة أحداث محاكاة
-        addHistoryEvent('info', 'تم عرض سجل الأحداث (محاكاة محلية)');
+        addHistoryEvent('error', `تعذر جلب سجل الأحداث: ${error.message}`);
     }
-    
+
     switchTab('history');
 }
 

@@ -1,0 +1,220 @@
+{
+  "_doc": "R-730 (البند ١.٤ — بأمر المالك): خريطة الربط الحي — كل عنصر بمعرّف في index.html مصنف هنا. bound = مربوط بنقطة API فعلية (المسار+الحقل يُفحصان آليًا مقابل استجابة backend الحقيقية)؛ client = قياس محلي حقيقي في المتصفح (ليس بيانات خادم)؛ action_log = يعرض نتائج أفعال المالك نفسه؛ control = زر/مدخل/تبويب؛ container = حاوية تخطيط؛ unbound = لا مصدر حي بعد — يعرض «غير مربوط» بصدق ولا يكتبه أي JS. الحارس: tests/test_live_bindings.py.",
+  "bound": [
+    {
+      "element": "status-connection",
+      "endpoint": "GET /health",
+      "field": "status",
+      "writers": [
+        "js/main.js"
+      ]
+    },
+    {
+      "element": "status-connection-text",
+      "endpoint": "GET /health",
+      "field": "status",
+      "writers": [
+        "js/main.js"
+      ]
+    },
+    {
+      "element": "version-pill",
+      "endpoint": "GET /health",
+      "field": "version",
+      "writers": [
+        "js/main.js"
+      ]
+    },
+    {
+      "element": "runtime-mode",
+      "endpoint": "GET /status",
+      "field": "orchestrator.mode",
+      "writers": [
+        "js/main.js"
+      ]
+    },
+    {
+      "element": "metric-cycles",
+      "endpoint": "GET /status",
+      "field": "orchestrator.stats.total_cycles",
+      "writers": [
+        "js/main.js"
+      ]
+    },
+    {
+      "element": "metric-cycles-bar",
+      "endpoint": "GET /status",
+      "field": "orchestrator.stats.total_cycles",
+      "writers": [
+        "js/main.js"
+      ]
+    },
+    {
+      "element": "metric-predictive",
+      "endpoint": "GET /status",
+      "field": "components.predictive_engine.status",
+      "writers": [
+        "js/main.js"
+      ]
+    },
+    {
+      "element": "last-update-time",
+      "endpoint": "GET /status",
+      "field": "timestamp",
+      "writers": [
+        "js/main.js"
+      ]
+    },
+    {
+      "element": "sovereign-section-memory",
+      "endpoint": "GET /components/memory",
+      "field": "core",
+      "writers": [
+        "js/modules/memory-viewer.js"
+      ]
+    },
+    {
+      "element": "live-system-status",
+      "created_by_writer": true,
+      "endpoint": "GET /health",
+      "field": "status",
+      "writers": [
+        "js/modules/live-system-status.js",
+        "js/modules/section-router.js"
+      ]
+    },
+    {
+      "element": "live-system-status",
+      "created_by_writer": true,
+      "endpoint": "GET /disk/status",
+      "field": "enabled",
+      "writers": [
+        "js/modules/live-system-status.js",
+        "js/modules/section-router.js"
+      ]
+    },
+    {
+      "element": "live-system-status",
+      "created_by_writer": true,
+      "endpoint": "GET /brain/status",
+      "field": "enabled",
+      "writers": [
+        "js/modules/live-system-status.js",
+        "js/modules/section-router.js"
+      ]
+    },
+    {
+      "element": "sovereign-tools-registry",
+      "created_by_writer": true,
+      "endpoint": "GET /tools/list",
+      "field": "tools",
+      "writers": [
+        "js/modules/tools-registry.js"
+      ]
+    },
+    {
+      "element": "dialogue-groups",
+      "endpoint": "POST /chat",
+      "field": "reply",
+      "writers": [
+        "js/main.js",
+        "js/modules/live-ai-engine.js",
+        "ui/cognitive-input.js"
+      ]
+    },
+    {
+      "element": "commands-list",
+      "endpoint": "POST /sovereign/command",
+      "field": null,
+      "writers": [
+        "js/main.js",
+        "js/modules/command-runtime.js"
+      ],
+      "note": "صدى أوامر المالك + ردود /sovereign/command (تتطلب مفتاح السيد — لا فحص حقل)"
+    }
+  ],
+  "client": [
+    {
+      "element": "metric-fps",
+      "source": "معدل إطارات المتصفح الفعلي (محرك الحركة) — قياس محلي حقيقي",
+      "writers": [
+        "js/modules/metrics-engine.js",
+        "js/bootstrap.js"
+      ]
+    },
+    {
+      "element": "ws-status-chip",
+      "source": "حالة اتصال WebSocket الفعلية بالخادم",
+      "writers": [
+        "js/main.js",
+        "js/websocket.js",
+        "js/modules/websocket-runtime.js"
+      ]
+    },
+    {
+      "element": "chat-input-count",
+      "source": "عدد أحرف المدخل",
+      "writers": [
+        "js/main.js",
+        "ui/cognitive-input.js",
+        "js/modules/chat-runtime.js"
+      ]
+    },
+    {
+      "element": "sir-command-count",
+      "source": "عدد أحرف المدخل",
+      "writers": [
+        "js/main.js",
+        "ui/cognitive-input.js",
+        "js/modules/interface-runtime.js"
+      ]
+    }
+  ],
+  "action_log": [
+    "decisions-groups",
+    "proposals-list"
+  ],
+  "control": [
+    "btn-reset-system",
+    "btn-export-data",
+    "main-tabs",
+    "sir-command-input",
+    "btn-send-sir-command",
+    "chat-input",
+    "btn-send-chat",
+    "btn-run-cycle",
+    "btn-view-history",
+    "btn-get-status",
+    "btn-get-components",
+    "toggle-live-refresh",
+    "toggle-holographic",
+    "btn-ws-connect",
+    "btn-ws-disconnect",
+    "sovereign-section-nav"
+  ],
+  "container": [
+    "app-root",
+    "tab-monitor",
+    "monitor-extra",
+    "tab-dialogue",
+    "tab-decisions",
+    "tab-proposals",
+    "tab-commands",
+    "sovereign-section-chat",
+    "sovereign-section-tools"
+  ],
+  "unbound": [
+    {
+      "element": "metric-field-energy",
+      "reason": "لا مصدر حي في backend لـ«طاقة الحقل» — كان يُغذى بموجة جيبية (metrics-engine) وعشوائية (main.js) أزيلتا في R-730"
+    },
+    {
+      "element": "sovereign-section-evolution",
+      "reason": "القسم الرابع (التطور الذاتي) لم يُبنَ — يعرض «قيد الربط» بصدق"
+    },
+    {
+      "element": "performanceChart",
+      "reason": "لوحة رسم فارغة — لا وحدة ترسم فيها ولا مصدر بيانات (موثقة في R-715 «مستطيل رسم بياني فارغ»)؛ تبقى فارغة بصدق حتى البند ٢.٧"
+    }
+  ]
+}

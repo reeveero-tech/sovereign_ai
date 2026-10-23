@@ -2223,4 +2223,14 @@ Bus إطلاقًا. الواجهة سليمة بعد الإزالة (101 وسم 
 - البديل: `backend/tool_registry.py` + `/tools/list` + `/tools/invoke` +
   حدث TOOL_INVOKED في السجل السيادي + واجهة حية `tools-registry.js`.
 - التوثيق: `forensics/R-729_TOOL_REGISTRY.md` + حارس
-  `test_fake_capability_registry_stay_removed` يمنع عودتها.
+  `test_fake_capability_registry_stays_replaced` يمنع عودتها.
+
+## 2026-10-23 — R-730 (توسيع ١.٤): إزالة المحاكاة من لوحة المراقبة واستبدال قراءة الحقول
+- **# DELETION-JUSTIFIED** — `frontend/js/main.js`: حُذفت `simulateMetricsUpdate()` (أرقام عشوائية تُعرض كحية عند فشل الشبكة)، وفرع «محاكاة محلية» في `runSovereignCycle` (نجاح مُدّعى بلا خادم) وفي `fetchHistory`، وثابتا `metricFieldEnergy/metricCoherence`، و`COMPONENTS: '/components'` (مسار غير مسجل وغير مستخدم). واستُبدلت `updateMetrics` بقراءة الشكل الفعلي لـ`/status` (كانت تقرأ `system_health` غير الموجود → 0.75 مزروعة، وتقارن كائنًا بنص → «متدهور» زورًا، وتقرأ `uptime_seconds` من مكان خاطئ).
+- **# DELETION-JUSTIFIED** — `frontend/js/modules/metrics-engine.js`: حُذف `this.metrics.cycles++` (عدّاد إطارات يُعرض كدورات النظام)، و«طاقة الحقل» الجيبية، ومدخلات `cycles/fieldEnergy/coherence` من خريطة العرض، و`|| 60` الافتراضية.
+- **# DELETION-JUSTIFIED** — `frontend/js/modules/sovereign-orchestrator.js`: حُذفت كتابة `metric-cycles` (كاتب ثالث لعدّاد إطارات).
+- **# DELETION-JUSTIFIED** — `frontend/index.html`: النصوص الثابتة «Neural Link Active» و`v2.0.0` و`Active` و`0.00/Energy Field` استُبدلت بقيم ابتدائية صادقة تملؤها البيانات الحية (أو «غير مربوط»).
+- **# DELETION-JUSTIFIED** — الوثائق: ترويستا «آخر تحديث» (CHANGELOG + PROJECT_STATE)، وصف ١.٤ في ROADMAP_V4، وسطر عدّاد الاختبارات. تحديث حالة روتيني إلى R-730 بالمحتوى نفسه وقيم جديدة.
+- **تصويب R-729 (المادة الأولى):** وثّقت R-729 اسم الحارس `…stay_removed` والاسم الفعلي `test_fake_capability_registry_stays_replaced` (صُحّح أعلاه وفي R-729_TOOL_REGISTRY.md). ولم يُدرج R-729 هنا أسطر الوثائق المستبدلة (ترويستا «آخر تحديث» وصف ٣.١ وسطر العدّاد)، فأُدرجت الآن: تحديث حالة روتيني إلى R-729. سابقة التصويب: R-725 وR-726.
+- الحارس: `tests/test_live_bindings.py`. التفصيل: `forensics/R-730_LIVE_BINDINGS.md`.
+

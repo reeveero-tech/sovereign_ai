@@ -14,7 +14,7 @@ backend: سجل أدوات حقيقي تعلن فيه كل قدرة فعلًا،
 
 ## ٢. المنهج — RED→GREEN (مُشاهَد)
 
-**RED (قبل الإصلاح):** كُتب `tests/test_tools_registry.py` (6 اختبارات) + حارس سابع يمنع عودة الوحدة المزالة (`test_fake_capability_registry_stay_removed`)
+**RED (قبل الإصلاح):** كُتب `tests/test_tools_registry.py` (6 اختبارات) + حارس سابع يمنع عودة الوحدة المزالة (`test_fake_capability_registry_stays_replaced`)
 وشُوهد الفشل الكامل:
 
 ```

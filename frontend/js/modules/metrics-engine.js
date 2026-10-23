@@ -131,19 +131,12 @@ class SovereignMetricsEngine {
 
         if (!render) return;
 
+        /* R-730: الدورات ملك main.js من /status، والطاقة غير مربوطة —
+           هذا المحرك يكتب FPS المحلي فقط (LIVE_BINDINGS.json). */
         const map = {
 
             fps:
-                'metric-fps',
-
-            cycles:
-                'metric-cycles',
-
-            fieldEnergy:
-                'metric-field-energy',
-
-            coherence:
-                'metric-coherence'
+                'metric-fps'
         };
 
         const target =
@@ -181,34 +174,22 @@ class SovereignMetricsEngine {
 
     generateLiveMetrics() {
 
+        /* R-730 (البند ١.٤): FPS فقط — قياس محلي حقيقي من محرك الحركة.
+           أزيل: عدّاد الإطارات المتزايد كل إطار الذي كان يُعرض كـ«دورات النظام»
+           ويطغى على total_cycles الحقيقي من /status، و«طاقة الحقل» من موجة
+           جيبية. ولا 60 افتراضية عند غياب المحرك — لا رقم بلا قياس. */
+
         const fps =
             window.SOVEREIGN_ANIMATION_ENGINE
-                ?.fps || 60;
+                ?.fps;
+
+        if (typeof fps !== 'number') return;
 
         this.metrics.fps = fps;
-
-        this.metrics.cycles++;
-
-        this.metrics.fieldEnergy =
-            (
-                Math.sin(
-                    performance.now() * 0.001
-                ) * 50 + 50
-            ).toFixed(2);
 
         this.renderMetric(
             'fps',
             fps
-        );
-
-        this.renderMetric(
-            'cycles',
-            this.metrics.cycles
-        );
-
-        this.renderMetric(
-            'fieldEnergy',
-            this.metrics.fieldEnergy
         );
     }
 

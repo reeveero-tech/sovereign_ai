@@ -167,15 +167,9 @@ class SovereignOrchestrator {
 
     updateMetrics() {
 
-        const render =
-            this.systems.render;
-
-        if (!render) return;
-
-        render.updateText(
-            'metric-cycles',
-            this.cycles
-        );
+        /* R-730 (البند ١.٤): لا كتابة في عدّاد الدورات — this.cycles عدّاد
+           إطارات محلي لا دورات النظام؛ المصدر الوحيد total_cycles من /status
+           (main.js — LIVE_BINDINGS.json). */
     }
 
     /* ========================================================

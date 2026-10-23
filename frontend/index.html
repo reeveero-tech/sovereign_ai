@@ -225,8 +225,8 @@
 
                     <div class="status-dot"></div>
 
-                    <span>
-                        Neural Link Active
+                    <span id="status-connection-text">
+                        جارٍ الاتصال…
                     </span>
 
                 </div>
@@ -246,13 +246,15 @@
                 </div>
 
                 <div
+                    id="version-pill"
                     class="
                         version-pill
                         glow-purple
                     "
+                    title="الإصدار من /health (R-730)"
                 >
 
-                    v2.0.0
+                    —
 
                 </div>
 
@@ -517,11 +519,11 @@
                                 id="metric-predictive"
                                 class="metric-value"
                             >
-                                Active
+                                —
                             </div>
 
                             <div class="metric-sub">
-                                SOVRA Runtime
+                                المحرك التنبؤي (/status)
                             </div>
 
                         </article>
@@ -545,12 +547,13 @@
                             <div
                                 id="metric-field-energy"
                                 class="metric-value"
+                                title="لا مصدر حي في backend بعد (R-730)"
                             >
-                                0.00
+                                غير مربوط
                             </div>
 
                             <div class="metric-sub">
-                                Energy Field
+                                لا مصدر حي بعد
                             </div>
 
                         </article>
