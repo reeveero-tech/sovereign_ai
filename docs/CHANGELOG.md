@@ -1,9 +1,19 @@
 # CHANGELOG.md — سجل التغييرات
 
 > كل تغيير يُسجل هنا (قاعدة الدفعة الذرية).
-> آخر تحديث: 2026-10-24 (D-041 — البند ٣.٣ مؤجل بقرار المالك)
+> آخر تحديث: 2026-10-24 (R-744 — البند ٤.٢: سجل التطور)
 
 ---
+
+## [R-744] — 2026-10-24 — البند ٤.٢: سجل التطور (بأمر المالك «ابدأ بالبند ٤.٢»)
+
+- **`backend/evolution_ledger.py`:** كل دورة تطور ذاتي (اليوم: `defects.scan` — R-743) تترك مدخلًا إلحاقيًا حتى بلا تغيير: ماذا اكتشف (discovered) / ماذا زال (resolved) / أين كانت وأين صارت (open_before→open_after) / بأي دليل (`report_fingerprint` = `ToolRegistry._fingerprint` نفسها، فتطابق `result_fingerprint` في حدث tool_invoked الموقّع). `changed=[]` صادقًا — النظام لا يعدّل نفسه اليوم.
+- **قابل للتدقيق:** سلسلة تجزئة prev_hash→entry_hash؛ `verify()` تكشف أي عبث بالمحتوى أو الترتيب.
+- **الدوام:** Supabase مفعّل → POST إلحاقي فقط إلى `disk_log` (namespace=evolution — لا PATCH/DELETE)؛ معطل أو بعيد → `durable=False` + `cloud_error` معلنان، والدورة لا تنهار (best-effort نمط R-719).
+- **الربط:** `_defect_scan_payload` يسجل الدورة دون مسّ التقرير المُعاد؛ `GET /evolution/ledger` قراءة فقط بلا سر (status + verify + entries).
+- **RED→GREEN:** 7 مُشاهدة (`forensics/R-744_evidence_RED.txt`) ← 7/7 ثابت 3 تشغيلات؛ دليل حي: None→1 ثم 1→0 والبصمات تطابق الأثر الموقّع، والعبث المقصود كُشف. **الحزمة 1000→1007.**
+- **الحد المعلن (المادة ٥):** الدوام عبر النشر يتطلب تفعيل Supabase (٤.١ بيد المالك) — وإلا تضيع المداخل عند إعادة التشغيل (والأثر الموقّع يبقى). السلسلة لا تُستأنف عبر الإقلاع (segment_start). التفصيل: `forensics/R-744_EVOLUTION_LEDGER.md`.
+- **# DELETION-JUSTIFIED:** سطرا `return defect_scan.get_worklist().scan(...)` في `_defect_scan_payload` استُبدلا بالنداء نفسه + تسجيل الدورة + `return report` (سلوك التقرير حرفيًا كما هو)؛ وأسطر توثيق حالة (ترويستا «آخر تحديث»، العدّادات، صف ٤.٢ في ROADMAP_V4) — مدخل DELETED_LINES_AUDIT في نفس الالتزام.
 
 ## [D-041] — 2026-10-24 — البند ٣.٣ (تنفيذ الكود) مؤجل بقرار المالك (توثيق فقط — لا كود)
 

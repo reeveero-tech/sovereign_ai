@@ -386,8 +386,27 @@ def _defect_scan_payload() -> Dict[str, Any]:
         threshold = min(max(10.0, 3.0 * hb["interval"]), 120.0)
         if time.time() - hb["epoch"] > threshold:
             hb = None  # منتهي المهلة = غائب (نفس حكم /supervisor/status)
-    return defect_scan.get_worklist().scan(
-        health=health, scheduler=sched_snapshot, heartbeat=hb, now=time.time())
+    now = time.time()
+    report = defect_scan.get_worklist().scan(
+        health=health, scheduler=sched_snapshot, heartbeat=hb, now=now)
+    # R-744 (البند ٤.٢): كل دورة تترك مدخلًا إلحاقيًا في سجل التطور (disk_log
+    # namespace=evolution). best-effort: لا يمس التقرير المُعاد — فبصمته تطابق
+    # result_fingerprint في حدث tool_invoked الموقّع.
+    import evolution_ledger
+    evolution_ledger.get_ledger().record_cycle("defects.scan", report, now=now)
+    return report
+
+
+@app.get("/evolution/ledger")
+async def evolution_ledger_view(limit: int = 50):
+    """R-744 (البند ٤.٢): سجل التطور — قراءة فقط، بلا سر (أعداد ومعرّفات وبصمات).
+
+    durable يعلن بصدق هل المداخل تُلحق بـ disk_log (Supabase) أم في الذاكرة فقط."""
+    import evolution_ledger
+    led = evolution_ledger.get_ledger()
+    limit = max(1, min(int(limit), evolution_ledger.BUFFER_SIZE))
+    return {"status": led.status(), "verify": led.verify(),
+            "entries": led.entries()[-limit:]}
 
 
 @app.get("/guardian/status")

@@ -1,0 +1,17 @@
+# R-744 RED — مُشاهد قبل أي تنفيذ (المادة ٢) — 2026-10-24T11:06:48Z
+_______ ERROR at setup of test_unreachable_cloud_keeps_entry_with_error ________
+FAILED tests/test_evolution_ledger.py::test_real_loop_entry_matches_signed_trace
+ERROR tests/test_evolution_ledger.py::test_every_cycle_records_entry_even_without_change
+ERROR tests/test_evolution_ledger.py::test_entry_captures_discovered_resolved_before_after
+ERROR tests/test_evolution_ledger.py::test_hash_chain_detects_tampering - Mod...
+ERROR tests/test_evolution_ledger.py::test_disabled_cloud_is_declared_not_durable
+ERROR tests/test_evolution_ledger.py::test_enabled_cloud_appends_only_to_disk_log
+ERROR tests/test_evolution_ledger.py::test_unreachable_cloud_keeps_entry_with_error
+1 failed, 3 warnings, 6 errors in 0.72s
+
+# GREEN + دليل حي (جذر بيانات مؤقت خارج المستودع، مفتاح اختباري عابر؛ نبض حارس محاكى بين الدورتين ليزول العيب فعلًا):
+status: {"namespace": "evolution", "durable": false, "buffered": 2, "reason": "Supabase غير مفعّل (SUPABASE_URL + SUPABASE_SECRE ...
+verify: {'ok': True, 'checked': 2}
+ seq=1 discovered=['supervisor_heartbeat_missing'] resolved=[] None→1 changed=[] durable=False fp=9d1aa717eb53e351 == trace 9d1aa717eb53e351: True
+ seq=2 discovered=[] resolved=['supervisor_heartbeat_missing'] 1→0 changed=[] durable=False fp=640dd76d561b963b == trace 640dd76d561b963b: True
+بعد عبث مقصود بالمدخل الأول: {'ok': False, 'broken_at': 0, 'reason': 'entry_hash لا يطابق المحتوى'}

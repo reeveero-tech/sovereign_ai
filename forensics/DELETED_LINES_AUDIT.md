@@ -2330,3 +2330,8 @@ Bus إطلاقًا. الواجهة سليمة بعد الإزالة (101 وسم 
 
 ## 2026-10-24 — D-041: تأجيل البند ٣.٣ بقرار المالك (توثيق فقط)
 - **# DELETION-JUSTIFIED** — لا حذف شيفرة. المحذوفات أسطر توثيق حالة استُبدلت: حالة صف ٣.٣ في ROADMAP_V4 («لم يبدأ» → «مؤجل بقرار المالك — D-041»)، وترويستا «آخر تحديث» (CHANGELOG + PROJECT_STATE). صف القرار في OWNER_DECISIONS_PENDING ومدخل DECISIONS إلحاق فقط.
+
+
+## 2026-10-24 — R-744 (البند ٤.٢): سجل التطور
+- **# DELETION-JUSTIFIED** — سطرا `return defect_scan.get_worklist().scan(` و`health=..., now=time.time())` في `backend/app.py::_defect_scan_payload` استُبدلا بالنداء نفسه مخزّنًا في `report` + `record_cycle` + `return report` — سلوك التقرير المُعاد حرفيًا كما هو (حارس test_defect_scan أخضر). بقية المحذوفات أسطر توثيق حالة استُبدلت: ترويستا «آخر تحديث» (CHANGELOG + PROJECT_STATE)، العدّادات (1000→1007)، حالة صف ٤.٢ في ROADMAP_V4 («جزئي… لا يُكتب فيه بعد» → منجز بحدود).
+- الحارس: `tests/test_evolution_ledger.py` (7). التفصيل: `forensics/R-744_EVOLUTION_LEDGER.md`.
