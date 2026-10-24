@@ -1,0 +1,8 @@
+backend/config.py:450
+  /home/user/workspace/repo/backend/config.py:450: UserWarning: ⚠️ CORS مفتوح للجميع — مقبول في التطوير فقط (D-034)
+    warnings.warn("⚠️ CORS مفتوح للجميع — مقبول في التطوير فقط (D-034)")
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_gate_docs_sync.py::test_staged_mode_enforces_active_roadmap_pointer
+1 failed, 1 warning in 0.32s

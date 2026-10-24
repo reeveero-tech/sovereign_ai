@@ -328,3 +328,31 @@ def test_deleted_doc_does_not_count():
         assert "docs/CHANGELOG.md" in (r.stdout + r.stderr)
     finally:
         shutil.rmtree(repo, ignore_errors=True)
+
+
+def test_staged_mode_enforces_active_roadmap_pointer():
+    """وضع الفهرس (--staged) يُلزم بالخارطة النشطة من مؤشر الفهرس نفسه —
+    علة R-749-ب: كان مؤشر الفهرس يُقرأ بمرجع خاطئ (::) فيسقط شرط الخارطة
+    النشطة كليًا في pre-commit ويُقبل أي ROADMAP*.md (اكتشاف مراجعة التسليم)."""
+    repo = _make_repo()
+    try:
+        _write(repo, "docs/ROADMAP_V5.md", "خارطة نشطة\n")
+        _write(repo, "docs/ROADMAP_ACTIVE.txt", "docs/ROADMAP_V5.md\n")
+        _write(repo, "docs/PROJECT_STATE.md", "حالة\n")
+        _write(repo, "docs/CHANGELOG.md", "سجل\n")
+        _commit_all(repo, "init active pointer")
+        # كود + الثلاثة المطلوبة + خارطة قديمة فقط (لا النشطة) في الفهرس
+        _write(repo, "backend/app.py", "x = 1\n")
+        _write(repo, "docs/PROJECT_STATE.md", "حالة 2\n")
+        _write(repo, "docs/CHANGELOG.md", "سجل 2\n")
+        _write(repo, "docs/ROADMAP_V4.md", "خارطة قديمة محدثة\n")
+        subprocess.run(["git", "add", "-A"], cwd=repo, check=True)
+        r = _run_gate(str(repo), "--staged")
+        assert r.returncode == 1, r.stdout + r.stderr
+        # وبإضافة تحديث الخارطة النشطة نفسها يمر
+        _write(repo, "docs/ROADMAP_V5.md", "خارطة نشطة محدثة\n")
+        subprocess.run(["git", "add", "-A"], cwd=repo, check=True)
+        r2 = _run_gate(str(repo), "--staged")
+        assert r2.returncode == 0, r2.stdout + r2.stderr
+    finally:
+        shutil.rmtree(repo, ignore_errors=True)

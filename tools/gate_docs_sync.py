@@ -106,8 +106,15 @@ def _staged_files() -> list[tuple[str, str]]:
 
 def _active_roadmap(ref: str) -> str | None:
     """الخارطة النشطة من مؤشر ROADMAP_ACTIVE.txt عند مرجع (SHA أو : للفهرس).
-    غياب المؤشر → None (توافق رجعي: أي ROADMAP*.md)."""
-    out = _git(["show", f"{ref}:{ACTIVE_ROADMAP_POINTER}"], check=False)
+    غياب المؤشر → None (توافق رجعي: أي ROADMAP*.md).
+    تصويب R-749-ب: مرجع الفهرس هو «:» — صيغة git للمسار في الفهرس
+    «:مسار» لا «::مسار» (الأخيرة فاشلة بصمت فكانت تسقط شرط الخارطة النشطة
+    في وضع --staged)."""
+    spec = (
+        f":{ACTIVE_ROADMAP_POINTER}" if ref == ":"
+        else f"{ref}:{ACTIVE_ROADMAP_POINTER}"
+    )
+    out = _git(["show", spec], check=False)
     if out.returncode != 0:
         return None
     for line in out.stdout.splitlines():
