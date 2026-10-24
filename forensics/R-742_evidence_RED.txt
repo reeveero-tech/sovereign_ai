@@ -1,0 +1,27 @@
+# R-742 RED — مُشاهد قبل أي تنفيذ (المادة ٢) — 2026-10-24T07:27:47Z
+=========================== short test summary info ============================
+FAILED tests/test_mic_ui.py::test_mic_button_in_chat_row - AssertionError: زر...
+FAILED tests/test_mic_ui.py::test_mic_button_classified - AssertionError: btn...
+FAILED tests/test_mic_ui.py::test_stt_module_real_and_bound - AssertionError:...
+FAILED tests/test_mic_ui.py::test_upload_type_normalized_and_in_server_contract
+FAILED tests/test_mic_ui.py::test_size_limit_matches_server_contract - Assert...
+FAILED tests/test_mic_ui.py::test_transcript_goes_to_input_not_auto_sent - As...
+FAILED tests/test_mic_ui.py::test_script_loaded_and_inventoried - AssertionEr...
+7 failed, 1 warning in 0.06s
+
+# دليل السلوك الحي (14/14):
+PASS | النقر الأول يبدأ التسجيل
+PASS | النقر الثاني يوقف التسجيل ويحرر الميكروفون
+PASS | طلب واحد إلى /stt
+PASS | النوع مطبَّع: audio/webm (لا codecs) — لن يُرفض 415
+PASS | اسم الملف بامتداد صحيح
+PASS | النص وُضع في مربع الإدخال
+PASS | لا إرسال آلي باسم المالك
+PASS | 503: لا نص في الإدخال
+PASS | 503: تحذير معلن بالسبب
+PASS | 502: لا نص مختلق
+PASS | نص فارغ: لا إدخال وتحذير معلن
+PASS | نوع خارج العقد: لا طلب شبكة
+PASS | رفض الإذن: لا تسجيل وتحذير معلن
+PASS | النص يُلحق بما كتبه المالك لا يمحوه
+SUMMARY: 14/14 PASS

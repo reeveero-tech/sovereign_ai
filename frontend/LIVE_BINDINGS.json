@@ -230,7 +230,8 @@
     "btn-ws-disconnect",
     "btn-tts-toggle",
     "btn-vision-upload",
-    "vision-file-input"
+    "vision-file-input",
+    "btn-stt-mic"
   ],
   "container": [
     "app-root",
