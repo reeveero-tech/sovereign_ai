@@ -2358,3 +2358,7 @@ Bus إطلاقًا. الواجهة سليمة بعد الإزالة (101 وسم 
 
 ## 2026-10-24 — R-748 (V5 §١.١): القاعدة الحاكمة المقوى
 - **# DELETION-JUSTIFIED** — أسطر بوابة D-040 القديمة في `.github/workflows/ci.yml` (سكربت bash الذي كان يقبل أي ملف docs//forensics/ — استُبدل بنداء `tools/gate_docs_sync.py "$GITHUB_SHA"` بنفس اسم الخطوة)، وأسطر بوابة PR القديمة (heredoc python الذي كان يشترط `docs/ROADMAP.md` غير الموجود — استُبدل بنداء الحارس `--diff`)، وسطرا `exec` وشرط docs/ في `.githooks/pre-commit` و`tests/test_governance_docs_sync.py` (استُبدل بالثلاثة الحرفية: PROJECT_STATE + CHANGELOG + ROADMAP*.md) — كلها استبدال بمنطق أضيق يطابق حرفية أمر المالك (D-042)، بسلوك محروس بـ10 حالات سلوكية RED→GREEN. بقية المحذوفات أسطر توثيق حالة استُبدلت: ترويستا «آخر تحديث» (CHANGELOG + PROJECT_STATE)، العدّادات (1055→1065)، صف المرحلة (ROADMAP_V3→V5)، وترويسة ROADMAP_V4 (إلحاق انتقال). الحارس: `tests/test_gate_docs_sync.py` (10). التفصيل: `forensics/R-748_GOVERNANCE_GATE.md`.
+
+
+## 2026-10-24 — R-748 تصويب: نقاط الدخول المسموح لها بـsys.exit
+- **# DELETION-JUSTIFIED** — لا حذف شيفرة: إلحاق سطر واحد لقائمة `EXIT_ALLOWED_ENTRY_POINTS` في `backend/tests/invariants/test_no_death_paths.py` (عقد CLI مع git/CI — ذات عقد `tools/private_ip_guard.py`)، وترويستا «آخر تحديث» (CHANGELOG + PROJECT_STATE) وحالة صف ١.١ في ROADMAP_V5 استُبدلت (إضافة الجولات). الحارس نفسه أخضر 12/12.

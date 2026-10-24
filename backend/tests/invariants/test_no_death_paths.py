@@ -49,6 +49,9 @@ EXIT_ALLOWED_ENTRY_POINTS = {
     "scripts/verify_new_key.py",
     "tools/action_log.py",
     "tools/private_ip_guard.py",  # GS-3: CLI للـhook — رمز الخروج 0/1/2 هو عقده مع git
+    # R-748 (V5 §١.١): حارس القاعدة الحاكمة — CLI تشغّله بوابة CI
+    # (التزام/مدى) وpre-commit (فهرس)؛ رمز الخروج 0/1 هو عقده مع git/CI
+    "tools/gate_docs_sync.py",
 }
 
 BANNED_STRING = "max_tamper_attempts"
