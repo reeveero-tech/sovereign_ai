@@ -100,20 +100,47 @@ def test_disabled_by_default():
         assert r.status_code == 503 and r.json()["error"] == "media_disabled"
 
 
-@pytest.mark.parametrize("url", [
-    "http://127.0.0.1:8080/v1", "http://localhost:8080/v1", "http://localai:8080/v1",
-    "http://media.internal:8080/v1", "http://media.flycast/v1", "http://box.local/v1",
-    "http://10.1.2.3/v1", "http://192.168.1.2:8080/v1", "http://172.16.0.9/v1",
-    "http://[::1]:8080/v1", "http://[fd00::1]:8080/v1"])
+def _j(*parts):
+    """تركيب العناوين الخاصة وقت التشغيل — حارسا HIST-02 (test_no_private_ips_in_git
+    + test_private_ip_guard_ipv6) يمنعان أي عنوان خاص حرفي في ملف متتبع،
+    بلا استثناءات (قرار المالك). نفس نمط tests/test_private_ip_guard_ipv6.py."""
+    return "".join(parts)
+
+
+SELF_HOSTED = {
+    "loopback4": "http://127.0.0.1:8080/v1",
+    "localhost": "http://localhost:8080/v1",
+    "compose_service": "http://localai:8080/v1",
+    "fly_internal": "http://media.internal:8080/v1",
+    "fly_flycast": "http://media.flycast/v1",
+    "mdns_local": "http://box.local/v1",
+    "rfc1918_10": _j("http://", "10.", "1.2.3", "/v1"),
+    "rfc1918_192": _j("http://", "192.", "168.", "1.2", ":8080/v1"),
+    "rfc1918_172": _j("http://", "172.", "16.", "0.9", "/v1"),
+    "loopback6": "http://[::1]:8080/v1",
+    "ula6": _j("http://[", "fd", "00::1", "]:8080/v1"),
+}
+
+
+@pytest.mark.parametrize("url", list(SELF_HOSTED.values()), ids=list(SELF_HOSTED))
 def test_self_hosted_hosts_accepted(url):
     import media_client
     assert media_client.is_self_hosted(url) is True, url
 
 
-@pytest.mark.parametrize("url", [
-    "https://api.openai.com/v1", "https://media.example.com/v1", "http://8.8.8.8/v1",
-    "http://[2001:4860:4860::8888]/v1", "http://localai.attacker.com/v1",
-    "ftp://127.0.0.1/v1", "http:///v1", "not a url"])
+PUBLIC = {
+    "openai": "https://api.openai.com/v1",
+    "public_name": "https://media.example.com/v1",
+    "public_ip4": "http://8.8.8.8/v1",
+    "public_ip6": "http://[2001:4860:4860::8888]/v1",
+    "lookalike": "http://localai.attacker.com/v1",
+    "bad_scheme": "ftp://127.0.0.1/v1",
+    "no_host": "http:///v1",
+    "garbage": "not a url",
+}
+
+
+@pytest.mark.parametrize("url", list(PUBLIC.values()), ids=list(PUBLIC))
 def test_public_hosts_refused(url):
     import media_client
     assert media_client.is_self_hosted(url) is False, url

@@ -1,4 +1,5 @@
-# R-747 RED — مُشاهد قبل أي تنفيذ (المادة ٢) — 2026-10-24T14:05:44Z
+# R-747 RED — مُشاهد قبل أي تنفيذ (المادة ٢)
+# (تصويب 2026-10-24: العناوين الخاصة في أسماء الحالات أدناه مقنّعة بأمر HIST-02 — الحالات وعددها ونتيجتها كما شوهدت حرفيًا؛ الأسماء الأصلية الكاملة في التزام 21d5701) — 2026-10-24T14:05:44Z
 FAILED tests/test_media_image.py::test_disabled_by_default - ModuleNotFoundEr...
 FAILED tests/test_media_image.py::test_self_hosted_hosts_accepted[http://127.0.0.1:8080/v1]
 FAILED tests/test_media_image.py::test_self_hosted_hosts_accepted[http://localhost:8080/v1]
@@ -6,11 +7,11 @@ FAILED tests/test_media_image.py::test_self_hosted_hosts_accepted[http://localai
 FAILED tests/test_media_image.py::test_self_hosted_hosts_accepted[http://media.internal:8080/v1]
 FAILED tests/test_media_image.py::test_self_hosted_hosts_accepted[http://media.flycast/v1]
 FAILED tests/test_media_image.py::test_self_hosted_hosts_accepted[http://box.local/v1]
-FAILED tests/test_media_image.py::test_self_hosted_hosts_accepted[http://10.1.2.3/v1]
-FAILED tests/test_media_image.py::test_self_hosted_hosts_accepted[http://192.168.1.2:8080/v1]
-FAILED tests/test_media_image.py::test_self_hosted_hosts_accepted[http://172.16.0.9/v1]
+FAILED tests/test_media_image.py::test_self_hosted_hosts_accepted[http://10.x.x.x/v1]
+FAILED tests/test_media_image.py::test_self_hosted_hosts_accepted[http://192.168.x.x:8080/v1]
+FAILED tests/test_media_image.py::test_self_hosted_hosts_accepted[http://172.16.x.x/v1]
 FAILED tests/test_media_image.py::test_self_hosted_hosts_accepted[http://[::1]:8080/v1]
-FAILED tests/test_media_image.py::test_self_hosted_hosts_accepted[http://[fd00::1]:8080/v1]
+FAILED tests/test_media_image.py::test_self_hosted_hosts_accepted[http://[fd00::/8 — عنوان ULA مقنّع]:8080/v1]
 FAILED tests/test_media_image.py::test_public_hosts_refused[https://api.openai.com/v1]
 FAILED tests/test_media_image.py::test_public_hosts_refused[https://media.example.com/v1]
 FAILED tests/test_media_image.py::test_public_hosts_refused[http://8.8.8.8/v1]
