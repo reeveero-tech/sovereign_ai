@@ -101,3 +101,60 @@ def test_inventory_lists_vision_module():
         "vision-input.js غير مدرجة في frontend/INVENTORY.md")
     assert "9 |" in INVENTORY or "| 9 |" in INVENTORY or " 9 " in INVENTORY.split("تستهلك API مباشرة")[1][:60], (
         "عدّة الجرد المباشرة لم تُحدَّث (8 → 9)")
+
+
+def test_accept_list_matches_server_contract():
+    """مطابقة العقد ثنائية الاتجاعة ومحروسة: قائمة الأنواع في accept الواجهة
+    = قائمة الخادم في backend/app.py حرفيًا — أي انجراف مستقبلي في أحدهما
+    يكسر هذا الحارس لا التطبيق بصمت (تصويب R-741: الادعاء صار محروسًا)."""
+    app_py = (REPO_ROOT / "backend" / "app.py").read_text(
+        encoding="utf-8", errors="ignore")
+    m = re.search(
+        r"VISION_ALLOWED_CONTENT_TYPES\s*=\s*\{(.*?)\}",
+        app_py, re.S)
+    assert m, "قائمة VISION_ALLOWED_CONTENT_TYPES غير موجودة في app.py"
+    server_types = set(re.findall(r'"(image/[a-z]+)"', m.group(1)))
+    accept = re.search(
+        r'<input[^>]*id="vision-file-input"[^>]*accept="([^"]+)"',
+        INDEX)
+    assert accept, "مدخل الملف بلا accept — لا مطابقة ممكنة"
+    ui_types = set(t.strip() for t in accept.group(1).split(","))
+    assert ui_types == server_types, (
+        f"انجراف عقد بين الواجهة والخادم: UI={sorted(ui_types)} "
+        f"vs SERVER={sorted(server_types)}")
+
+
+def test_size_limit_matches_server_contract():
+    """حد الحجم في الواجهة = حد الخادم (VISION_MAX_IMAGE_BYTES في config) —
+    انجراف أي طرف يكسر الحارس."""
+    config_py = (REPO_ROOT / "backend" / "config.py").read_text(
+        encoding="utf-8", errors="ignore")
+    m = re.search(
+        r"VISION_MAX_IMAGE_BYTES\s*=\s*int\(\w+\(\"VISION_MAX_IMAGE_BYTES\",\s*str\(([^)]+)\)\)\)",
+        config_py)
+    assert m, "VISION_MAX_IMAGE_BYTES غير موجود في config.py"
+    server_expr = m.group(1).replace(" ", "")
+    server_limit = eval(server_expr)  # تعبير رقمي معروف المصدر (10*1024*1024)
+    js = VISION_JS.read_text(encoding="utf-8", errors="ignore")
+    jm = re.search(r"this\.maxBytes\s*=\s*([\d\s*+]+);", js)
+    assert jm, "حد الحجم (maxBytes) غير معرف في vision-input.js"
+    ui_limit = eval(jm.group(1).replace("\n", "").replace(" ", ""))
+    assert ui_limit == server_limit, (
+        f"انجراف حد الحجم: UI={ui_limit} vs SERVER={server_limit}")
+
+
+def test_vision_flow_persists_image_before_description():
+    """رسالة الصورة تدخل activeConversation قبل تسليم الوصف — فيرتبط حفظ
+    الذاكرة (saveInteraction يبحث آخر رسالة مستخدم) بالصورة لا بما قبلها
+    (تصويب R-741 بعد اعتراض المراجعة)."""
+    js = CHAT_JS
+    m = re.search(
+        r"receiveVisionDescription\([^)]*\)\s*\{.*?\n    \}",
+        js, re.S)
+    assert m, "receiveVisionDescription غير موجود في chat-runtime.js"
+    body = m.group(0)
+    push_pos = body.find("activeConversation.push")
+    receive_pos = body.find("receiveMessage")
+    assert push_pos != -1 and receive_pos != -1 and push_pos < receive_pos, (
+        "يجب أن تدفع رسالة الصورة إلى activeConversation قبل receiveMessage "
+        "— وإلا يُحفظ الوصف في الذاكرة كرد على ما قبل الصورة")

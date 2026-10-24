@@ -1,0 +1,24 @@
+# R-741 تصويب — RED مُشاهد على النسخة المدفوعة (9cc8d1b) قبل إصلاح الترتيب — 2026-10-24T00:52:18Z
+# حارس test_vision_flow_persists_image_before_description على chat-runtime كما دُفع:
+FAILED tests/test_vision_ui.py::test_vision_flow_persists_image_before_description
+1 failed, 1 warning in 0.05s
+
+# دليل السلوك الحي للوحدة (16/16):
+👁 Vision Input Initialized
+PASS | الوحدة حُملت وأنشأت SOVEREIGN_VISION_INPUT
+PASS | نقر الزر يفتح منتقي الملفات
+PASS | نوع غير مسموح: لا طلب شبكة
+PASS | نوع غير مسموح: تحذير معلن
+PASS | حجم زائد (11MiB): لا طلب شبكة
+PASS | حجم زائد: تحذير معلن
+PASS | صورة صالحة: طلب واحد إلى /vision
+PASS | الرفع multipart يحمل الملف
+PASS | الوصف سُلّم للمحادثة
+PASS | 503: لا تسليم للمحادثة
+PASS | 503: تحذير معلن بالسبب
+PASS | 502: لا تسليم ولا وصف مختلق
+PASS | 502: تحذير معلن
+PASS | بلا description: لا تسليم
+PASS | بلا description: تحذير معلن
+PASS | لا رفعان متزامنان (uploading flag)
+SUMMARY: 16/16 PASS

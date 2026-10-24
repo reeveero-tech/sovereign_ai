@@ -230,10 +230,26 @@ class SovereignChatRuntime {
 
     receiveVisionDescription(description, fileName) {
 
+        const imageNote =
+            `🖼️ صورة: ${fileName}`;
+
         window.SOVEREIGN_DIALOGUE
             ?.addUserMessage(
-                `🖼️ صورة: ${fileName}`
+                imageNote
             );
+
+        /* الرسالة تدخل سجل المحادثة الفعلي قبل الرد — كنمط
+           sendMessage — فيرتبط الوصف بالصورة لا بما قبلها */
+
+        this.activeConversation.push({
+
+            role: 'user',
+
+            content: imageNote,
+
+            timestamp:
+                Date.now()
+        });
 
         this.receiveMessage(
             `👁 ${description}`
