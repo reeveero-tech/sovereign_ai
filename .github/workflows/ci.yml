@@ -60,31 +60,16 @@ jobs:
           echo "❌ مرفوض تلقائياً: الالتزام يحذف ${DELETIONS} سطراً بلا # DELETION-JUSTIFIED في نفس الالتزام — قرار المالك (Issue #8)"
           exit 1
 
-      # القاعدة الحاكمة (D-040 — R-722 بأمر المالك 2026-10-22): أي التزام يغيّر
-      # كودًا (backend/frontend/tools/tests/التكوين) يجب أن يحدّث وثائق المشروع
-      # (docs/ أو forensics/) في نفس الالتزام — لا دفعة وثائق منفصلة.
+      # القاعدة الحاكمة (D-040 — R-722 بأمر المالك؛ تعزيز R-748 بأمر المالك
+      # 2026-10-24 «القاعدة الحاكمة»): أي التزام يغيّر كودًا (backend/frontend/
+      # tools/tests/nexus/guardian/التكوين) يجب أن يحدّث الثلاثة الحرفية في نفس
+      # الالتزام: docs/PROJECT_STATE.md وdocs/CHANGELOG.md وdocs/ROADMAP*.md —
+      # لا دفعة وثائق منفصلة. التنفيذ الموحد: tools/gate_docs_sync.py
+      # (CI + pre-commit + اختبار سلوكي tests/test_gate_docs_sync.py).
       - name: 'Owner rule (D-040): reject code changes without docs update in the same commit'
         run: |
           set -euo pipefail
-          SHA="${GITHUB_SHA}"
-          PARENTS=$(git rev-list --parents -n 1 "${SHA}" | wc -w)
-          if [ "${PARENTS}" -gt 2 ]; then
-            echo "⏭️ التزام دمجي — يُفحص بمعايير خاصة عند وقوعه"
-            exit 0
-          fi
-          FILES=$(git show --name-only --format= "${SHA}")
-          CODE=$(echo "$FILES" | grep -E '^(backend/|frontend/|tools/|tests/|\.github/|fly\.toml$|verify\.sh$|requirements\.txt$|pytest\.ini$)' || true)
-          DOCS=$(echo "$FILES" | grep -E '^(docs/|forensics/)' || true)
-          if [ -z "${CODE}" ]; then
-            echo "✅ لا تغييرات كود — لا يلزم تحديث وثائق"
-            exit 0
-          fi
-          if [ -n "${DOCS}" ]; then
-            echo "✅ الالتزام يحدّث الوثائق مع الكود في نفس الدفعة (D-040)"
-            exit 0
-          fi
-          echo "❌ مرفوض تلقائياً (D-040): الالتزام يغيّر كودًا دون تحديث وثائق المشروع في نفس الالتزام — القاعدة الحاكمة بأمر المالك (R-722)"
-          exit 1
+          python tools/gate_docs_sync.py "${GITHUB_SHA}"
 
       - uses: actions/setup-python@v5
         with:
@@ -198,36 +183,16 @@ jobs:
           path: forensics/pytest_results.xml
           if-no-files-found: error
 
+      # بوابة الدفعة الذرية (PR) — نفس الحارس الموحد (R-748): الثلاثة الحرفية.
+      # (القائمة القديمة كانت تشترط docs/ROADMAP.md الذي لم يعد موجودًا —
+      # الخارطة النشطة بأي إصدار docs/ROADMAP*.md.)
       - name: Atomic batch gate — docs must change with code
         if: github.event_name == 'pull_request'
         env:
           BASE: ${{ github.event.pull_request.base.sha }}
           HEAD: ${{ github.event.pull_request.head.sha }}
         run: |
-          python - << 'EOF'
-          import os, subprocess, sys
-
-          base = os.environ["BASE"]
-          head = os.environ["HEAD"]
-          changed = subprocess.run(
-              ["git", "diff", "--name-only", base, head],
-              capture_output=True, text=True
-          ).stdout.splitlines()
-
-          code_files = [f for f in changed if f.startswith(("backend/", "frontend/", "nexus/", "main.py", "start.sh", "Dockerfile"))]
-          if not code_files:
-              print("✅ No code changed — gate not required.")
-              sys.exit(0)
-
-          required_docs = ["docs/ROADMAP.md", "docs/PROJECT_STATE.md"]
-          missing = [d for d in required_docs if d not in changed]
-          if missing:
-              print(f"❌ Atomic batch gate FAILED: code changed but these docs did not: {missing}")
-              print("   Rule: any code change must update ROADMAP.md + PROJECT_STATE.md in the SAME batch.")
-              sys.exit(1)
-
-          print(f"✅ Atomic batch gate passed — {len(code_files)} code files + docs updated together.")
-          EOF
+          python tools/gate_docs_sync.py --diff "${BASE}" "${HEAD}"
 
   # R-682 (Task 3.3): Separate operational job — manual trigger only.
   # Reads host secrets (KEY_SECRET), writes real data. NOT part of default CI.

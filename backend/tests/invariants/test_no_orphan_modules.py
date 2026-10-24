@@ -46,6 +46,10 @@ SCRIPT_ENTRY_POINTS = {
     # GS-3 (قرار المالك د.٣): نواة حارس العناوين — CLI يشغّله .githooks/pre-commit
     # (`--staged`)، ويُحمَّل في tests/test_private_ip_guard_ipv6.py بـ spec_from_file_location
     "tools/private_ip_guard.py",
+    # R-748 (V5 §١.١): حارس القاعدة الحاكمة المقوى — CLI تشغّله بوابة CI
+    # (.github/workflows/ci.yml: التزام/مدى) و.githooks/pre-commit (`--staged`)
+    # وتستدعيه اختباراته السلوكية كعملية مستقلة (tests/test_gate_docs_sync.py)
+    "tools/gate_docs_sync.py",
 }
 
 # الجولة <2> (اعتراض المراجع بصير): ملفات تُحمّل ديناميكيًا عبر

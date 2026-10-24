@@ -1,0 +1,251 @@
+forensics/R-748_evidence_RED.txt — دليل RED لحارس القاعدة الحاكمة المقوى (D-040)
+التاريخ: 2026-10-24 (~18:28 UTC) — قبل بناء tools/gate_docs_sync.py وتحديث ci.yml/pre-commit
+الأمر: python -m pytest tests/test_gate_docs_sync.py -q (على شجرة العمل قبل أي تغيير متتبع)
+
+FFFFFFFFFF                                                               [100%]
+=================================== FAILURES ===================================
+____________________________ test_gate_file_exists _____________________________
+
+    def test_gate_file_exists():
+        """الحارس موجود في tools/ (تسلسل البناء: الالتزام الذري يدفعه مع اختباره)."""
+>       assert GATE.is_file(), f"الحارس مفقود: {GATE}"
+E       AssertionError: الحارس مفقود: /home/user/workspace/repo/tools/gate_docs_sync.py
+E       assert False
+E        +  where False = is_file()
+E        +    where is_file = PosixPath('/home/user/workspace/repo/tools/gate_docs_sync.py').is_file
+
+tests/test_gate_docs_sync.py:79: AssertionError
+_____________________ test_code_with_all_three_docs_passes _____________________
+
+tmp_repo = None
+
+    def test_code_with_all_three_docs_passes(tmp_repo=None):
+        repo = _make_repo()
+        try:
+            _write(repo, "backend/app.py", "x = 1\n")
+            for rel, text in DOCS_OK.items():
+                _write(repo, rel, text)
+            _commit_all(repo, "code + full docs")
+            r = _run_gate(str(repo), "HEAD")
+>           assert r.returncode == 0, r.stderr
+E           AssertionError: /home/user/workspace/venv-repo/bin/python: can't open file '/home/user/workspace/repo/tools/gate_docs_sync.py': [Errno 2] No such file or directory
+E             
+E           assert 2 == 0
+E            +  where 2 = CompletedProcess(args=['/home/user/workspace/venv-repo/bin/python', '/home/user/workspace/repo/tools/gate_docs_sync.py...in/python: can't open file '/home/user/workspace/repo/tools/gate_docs_sync.py': [Errno 2] No such file or directory\n").returncode
+
+tests/test_gate_docs_sync.py:90: AssertionError
+___________________ test_code_with_unrelated_doc_only_fails ____________________
+
+    def test_code_with_unrelated_doc_only_fails():
+        """كود + ملف docs/ غير مطلوب لا يكفي — القاعدة الحرفية للمالك."""
+        repo = _make_repo()
+        try:
+            _write(repo, "backend/app.py", "x = 1\n")
+            _write(repo, "docs/API.md", "توثيق عام\n")
+            _commit_all(repo, "code + unrelated doc")
+            r = _run_gate(str(repo), "HEAD")
+>           assert r.returncode == 1
+E           assert 2 == 1
+E            +  where 2 = CompletedProcess(args=['/home/user/workspace/venv-repo/bin/python', '/home/user/workspace/repo/tools/gate_docs_sync.py...in/python: can't open file '/home/user/workspace/repo/tools/gate_docs_sync.py': [Errno 2] No such file or directory\n").returncode
+
+tests/test_gate_docs_sync.py:103: AssertionError
+______________________ test_code_missing_changelog_fails _______________________
+
+    def test_code_missing_changelog_fails():
+        repo = _make_repo()
+        try:
+            _write(repo, "tests/test_x.py", "def test_x(): pass\n")
+            _write(repo, "docs/PROJECT_STATE.md", "حالة\n")
+            _write(repo, "docs/ROADMAP_V5.md", "خارطة\n")
+            _commit_all(repo, "code + state + roadmap, no changelog")
+            r = _run_gate(str(repo), "HEAD")
+>           assert r.returncode == 1
+E           assert 2 == 1
+E            +  where 2 = CompletedProcess(args=['/home/user/workspace/venv-repo/bin/python', '/home/user/workspace/repo/tools/gate_docs_sync.py...in/python: can't open file '/home/user/workspace/repo/tools/gate_docs_sync.py': [Errno 2] No such file or directory\n").returncode
+
+tests/test_gate_docs_sync.py:118: AssertionError
+_______________________ test_code_missing_roadmap_fails ________________________
+
+    def test_code_missing_roadmap_fails():
+        repo = _make_repo()
+        try:
+            _write(repo, "tools/x.py", "pass\n")
+            _write(repo, "docs/PROJECT_STATE.md", "حالة\n")
+            _write(repo, "docs/CHANGELOG.md", "سجل\n")
+            _commit_all(repo, "code + state + changelog, no roadmap")
+            r = _run_gate(str(repo), "HEAD")
+>           assert r.returncode == 1
+E           assert 2 == 1
+E            +  where 2 = CompletedProcess(args=['/home/user/workspace/venv-repo/bin/python', '/home/user/workspace/repo/tools/gate_docs_sync.py...in/python: can't open file '/home/user/workspace/repo/tools/gate_docs_sync.py': [Errno 2] No such file or directory\n").returncode
+
+tests/test_gate_docs_sync.py:132: AssertionError
+_________________________ test_docs_only_change_passes _________________________
+
+    def test_docs_only_change_passes():
+        """دفعة وثائق بلا كود — مسموحة (نمط مداخل «تسليم» القائمة)."""
+        repo = _make_repo()
+        try:
+            for rel, text in DOCS_OK.items():
+                _write(repo, rel, text)
+            _commit_all(repo, "docs only")
+            r = _run_gate(str(repo), "HEAD")
+>           assert r.returncode == 0, r.stderr
+E           AssertionError: /home/user/workspace/venv-repo/bin/python: can't open file '/home/user/workspace/repo/tools/gate_docs_sync.py': [Errno 2] No such file or directory
+E             
+E           assert 2 == 0
+E            +  where 2 = CompletedProcess(args=['/home/user/workspace/venv-repo/bin/python', '/home/user/workspace/repo/tools/gate_docs_sync.py...in/python: can't open file '/home/user/workspace/repo/tools/gate_docs_sync.py': [Errno 2] No such file or directory\n").returncode
+
+tests/test_gate_docs_sync.py:146: AssertionError
+__________________ test_staged_mode_rejects_code_without_docs __________________
+
+    def test_staged_mode_rejects_code_without_docs():
+        """وضع pre-commit: الفهرس (ما سيُلتزم) يُفحص قبل إنشاء الالتزام."""
+        repo = _make_repo()
+        try:
+            _write(repo, "backend/app.py", "x = 1\n")
+            subprocess.run(["git", "add", "-A"], cwd=repo, check=True)
+            r = _run_gate(str(repo), "--staged")
+>           assert r.returncode == 1
+E           assert 2 == 1
+E            +  where 2 = CompletedProcess(args=['/home/user/workspace/venv-repo/bin/python', '/home/user/workspace/repo/tools/gate_docs_sync.py...in/python: can't open file '/home/user/workspace/repo/tools/gate_docs_sync.py': [Errno 2] No such file or directory\n").returncode
+
+tests/test_gate_docs_sync.py:158: AssertionError
+____________________ test_staged_mode_passes_with_full_docs ____________________
+
+    def test_staged_mode_passes_with_full_docs():
+        repo = _make_repo()
+        try:
+            _write(repo, "backend/app.py", "x = 1\n")
+            for rel, text in DOCS_OK.items():
+                _write(repo, rel, text)
+            subprocess.run(["git", "add", "-A"], cwd=repo, check=True)
+            r = _run_gate(str(repo), "--staged")
+>           assert r.returncode == 0, r.stderr
+E           AssertionError: /home/user/workspace/venv-repo/bin/python: can't open file '/home/user/workspace/repo/tools/gate_docs_sync.py': [Errno 2] No such file or directory
+E             
+E           assert 2 == 0
+E            +  where 2 = CompletedProcess(args=['/home/user/workspace/venv-repo/bin/python', '/home/user/workspace/repo/tools/gate_docs_sync.py...in/python: can't open file '/home/user/workspace/repo/tools/gate_docs_sync.py': [Errno 2] No such file or directory\n").returncode
+
+tests/test_gate_docs_sync.py:172: AssertionError
+__________________________ test_merge_commit_skipped ___________________________
+
+    def test_merge_commit_skipped():
+        """الالتزامات الدمجية تُفحص بمعايير خاصة عند وقوعها — نفس سلوك البوابة القائمة."""
+        repo = _make_repo()
+        try:
+            _write(repo, "backend/app.py", "x = 1\n")
+            _commit_all(repo, "code on main")
+            subprocess.run(["git", "checkout", "-q", "-b", "side"], cwd=repo, check=True)
+            _write(repo, "backend/other.py", "y = 2\n")
+            _commit_all(repo, "code on side")
+>           subprocess.run(["git", "checkout", "-q", "main"], cwd=repo, check=True)
+
+tests/test_gate_docs_sync.py:186: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+input = None, capture_output = False, timeout = None, check = True
+popenargs = (['git', 'checkout', '-q', 'main'],)
+kwargs = {'cwd': PosixPath('/tmp/gate_docs_sync_uwsxzbtq')}
+
+    def run(*popenargs,
+            input=None, capture_output=False, timeout=None, check=False, **kwargs):
+        """Run command with arguments and return a CompletedProcess instance.
+    
+        The returned instance will have attributes args, returncode, stdout and
+        stderr. By default, stdout and stderr are not captured, and those attributes
+        will be None. Pass stdout=PIPE and/or stderr=PIPE in order to capture them,
+        or pass capture_output=True to capture both.
+    
+        If check is True and the exit code was non-zero, it raises a
+        CalledProcessError. The CalledProcessError object will have the return code
+        in the returncode attribute, and output & stderr attributes if those streams
+        were captured.
+    
+        If timeout is given, and the process takes too long, a TimeoutExpired
+        exception will be raised.
+    
+        There is an optional argument "input", allowing you to
+        pass bytes or a string to the subprocess's stdin.  If you use this argument
+        you may not also use the Popen constructor's "stdin" argument, as
+        it will be used internally.
+    
+        By default, all communication is in bytes, and therefore any "input" should
+        be bytes, and the stdout and stderr will be bytes. If in text mode, any
+        "input" should be a string, and stdout and stderr will be strings decoded
+        according to locale encoding, or by "encoding" if set. Text mode is
+        triggered by setting any of text, encoding, errors or universal_newlines.
+    
+        The other arguments are the same as for the Popen constructor.
+        """
+        if input is not None:
+            if kwargs.get('stdin') is not None:
+                raise ValueError('stdin and input arguments may not both be used.')
+            kwargs['stdin'] = PIPE
+    
+        if capture_output:
+            if kwargs.get('stdout') is not None or kwargs.get('stderr') is not None:
+                raise ValueError('stdout and stderr arguments may not be used '
+                                 'with capture_output.')
+            kwargs['stdout'] = PIPE
+            kwargs['stderr'] = PIPE
+    
+        with Popen(*popenargs, **kwargs) as process:
+            try:
+                stdout, stderr = process.communicate(input, timeout=timeout)
+            except TimeoutExpired as exc:
+                process.kill()
+                if _mswindows:
+                    # Windows accumulates the output in a single blocking
+                    # read() call run on child threads, with the timeout
+                    # being done in a join() on those threads.  communicate()
+                    # _after_ kill() is required to collect that and add it
+                    # to the exception.
+                    exc.stdout, exc.stderr = process.communicate()
+                else:
+                    # POSIX _communicate already populated the output so
+                    # far into the TimeoutExpired exception.
+                    process.wait()
+                raise
+            except:  # Including KeyboardInterrupt, communicate handled that.
+                process.kill()
+                # We don't call process.wait() as .__exit__ does that for us.
+                raise
+            retcode = process.poll()
+            if check and retcode:
+>               raise CalledProcessError(retcode, process.args,
+                                         output=stdout, stderr=stderr)
+E               subprocess.CalledProcessError: Command '['git', 'checkout', '-q', 'main']' returned non-zero exit status 1.
+
+../../.local/share/uv/python/cpython-3.11.17-linux-x86_64-gnu/lib/python3.11/subprocess.py:571: CalledProcessError
+----------------------------- Captured stderr call -----------------------------
+error: pathspec 'main' did not match any file(s) known to git
+________________________ test_ci_and_hook_call_the_gate ________________________
+
+    def test_ci_and_hook_call_the_gate():
+        """التطبيق الواحد: ci.yml (دفعًا وPR) وpre-commit يستدعيان الحارس نفسه."""
+        ci = (REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+        hook = (REPO_ROOT / ".githooks" / "pre-commit").read_text(encoding="utf-8")
+        # الخطوة تحتفظ بالاسم الحرفي الذي يفحصه اختبار test_governance_docs_sync
+        assert "reject code changes without docs update in the same commit" in ci
+>       assert "tools/gate_docs_sync.py" in ci
+E       assert 'tools/gate_docs_sync.py' in 'name: CI — Quality Gates (M4)\n\non:\n  push:\n    branches: [main]\n  pull_request:\n    branches: [main]\n  workflo...overeign_ai.git verify_exec && cd verify_exec && git checkout -q "$TARGET_SHA" && timeout 1500 bash verify.sh --full\n'
+
+tests/test_gate_docs_sync.py:201: AssertionError
+=============================== warnings summary ===============================
+backend/config.py:450
+  /home/user/workspace/repo/backend/config.py:450: UserWarning: ⚠️ CORS مفتوح للجميع — مقبول في التطوير فقط (D-034)
+    warnings.warn("⚠️ CORS مفتوح للجميع — مقبول في التطوير فقط (D-034)")
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_gate_docs_sync.py::test_gate_file_exists - AssertionError: ...
+FAILED tests/test_gate_docs_sync.py::test_code_with_all_three_docs_passes - A...
+FAILED tests/test_gate_docs_sync.py::test_code_with_unrelated_doc_only_fails
+FAILED tests/test_gate_docs_sync.py::test_code_missing_changelog_fails - asse...
+FAILED tests/test_gate_docs_sync.py::test_code_missing_roadmap_fails - assert...
+FAILED tests/test_gate_docs_sync.py::test_docs_only_change_passes - Assertion...
+FAILED tests/test_gate_docs_sync.py::test_staged_mode_rejects_code_without_docs
+FAILED tests/test_gate_docs_sync.py::test_staged_mode_passes_with_full_docs
+FAILED tests/test_gate_docs_sync.py::test_merge_commit_skipped - subprocess.C...
+FAILED tests/test_gate_docs_sync.py::test_ci_and_hook_call_the_gate - assert ...
+10 failed, 1 warning in 1.69s

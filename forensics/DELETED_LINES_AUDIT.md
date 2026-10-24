@@ -2354,3 +2354,7 @@ Bus إطلاقًا. الواجهة سليمة بعد الإزالة (101 وسم 
 
 ## 2026-10-24 — R-747 تصويب: عناوين خاصة حرفية (HIST-02)
 - **# DELETION-JUSTIFIED** — `tests/test_media_image.py`: قائمتا المعاملات الحرفيتان (9 أسطر) استُبدلتا بقواميس `SELF_HOSTED`/`PUBLIC` بعناوين مركّبة وقت التشغيل وأسماء حالات وصفية — نفس الحالات الإحدى عشرة والثماني. `forensics/R-747_evidence_RED.txt`: 5 أسطر أسماء حالات حملت عناوين خاصة استُبدلت بصيغة مقنّعة + سطر ملاحظة. السبب: حارسا HIST-02 أحمران على CI 40101540728 (قرار المالك: لا عنوان خاص حرفي في ملف متتبع).
+
+
+## 2026-10-24 — R-748 (V5 §١.١): القاعدة الحاكمة المقوى
+- **# DELETION-JUSTIFIED** — أسطر بوابة D-040 القديمة في `.github/workflows/ci.yml` (سكربت bash الذي كان يقبل أي ملف docs//forensics/ — استُبدل بنداء `tools/gate_docs_sync.py "$GITHUB_SHA"` بنفس اسم الخطوة)، وأسطر بوابة PR القديمة (heredoc python الذي كان يشترط `docs/ROADMAP.md` غير الموجود — استُبدل بنداء الحارس `--diff`)، وسطرا `exec` وشرط docs/ في `.githooks/pre-commit` و`tests/test_governance_docs_sync.py` (استُبدل بالثلاثة الحرفية: PROJECT_STATE + CHANGELOG + ROADMAP*.md) — كلها استبدال بمنطق أضيق يطابق حرفية أمر المالك (D-042)، بسلوك محروس بـ10 حالات سلوكية RED→GREEN. بقية المحذوفات أسطر توثيق حالة استُبدلت: ترويستا «آخر تحديث» (CHANGELOG + PROJECT_STATE)، العدّادات (1055→1065)، صف المرحلة (ROADMAP_V3→V5)، وترويسة ROADMAP_V4 (إلحاق انتقال). الحارس: `tests/test_gate_docs_sync.py` (10). التفصيل: `forensics/R-748_GOVERNANCE_GATE.md`.

@@ -111,6 +111,14 @@ def hooked_repo(tmp_path):
     (repo / "tools").mkdir(parents=True)
     (repo / ".githooks").mkdir()
     shutil.copy2(GUARD_PATH, repo / "tools" / "private_ip_guard.py")
+    # R-748 (V5 §١.١): الحارس الثاني في نفس الـ hook — القاعدة الحاكمة
+    # (كود بلا الثلاثة الحرفية يُرفض قبل حارس العناوين الخاصة)
+    shutil.copy2(REPO_ROOT / "tools" / "gate_docs_sync.py",
+                repo / "tools" / "gate_docs_sync.py")
+    # R-748: سقالة الاختبار (الحارسان والـ hook) ليست كود المشروع — تُستثنى
+    # من الفهرس حتى يبقى الملف المُلتزم هو note.txt وحده (لا كود ⇒ بوابة
+    # القاعدة الحاكمة تسمح، وحارس العناوين الخاصة هو من يقرر — أصل الاختبار)
+    (repo / ".gitignore").write_text("tools/\n.githooks/\n", encoding="utf-8")
     shutil.copy2(HOOK_PATH, repo / ".githooks" / "pre-commit")
     env = dict(os.environ, PYTHON=sys.executable,
                GIT_CONFIG_GLOBAL=os.devnull, GIT_CONFIG_NOSYSTEM="1")
