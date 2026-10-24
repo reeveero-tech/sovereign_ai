@@ -2340,3 +2340,8 @@ Bus إطلاقًا. الواجهة سليمة بعد الإزالة (101 وسم 
 ## 2026-10-24 — R-745 (البند ٤.٥): التحسين بموافقة
 - **# DELETION-JUSTIFIED** — لا حذف شيفرة (backend: +62/−0 — app.py وtool_registry.py إلحاق فقط؛ improvement_proposals.py جديد). المحذوفات أسطر توثيق حالة استُبدلت: ترويستا «آخر تحديث» (CHANGELOG + PROJECT_STATE)، العدّادات (1007→1016)، حالة صف ٤.٥ في ROADMAP_V4 («لم يبدأ» → منجز بحدود).
 - الحارس: `tests/test_improvement_proposals.py` (9). التفصيل: `forensics/R-745_APPROVED_IMPROVEMENT.md`.
+
+
+## 2026-10-24 — R-746 (البند ٤.٤): المقارنة بالعالم الخارجي
+- **# DELETION-JUSTIFIED** — لا حذف شيفرة (external_benchmark.py جديد؛ app.py وscheduler.py وimprovement_proposals.py إلحاق فقط). المحذوفات أسطر توثيق حالة استُبدلت: ترويستا «آخر تحديث» (CHANGELOG + PROJECT_STATE)، العدّادات (1016→1024)، حالة صف ٤.٤ في ROADMAP_V4 («لم يبدأ» → منجز بحدود).
+- الحارس: `tests/test_external_benchmark.py` (8). التفصيل: `forensics/R-746_EXTERNAL_BENCHMARK.md`.

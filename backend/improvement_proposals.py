@@ -62,6 +62,10 @@ def _recommend(defect: Dict[str, Any]) -> Tuple[str, str]:
         return ("code_fix",
                 f"إعادة إنتاج فشل المهمة «{task}» باختبار أحمر من last_error، ثم "
                 "الإصلاح في دورة ذرية.")
+    if did.startswith("benchmark_gap:"):
+        return ("investigation",
+                f"فجوة مقابل مرجع عام ({did.split(':', 1)[1]}): قياس أدق (تكرار + "
+                "تحليل أداء) قبل أي تغيير؛ المرجع والرقم في الدليل وفي /benchmark/report.")
     if did == "supervisor_alerts":
         return ("investigation",
                 "مراجعة التنبيهات النشطة في /supervisor/status وتصنيفها قبل أي تغيير.")

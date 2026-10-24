@@ -400,6 +400,50 @@ def _defect_scan_payload() -> Dict[str, Any]:
     return report
 
 
+def _benchmark_payload() -> Dict[str, Any]:
+    """R-746 (البند ٤.٤): دورة المقارنة بالمراجع العامة — زمن/جودة/تغطية.
+
+    التغطية من السجل الفعلي والأعلام (لا ادعاء)؛ الجودة فقط إن كان العقل مفعّلًا
+    (BENCHMARK_QUALITY_N مسائل، افتراضي 3، حد 10)؛ الفجوات القابلة للقياس
+    تغذي اقتراحات ٤.٥ (التنفيذ بموافقة المالك فقط)."""
+    import config
+    import external_benchmark
+    import improvement_proposals
+    from tool_registry import get_registry
+    names = {t["name"] for t in get_registry().list_tools()}
+    flags = {"web_tools": bool(getattr(config, "WEB_TOOLS_ENABLED", False)),
+             "media": bool(getattr(config, "MEDIA_ENABLED", False))}
+    mind = None
+    if config.OLLAMA_ENABLED and config.OLLAMA_MODEL:
+        import ollama_client
+        mind = lambda system, question: ollama_client.chat(system, question)  # noqa: E731
+    try:
+        n = max(1, min(int(os.getenv("BENCHMARK_QUALITY_N", "3")), 10))
+    except ValueError:  # TOLERATED: قيمة غير رقمية → الافتراضي المعلن
+        n = 3
+    now = time.time()
+    report = external_benchmark.run(_health_payload, names, flags, mind=mind,
+                                    quality_n=n, now=now)
+    external_benchmark.get_store().save(report)
+    improvement_proposals.get_book().ingest(
+        external_benchmark.gaps_as_defects(report), now=now)
+    return report
+
+
+@app.get("/benchmark/report")
+async def benchmark_report():
+    """R-746 (البند ٤.٤): آخر تقرير مقارنة بالمراجع العامة — قراءة فقط."""
+    import external_benchmark
+    report = external_benchmark.get_store().last()
+    if report is None:
+        return {"report": None,
+                "reason": "لم تُشغَّل دورة مقارنة بعد — المهمة external_benchmark "
+                          "تعمل عند تفعيل المجدول (SOVEREIGN_SCHEDULER=1 — قرار المالك) "
+                          "أو باستدعاء benchmark.run عبر /tools/invoke",
+                "references": external_benchmark.REFERENCES}
+    return {"report": report}
+
+
 def _proposal_decide(proposal_id: str, decision: str, note: str = None,
                      commit: str = None) -> Dict[str, Any]:
     """R-745: المرحلة الأولى لقرار المالك — تحضير بلا تغيير حالة؛ التطبيق
@@ -1373,6 +1417,13 @@ def _register_real_tools() -> None:
         inputs={},
         outputs="open_count/resolved_count/defects[]/health_history",
         handler=_defect_scan_payload,
+    ))
+    registry.register(ToolSpec(
+        name="benchmark.run",
+        description="R-746 (٤.٤): مقارنة دورية بمراجع عامة — زمن الرد/الجودة/تغطية الأدوات",
+        inputs={},
+        outputs="latency/quality/coverage/gaps/references",
+        handler=_benchmark_payload,
     ))
     registry.register(ToolSpec(
         name="proposals.decide",

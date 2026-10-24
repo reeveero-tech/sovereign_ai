@@ -145,6 +145,8 @@ def build_from_env() -> Scheduler:
         ScheduledTask(name="self_health_check", tool="health.snapshot", interval_seconds=interval),
         # R-743 (البند ٤.٣): دورة اكتشاف العيوب ذاتيًا — قائمة عمل في /defects/report
         ScheduledTask(name="self_defect_scan", tool="defects.scan", interval_seconds=interval),
+        # R-746 (البند ٤.٤): المقارنة الدورية بالمراجع العامة — /benchmark/report
+        ScheduledTask(name="external_benchmark", tool="benchmark.run", interval_seconds=interval),
     ]
     enabled = os.environ.get(ENV_ENABLE, "").strip() == "1"
     reason = (

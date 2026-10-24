@@ -1,0 +1,28 @@
+# R-746 RED — مُشاهد قبل أي تنفيذ (المادة ٢) — 2026-10-24T13:40:34Z
+FAILED tests/test_external_benchmark.py::test_scheduled_task_registered - Sto...
+FAILED tests/test_external_benchmark.py::test_real_loop_report_from_real_registry
+ERROR tests/test_external_benchmark.py::test_references_are_public_cited_and_pinned
+ERROR tests/test_external_benchmark.py::test_latency_classified_by_nielsen_and_rail_gap
+ERROR tests/test_external_benchmark.py::test_coverage_status_from_registry_and_flags
+ERROR tests/test_external_benchmark.py::test_quality_without_mind_is_unmeasured_not_invented
+ERROR tests/test_external_benchmark.py::test_quality_with_mind_scores_numeric_answers
+ERROR tests/test_external_benchmark.py::test_measurable_gaps_feed_improvement_proposals
+2 failed, 3 warnings, 6 errors in 0.80s
+
+# GREEN + دليل حي (جذر بيانات مؤقت خارج المستودع، مفتاح اختباري عابر، العقل معطل):
+ok: True | بصمة الأثر: acbb4670f6bd0010
+زمن لقطة الصحة: 0.031ms | Nielsen: instant | ميزانية RAIL 50.0ms → فجوة 0.0ms
+الجودة: unmeasured — العقل معطل (OLLAMA_ENABLED + OLLAMA_MODEL بيد المالك) — لا ق
+التغطية: 1 متاحة / 3 مبنية معطلة / 1 مؤجلة / 6 غائبة من 11
+  - function_calling available
+  - web_search built_disabled
+  - web_fetch built_disabled
+  - remote_mcp built_disabled
+  - code_execution deferred
+  - image_generation missing
+  - file_search missing
+  - tool_search missing
+  - computer_use missing
+  - skills missing
+  - programmatic_tool_calling missing
+فجوات قابلة للقياس: []
