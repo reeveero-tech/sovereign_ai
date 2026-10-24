@@ -1,9 +1,20 @@
 # CHANGELOG.md — سجل التغييرات
 
 > كل تغيير يُسجل هنا (قاعدة الدفعة الذرية).
-> آخر تحديث: 2026-10-24 (R-746 — البند ٤.٤: المقارنة بالعالم الخارجي)
+> آخر تحديث: 2026-10-24 (R-747 — البند ٣.٥: أدوات الوسائط ذاتية الاستضافة)
 
 ---
+
+## [R-747] — 2026-10-24 — البند ٣.٥: أدوات الوسائط (بأمر المالك «ابدأ بالبند ٣.٥، واستخدم خدمة وسائط لا تتطلب إرسال البيانات لطرف ثالث»)
+
+- **الخدمة:** LocalAI — مفتوح المصدر، يعمل على عتاد المالك، ويقدّم عقد OpenAI Images (`POST {base}/images/generations`) — https://localai.io/docs/features/image-generation/
+- **`backend/media_client.py`:** `generate_image(prompt, size)` بـ `response_format=b64_json`، و`is_self_hosted()` حارس السيادة: loopback / عناوين خاصة (RFC1918، ULA fc00::/7، link-local) / `.internal` / `.flycast` / `.local` / `.localhost` / اسم خدمة بلا نقاط — وأي مضيف عام (اسمًا أو IPv4/IPv6) يُرفض **قبل أي اتصال**. `follow_redirects=False` (لا تهريب عبر إعادة التوجيه)؛ استجابة `url` تُجلب من نفس scheme+host+port فقط. صورة حقيقية فقط: base64 صارم + توقيع PNG/JPEG/WEBP/GIF + حد `MEDIA_MAX_IMAGE_BYTES` (10MiB). لا يرفع أبدًا؛ `last_outcome()` بتصنيف الخطأ فقط.
+- **الإعداد (`backend/config.py`):** `MEDIA_ENABLED` (افتراضي false)، `MEDIA_BASE_URL` (افتراضي http://127.0.0.1:8080/v1)، `MEDIA_MODEL`، `MEDIA_API_KEY`، `MEDIA_TIMEOUT_SECONDS` 120، `MEDIA_IMAGE_SIZE` 512x512، المقاسات المسموحة 256/512/768/1024، `MEDIA_MAX_PROMPT_CHARS` 1000.
+- **النقاط:** `POST /media/image` (503 `media_disabled` / `media_host_not_self_hosted`، 400 وصف فارغ أو مقاس غير مسموح، 413 طويل، 502 `media_failed` بالتصنيف، 429 بحد /chat) → `{image_b64, mime, bytes, sha256, size}`؛ أداة `media.image` في السجل (أثر موقّع لكل توليد)؛ `GET /media/status` بلا سر (عنوان معقّم + self_hosted).
+- **أثر على ٤.٤:** التغطية تُحسب من السجل الفعلي، فصارت image_generation `built_disabled` تلقائيًا: **1 متاحة / 4 مبنية معطلة / 1 مؤجلة / 5 غائبة من 11**.
+- **RED→GREEN:** 31 مُشاهدة (`forensics/R-747_evidence_RED.txt`) ← 31/31 ثابت 3 تشغيلات؛ دليل حي: أداة عبر /tools/invoke بأثر موقّع، والمضيف العام رُفض بـ 503 مع **صفر** محاولات DNS/اتصال نحو الخارج. **الحزمة 1024→1055.**
+- **الحد المعلن (المادة ٥):** لم يُختبر مع LocalAI حقيقي — خادم محلي بالعقد نفسه؛ التفعيل (تشغيل LocalAI بنموذج صور على شبكة خاصة + MEDIA_*) بيد المالك، وآلة Fly الحالية (512MB) لا تتسع لنموذج صور؛ الحارس يحكم على شكل العنوان لا على DNS (اسم خدمة بلا نقاط يُوثق بالمالك)؛ «الأصوات» في نص البند يغطيها النطق (R-740)؛ لا واجهة أمامية بعد. التفصيل: `forensics/R-747_MEDIA_SELF_HOSTED.md`.
+- **# DELETION-JUSTIFIED:** لا حذف شيفرة. المحذوفات أسطر توثيق حالة استُبدلت (ترويستا «آخر تحديث»، العدّادات، صف ٣.٥ في ROADMAP_V4، صف image_generation في تقرير R-746) — مدخل DELETED_LINES_AUDIT في نفس الالتزام.
 
 ## [R-746 تسليم] — 2026-10-24 — دورة التسليم مكتملة بتطابق ثلاثي (لا كود)
 

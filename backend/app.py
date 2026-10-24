@@ -100,6 +100,8 @@ stt_rate_limiter = SlidingWindowRateLimiter(MAX_USER_MESSAGES_PER_MINUTE)
 vision_rate_limiter = SlidingWindowRateLimiter(MAX_USER_MESSAGES_PER_MINUTE)
 # R-740 (البند ٢.٤): حد النطق بحد المحادثة نفسه لكل IP — لا باب مفتوح
 tts_rate_limiter = SlidingWindowRateLimiter(MAX_USER_MESSAGES_PER_MINUTE)
+# R-747 (البند ٣.٥): حد معدل توليد الصور — نفس حد /chat
+media_rate_limiter = SlidingWindowRateLimiter(MAX_USER_MESSAGES_PER_MINUTE)
 
 # ============================================================
 # طبقة الأمان السيادية (R-608) — إحياء safety.py
@@ -1241,6 +1243,114 @@ async def tts(request: Request, body: TtsRequest):
     return Response(content=audio, media_type=ctype)
 
 
+# ============================================================
+# R-747 (البند ٣.٥ — أدوات الوسائط): توليد صور ذاتي الاستضافة
+# ============================================================
+
+
+class MediaImageRequest(BaseModel):
+    """R-747 (البند ٣.٥): طلب توليد صورة — وصف → صورة."""
+    prompt: str = Field(..., max_length=20000, description="وصف الصورة")
+    size: Optional[str] = Field(None, description="256x256 | 512x512 | 768x768 | 1024x1024")
+
+
+def _media_validate(prompt: str, size: Optional[str]):
+    """حدود الطلب قبل أي اتصال — يعيد (prompt, size) أو (None, JSONResponse)."""
+    import config
+    import media_client
+    if not config.MEDIA_ENABLED:
+        return None, JSONResponse(status_code=503, content={
+            "error": "media_disabled",
+            "reason": "توليد الصور معطل افتراضيًا — التفعيل بيد المالك "
+                      "(MEDIA_ENABLED + MEDIA_BASE_URL لخادم LocalAI ذاتي الاستضافة)"})
+    if not media_client.is_self_hosted(config.MEDIA_BASE_URL):
+        return None, JSONResponse(status_code=503, content={
+            "error": "media_host_not_self_hosted",
+            "reason": "MEDIA_BASE_URL يشير إلى مضيف عام — مرفوض بأمر المالك (لا بيانات "
+                      "لطرف ثالث). المسموح: loopback/عنوان خاص/.internal/.flycast/.local/اسم خدمة"})
+    text = (prompt or "").strip()
+    if not text:
+        return None, JSONResponse(status_code=400, content={
+            "error": "empty_prompt", "reason": "وصف فارغ — لا توليد"})
+    if len(text) > config.MEDIA_MAX_PROMPT_CHARS:
+        return None, JSONResponse(status_code=413, content={
+            "error": "prompt_too_long", "reason": f"الحد {config.MEDIA_MAX_PROMPT_CHARS} حرفًا"})
+    size = size or config.MEDIA_IMAGE_SIZE
+    if size not in config.MEDIA_ALLOWED_SIZES:
+        return None, JSONResponse(status_code=400, content={
+            "error": "size_not_allowed", "reason": f"المسموح: {list(config.MEDIA_ALLOWED_SIZES)}"})
+    return (text, size), None
+
+
+def _media_result(img: bytes, mime: str, size: str) -> Dict[str, Any]:
+    import base64
+    import hashlib
+    return {"image_b64": base64.b64encode(img).decode("ascii"), "mime": mime,
+            "bytes": len(img), "sha256": hashlib.sha256(img).hexdigest(), "size": size}
+
+
+@app.post("/media/image")
+async def media_image(request: Request, body: MediaImageRequest):
+    """R-747 (البند ٣.٥): وصف → صورة عبر خدمة ذاتية الاستضافة (LocalAI).
+
+    fail-closed بصدق: معطل 503، مضيف عام 503 (بلا اتصال)، وصف فارغ 400،
+    طويل 413، مقاس غير مسموح 400، فشل الخدمة 502، المعدل 429. لا صورة مختلقة."""
+    client_host = request.client.host if request.client else "unknown"
+    retry_after = media_rate_limiter.check(client_host)
+    if retry_after is not None:
+        return JSONResponse(status_code=429, headers={"Retry-After": str(retry_after)},
+                            content={"error": "rate_limited",
+                                     "reason": "تم تجاوز حد طلبات توليد الصور"})
+    ok, err = _media_validate(body.prompt, body.size)
+    if err is not None:
+        return err
+    prompt, size = ok
+    import media_client
+    out = media_client.generate_image(prompt, size=size)
+    if out is None:
+        return JSONResponse(status_code=502, content={
+            "error": "media_failed",
+            "reason": f"خدمة الوسائط لم تُرجع صورة صالحة ({media_client.last_outcome()['result']}) "
+                      "— لا صورة مختلقة"})
+    return _media_result(out[0], out[1], size)
+
+
+def _media_tool(prompt: str, size: str = None) -> Dict[str, Any]:
+    """R-747: أداة media.image — نفس الحدود والحارس، وكل استدعاء بأثر موقّع."""
+    ok, err = _media_validate(prompt, size)
+    if err is not None:
+        raise RuntimeError(json.loads(err.body)["error"])
+    import media_client
+    out = media_client.generate_image(ok[0], size=ok[1])
+    if out is None:
+        raise RuntimeError(f"media_failed: {media_client.last_outcome()['result']}")
+    return _media_result(out[0], out[1], ok[1])
+
+
+@app.get("/media/status")
+async def media_status():
+    """R-747: حالة الوسائط — لا سر أبدًا (العنوان معقّم)."""
+    import config
+    import media_client
+    from urllib.parse import urlsplit
+    raw = urlsplit(str(config.MEDIA_BASE_URL))
+    netloc = raw.hostname or ""
+    try:
+        if raw.port is not None:
+            netloc = f"{netloc}:{raw.port}"
+        scheme = f"{raw.scheme}://" if (raw.scheme and netloc) else ""
+        safe_base = f"{scheme}{netloc}{raw.path}"
+    except ValueError:
+        safe_base = "<عنوان مضبوط غير قابل للعرض>"
+    return {"enabled": bool(config.MEDIA_ENABLED),
+            "self_hosted": media_client.is_self_hosted(config.MEDIA_BASE_URL),
+            "base_url": safe_base, "model": config.MEDIA_MODEL,
+            "default_size": config.MEDIA_IMAGE_SIZE,
+            "allowed_sizes": list(config.MEDIA_ALLOWED_SIZES),
+            "max_image_bytes": config.MEDIA_MAX_IMAGE_BYTES,
+            "last_outcome": media_client.last_outcome()}
+
+
 @app.get("/tts/status")
 async def tts_status():
     """R-740: حالة النطق — لا سر أبدًا (العنوان معقّم بنمط /brain/status)."""
@@ -1417,6 +1527,13 @@ def _register_real_tools() -> None:
         inputs={},
         outputs="open_count/resolved_count/defects[]/health_history",
         handler=_defect_scan_payload,
+    ))
+    registry.register(ToolSpec(
+        name="media.image",
+        description="R-747 (٣.٥): توليد صورة عبر خدمة ذاتية الاستضافة (LocalAI) — لا طرف ثالث",
+        inputs={"prompt": "وصف الصورة", "size": "اختياري: 256x256|512x512|768x768|1024x1024"},
+        outputs="image_b64/mime/bytes/sha256/size",
+        handler=_media_tool,
     ))
     registry.register(ToolSpec(
         name="benchmark.run",

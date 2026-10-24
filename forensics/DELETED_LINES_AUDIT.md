@@ -2345,3 +2345,8 @@ Bus إطلاقًا. الواجهة سليمة بعد الإزالة (101 وسم 
 ## 2026-10-24 — R-746 (البند ٤.٤): المقارنة بالعالم الخارجي
 - **# DELETION-JUSTIFIED** — لا حذف شيفرة (external_benchmark.py جديد؛ app.py وscheduler.py وimprovement_proposals.py إلحاق فقط). المحذوفات أسطر توثيق حالة استُبدلت: ترويستا «آخر تحديث» (CHANGELOG + PROJECT_STATE)، العدّادات (1016→1024)، حالة صف ٤.٤ في ROADMAP_V4 («لم يبدأ» → منجز بحدود).
 - الحارس: `tests/test_external_benchmark.py` (8). التفصيل: `forensics/R-746_EXTERNAL_BENCHMARK.md`.
+
+
+## 2026-10-24 — R-747 (البند ٣.٥): أدوات الوسائط ذاتية الاستضافة
+- **# DELETION-JUSTIFIED** — لا حذف شيفرة (media_client.py جديد؛ app.py وconfig.py إلحاق فقط). المحذوفات أسطر توثيق حالة استُبدلت: ترويستا «آخر تحديث» (CHANGELOG + PROJECT_STATE)، العدّادات (1024→1055)، حالة صف ٣.٥ في ROADMAP_V4 («لم يبدأ» → منجز بحدود)، وصف image_generation في جدول `forensics/R-746_EXTERNAL_BENCHMARK.md` (missing → built_disabled بعد R-747).
+- الحارس: `tests/test_media_image.py` (31 بالمعاملات). التفصيل: `forensics/R-747_MEDIA_SELF_HOSTED.md`.

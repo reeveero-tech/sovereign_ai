@@ -27,7 +27,7 @@
 | web_fetch | Claude | built_disabled | web.fetch مسجلة؛ نفس العلم |
 | remote_mcp | OpenAI | built_disabled | بوابة MCP (R-738)؛ MCP_SERVERS بيد المالك |
 | code_execution | OpenAI (Shell) + Claude | deferred | D-041 |
-| image_generation | OpenAI | missing | البند ٣.٥ — قيد التنفيذ في الجولة التالية |
+| image_generation | OpenAI | missing → **built_disabled بعد R-747** | media.image مسجلة (R-747)؛ MEDIA_ENABLED بيد المالك |
 | file_search | OpenAI | missing | — |
 | tool_search | OpenAI + Claude | missing | /tools/list سرد لا بحث |
 | computer_use | OpenAI | missing | خارج الخارطة |
@@ -51,3 +51,6 @@
 
 ## التسليم
 - الالتزام `792d779` — CI أخضر (تشغيل 40099735635) و`verify.sh --full`: **1024/0/0** محليًا = CI = استنساخ نظيف.
+
+## تحديث بعد R-747
+- التغطية الحية صارت **1 متاحة / 4 مبنية معطلة / 1 مؤجلة / 5 غائبة من 11** (image_generation → built_disabled) — محسوبة تلقائيًا من السجل، بلا تعديل في كود المقارنة.

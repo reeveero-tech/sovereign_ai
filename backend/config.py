@@ -340,6 +340,22 @@ TTS_TIMEOUT_SECONDS = float(_ollama_env("TTS_TIMEOUT_SECONDS", "60"))
 TTS_MAX_TEXT_CHARS = int(_ollama_env("TTS_MAX_TEXT_CHARS", "2000"))
 
 # ============================================================
+# R-747 (البند ٣.٥ — أدوات الوسائط): توليد الصور — ذاتي الاستضافة فقط
+# ============================================================
+# بأمر المالك: «خدمة وسائط لا تتطلب إرسال البيانات لطرف ثالث» — LocalAI
+# (عقد OpenAI Images). معطل افتراضيًا؛ والعميل يرفض أي مضيف عام قبل الاتصال
+# (media_client.is_self_hosted): loopback/خاص/.internal/.flycast/.local/اسم خدمة.
+MEDIA_ENABLED = _ollama_env("MEDIA_ENABLED", "false").lower() == "true"
+MEDIA_BASE_URL = _ollama_env("MEDIA_BASE_URL", "http://127.0.0.1:8080/v1")
+MEDIA_MODEL = _ollama_env("MEDIA_MODEL", None)
+MEDIA_API_KEY = _ollama_env("MEDIA_API_KEY", None)
+MEDIA_TIMEOUT_SECONDS = float(_ollama_env("MEDIA_TIMEOUT_SECONDS", "120"))
+MEDIA_IMAGE_SIZE = _ollama_env("MEDIA_IMAGE_SIZE", "512x512")
+MEDIA_ALLOWED_SIZES = ("256x256", "512x512", "768x768", "1024x1024")
+MEDIA_MAX_IMAGE_BYTES = int(_ollama_env("MEDIA_MAX_IMAGE_BYTES", str(10 * 1024 * 1024)))
+MEDIA_MAX_PROMPT_CHARS = int(_ollama_env("MEDIA_MAX_PROMPT_CHARS", "1000"))
+
+# ============================================================
 # R-739 (البند ٢.٢ — عينان): إعدادات الرؤية (تحليل الصور)
 # ============================================================
 # معطل افتراضيًا (نمط R-704/R-736/R-737 — لا اتصال ضمني).
