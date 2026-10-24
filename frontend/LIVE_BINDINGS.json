@@ -228,7 +228,9 @@
     "toggle-holographic",
     "btn-ws-connect",
     "btn-ws-disconnect",
-    "btn-tts-toggle"
+    "btn-tts-toggle",
+    "btn-vision-upload",
+    "vision-file-input"
   ],
   "container": [
     "app-root",

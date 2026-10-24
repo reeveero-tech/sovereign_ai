@@ -901,6 +901,24 @@
                             النطق
                         </button>
 
+                        <button
+                            id="btn-vision-upload"
+                            class="btn btn-secondary ripple"
+                            title="رفع صورة لتحليلها (الرؤية)"
+                        >
+
+                            <i class="fas fa-image"></i>
+
+                            صورة
+                        </button>
+
+                        <input
+                            id="vision-file-input"
+                            type="file"
+                            accept="image/png,image/jpeg,image/webp,image/gif,image/bmp"
+                            hidden
+                        />
+
                     </div>
 
                 </section>
@@ -1250,6 +1268,7 @@
     <script defer src="js/modules/chat-runtime.js"></script>
 
     <script defer src="js/modules/voice-output.js"></script>
+    <script defer src="js/modules/vision-input.js"></script>
 
     <script defer src="js/modules/runtime-events.js"></script>
 

@@ -1,0 +1,103 @@
+"""R-741 (البند ٢.٢ — الجولة الموثقة «اللاحقة»: رفع الصور في الواجهة):
+النصف الثاني المعلن من معيار البند — واجهة ترفع صورة إلى /vision.
+
+معيار الجولة المعلن في ROADMAP_V4 (حد ٢.٢): «رفع الصور في الواجهة جولة
+لاحقة». هذا الحارس يثبت نصف الواجهة:
+1. زر الرفع موجود فعلًا في صف المحادثة (btn-vision-upload) بجانب الإرسال.
+2. مدخل ملف مخفي يقبل أنواع الصور المسموحة فقط (نفس قائمة الخادم).
+3. الزر والمدخل مصنفان في LIVE_BINDINGS.json (control) — حارس R-730
+   يرفض عنصرًا بلا تصنيف.
+4. وحدة الرؤية الحية موجودة وتخاطب الزر والمدخل ونقطة /vision الفعلية
+   وتسلّم الوصف عبر مسار المحادثة الحقيقي — لا كتابة DOM مجهولة.
+5. خطاف المحادثة (chat-runtime) له مدخل استقبال وصف الرؤية معلن.
+6. السكربت محمّل فعلًا في index.html.
+7. الوحدة مجرودة في INVENTORY.md (وحدة حقيقية تستهلك API).
+"""
+
+import json
+import re
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+FRONTEND = REPO_ROOT / "frontend"
+INDEX = (FRONTEND / "index.html").read_text(encoding="utf-8", errors="ignore")
+BINDINGS = json.loads((FRONTEND / "LIVE_BINDINGS.json").read_text(
+    encoding="utf-8"))
+VISION_JS = FRONTEND / "js" / "modules" / "vision-input.js"
+CHAT_JS = (FRONTEND / "js" / "modules" / "chat-runtime.js").read_text(
+    encoding="utf-8", errors="ignore")
+INVENTORY = (FRONTEND / "INVENTORY.md").read_text(encoding="utf-8")
+
+
+def test_upload_button_exists_near_chat_send():
+    """زر رفع الصورة موجود في صف المحادثة — لا زر وهمي في مكان معزول."""
+    assert 'id="btn-vision-upload"' in INDEX, (
+        "زر رفع الصور (btn-vision-upload) غير موجود في index.html")
+    chat_pos = INDEX.find('id="chat-input"')
+    btn_pos = INDEX.find('id="btn-vision-upload"')
+    assert chat_pos != -1 and btn_pos > chat_pos, (
+        "الزر يجب أن يكون في صف إدخال المحادثة بعد مربع النص")
+
+
+def test_file_input_accepts_images_only():
+    """مدخل الملف المخفي يقبل أنواع الصور المسموحة فقط (نفس قائمة الخادم)."""
+    assert 'id="vision-file-input"' in INDEX, (
+        "مدخل ملف الصور (vision-file-input) غير موجود في index.html")
+    m = re.search(r'<input[^>]*id="vision-file-input"[^>]*>', INDEX)
+    assert m, "مدخل ملف الصور غير قابل للتحليل"
+    tag = m.group(0)
+    assert 'type="file"' in tag, "المدخل ليس نوع ملف"
+    accept = re.search(r'accept="([^"]+)"', tag)
+    assert accept, "المدخل بلا قائمة أنواع مسموحة (accept)"
+    for allowed in ("image/png", "image/jpeg", "image/webp"):
+        assert allowed in accept.group(1), (
+            f"النوع {allowed} مفقود من قائمة القبول — يجب أن تطابق الخادم")
+
+
+def test_upload_controls_classified_in_live_bindings():
+    """الزر والمدخل مصنفان control في LIVE_BINDINGS — حارس R-730 يرفض
+    غير المصنف (تغطية كاملة لعناصر index.html)."""
+    assert "btn-vision-upload" in BINDINGS.get("control", []), (
+        "btn-vision-upload غير مصنف في LIVE_BINDINGS.json (control)")
+    assert "vision-file-input" in BINDINGS.get("control", []), (
+        "vision-file-input غير مصنف في LIVE_BINDINGS.json (control)")
+
+
+def test_vision_module_real_and_bound():
+    """وحدة رفع الصور موجودة وتخاطب الزر والنقطة الفعلية وتسلّم عبر
+    مسار المحادثة الحقيقي — لا محاكاة ولا كتابة DOM مجهولة."""
+    assert VISION_JS.exists(), "وحدة vision-input.js غير موجودة"
+    js = VISION_JS.read_text(encoding="utf-8", errors="ignore")
+    assert "btn-vision-upload" in js, "الوحدة لا تخاطب الزر المعلن"
+    assert "vision-file-input" in js, "الوحدة لا تخاطب مدخل الملف المعلن"
+    assert "/vision" in js, "الوحدة لا تستدعي نقطة /vision الفعلية"
+    assert "SOVEREIGN_CHAT_RUNTIME" in js, (
+        "الوحدة يجب أن تسلّم الوصف عبر مسار المحادثة الحقيقي "
+        "(SOVEREIGN_CHAT_RUNTIME) — لا كتابة DOM مباشرة")
+    # صدق الفشل: كل رموز الخادم المعلنة تُعلن في الواجهة لا تُخفى
+    for code in ("503", "502", "413", "415", "429"):
+        assert code in js, (
+            f"الوحدة يجب أن تعلن فشل {code} بصدق (عقد /vision — R-739)")
+
+
+def test_chat_runtime_has_vision_entry():
+    """خطاف المحادثة له مدخل استقبال وصف الرؤية معلن — لا وحدة مجهولة
+    تكتب في المحادثة."""
+    assert "receiveVisionDescription" in CHAT_JS, (
+        "chat-runtime.js لا يملك مدخل استقبال وصف الرؤية "
+        "(receiveVisionDescription)")
+
+
+def test_vision_script_loaded():
+    """السكربت محمّل فعلًا في index.html — وحدة غير محملة = زر ميت."""
+    assert 'js/modules/vision-input.js' in INDEX, (
+        "vision-input.js غير محمّل في index.html")
+
+
+def test_inventory_lists_vision_module():
+    """الوحدة مجرودة في INVENTORY.md كوحدة حقيقية تستهلك API — حارس ١.١
+    يرفض وحدة غير مجرودة، والجرد يوثق العدّة الصادقة."""
+    assert "`vision-input.js`" in INVENTORY, (
+        "vision-input.js غير مدرجة في frontend/INVENTORY.md")
+    assert "9 |" in INVENTORY or "| 9 |" in INVENTORY or " 9 " in INVENTORY.split("تستهلك API مباشرة")[1][:60], (
+        "عدّة الجرد المباشرة لم تُحدَّث (8 → 9)")

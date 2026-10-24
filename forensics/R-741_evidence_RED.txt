@@ -1,0 +1,97 @@
+# R-741 RED — مُشاهد حرفيًا قبل أي تنفيذ (المادة ٢) — 2026-10-24T00:21:03Z
+
+FFFFFFF                                                                  [100%]
+=================================== FAILURES ===================================
+___________________ test_upload_button_exists_near_chat_send ___________________
+
+    def test_upload_button_exists_near_chat_send():
+        """زر رفع الصورة موجود في صف المحادثة — لا زر وهمي في مكان معزول."""
+>       assert 'id="btn-vision-upload"' in INDEX, (
+            "زر رفع الصور (btn-vision-upload) غير موجود في index.html")
+E       AssertionError: زر رفع الصور (btn-vision-upload) غير موجود في index.html
+E       assert 'id="btn-vision-upload"' in '<!DOCTYPE html>\n<html lang="ar" dir="rtl">\n\n<head>\n\n    <!-- ===================================================...dules/experimental-badges.js"></script>\n<script src="js/modules/live-health-chart.js"></script>\n</body>\n\n</html>\n'
+
+tests/test_vision_ui.py:34: AssertionError
+_____________________ test_file_input_accepts_images_only ______________________
+
+    def test_file_input_accepts_images_only():
+        """مدخل الملف المخفي يقبل أنواع الصور المسموحة فقط (نفس قائمة الخادم)."""
+>       assert 'id="vision-file-input"' in INDEX, (
+            "مدخل ملف الصور (vision-file-input) غير موجود في index.html")
+E       AssertionError: مدخل ملف الصور (vision-file-input) غير موجود في index.html
+E       assert 'id="vision-file-input"' in '<!DOCTYPE html>\n<html lang="ar" dir="rtl">\n\n<head>\n\n    <!-- ===================================================...dules/experimental-badges.js"></script>\n<script src="js/modules/live-health-chart.js"></script>\n</body>\n\n</html>\n'
+
+tests/test_vision_ui.py:44: AssertionError
+_______________ test_upload_controls_classified_in_live_bindings _______________
+
+    def test_upload_controls_classified_in_live_bindings():
+        """الزر والمدخل مصنفان control في LIVE_BINDINGS — حارس R-730 يرفض
+        غير المصنف (تغطية كاملة لعناصر index.html)."""
+>       assert "btn-vision-upload" in BINDINGS.get("control", []), (
+            "btn-vision-upload غير مصنف في LIVE_BINDINGS.json (control)")
+E       AssertionError: btn-vision-upload غير مصنف في LIVE_BINDINGS.json (control)
+E       assert 'btn-vision-upload' in ['btn-reset-system', 'btn-export-data', 'main-tabs', 'sir-command-input', 'btn-send-sir-command', 'chat-input', ...]
+E        +  where ['btn-reset-system', 'btn-export-data', 'main-tabs', 'sir-command-input', 'btn-send-sir-command', 'chat-input', ...] = <built-in method get of dict object at 0x7fa96739dd40>('control', [])
+E        +    where <built-in method get of dict object at 0x7fa96739dd40> = {'_doc': 'R-730 (البند ١.٤ — بأمر المالك): خريطة الربط الحي — كل عنصر بمعرّف في index.html مصنف هنا. bound = مربوط بنق...i/cognitive-input.js', 'js/modules/interface-runtime.js']}], 'action_log': ['decisions-groups', 'proposals-list'], ...}.get
+
+tests/test_vision_ui.py:60: AssertionError
+______________________ test_vision_module_real_and_bound _______________________
+
+    def test_vision_module_real_and_bound():
+        """وحدة رفع الصور موجودة وتخاطب الزر والنقطة الفعلية وتسلّم عبر
+        مسار المحادثة الحقيقي — لا محاكاة ولا كتابة DOM مجهولة."""
+>       assert VISION_JS.exists(), "وحدة vision-input.js غير موجودة"
+E       AssertionError: وحدة vision-input.js غير موجودة
+E       assert False
+E        +  where False = exists()
+E        +    where exists = PosixPath('/home/user/workspace/sovereign_ai/frontend/js/modules/vision-input.js').exists
+
+tests/test_vision_ui.py:69: AssertionError
+______________________ test_chat_runtime_has_vision_entry ______________________
+
+    def test_chat_runtime_has_vision_entry():
+        """خطاف المحادثة له مدخل استقبال وصف الرؤية معلن — لا وحدة مجهولة
+        تكتب في المحادثة."""
+>       assert "receiveVisionDescription" in CHAT_JS, (
+            "chat-runtime.js لا يملك مدخل استقبال وصف الرؤية "
+            "(receiveVisionDescription)")
+E       AssertionError: chat-runtime.js لا يملك مدخل استقبال وصف الرؤية (receiveVisionDescription)
+E       assert 'receiveVisionDescription' in '/* ============================================================\n   Sovereign AI — chat-runtime.js\n   الإصدار: 6.0.0...===================================================== */\n\nwindow.SOVEREIGN_CHAT =\n    new SovereignChatRuntime();\n'
+
+tests/test_vision_ui.py:86: AssertionError
+__________________________ test_vision_script_loaded ___________________________
+
+    def test_vision_script_loaded():
+        """السكربت محمّل فعلًا في index.html — وحدة غير محملة = زر ميت."""
+>       assert 'js/modules/vision-input.js' in INDEX, (
+            "vision-input.js غير محمّل في index.html")
+E       AssertionError: vision-input.js غير محمّل في index.html
+E       assert 'js/modules/vision-input.js' in '<!DOCTYPE html>\n<html lang="ar" dir="rtl">\n\n<head>\n\n    <!-- ===================================================...dules/experimental-badges.js"></script>\n<script src="js/modules/live-health-chart.js"></script>\n</body>\n\n</html>\n'
+
+tests/test_vision_ui.py:93: AssertionError
+______________________ test_inventory_lists_vision_module ______________________
+
+    def test_inventory_lists_vision_module():
+        """الوحدة مجرودة في INVENTORY.md كوحدة حقيقية تستهلك API — حارس ١.١
+        يرفض وحدة غير مجرودة، والجرد يوثق العدّة الصادقة."""
+>       assert "`vision-input.js`" in INVENTORY, (
+            "vision-input.js غير مدرجة في frontend/INVENTORY.md")
+E       AssertionError: vision-input.js غير مدرجة في frontend/INVENTORY.md
+E       assert '`vision-input.js`' in '# جرد واجهة سوفره — البند ١.١ (ROADMAP_V4 / R-723)\n\n**التاريخ:** 2026-10-22 — **الطريقة:** تحليل آلي (استهلاك API م...nd_inventory.py`) — وحدة غير مجرودة = رفض.\n- أي تغيير تصنيف وحدة يتطلب تحديث هذا الملف معه في نفس الالتزام (D-040).\n'
+
+tests/test_vision_ui.py:100: AssertionError
+=============================== warnings summary ===============================
+backend/config.py:434
+  /home/user/workspace/sovereign_ai/backend/config.py:434: UserWarning: ⚠️ CORS مفتوح للجميع — مقبول في التطوير فقط (D-034)
+    warnings.warn("⚠️ CORS مفتوح للجميع — مقبول في التطوير فقط (D-034)")
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_vision_ui.py::test_upload_button_exists_near_chat_send - As...
+FAILED tests/test_vision_ui.py::test_file_input_accepts_images_only - Asserti...
+FAILED tests/test_vision_ui.py::test_upload_controls_classified_in_live_bindings
+FAILED tests/test_vision_ui.py::test_vision_module_real_and_bound - Assertion...
+FAILED tests/test_vision_ui.py::test_chat_runtime_has_vision_entry - Assertio...
+FAILED tests/test_vision_ui.py::test_vision_script_loaded - AssertionError: v...
+FAILED tests/test_vision_ui.py::test_inventory_lists_vision_module - Assertio...
+7 failed, 1 warning in 0.06s
