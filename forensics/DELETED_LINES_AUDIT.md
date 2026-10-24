@@ -2335,3 +2335,8 @@ Bus إطلاقًا. الواجهة سليمة بعد الإزالة (101 وسم 
 ## 2026-10-24 — R-744 (البند ٤.٢): سجل التطور
 - **# DELETION-JUSTIFIED** — سطرا `return defect_scan.get_worklist().scan(` و`health=..., now=time.time())` في `backend/app.py::_defect_scan_payload` استُبدلا بالنداء نفسه مخزّنًا في `report` + `record_cycle` + `return report` — سلوك التقرير المُعاد حرفيًا كما هو (حارس test_defect_scan أخضر). بقية المحذوفات أسطر توثيق حالة استُبدلت: ترويستا «آخر تحديث» (CHANGELOG + PROJECT_STATE)، العدّادات (1000→1007)، حالة صف ٤.٢ في ROADMAP_V4 («جزئي… لا يُكتب فيه بعد» → منجز بحدود).
 - الحارس: `tests/test_evolution_ledger.py` (7). التفصيل: `forensics/R-744_EVOLUTION_LEDGER.md`.
+
+
+## 2026-10-24 — R-745 (البند ٤.٥): التحسين بموافقة
+- **# DELETION-JUSTIFIED** — لا حذف شيفرة (backend: +62/−0 — app.py وtool_registry.py إلحاق فقط؛ improvement_proposals.py جديد). المحذوفات أسطر توثيق حالة استُبدلت: ترويستا «آخر تحديث» (CHANGELOG + PROJECT_STATE)، العدّادات (1007→1016)، حالة صف ٤.٥ في ROADMAP_V4 («لم يبدأ» → منجز بحدود).
+- الحارس: `tests/test_improvement_proposals.py` (9). التفصيل: `forensics/R-745_APPROVED_IMPROVEMENT.md`.

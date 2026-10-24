@@ -394,7 +394,47 @@ def _defect_scan_payload() -> Dict[str, Any]:
     # result_fingerprint في حدث tool_invoked الموقّع.
     import evolution_ledger
     evolution_ledger.get_ledger().record_cycle("defects.scan", report, now=now)
+    # R-745 (البند ٤.٥): العيوب المفتوحة → اقتراحات تنتظر قرار المالك (لا تنفيذ ذاتي)
+    import improvement_proposals
+    improvement_proposals.get_book().ingest(report, now=now)
     return report
+
+
+def _proposal_decide(proposal_id: str, decision: str, note: str = None,
+                     commit: str = None) -> Dict[str, Any]:
+    """R-745: المرحلة الأولى لقرار المالك — تحضير بلا تغيير حالة؛ التطبيق
+    في _proposal_apply بعد نجاح الأثر الموقّع (لا أثر = لا تنفيذ)."""
+    import improvement_proposals
+    return improvement_proposals.get_book().prepare(
+        proposal_id, decision, note=note, commit=commit, now=time.time())
+
+
+def _proposal_apply(prepared: Dict[str, Any]) -> Dict[str, Any]:
+    import improvement_proposals
+    return improvement_proposals.get_book().apply_prepared(prepared)
+
+
+@app.get("/proposals")
+async def proposals_list():
+    """R-745 (البند ٤.٥): اقتراحات التحسين — قراءة فقط. القرار عبر /tools/invoke
+    (proposals.decide بمفتاح المالك وأثر موقّع)، والتنفيذ بالدورة الذرية لا هنا."""
+    import improvement_proposals
+    items = improvement_proposals.get_book().list()
+    return {"proposals": items,
+            "counts": {s: sum(1 for i in items if i["status"] == s)
+                       for s in ("proposed", "approved", "rejected",
+                                 "implemented", "suppressed")}}
+
+
+@app.get("/proposals/{proposal_id}/file")
+async def proposal_file(proposal_id: str):
+    """R-745: ملف التوصية (markdown) — يُحفظ ويُنفَّذ بالدورة الذرية المعتادة."""
+    import improvement_proposals
+    try:
+        md = improvement_proposals.get_book().render_markdown(proposal_id)
+    except KeyError:
+        raise HTTPException(status_code=404, detail=f"اقتراح غير موجود: {proposal_id}")
+    return Response(content=md, media_type="text/markdown; charset=utf-8")
 
 
 @app.get("/evolution/ledger")
@@ -1333,6 +1373,15 @@ def _register_real_tools() -> None:
         inputs={},
         outputs="open_count/resolved_count/defects[]/health_history",
         handler=_defect_scan_payload,
+    ))
+    registry.register(ToolSpec(
+        name="proposals.decide",
+        description="R-745 (٤.٥): قرار المالك في اقتراح تحسين — approved/rejected/implemented",
+        inputs={"proposal_id": "P-xxxxxxxx", "decision": "approved|rejected|implemented",
+                "note": "اختياري", "commit": "SHA — إلزامي لـ implemented"},
+        outputs="الاقتراح بعد القرار (status/history/commit)",
+        handler=_proposal_decide,
+        apply=_proposal_apply,
     ))
     registry.register(ToolSpec(
         name="sovereignty.score",

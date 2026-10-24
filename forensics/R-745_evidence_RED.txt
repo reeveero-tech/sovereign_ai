@@ -1,0 +1,27 @@
+# R-745 RED — مُشاهد قبل أي تنفيذ (المادة ٢) — 2026-10-24T12:51:03Z
+    with self.open(mode='r', encoding=encoding, errors=errors) as f:
+mode = 'r', buffering = -1, encoding = 'utf-8', errors = None, newline = None
+             errors=None, newline=None):
+>       return io.open(self, mode, buffering, encoding, errors, newline)
+FAILED tests/test_improvement_proposals.py::test_module_has_no_self_modification_paths
+FAILED tests/test_improvement_proposals.py::test_real_loop_scan_propose_owner_decides_signed
+ERROR tests/test_improvement_proposals.py::test_proposals_from_open_defects_stable_and_deduped
+ERROR tests/test_improvement_proposals.py::test_owner_decision_conflict_is_suppressed_with_reason
+ERROR tests/test_improvement_proposals.py::test_signing_key_evidence_becomes_owner_action
+ERROR tests/test_improvement_proposals.py::test_state_machine_is_strict - Mod...
+ERROR tests/test_improvement_proposals.py::test_rejected_is_not_reproposed - ...
+ERROR tests/test_improvement_proposals.py::test_recommendation_file_carries_evidence_and_atomic_checklist
+2 failed, 3 warnings, 6 errors in 0.69s
+
+# RED-2 (ثغرة مكتشفة أثناء الربط — المعالج يطبّق قبل الأثر): ربط مباشر handler=decide، قبل إصلاح المرحلتين — 2026-10-24T12:52:18Z
+FAILED tests/test_improvement_proposals.py::test_decision_not_applied_when_ledger_cannot_sign
+1 failed, 8 passed, 3 warnings in 0.77s
+
+# GREEN + دليل حي (جذر بيانات مؤقت خارج المستودع، مفتاح اختباري عابر):
+الدورة ١ (نظام حقيقي سليم): [('supervisor_heartbeat_missing', 'suppressed', 'قرار المالك ٤.٧ (الحارس كخدمة): مغلق — خ')]
+الدورة ٢ (مكوّن معطوب محاكى): P-23997dad code_fix proposed
+مفتاح خاطئ: 401
+implemented قبل الموافقة: False ValueError: انتقال مرفوض: proposed → implemented (المسموح من proposed:
+موافقة المالك: True approved | بصمة الأثر الموقّع: e0d7a9ec724fb9d5
+ملف التوصية: 200 text/markdown; charset=utf-8 | أول سطر: # P-23997dad — اقتراح تحسين (code_fix)
+رفض توقيع محاكى → RuntimeError، الحالة بعده: approved

@@ -37,6 +37,10 @@ class ToolSpec:
     outputs: str
     handler: Callable[[], Any]
     permission: str = "owner"  # استدعاؤها يتطلب مفتاح API (نمط /sovereign/command)
+    # R-745: أدوات تغيّر حالة — handler يحضّر (بلا أثر جانبي) وapply يطبّق
+    # النتيجة المحضّرة **بعد** نجاح الأثر الموقّع فقط. لا أثر = لا تنفيذ.
+    # أدوات القراءة (apply=None) سلوكها كما هو حرفيًا.
+    apply: Optional[Callable[[Any], Any]] = None
 
 
 class ToolRegistry:
@@ -107,6 +111,15 @@ class ToolRegistry:
         # (نفس حارس R-635 قبل أي حفظ دائم). لا سر في الحدث أبدًا.
         from memory.core import get_core
         get_core().append_event("tool_invoked", payload, user=caller)
+
+        if ok and spec.apply is not None:
+            try:
+                spec.apply(result)
+            except Exception as exc:  # الأثر الأول صادق عن التحضير؛ فشل التطبيق يُوثّق بأثر ثانٍ
+                ok, error = False, f"apply: {type(exc).__name__}: {exc}"[:200]
+                get_core().append_event("tool_invoked", {
+                    **payload, "ok": False, "error": error, "phase": "apply"}, user=caller)
+                result = None
 
         return {
             "ok": ok,
