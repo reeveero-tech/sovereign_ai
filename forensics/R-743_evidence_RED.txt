@@ -1,0 +1,18 @@
+# R-743 RED — مُشاهد قبل أي تنفيذ (المادة ٢) — 2026-10-24T08:45:04Z
+FAILED tests/test_defect_scan.py::test_tool_and_scheduled_task_registered - A...
+FAILED tests/test_defect_scan.py::test_real_loop_scheduler_runs_scan_and_report_endpoint
+ERROR tests/test_defect_scan.py::test_healthy_state_yields_no_open_defects - ...
+ERROR tests/test_defect_scan.py::test_unhealthy_component_is_defect_with_evidence
+ERROR tests/test_defect_scan.py::test_scheduler_failure_is_defect - ModuleNot...
+ERROR tests/test_defect_scan.py::test_supervisor_alerts_and_missing_heartbeat
+ERROR tests/test_defect_scan.py::test_worklist_dedupes_and_resolves_without_deleting
+ERROR tests/test_defect_scan.py::test_persistent_degraded_health_history - Mo...
+2 failed, 3 warnings, 6 errors in 0.75s
+
+# GREEN + دليل تشغيل حي (جذر بيانات مؤقت خارج المستودع، مفتاح اختباري عابر):
+قبل أي دورة: لم تُشغَّل دورة فحص بعد — المهمة self_defect_scan تعمل عند ت ...
+الدورة ١ ok: True | بصمة الأثر الموقّع: 18703427eb72fbdf
+open: 1 resolved: 0 scans: 1 history: ['healthy']
+ - open low supervisor_heartbeat_missing | data/supervisor/status.json غائب أو تالف أو منتهي المهلة
+
+# بلا مفتاح توقيع (حالة الإنتاج اليوم — R-635): invoke يرفع RuntimeError — لا أثر = لا تنفيذ، فيظهر كفشل مهمة مجدولة لا تقرير.

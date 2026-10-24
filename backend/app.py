@@ -354,6 +354,42 @@ async def scheduler_status():
     return sched.status()
 
 
+@app.get("/defects/report")
+async def defects_report():
+    """R-743 (البند ٤.٣): آخر تقرير عيوب أنتجته دورة defects.scan — قراءة فقط.
+
+    لا يشغّل فحصًا (التشغيل عبر السجل فقط: المجدول أو /tools/invoke — كل
+    تشغيل يترك أثرًا موقّعًا). بلا دورة سابقة يعلن ذلك بصدق مع السبب."""
+    import defect_scan
+    report = defect_scan.get_worklist().last_report()
+    if report is None:
+        return {"report": None,
+                "reason": "لم تُشغَّل دورة فحص بعد — المهمة self_defect_scan "
+                          "تعمل عند تفعيل المجدول (SOVEREIGN_SCHEDULER=1 — قرار "
+                          "المالك) أو باستدعاء defects.scan عبر /tools/invoke"}
+    return {"report": report}
+
+
+def _defect_scan_payload() -> Dict[str, Any]:
+    """R-743: مصادر حقيقية → قائمة العيوب. تُستدعى من داخل run_due (والمجدول
+    ممسك بقفله) فتقرأ المهام مباشرة لا عبر status() — لا قفل مزدوج."""
+    import defect_scan
+    try:
+        health = _health_payload()
+    except Exception:  # R-743: تعذر اللقطة نفسه عيب يُرصد (health_unavailable) لا انهيار
+        health = None
+    sched = getattr(app.state, "scheduler", None)
+    sched_snapshot = ({"tasks": [t.to_dict() for t in list(sched.tasks)]}
+                      if sched is not None else None)
+    hb = _load_heartbeat()
+    if hb is not None:
+        threshold = min(max(10.0, 3.0 * hb["interval"]), 120.0)
+        if time.time() - hb["epoch"] > threshold:
+            hb = None  # منتهي المهلة = غائب (نفس حكم /supervisor/status)
+    return defect_scan.get_worklist().scan(
+        health=health, scheduler=sched_snapshot, heartbeat=hb, now=time.time())
+
+
 @app.get("/guardian/status")
 async def guardian_status():
     """حالة نظام الحارس (قراءة فقط) — إحياء guardian/ عبر طبقة توافق"""
@@ -1272,6 +1308,13 @@ def _register_real_tools() -> None:
         inputs={"goal": "هدف البحث"}, outputs="report/sources/facts/steps",
         handler=_tool_research_run))
 
+    registry.register(ToolSpec(
+        name="defects.scan",
+        description="R-743 (٤.٣): فحص ذاتي للعيوب — الصحة/المجدول/الحارس → قائمة عمل",
+        inputs={},
+        outputs="open_count/resolved_count/defects[]/health_history",
+        handler=_defect_scan_payload,
+    ))
     registry.register(ToolSpec(
         name="sovereignty.score",
         description="تقرير درجة السيادة الكامل (نفس منطق /sovereignty/score)",

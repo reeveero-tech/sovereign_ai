@@ -143,6 +143,8 @@ def build_from_env() -> Scheduler:
     tasks = [
         # فحص ذاتي دوري: لقطة الصحة — أساس البند ٤.٣ (اكتشاف العيوب ذاتيًا)
         ScheduledTask(name="self_health_check", tool="health.snapshot", interval_seconds=interval),
+        # R-743 (البند ٤.٣): دورة اكتشاف العيوب ذاتيًا — قائمة عمل في /defects/report
+        ScheduledTask(name="self_defect_scan", tool="defects.scan", interval_seconds=interval),
     ]
     enabled = os.environ.get(ENV_ENABLE, "").strip() == "1"
     reason = (

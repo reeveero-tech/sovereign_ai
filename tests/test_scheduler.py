@@ -77,6 +77,10 @@ def test_scheduled_task_runs_and_is_ledgered(monkeypatch):
         assert task["last_ok"] is True, task.get("last_error")
     events = _scheduler_events()
     assert len(events) > before, "لا أثر للتشغيل المجدول في السجل السيادي"
+    # R-743: مهمتان مجدولتان الآن (health.snapshot + defects.scan) — نفس الفحص
+    # محصورًا في أحداث المهمة المختبرة لا «آخر حدث أيًّا كان»
+    events = [e for e in events if e["tool"] == "health.snapshot"]
+    assert events, "لا أثر لتشغيل health.snapshot المجدول في السجل السيادي"
     latest = events[0]
     assert latest["tool"] == "health.snapshot" and latest["ok"] is True
     # الحالة تعكس السجل الحقيقي لا رقمًا داخليًا منفصلًا
