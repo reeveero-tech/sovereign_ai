@@ -203,3 +203,128 @@ def test_ci_and_hook_call_the_gate():
     assert "reject code changes without docs update in the same commit" in ci
     assert "tools/gate_docs_sync.py" in ci
     assert "tools/gate_docs_sync.py" in hook
+
+
+# --- R-749: فجوات التغطية التي أظهرها المراجعة — على التطبيق الحالي (RED أولًا) ---
+
+DOCS_OK_V2 = {
+    "docs/PROJECT_STATE.md": "الحالة محدثة\n",
+    "docs/CHANGELOG.md": "مدخل جديد\n",
+    "docs/ROADMAP_V5.md": "خارطة محدثة\n",
+    # مؤشر الخارطة النشطة — عقد القراءة الموحد
+    "docs/ROADMAP_ACTIVE.txt": "docs/ROADMAP_V5.md\n",
+}
+
+
+def _commit_range_repo() -> Path:
+    repo = _make_repo()
+    for rel, text in DOCS_OK_V2.items():
+        _write(repo, rel, text)
+    _commit_all(repo, "initial with docs")
+    return repo
+
+
+def test_push_range_code_without_docs_rejected():
+    """دفعة دفع متعددة الالتزامات: التزام كود بلا وثائق ثم التزام وثائق فقط —
+    فحص الرأس وحده يمر، والقاعدة الحرفية (نفس الالتزام) ترفض. وضع --range."""
+    repo = _commit_range_repo()
+    try:
+        BEFORE = subprocess.run(["git", "rev-parse", "HEAD"], cwd=repo,
+                                capture_output=True, text=True, check=True).stdout.strip()
+        _write(repo, "backend/app.py", "x = 1\n")
+        _commit_all(repo, "code without docs")
+        _write(repo, "docs/CHANGELOG.md", "توثيق لاحق منفصل\n")
+        _commit_all(repo, "docs only, separate")
+        r = _run_gate(str(repo), "--range", BEFORE, "HEAD")
+        assert r.returncode == 1, (
+            "وضع --range يجب أن يرفض: الالتزام الأول كود بلا وثائق في نفسه"
+        )
+        assert "backend/app.py" in (r.stdout + r.stderr)
+    finally:
+        shutil.rmtree(repo, ignore_errors=True)
+
+
+def test_range_all_compliant_passes():
+    repo = _commit_range_repo()
+    try:
+        BEFORE = subprocess.run(["git", "rev-parse", "HEAD"], cwd=repo,
+                                capture_output=True, text=True, check=True).stdout.strip()
+        _write(repo, "backend/app.py", "x = 1\n")
+        for rel, text in DOCS_OK_V2.items():
+            _write(repo, rel, text + "v2\n")
+        _commit_all(repo, "code + full docs in same commit")
+        r = _run_gate(str(repo), "--range", BEFORE, "HEAD")
+        assert r.returncode == 0, r.stdout + r.stderr
+    finally:
+        shutil.rmtree(repo, ignore_errors=True)
+
+
+def test_pr_aggregation_rejected():
+    """كود في التزام ووثائق في التزام آخر داخل نفس المدى — التجميع المدى
+    (السلوك القديم لبوابة PR) يمر، والقاعدة الحرفية ترفض: كل التزام كود
+    يحمل وثائقه بنفسه."""
+    repo = _commit_range_repo()
+    try:
+        BEFORE = subprocess.run(["git", "rev-parse", "HEAD"], cwd=repo,
+                                capture_output=True, text=True, check=True).stdout.strip()
+        _write(repo, "backend/pr_code.py", "x = 1\n")
+        _commit_all(repo, "code commit")
+        _write(repo, "docs/CHANGELOG.md", "توثيق في التزام آخر\n")
+        _commit_all(repo, "docs commit")
+        r = _run_gate(str(repo), "--range", BEFORE, "HEAD")
+        assert r.returncode == 1
+    finally:
+        shutil.rmtree(repo, ignore_errors=True)
+
+
+def test_historical_roadmap_change_not_enough():
+    """تحديث خارطة قديمة (ROADMAP_V2.md) لا يبرر الكود — المطلوب الخارطة
+    النشطة المشار إليها بمؤشر docs/ROADMAP_ACTIVE.txt."""
+    repo = _commit_range_repo()
+    try:
+        _write(repo, "backend/app.py", "x = 1\n")
+        _write(repo, "docs/PROJECT_STATE.md", "حالة\n")
+        _write(repo, "docs/CHANGELOG.md", "سجل\n")
+        _write(repo, "docs/ROADMAP_V2.md", "خارطة قديمة محدثة\n")
+        _commit_all(repo, "code + historical roadmap")
+        r = _run_gate(str(repo), "HEAD")
+        assert r.returncode == 1
+        assert "ROADMAP" in (r.stdout + r.stderr)
+    finally:
+        shutil.rmtree(repo, ignore_errors=True)
+
+
+def test_scripts_change_requires_docs():
+    """scripts/ و.githooks/ كود — تغييرهما يلزمه التوثيق في نفس الالتزام."""
+    repo = _make_repo()
+    try:
+        _write(repo, "scripts/deploy_helper.py", "print('hi')\n")
+        _write(repo, "docs/PROJECT_STATE.md", "حالة\n")
+        _write(repo, "docs/CHANGELOG.md", "سجل\n")
+        _write(repo, "docs/ROADMAP_V5.md", "خارطة\n")
+        _commit_all(repo, "scripts change + docs")
+        r = _run_gate(str(repo), "HEAD")
+        assert r.returncode == 0, r.stdout + r.stderr  # مع الوثائق يمر
+        # وبلا وثائق يُرفض
+        _write(repo, ".githooks/pre-commit", "#!/bin/sh\n")
+        _commit_all(repo, "hook change without docs")
+        r2 = _run_gate(str(repo), "HEAD")
+        assert r2.returncode == 1
+    finally:
+        shutil.rmtree(repo, ignore_errors=True)
+
+
+def test_deleted_doc_does_not_count():
+    """حذف وثيقة مطلوبة ليس «تحديثًا» — الاسم في قائمة التغيير لا يكفي،
+    لا بد أن تكون موجودة في شجرة الالتزام."""
+    repo = _commit_range_repo()
+    try:
+        _write(repo, "backend/app.py", "x = 1\n")
+        subprocess.run(["git", "rm", "-q", "docs/CHANGELOG.md"], cwd=repo, check=True)
+        subprocess.run(["git", "add", "-A"], cwd=repo, check=True)
+        subprocess.run(["git", "commit", "-q", "-m", "delete changelog"], cwd=repo, check=True)
+        r = _run_gate(str(repo), "HEAD")
+        assert r.returncode == 1
+        assert "docs/CHANGELOG.md" in (r.stdout + r.stderr)
+    finally:
+        shutil.rmtree(repo, ignore_errors=True)

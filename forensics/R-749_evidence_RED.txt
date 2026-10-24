@@ -1,0 +1,180 @@
+forensics/R-749_evidence_RED.txt — دليل RED لفجوات تغطية حارس القاعدة الحاكمة (مراجعة R-749)
+التاريخ: 2026-10-24 — قبل إصلاح tools/gate_docs_sync.py
+الأمر: python -m pytest tests/test_gate_docs_sync.py -q (على التطبيق الحالي — R-748)
+
+..........FFFFFF                                                         [100%]
+=================================== FAILURES ===================================
+__________________ test_push_range_code_without_docs_rejected __________________
+
+    def test_push_range_code_without_docs_rejected():
+        """دفعة دفع متعددة الالتزامات: التزام كود بلا وثائق ثم التزام وثائق فقط —
+        فحص الرأس وحده يمر، والقاعدة الحرفية (نفس الالتزام) ترفض. وضع --range."""
+        repo = _commit_range_repo()
+        try:
+            BEFORE = subprocess.run(["git", "rev-parse", "HEAD"], cwd=repo,
+                                    capture_output=True, text=True, check=True).stdout.strip()
+            _write(repo, "backend/app.py", "x = 1\n")
+            _commit_all(repo, "code without docs")
+            _write(repo, "docs/CHANGELOG.md", "توثيق لاحق منفصل\n")
+            _commit_all(repo, "docs only, separate")
+            r = _run_gate(str(repo), "--range", BEFORE, "HEAD")
+>           assert r.returncode == 1, (
+                "وضع --range يجب أن يرفض: الالتزام الأول كود بلا وثائق في نفسه"
+            )
+E           AssertionError: وضع --range يجب أن يرفض: الالتزام الأول كود بلا وثائق في نفسه
+E           assert 2 == 1
+E            +  where 2 = CompletedProcess(args=['/home/user/workspace/venv-repo/bin/python', '/home/user/workspace/repo/tools/gate_docs_sync.py...ommit\n    --left-right\n    --count\n    -z\n  special purpose:\n    --bisect\n    --bisect-vars\n    --bisect-all\n').returncode
+
+tests/test_gate_docs_sync.py:239: AssertionError
+_______________________ test_range_all_compliant_passes ________________________
+
+    def test_range_all_compliant_passes():
+        repo = _commit_range_repo()
+        try:
+            BEFORE = subprocess.run(["git", "rev-parse", "HEAD"], cwd=repo,
+                                    capture_output=True, text=True, check=True).stdout.strip()
+            _write(repo, "backend/app.py", "x = 1\n")
+            for rel, text in DOCS_OK_V2.items():
+                _write(repo, rel, text + "v2\n")
+            _commit_all(repo, "code + full docs in same commit")
+            r = _run_gate(str(repo), "--range", BEFORE, "HEAD")
+>           assert r.returncode == 0, r.stdout + r.stderr
+E           AssertionError: git rev-list --parents -n 1 --range فشل: usage: git rev-list [<options>] <commit>... [--] [<path>...]
+E             
+E               limiting output:
+E                 --max-count=<n>
+E                 --max-age=<epoch>
+E                 --min-age=<epoch>
+E                 --sparse
+E                 --no-merges
+E                 --min-parents=<n>
+E                 --no-min-parents
+E                 --max-parents=<n>
+E                 --no-max-parents
+E                 --remove-empty
+E                 --all
+E                 --branches
+E                 --tags
+E                 --remotes
+E                 --stdin
+E                 --exclude-hidden=[fetch|receive|uploadpack]
+E                 --quiet
+E               ordering output:
+E                 --topo-order
+E                 --date-order
+E                 --reverse
+E               formatting output:
+E                 --parents
+E                 --children
+E                 --objects | --objects-edge
+E                 --disk-usage[=human]
+E                 --unpacked
+E                 --header | --pretty
+E                 --[no-]object-names
+E                 --abbrev=<n> | --no-abbrev
+E                 --abbrev-commit
+E                 --left-right
+E                 --count
+E                 -z
+E               special purpose:
+E                 --bisect
+E                 --bisect-vars
+E                 --bisect-all
+E             
+E           assert 2 == 0
+E            +  where 2 = CompletedProcess(args=['/home/user/workspace/venv-repo/bin/python', '/home/user/workspace/repo/tools/gate_docs_sync.py...ommit\n    --left-right\n    --count\n    -z\n  special purpose:\n    --bisect\n    --bisect-vars\n    --bisect-all\n').returncode
+
+tests/test_gate_docs_sync.py:257: AssertionError
+_________________________ test_pr_aggregation_rejected _________________________
+
+    def test_pr_aggregation_rejected():
+        """كود في التزام ووثائق في التزام آخر داخل نفس المدى — التجميع المدى
+        (السلوك القديم لبوابة PR) يمر، والقاعدة الحرفية ترفض: كل التزام كود
+        يحمل وثائقه بنفسه."""
+        repo = _commit_range_repo()
+        try:
+            BEFORE = subprocess.run(["git", "rev-parse", "HEAD"], cwd=repo,
+                                    capture_output=True, text=True, check=True).stdout.strip()
+            _write(repo, "backend/pr_code.py", "x = 1\n")
+            _commit_all(repo, "code commit")
+            _write(repo, "docs/CHANGELOG.md", "توثيق في التزام آخر\n")
+            _commit_all(repo, "docs commit")
+            r = _run_gate(str(repo), "--range", BEFORE, "HEAD")
+>           assert r.returncode == 1
+E           AssertionError: assert 2 == 1
+E            +  where 2 = CompletedProcess(args=['/home/user/workspace/venv-repo/bin/python', '/home/user/workspace/repo/tools/gate_docs_sync.py...ommit\n    --left-right\n    --count\n    -z\n  special purpose:\n    --bisect\n    --bisect-vars\n    --bisect-all\n').returncode
+
+tests/test_gate_docs_sync.py:275: AssertionError
+__________________ test_historical_roadmap_change_not_enough ___________________
+
+    def test_historical_roadmap_change_not_enough():
+        """تحديث خارطة قديمة (ROADMAP_V2.md) لا يبرر الكود — المطلوب الخارطة
+        النشطة المشار إليها بمؤشر docs/ROADMAP_ACTIVE.txt."""
+        repo = _commit_range_repo()
+        try:
+            _write(repo, "backend/app.py", "x = 1\n")
+            _write(repo, "docs/PROJECT_STATE.md", "حالة\n")
+            _write(repo, "docs/CHANGELOG.md", "سجل\n")
+            _write(repo, "docs/ROADMAP_V2.md", "خارطة قديمة محدثة\n")
+            _commit_all(repo, "code + historical roadmap")
+            r = _run_gate(str(repo), "HEAD")
+>           assert r.returncode == 1
+E           AssertionError: assert 0 == 1
+E            +  where 0 = CompletedProcess(args=['/home/user/workspace/venv-repo/bin/python', '/home/user/workspace/repo/tools/gate_docs_sync.py...تزام HEAD] الدفعة ذرية: كود (1 ملفًا) + PROJECT_STATE + CHANGELOG + خارطة الطريق في نفس الالتزام (D-040)\n', stderr='').returncode
+
+tests/test_gate_docs_sync.py:291: AssertionError
+______________________ test_scripts_change_requires_docs _______________________
+
+    def test_scripts_change_requires_docs():
+        """scripts/ و.githooks/ كود — تغييرهما يلزمه التوثيق في نفس الالتزام."""
+        repo = _make_repo()
+        try:
+            _write(repo, "scripts/deploy_helper.py", "print('hi')\n")
+            _write(repo, "docs/PROJECT_STATE.md", "حالة\n")
+            _write(repo, "docs/CHANGELOG.md", "سجل\n")
+            _write(repo, "docs/ROADMAP_V5.md", "خارطة\n")
+            _commit_all(repo, "scripts change + docs")
+            r = _run_gate(str(repo), "HEAD")
+            assert r.returncode == 0, r.stdout + r.stderr  # مع الوثائق يمر
+            # وبلا وثائق يُرفض
+            _write(repo, ".githooks/pre-commit", "#!/bin/sh\n")
+            _commit_all(repo, "hook change without docs")
+            r2 = _run_gate(str(repo), "HEAD")
+>           assert r2.returncode == 1
+E           AssertionError: assert 0 == 1
+E            +  where 0 = CompletedProcess(args=['/home/user/workspace/venv-repo/bin/python', '/home/user/workspace/repo/tools/gate_docs_sync.py', 'HEAD'], returncode=0, stdout='✅ [التزام HEAD] لا تغييرات كود — لا يلزم توثيق (D-040)\n', stderr='').returncode
+
+tests/test_gate_docs_sync.py:312: AssertionError
+_______________________ test_deleted_doc_does_not_count ________________________
+
+    def test_deleted_doc_does_not_count():
+        """حذف وثيقة مطلوبة ليس «تحديثًا» — الاسم في قائمة التغيير لا يكفي،
+        لا بد أن تكون موجودة في شجرة الالتزام."""
+        repo = _commit_range_repo()
+        try:
+            _write(repo, "backend/app.py", "x = 1\n")
+            subprocess.run(["git", "rm", "-q", "docs/CHANGELOG.md"], cwd=repo, check=True)
+            subprocess.run(["git", "add", "-A"], cwd=repo, check=True)
+            subprocess.run(["git", "commit", "-q", "-m", "delete changelog"], cwd=repo, check=True)
+            r = _run_gate(str(repo), "HEAD")
+            assert r.returncode == 1
+>           assert "docs/CHANGELOG.md" in (r.stdout + r.stderr)
+E           assert 'docs/CHANGELOG.md' in ("❌ [D-040 — القاعدة الحاكمة بأمر المالك] الالتزام/الدفعة يغيّر كودًا (1 ملفًا: ['backend/app.py']...) دون تحديث المطلو...ة: أي تغيير كود يلزمه تحديث حالة المشروع وسجل التغييرات وخارطة الطريق النشطة في نفس الالتزام — لا دفعة توثيق منفصلة.\n" + '')
+E            +  where "❌ [D-040 — القاعدة الحاكمة بأمر المالك] الالتزام/الدفعة يغيّر كودًا (1 ملفًا: ['backend/app.py']...) دون تحديث المطلو...ة: أي تغيير كود يلزمه تحديث حالة المشروع وسجل التغييرات وخارطة الطريق النشطة في نفس الالتزام — لا دفعة توثيق منفصلة.\n" = CompletedProcess(args=['/home/user/workspace/venv-repo/bin/python', '/home/user/workspace/repo/tools/gate_docs_sync.py...كود يلزمه تحديث حالة المشروع وسجل التغييرات وخارطة الطريق النشطة في نفس الالتزام — لا دفعة توثيق منفصلة.\n", stderr='').stdout
+E            +  and   '' = CompletedProcess(args=['/home/user/workspace/venv-repo/bin/python', '/home/user/workspace/repo/tools/gate_docs_sync.py...كود يلزمه تحديث حالة المشروع وسجل التغييرات وخارطة الطريق النشطة في نفس الالتزام — لا دفعة توثيق منفصلة.\n", stderr='').stderr
+
+tests/test_gate_docs_sync.py:328: AssertionError
+=============================== warnings summary ===============================
+backend/config.py:450
+  /home/user/workspace/repo/backend/config.py:450: UserWarning: ⚠️ CORS مفتوح للجميع — مقبول في التطوير فقط (D-034)
+    warnings.warn("⚠️ CORS مفتوح للجميع — مقبول في التطوير فقط (D-034)")
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_gate_docs_sync.py::test_push_range_code_without_docs_rejected
+FAILED tests/test_gate_docs_sync.py::test_range_all_compliant_passes - Assert...
+FAILED tests/test_gate_docs_sync.py::test_pr_aggregation_rejected - Assertion...
+FAILED tests/test_gate_docs_sync.py::test_historical_roadmap_change_not_enough
+FAILED tests/test_gate_docs_sync.py::test_scripts_change_requires_docs - Asse...
+FAILED tests/test_gate_docs_sync.py::test_deleted_doc_does_not_count - assert...
+6 failed, 10 passed, 1 warning in 4.23s

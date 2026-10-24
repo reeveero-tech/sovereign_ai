@@ -69,7 +69,18 @@ jobs:
       - name: 'Owner rule (D-040): reject code changes without docs update in the same commit'
         run: |
           set -euo pipefail
-          python tools/gate_docs_sync.py "${GITHUB_SHA}"
+          # R-749: القاعدة الحرفية «نفس الالتزام» على مستوى الدفعة كلها —
+          # كل التزام كود داخل الدفعة يحمل وثائقه بنفسه (--range)، لا فحص
+          # الرأس وحده. عند غياب قاعدة الدفع (before) أو عدم توفرها في
+          # الاستنساخ (دفع قسري/أول) يُفحص الرأس وحده (الحد موثق).
+          BEFORE="${{ github.event.before }}"
+          if [ -z "${BEFORE}" ] || [ "${BEFORE}" = "0000000000000000000000000000000000000000" ] \
+              || ! git cat-file -e "${BEFORE}"^{commit} 2>/dev/null; then
+            echo "[info] لا قاعدة دفع صالحة — فحص الرأس وحده (حد موثق)"
+            python tools/gate_docs_sync.py "${GITHUB_SHA}"
+          else
+            python tools/gate_docs_sync.py --range "${BEFORE}" "${GITHUB_SHA}"
+          fi
 
       - uses: actions/setup-python@v5
         with:
@@ -192,7 +203,9 @@ jobs:
           BASE: ${{ github.event.pull_request.base.sha }}
           HEAD: ${{ github.event.pull_request.head.sha }}
         run: |
-          python tools/gate_docs_sync.py --diff "${BASE}" "${HEAD}"
+          # R-749: كل التزام في PR يُفحص بنفسه — كود في التزام ووثائق في
+          # التزام آخر مخالفة حرفية (لا تجميع المدى)
+          python tools/gate_docs_sync.py --range "${BASE}" "${HEAD}"
 
   # R-682 (Task 3.3): Separate operational job — manual trigger only.
   # Reads host secrets (KEY_SECRET), writes real data. NOT part of default CI.
