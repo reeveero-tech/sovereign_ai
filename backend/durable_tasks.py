@@ -180,5 +180,14 @@ def get_runner() -> DurableRunner:
         from tool_registry import get_registry
         root = os.environ.get("SOVEREIGN_TASKS_DIR") or str(
             Path(__file__).resolve().parents[1] / "data" / "tasks")
-        _RUNNER = DurableRunner(TaskStore(root), get_registry())
+        # R-756: أفعال الموصلات الخارجية لا تُعاد بعد انقطاع (٣.٢)
+        external = set()
+        try:
+            import connectors
+            hub = connectors.get_hub()
+            for n in hub.names():
+                external |= {f"connector.{n}.{a}" for a in hub.spec(n).external_actions}
+        except Exception:  # TOLERATED: بلا موصلات = لا أفعال خارجية مسجلة
+            external = set()
+        _RUNNER = DurableRunner(TaskStore(root), get_registry(), external_tools=external)
     return _RUNNER

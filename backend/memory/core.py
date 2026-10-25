@@ -68,6 +68,7 @@ class EventType(str, Enum):
     TOOL_INVOKED = "tool_invoked"    # R-729 (البند ٣.١): استدعاء أداة مسجلة
     VAULT_ACCESS = "vault_access"    # R-752 (V5 ١.٥): فعل على خزينة الأسرار (بصمة فقط)
     AGENT_RUN = "agent_run"          # R-753 (V5 §٢): بدء/نهاية تشغيل حلقة الوكيل
+    CONNECTOR_CALL = "connector_call"  # R-756 (V5 ٤.١): منحة/سحب/استدعاء موصل
 
 
 class IntegrityStatus(str, Enum):

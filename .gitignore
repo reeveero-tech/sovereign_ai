@@ -27,6 +27,8 @@ data/memory_store/
 data/vault/
 # R-754: ملفات المهام الدائمة — بيانات تشغيل
 data/tasks/
+# R-756: منح الموصلات — بيانات تشغيل
+data/connectors/
 data/simulation/
 data/config_backup.json
 data/language_evolution.json

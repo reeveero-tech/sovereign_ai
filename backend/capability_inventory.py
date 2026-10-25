@@ -76,6 +76,11 @@ CATALOG: List[Dict[str, Any]] = [
      "note": "مبنية (R-754: نقاط تفتيش، استئناف بعد قتل فعلي، منع تكرار الفعل "
              "الخارجي، تقدم من القرص) — تتطلب العقل (١.٦) والتوقيع (١.٣)، "
              "والدوام عبر النشر يتطلب ١.٤"},
+    {"id": "connectors", "name": "عقد الموصل المعزول (مصادقة/منحة/سحب/عزل)",
+     "anchor_tool": "connectors.status", "flag": "vault", "requires_signing": True,
+     "roadmap": "V5 ٤.١",
+     "note": "مبني (R-756) وأول موصل: إشعار webhook — يتطلب سره في الخزينة "
+             "(المفتاح الرئيسي بيد المالك) وعنوانه SOVEREIGN_WEBHOOK_URL والتوقيع (١.٣)"},
     {"id": "skill_acquisition", "name": "اكتساب المهارات",
      "anchor_tool": "skills.install", "flag": None, "requires_signing": True,
      "roadmap": "V5 §٤", "note": "غير مبني — سجل التطور والاقتراحات ليسا اكتساب مهارات"},

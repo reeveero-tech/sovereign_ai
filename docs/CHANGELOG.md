@@ -1,7 +1,18 @@
 # CHANGELOG.md — سجل التغييرات
 
 > كل تغيير يُسجل هنا (قاعدة الدفعة الذرية).
-> آخر تحديث: 2026-10-25 (R-755 — إصلاح مزامنة MCP عند الإقلاع + تسليم R-754)
+> آخر تحديث: 2026-10-25 (R-756 — عقد الموصل المعزول + تسليم R-755)
+
+---
+
+## [R-756 + تسليم R-755] — 2026-10-25 — عقد الموصل المعزول (V5 ٤.١ — منجز في الكود)
+
+- **تسليم R-755:** `457ca2f` — CI أخضر [40163101588](https://github.com/reeveero-tech/sovereign_ai/actions/runs/40163101588)، و`verify.sh --full` تشغيل واحد: **1127/0/0** محليًا = CI = استنساخ نظيف.
+- **بأمر المالك (2026-10-25: «أسلمك المشروع ابدء ولا تتوقف»).**
+- **RED→GREEN:** `tests/test_connectors.py` — RED موثق كاملًا `forensics/R-756_evidence_RED.txt` (3 failed + 11 errors على `457ca2f`) ← GREEN 14/14. الحزمة 1127→**1141** (1141/0/0 محليًا).
+- **التنفيذ:** `backend/connectors.py` — `ConnectorHub` + `ConnectorSpec` + `WebhookConnector`؛ منح/سحب/تجديد على القرص (`data/connectors/` في `.gitignore`)؛ قاطع دائرة لكل موصل؛ `EventType.CONNECTOR_CALL`؛ `/connectors/status` + `POST /connectors/grant|revoke` (مفتاح API للمالك)؛ أدوات `connectors.status` و`connector.webhook.notify|health`؛ `durable_tasks.get_runner` يعلن أفعال الموصلات كأدوات خارجية (لا تُعاد عند الاستئناف إلا بمفتاح idempotency)؛ الجرد: قدرة `connectors` بعلم `vault`.
+- **حدود صادقة:** معطل حتى يضع المالك المفتاح الرئيسي للخزينة وسر الموصل والعنوان والتوقيع (١.٣)؛ الإثبات بخادم HTTP محلي لا بطرف خارجي حي؛ البريد والتقويم غير مبنيين.
+- التفصيل: `forensics/R-756_CONNECTORS.md`.
 
 ---
 

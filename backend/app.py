@@ -965,6 +965,61 @@ def _vault_status_payload() -> Dict[str, Any]:
     return get_vault().status()
 
 
+# ============================================================
+# R-756 (ROADMAP_V5 ٤.١): عقد الموصل المعزول — الحالة والمنح والسحب
+# ============================================================
+class ConnectorGrantRequest(BaseModel):
+    """منحة/سحب تفويض موصل — أمر مالك (مفتاح API) بأثر في السجل السيادي."""
+    connector: str = Field(..., min_length=1, max_length=64)
+    actions: List[str] = Field(default_factory=list)
+    ttl_s: Optional[float] = Field(None, description="مدة المنحة بالثواني (غيابها = حتى السحب)")
+    api_key: Optional[str] = Field(None, description="مفتاح API للسيد — غيابه رفض 401")
+
+
+def _connectors_status_payload() -> Dict[str, Any]:
+    """حمولة /connectors/status — تخدم النقطة وأداة connectors.status (R-756)."""
+    import connectors
+    return connectors.get_hub().status()
+
+
+@app.get("/connectors/status")
+async def connectors_status():
+    """R-756: الموصلات المضبوطة ومنحها وقواطعها — لا سر في المخرجات أبدًا."""
+    return _connectors_status_payload()
+
+
+def _connector_owner_op(request: "ConnectorGrantRequest", op: str) -> Dict[str, Any]:
+    if not verify_api_key(request.api_key or ""):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
+                            detail="مفتاح API غير صحيح")
+    import connectors
+    hub = connectors.get_hub()
+    try:
+        if op == "grant":
+            return {"ok": True, "grant": hub.grant(request.connector, request.actions,
+                                                   actor="owner", ttl_s=request.ttl_s)}
+        hub.revoke(request.connector, actor="owner")
+        return {"ok": True, "revoked": request.connector}
+    except KeyError:
+        raise HTTPException(status_code=404, detail=f"موصل غير مضبوط: {request.connector}")
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except RuntimeError as exc:  # السجل لا يوقّع — لا أثر = لا تنفيذ
+        raise HTTPException(status_code=503,
+                            detail=f"السجل السيادي لا يوقّع — مرفوض (fail-closed): {exc}")
+
+
+@app.post("/connectors/grant")
+async def connectors_grant(request: ConnectorGrantRequest):
+    return _connector_owner_op(request, "grant")
+
+
+@app.post("/connectors/revoke")
+async def connectors_revoke(request: ConnectorGrantRequest):
+    """سحب فوري: الاستدعاء التالي يُرفض (الحالة تُقرأ من القرص عند كل استدعاء)."""
+    return _connector_owner_op(request, "revoke")
+
+
 @app.get("/brain/status")
 async def brain_status():
     """حالة عقل Ollama ومصدر الردود (R-726 — البند ١.٦ بأمر المالك).
@@ -1534,6 +1589,25 @@ def _register_real_tools() -> None:
         outputs="run_id/status/steps[]/answer (answer فقط عند completed)",
         handler=lambda goal, max_steps=8: __import__("agent_loop").run_goal(goal, max_steps),
     ))
+    # R-756 (V5 ٤.١): الموصلات — الحالة + أفعال كل موصل مضبوط كأدوات
+    registry.register(ToolSpec(
+        name="connectors.status",
+        description="حالة الموصلات ومنحها وقواطعها (نفس منطق /connectors/status)",
+        inputs={}, outputs="connectors{name: actions/granted/revoked/breaker}",
+        handler=_connectors_status_payload))
+    try:
+        import connectors as _connectors_mod
+        _hub = _connectors_mod.get_hub()
+        for _cname in _hub.names():
+            _cspec = _hub.spec(_cname)
+            for _act in sorted(_cspec.actions):
+                registry.register(ToolSpec(
+                    name=f"connector.{_cname}.{_act}",
+                    description=f"{_cspec.description} — فعل {_act} (منحة المالك شرط)",
+                    inputs=dict(_cspec.inputs.get(_act, {})), outputs="ok/result/error",
+                    handler=(lambda _n, _a: lambda **kw: _hub.call(_n, _a, kw))(_cname, _act)))
+    except Exception as _conn_exc:  # TOLERATED: موصل معطوب لا يكسر الإقلاع — تحذير صادق
+        logger.warning("R-756: تعذر تسجيل أفعال الموصلات (%s)", type(_conn_exc).__name__)
     # R-754 (V5 §٣): مهام دائمة — نقطة تفتيش بعد كل خطوة، استئناف بعد إعادة التشغيل
     def _tasks_start(goal):
         import durable_tasks
