@@ -1,9 +1,16 @@
 # CHANGELOG.md — سجل التغييرات
 
 > كل تغيير يُسجل هنا (قاعدة الدفعة الذرية).
-> آخر تحديث: 2026-10-25 (R-764 — عقل ذاتي الاستضافة + /tools/invoke خارج الحلقة)
+> آخر تحديث: 2026-10-25 (R-765 — مخطط وكيل مقيَّد + أدلة R-764 الحية)
 
 ---
+
+## [R-765] — 2026-10-25 — مخطط الوكيل: فك ترميز مقيَّد + تغذية راجعة (من الحادثة الحية)
+
+- **الحادثة:** `agent.run` على الإنتاج بعقل qwen2.5:3b: (١) مهلة 150ث على shared-cpu (خنق: steal ≈96%) → ترقية performance-2x (D-046)؛ (٢) «JSON فاسد: Extra data» بعد 132ث — محلّل جشع + توليد بلا سقف؛ (٣) بعد إصلاح أول: اسم أداة مخترع.
+- **الإصلاح:** `ollama_client.chat` يقبل `json_mode`/`max_tokens`/`json_schema` (Ollama: `format` + `options.num_predict`؛ OpenAI: `response_format: json_object` + `max_tokens`)؛ `BrainPlanner` يرسل `step_schema(أسماء الأدوات)` و`tool_names` و`rejected`؛ `_extract_json` بـ`raw_decode` لأول كائن؛ `AgentLoop(max_invalid_retries=2)` للمخططات `accepts_feedback` — الخطوة المرفوضة لا تُنفَّذ، و`rejected_steps` في النتيجة.
+- **الاختبار:** `tests/test_planner_json_mode.py` (12 حالة)؛ RED `forensics/R-765_evidence_RED.txt`. `tests/test_agent_loop.py`: توقيع البديل المزيف لـ`chat` وُسّع بـ`**kw` (الواجهة اتسعت؛ ما يثبته الاختبار لم يتغير).
+- **أدلة R-764 الحية** (في الدفعة نفسها): `forensics/R-764_LIVE_EVIDENCE.md`؛ صفوف ١.٥/١.٦/٣.١/٣.٣/٣.٤ في الخارطة.
 
 ## [R-764] — 2026-10-25 — العقل الحي ذاتي الاستضافة (١.٦) + عدم حجب الحلقة
 

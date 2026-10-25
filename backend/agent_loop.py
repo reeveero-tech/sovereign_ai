@@ -76,37 +76,76 @@ _SYSTEM = (
 )
 
 
+PLANNER_MAX_TOKENS = 512  # R-765: كائن خطوة واحدة لا يحتاج أكثر
+
+
+def step_schema(tool_names: List[str]) -> Dict[str, Any]:
+    """R-765: مخطط JSON لخطوة المخطط — فك ترميز مقيَّد (Ollama format=<schema>):
+    الفعل call|finish، واسم الأداة تعداد من الأدوات المسجلة فعلًا فلا يُخترع."""
+    tool = {"type": "string"}
+    if tool_names:
+        tool["enum"] = sorted(set(tool_names))
+    return {
+        "type": "object",
+        "properties": {
+            "action": {"type": "string", "enum": ["call", "finish"]},
+            "tool": tool,
+            "inputs": {"type": "object"},
+            "check": {"type": "object", "properties": {
+                "type": {"type": "string", "enum": sorted(CHECK_TYPES)},
+                "key": {"type": "string"}}},
+            "answer": {"type": "string"},
+        },
+        "required": ["action"],
+    }
+
+
 def _extract_json(text: str) -> Dict[str, Any]:
-    m = re.search(r"\{.*\}", text or "", re.S)
-    if not m:
+    """R-765: أول كائن JSON صالح في الرد — النموذج قد يسبقه أو يتبعه بنص فيه
+    أقواس (الحادثة الحية: «Extra data» من التقاط جشع بين أول { وآخر })."""
+    text = text or ""
+    decoder = json.JSONDecoder()
+    last_err = None
+    for m in re.finditer(r"\{", text):
+        try:
+            obj, _end = decoder.raw_decode(text, m.start())
+        except json.JSONDecodeError as exc:
+            last_err = exc
+            continue
+        if isinstance(obj, dict):
+            return obj
+    if last_err is None:
         raise PlannerError("رد العقل ليس JSON")
-    try:
-        obj = json.loads(m.group(0))
-    except json.JSONDecodeError as exc:
-        raise PlannerError(f"رد العقل JSON فاسد: {exc.msg}") from exc
-    if not isinstance(obj, dict):
-        raise PlannerError("رد العقل ليس كائنًا")
-    return obj
+    raise PlannerError(f"رد العقل JSON فاسد: {last_err.msg}")
 
 
 class BrainPlanner:
     """مخطط العقل الحي (ollama_client — Ollama أو متوافق OpenAI)."""
 
     kind = "brain"
+    # R-765: يقبل تغذية راجعة تصحيحية — سبب رفض خطوته يعود إليه ليصحح
+    accepts_feedback = True
 
     def __init__(self, timeout: Optional[float] = None):
         self.timeout = timeout
 
     def next_step(self, goal: str, tools: List[Dict[str, Any]],
-                  history: List[Dict[str, Any]]) -> Dict[str, Any]:
+                  history: List[Dict[str, Any]],
+                  feedback: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
         import ollama_client
         catalog = [{"name": t["name"], "description": t.get("description", ""),
                     "inputs": t.get("inputs", {})} for t in tools]
         hist = [{k: h.get(k) for k in ("tool", "inputs", "ok", "verified",
                                         "result", "error")} for h in history]
-        user = json.dumps({"goal": goal, "tools": catalog, "history": hist},
-                          ensure_ascii=False, default=str)[:12000]
-        reply = ollama_client.chat(_SYSTEM, user, timeout=self.timeout)
+        payload = {"goal": goal, "tool_names": [t["name"] for t in tools],
+                   "tools": catalog, "history": hist}
+        if feedback:
+            payload["rejected"] = feedback  # خطوات رُفضت وسبب الرفض — صحّح
+        user = json.dumps(payload, ensure_ascii=False, default=str)[:12000]
+        # R-765: وضع JSON مقيَّد + سقف توليد — المخطط يحتاج كائنًا واحدًا لا شرحًا
+        reply = ollama_client.chat(_SYSTEM, user, timeout=self.timeout,
+                                   json_mode=True, max_tokens=PLANNER_MAX_TOKENS,
+                                   json_schema=step_schema([t["name"] for t in tools]))
         if reply is None:
             raise PlannerError("العقل غير متاح أو غير مفعّل (ROADMAP_V5 ١.٦) — لا تخطيط")
         return _extract_json(reply)
@@ -137,7 +176,8 @@ class AgentLoop:
                  allowed_tools: Optional[Iterable[str]] = None,
                  cancel: Optional[CancelToken] = None,
                  clock: Callable[[], float] = time.monotonic,
-                 caller: str = "agent"):
+                 caller: str = "agent",
+                 max_invalid_retries: int = 2):
         self.registry = registry
         self.planner = planner
         self.max_steps = int(max_steps)
@@ -147,6 +187,8 @@ class AgentLoop:
         self.cancel = cancel or CancelToken()
         self.clock = clock
         self.caller = caller
+        # R-765: سقف المحاولات التصحيحية بعد خطوة مرفوضة (للمخططات القابلة للتغذية)
+        self.max_invalid_retries = max(0, int(max_invalid_retries))
 
     # ------------------------------------------------------------------
     def _trace(self, payload: Dict[str, Any]) -> None:
@@ -210,6 +252,8 @@ class AgentLoop:
         tools = self._tools()
         names = {t["name"] for t in tools}
         tool_calls = 0
+        feedback: List[Dict[str, Any]] = []
+        takes_feedback = bool(getattr(self.planner, "accepts_feedback", False))
         status, extra = None, {}
         while status is None:
             if self.cancel.cancelled:
@@ -225,12 +269,22 @@ class AgentLoop:
                 status, extra = "budget_exhausted", {"budget": "max_seconds"}
                 break
             try:
-                step = self.planner.next_step(goal, tools, steps)
+                if takes_feedback:
+                    step = self.planner.next_step(goal, tools, steps, feedback=feedback)
+                else:
+                    step = self.planner.next_step(goal, tools, steps)
             except Exception as exc:
                 status, extra = "planner_failed", {"error": f"{exc}"[:300]}
                 break
             problem = self._validate(step, names)
             if problem:
+                # R-765: الخطوة المرفوضة لا تُنفَّذ أبدًا؛ للمخطط القابل للتغذية
+                # يعود سبب الرفض إليه ليصحح ضمن سقف — ثم توقف صادق كما كان
+                if takes_feedback and len(feedback) < self.max_invalid_retries:
+                    feedback.append({"rejected_step": json.dumps(step, ensure_ascii=False,
+                                                                 default=str)[:400],
+                                     "error": problem})
+                    continue
                 status, extra = "invalid_step", {"error": problem, "failed_step": len(steps)}
                 break
             if step["action"] == "finish":
@@ -277,6 +331,7 @@ class AgentLoop:
                     "failed_step": idx}
 
         res.update(status=status, **extra)
+        res["rejected_steps"] = len(feedback)
         res["duration_s"] = round(self.clock() - start, 3)
         phase = {"completed": "finish", "cancelled": "cancelled"}.get(status, "stopped")
         try:

@@ -2521,3 +2521,15 @@ Bus إطلاقًا. الواجهة سليمة بعد الإزالة (101 وسم 
   داخل `tools_invoke` استُبدلا بتنفيذ عبر `asyncio.to_thread` (كان الاستدعاء المتزامن يحجب
   حلقة الأحداث). صف ١.٦ في الخارطة، وترويستا PROJECT_STATE وCHANGELOG. محروسة بـ
   `tests/test_tools_invoke_offload.py` + اختبارات `/tools/invoke` القائمة.
+
+## 2026-10-25 — R-765: أسطر مستبدلة (مخطط الوكيل)
+- **# DELETION-JUSTIFIED** — في `backend/agent_loop.py`: جسم `_extract_json` (التقاط جشع
+  `\{.*\}` ثم `json.loads`) استُبدل بقراءة أول كائن (`raw_decode`)؛ توقيع
+  `BrainPlanner.next_step` وبناء حمولته (أُضيف `tool_names`/`rejected`)؛ سطر استدعاء
+  `ollama_client.chat` (أُضيف الوضع المقيَّد)؛ استدعاء `planner.next_step` وفرع `invalid_step`
+  (أُضيفت التغذية الراجعة بسقف)؛ توقيع `AgentLoop.__init__` (معامل `max_invalid_retries`).
+  في `backend/ollama_client.py`: توقيع `chat` (معاملات اختيارية؛ الافتراضي بلا تغيير). في
+  `tests/test_agent_loop.py`: ثلاث lambda بديلة لـ`chat` وُسّعت بـ`**kw` لتقبل الواجهة الأوسع.
+  صفوف ١.٥/١.٦/٢.١/٣.١/٣.٣/٣.٤ وسطر تحديث R-764 في الخارطة، وترويستا PROJECT_STATE وCHANGELOG.
+  محروسة بـ`tests/test_planner_json_mode.py` + `tests/test_agent_loop.py` و`test_durable_tasks`
+  و`test_ollama_brain` و`test_brain_openai_protocol` القائمة.

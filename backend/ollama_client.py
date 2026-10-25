@@ -35,11 +35,19 @@ def last_outcome():
     return dict(_LAST_OUTCOME)
 
 
-def chat(system_prompt: str, user_message: str, timeout=None):
+def chat(system_prompt: str, user_message: str, timeout=None,
+         json_mode: bool = False, max_tokens=None, json_schema=None):
     """توليد رد عبر العقل (Ollama أو متوافق OpenAI) — يعيد نص النموذج أو None.
 
     لا يُستدعى فعليًا إلا إذا كان العقل مفعّلًا (OLLAMA_ENABLED + نموذج)
     — تحقق المستدعي أو هذا الشرط هنا: كلاهما رخيص.
+
+    R-765: json_mode=True يقيّد الخرج بكائن JSON (Ollama: format=json؛
+    OpenAI: response_format=json_object)، وmax_tokens يسقف التوليد (Ollama:
+    options.num_predict). الافتراضي بلا أي منهما — الحمولة كما كانت.
+    json_schema (Ollama فقط): مخطط JSON يقيّد فك الترميز نفسه (format=<schema>)
+    — مثل تعداد أسماء الأدوات الحقيقية فلا يُخترع اسم؛ متوافق OpenAI يبقى
+    على json_object (الأوسع دعمًا بين المزودين).
     """
     global _LAST_OUTCOME
     import config
@@ -64,6 +72,18 @@ def chat(system_prompt: str, user_message: str, timeout=None):
             ],
             "stream": False,
         }
+        if protocol == "openai":
+            if json_mode or json_schema:
+                payload["response_format"] = {"type": "json_object"}
+            if max_tokens:
+                payload["max_tokens"] = int(max_tokens)
+        elif protocol == "ollama":
+            if json_schema:
+                payload["format"] = json_schema
+            elif json_mode:
+                payload["format"] = "json"
+            if max_tokens:
+                payload["options"] = {"num_predict": int(max_tokens)}
         base = str(config.OLLAMA_BASE_URL).rstrip("/")
         if protocol == "openai":
             # BASE_URL بادئة الإصدار كاملة (مثل .../openai/v1) — يُلحق

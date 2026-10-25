@@ -1,0 +1,11 @@
+# R-765 RED — base 048c5c9 + tests/test_planner_json_mode.py (full suite, -m 'not operational')
+FAILED tests/test_planner_json_mode.py::test_extract_first_object_ignores_trailing_prose
+FAILED tests/test_planner_json_mode.py::test_extract_object_after_leading_prose_and_braces
+FAILED tests/test_planner_json_mode.py::test_brain_planner_requests_constrained_json[ollama]
+FAILED tests/test_planner_json_mode.py::test_brain_planner_requests_constrained_json[openai]
+FAILED tests/test_planner_json_mode.py::test_rejected_step_feeds_back_and_planner_corrects
+FAILED tests/test_planner_json_mode.py::test_retries_are_bounded_and_forbidden_tool_never_runs
+FAILED tests/test_planner_json_mode.py::test_scripted_planner_still_stops_immediately
+FAILED tests/test_planner_json_mode.py::test_brain_planner_sends_tool_names_and_rejections
+FAILED tests/test_planner_json_mode.py::test_json_mode_without_schema_uses_plain_json
+9 failed, 1194 passed, 1 deselected, 3 warnings in 364.21s (0:06:04)

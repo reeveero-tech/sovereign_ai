@@ -191,18 +191,18 @@ def test_brain_planner_parses_json_and_rejects_garbage(monkeypatch, ledger):
                     "check": {"type": "contains", "key": "text", "value": "hi"}}),
         "```json\n" + json.dumps({"action": "finish", "answer": "hi"}) + "\n```",
     ])
-    monkeypatch.setattr(ollama_client, "chat", lambda s, u, timeout=None: next(replies))
+    monkeypatch.setattr(ollama_client, "chat", lambda s, u, timeout=None, **kw: next(replies))
     calls = []
     res = agent_loop.AgentLoop(registry=_registry(calls),
                                planner=agent_loop.BrainPlanner()).run("قل hi")
     assert res["status"] == "completed" and res["answer"] == "hi" and calls == ["echo"]
 
-    monkeypatch.setattr(ollama_client, "chat", lambda s, u, timeout=None: "لا أعرف")
+    monkeypatch.setattr(ollama_client, "chat", lambda s, u, timeout=None, **kw: "لا أعرف")
     res2 = agent_loop.AgentLoop(registry=_registry([]),
                                 planner=agent_loop.BrainPlanner()).run("x")
     assert res2["status"] == "planner_failed"
 
-    monkeypatch.setattr(ollama_client, "chat", lambda s, u, timeout=None: None)
+    monkeypatch.setattr(ollama_client, "chat", lambda s, u, timeout=None, **kw: None)
     res3 = agent_loop.AgentLoop(registry=_registry([]),
                                 planner=agent_loop.BrainPlanner()).run("x")
     assert res3["status"] == "planner_failed" and "العقل" in res3["error"]
