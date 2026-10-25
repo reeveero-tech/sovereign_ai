@@ -1003,6 +1003,19 @@ class SovereignCore:
             
             return event
     
+    @staticmethod
+    def _parse_ledger_line(line: str) -> Optional[Dict[str, Any]]:
+        """R-766: تحليل سطر سجل واحد — السطر التالف (كتابة ممزقة/NUL/جزئي) يعيد None.
+
+        القرّاء يتخطونه ولا يمسّونه (إلحاقي — سياسة R-763). كان `json.loads` المباشر
+        يُسقط `iterate_events` فتفشل `MemoryViews` ونحو 20 مكونًا عند الإقلاع.
+        """
+        try:
+            obj = json.loads(line)
+        except ValueError:
+            return None
+        return obj if isinstance(obj, dict) else None
+
     def get_event(self, event_hash: str) -> Optional[Dict[str, Any]]:
         """استرجاع حدث من السجل"""
         if not self.log_file.exists():
@@ -1013,8 +1026,8 @@ class SovereignCore:
                 line = line.strip()
                 if not line:
                     continue
-                event = json.loads(line)
-                if event.get('hash') == event_hash:
+                event = self._parse_ledger_line(line)
+                if event is not None and event.get('hash') == event_hash:
                     return event
         return None
     
@@ -1049,7 +1062,8 @@ class SovereignCore:
                     f.seek(size - read_size)
                     tail = f.read().decode('utf-8', errors='replace')
                 lines = [l for l in tail.split('\n') if l.strip()]
-                events = [json.loads(l) for l in lines]
+                # R-766: السطر الجزئي الأول والأسطر التالفة تُتخطى (لا تُسقط المسار)
+                events = [e for e in map(self._parse_ledger_line, lines) if e is not None]
                 # قد نكون بدأنا في منتصف سطر — تجاهل أول عنصر غير مكتمل
                 if len(events) > limit:
                     events = events[-limit:]
@@ -1066,7 +1080,9 @@ class SovereignCore:
                 line = line.strip()
                 if not line:
                     continue
-                events.append(json.loads(line))
+                event = self._parse_ledger_line(line)
+                if event is not None:  # R-766: السطر التالف يُتخطى
+                    events.append(event)
         
         if reverse:
             events.reverse()
@@ -1479,7 +1495,7 @@ class SovereignCore:
                 if not line:
                     continue
                 if i == index:
-                    return json.loads(line)
+                    return self._parse_ledger_line(line)  # R-766: تالف → None
         return None
     
     def _ledger_line_count(self) -> int:

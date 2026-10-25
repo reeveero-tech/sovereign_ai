@@ -1,9 +1,16 @@
 # CHANGELOG.md — سجل التغييرات
 
 > كل تغيير يُسجل هنا (قاعدة الدفعة الذرية).
-> آخر تحديث: 2026-10-25 (R-765 — مخطط وكيل مقيَّد + أدلة R-764 الحية)
+> آخر تحديث: 2026-10-25 (R-766 — قرّاء السجل يتخطون السطر التالف + تسليم R-765)
 
 ---
+
+## [R-766 + تسليم R-765] — 2026-10-25 — `/health` degraded على الإنتاج: قرّاء السجل والسطر التالف
+
+- **تسليم R-765:** `def6d46` — CI [40189661067](https://github.com/reeveero-tech/sovereign_ai/actions/runs/40189661067)، `verify.sh --full` **1203/0/0** ثلاثيًا، نشر [40190105929](https://github.com/reeveero-tech/sovereign_ai/actions/runs/40190105929).
+- **الحادثة (حية):** `/health` يعلن `degraded`؛ ~20 مكونًا `error_count 1` و`last_error "Expecting value: line 1 column 1 (char 0)"`. التتبع على آلة الإنتاج: `consciousness.field` → `get_dynamic_memory` → `MemoryViews._load_from_core` → `SovereignCore.iterate_events` → `json.loads` على سطر الكتابة الممزقة (2059 بايت NUL، السطر 1658). R-763 حمى `_load_last_hash` وإعادة بناء الفهرس، وفاته القرّاء.
+- **الإصلاح:** `SovereignCore._parse_ledger_line` (تالف/جزئي/غير كائن → `None`)؛ يستعمله `iterate_events` (المسار الكامل والمسار السريع للذيل — والسريع كان يسقط إلى الكامل عند السطر الجزئي الأول) و`get_event` و`get_event_by_sequence` (السطر التالف → `None`). السطر نفسه لا يُمس (إلحاقي).
+- **الاختبار:** `tests/test_ledger_corrupt_readers.py` (4 حالات، سطر NUL بطول حادثة الإنتاج)؛ RED `forensics/R-766_evidence_RED.txt`.
 
 ## [R-765] — 2026-10-25 — مخطط الوكيل: فك ترميز مقيَّد + تغذية راجعة (من الحادثة الحية)
 

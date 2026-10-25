@@ -2533,3 +2533,10 @@ Bus إطلاقًا. الواجهة سليمة بعد الإزالة (101 وسم 
   صفوف ١.٥/١.٦/٢.١/٣.١/٣.٣/٣.٤ وسطر تحديث R-764 في الخارطة، وترويستا PROJECT_STATE وCHANGELOG.
   محروسة بـ`tests/test_planner_json_mode.py` + `tests/test_agent_loop.py` و`test_durable_tasks`
   و`test_ollama_brain` و`test_brain_openai_protocol` القائمة.
+
+## 2026-10-25 — R-766: أسطر مستبدلة (قرّاء السجل والسطر التالف)
+- **# DELETION-JUSTIFIED** — في `backend/memory/core.py`: أربعة استدعاءات `json.loads` بلا حماية
+  (`get_event`، المسار السريع والمسار الكامل في `iterate_events`، `get_event_by_sequence`) استُبدلت
+  بـ`_parse_ledger_line` الذي يعيد `None` للسطر التالف — كانت تُسقط `MemoryViews` و~20 مكونًا عند
+  الإقلاع على الإنتاج. وسطرا الترويسة في PROJECT_STATE وCHANGELOG. محروسة بـ
+  `tests/test_ledger_corrupt_readers.py` + `tests/test_ledger_durability.py` القائمة.

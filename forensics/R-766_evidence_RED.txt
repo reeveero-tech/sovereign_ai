@@ -1,0 +1,13 @@
+ERROR    backend.memory.core:core.py:673 R-763: 1 سطر تالف في السجل (كتابة ممزقة؟) — السلسلة تستمر من آخر حدث سليم؛ الأسطر التالفة باقية كما هي
+ERROR    backend.memory.core:core.py:1536 فشل إعادة بناء الفهرس عند حدث: Expecting value: line 1 column 1 (char 0)
+ERROR    backend.memory.core:core.py:673 R-763: 1 سطر تالف في السجل (كتابة ممزقة؟) — السلسلة تستمر من آخر حدث سليم؛ الأسطر التالفة باقية كما هي
+ERROR    backend.memory.core:core.py:1536 فشل إعادة بناء الفهرس عند حدث: Expecting value: line 1 column 1 (char 0)
+ERROR    backend.memory.core:core.py:673 R-763: 1 سطر تالف في السجل (كتابة ممزقة؟) — السلسلة تستمر من آخر حدث سليم؛ الأسطر التالفة باقية كما هي
+ERROR    backend.memory.core:core.py:1536 فشل إعادة بناء الفهرس عند حدث: Expecting value: line 1 column 1 (char 0)
+ERROR    backend.memory.core:core.py:673 R-763: 1 سطر تالف في السجل (كتابة ممزقة؟) — السلسلة تستمر من آخر حدث سليم؛ الأسطر التالفة باقية كما هي
+ERROR    backend.memory.core:core.py:1536 فشل إعادة بناء الفهرس عند حدث: Expecting value: line 1 column 1 (char 0)
+FAILED tests/test_ledger_corrupt_readers.py::test_iterate_events_skips_torn_line_both_paths
+FAILED tests/test_ledger_corrupt_readers.py::test_get_event_finds_event_after_torn_line
+FAILED tests/test_ledger_corrupt_readers.py::test_get_event_by_sequence_returns_none_on_torn_line
+FAILED tests/test_ledger_corrupt_readers.py::test_readers_never_modify_the_torn_line
+4 failed, 1203 passed, 1 deselected, 3 warnings in 389.39s (0:06:29)

@@ -1,7 +1,7 @@
 # PROJECT_STATE.md — حالة المشروع
 
 > أين نحن الآن؟ هذه الوثيقة تُحدَّث في **كل دفعة** (قاعدة الدفعة الذرية).
-> آخر تحديث: 2026-10-25 — 1203 اختبارًا — **R-765: مخطط وكيل بفك ترميز مقيَّد بمخطط JSON + تغذية راجعة تصحيحية؛ ومعه أدلة R-764 الحية: العقل (١.٦) والخزينة (١.٥) والتقدم (٣.٣) والقياس (٣.٤) مثبتة حيًا** — يبقى ٢.x/٥.x حيًا بعد النشر
+> آخر تحديث: 2026-10-25 — 1207 اختبارات — **R-766: قرّاء السجل يتخطون السطر التالف (كان `/health` على الإنتاج `degraded`: ~20 مكونًا تسقط عند الإقلاع)؛ وتسليم R-765 (1203/0/0 ثلاثيًا، منشور)** — يبقى ٢.x/٥.x حيًا بعد النشر
 
 ---
 
@@ -21,6 +21,8 @@
 
 ## 2) ما الذي يعمل (مُتحقق منه في هذه الدفعة)
 
+- ✅ **R-766 (2026-10-25، حادثة حية):** `/health` على الإنتاج كان `degraded`: ~20 مكونًا (الوعي، الذاكرة الديناميكية، التنبؤ، المحاكاة، السيادة، ...) تفشل عند الإقلاع بـ«Expecting value». التتبع على الآلة: `MemoryViews._load_from_core` → `SovereignCore.iterate_events` → `json.loads` على السطر الممزق 1658 (شاهد R-763). صار `_parse_ledger_line` يعيد `None` للتالف فيتخطاه `iterate_events` (المساران) و`get_event` و`get_event_by_sequence` — ولا يمسّه. 4 حالات في `tests/test_ledger_corrupt_readers.py` (RED: `forensics/R-766_evidence_RED.txt` — 4 فشلت/1203 نجحت).
+- ✅ **تسليم R-765:** CI [40189661067](https://github.com/reeveero-tech/sovereign_ai/actions/runs/40189661067) أخضر، و`verify.sh --full` على `def6d46`: **1203/0/0** محليًا = CI = استنساخ نظيف؛ نشر [40190105929](https://github.com/reeveero-tech/sovereign_ai/actions/runs/40190105929) نجاح. حيًا: `agent.run` عبر الخادم نفّذ `health.snapshot` (ok/verified) في 105ث و`/health` ≤0.01ث أثناءه.
 - ✅ **R-765 (2026-10-25):** `agent_loop.BrainPlanner` يطلب مخطط JSON مقيِّدًا (اسم الأداة تعداد من المسجل) بسقف 512 رمزًا، و`_extract_json` يقرأ أول كائن صالح، والخطوة المرفوضة تعود للعقل حتى مرتين (لا تُنفَّذ). `ollama_client.chat(json_mode, max_tokens, json_schema)` — الحمولة الافتراضية بلا تغيير. 12 حالة في `tests/test_planner_json_mode.py` (RED في `forensics/R-765_evidence_RED.txt`).
 - ✅ **تسليم R-764 حيًا:** CI [40186206792](https://github.com/reeveero-tech/sovereign_ai/actions/runs/40186206792)، `verify.sh --full` على `048c5c9`: **1191/0/0** ثلاثيًا؛ نشر [40186678296](https://github.com/reeveero-tech/sovereign_ai/actions/runs/40186678296). الأدلة: `forensics/R-764_LIVE_EVIDENCE.md` — `/chat` من النموذج، الخزينة حيًا، مهمة دائمة بالعقل، GSM8K 3/3، و`/health` ≤0.01ث أثناء كل استدلال. آلة العقل رُقّيت performance-2x (D-046).
 - ✅ **R-764 (2026-10-25، D-045):** آلة عقل `sovereign-brain` أُنشئت داخل التطبيق عبر واجهة الآلات (بلا وسم `fly_platform_version` فلا يمسها `fly deploy`، ولا خدمات عامة)، Ollama 0.40.11 + `qwen2.5:3b` على حجم مشفّر؛ قيس من آلة التطبيق عبر الشبكة الخاصة: 12–14 رمز/ث. واختبار `tests/test_tools_invoke_offload.py` (RED في `forensics/R-764_evidence_RED.txt`) يثبت أن `/tools/invoke` لم يعد يحجب الحلقة. التفعيل: أسرار `OLLAMA_ENABLED/OLLAMA_BASE_URL/OLLAMA_MODEL/OLLAMA_TIMEOUT_SECONDS` بعد النشر.
