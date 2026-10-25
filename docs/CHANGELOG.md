@@ -1,9 +1,18 @@
 # CHANGELOG.md — سجل التغييرات
 
 > كل تغيير يُسجل هنا (قاعدة الدفعة الذرية).
-> آخر تحديث: 2026-10-25 (R-766 — قرّاء السجل يتخطون السطر التالف + تسليم R-765)
+> آخر تحديث: 2026-10-25 (R-767 — أهداف fleet.spawn عبر HTTP + ٥.٣ حيًا + تسليم R-766)
 
 ---
+
+## [R-767 + تسليم R-766] — 2026-10-25 — `fleet.spawn` يفكك النص حروفًا؛ قياس الأسطول على الإنتاج
+
+- **تسليم R-766:** `dca9947` — CI [40191488202](https://github.com/reeveero-tech/sovereign_ai/actions/runs/40191488202)، `verify.sh --full` **1207/0/0** ثلاثيًا، نشر [40192127283](https://github.com/reeveero-tech/sovereign_ai/actions/runs/40192127283)؛ `/health` حيًا `healthy` (23/23).
+- **العيب:** `ToolInvokeRequest.inputs` من نوع `Dict[str, str]`؛ معالج `fleet.spawn` استدعى `list(goals)` على النص فصار كل حرف هدفًا لعامل بالعقل الحي. كشفه التحضير للإثبات الحي ٥.١.
+- **الإصلاح:** `fleet.parse_goals` (قائمة، أو نص قائمة JSON، أو أسطر؛ الفارغ يُسقط) يستدعيه `spawn_goals`؛ وصف مدخل الأداة يعلن الصيغة.
+- **الاختبار:** `tests/test_fleet_spawn_http_goals.py` عبر `tools_invoke` الحقيقي (3 حالات)؛ RED `forensics/R-767_evidence_RED.txt`.
+- **٥.٣ حيًا:** `forensics/R-767_PROD_SCALE_REPORT.json` — قياس على آلة الإنتاج 512MB (1000 عامل، ذروة 65MB).
+- **مكشوف:** تشبع المعالج على الإنتاج بعد عودة المكونات — `verify_integrity` الكامل المتكرر (py-spy ~80%)؛ آلة التطبيق رُفعت مؤقتًا إلى performance-1x للقياس فقط، والنشر التالي يعيدها إلى `fly.toml` (shared-cpu-1x). الإصلاح في R-768.
 
 ## [R-766 + تسليم R-765] — 2026-10-25 — `/health` degraded على الإنتاج: قرّاء السجل والسطر التالف
 

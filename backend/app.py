@@ -1715,10 +1715,11 @@ def _register_real_tools() -> None:
         name="fleet.spawn",
         description="أسطول وكلاء (R-758): هدف جزئي لكل عامل، سقف تزامن (FLEET_MAX_CONCURRENCY)، "
                     "عزل وإعادة جدولة الفاشل، تقرير صادق — يتطلب العقل الحي (١.٦)",
-        inputs={"goals": "قائمة الأهداف الجزئية", "max_concurrency": "سقف التزامن (افتراضي 4)"},
+        inputs={"goals": "الأهداف الجزئية: قائمة JSON نصًا أو هدف في كل سطر",
+                "max_concurrency": "سقف التزامن (افتراضي 4)"},
         outputs="status/registered/measured_peak_concurrency/completed/failed[]/results[]",
         handler=lambda goals, max_concurrency=4: __import__("fleet").spawn_goals(
-            list(goals), int(max_concurrency))))
+            goals, int(max_concurrency))))
     registry.register(ToolSpec(
         name="brain.status",
         description="حالة عقل Ollama ومصدر الرد (نفس منطق /brain/status)",

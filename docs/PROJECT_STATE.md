@@ -1,7 +1,7 @@
 # PROJECT_STATE.md — حالة المشروع
 
 > أين نحن الآن؟ هذه الوثيقة تُحدَّث في **كل دفعة** (قاعدة الدفعة الذرية).
-> آخر تحديث: 2026-10-25 — 1207 اختبارات — **R-766: قرّاء السجل يتخطون السطر التالف (كان `/health` على الإنتاج `degraded`: ~20 مكونًا تسقط عند الإقلاع)؛ وتسليم R-765 (1203/0/0 ثلاثيًا، منشور)** — يبقى ٢.x/٥.x حيًا بعد النشر
+> آخر تحديث: 2026-10-25 — 1210 اختبارات — **R-767: `fleet.spawn` عبر HTTP كان يفكك الأهداف حروفًا (أُصلح)؛ ٥.٣ مقيس حيًا على آلة الإنتاج (1000 عامل، ذروة 65MB)؛ تسليم R-766 (1207/0/0، `/health` صار healthy: 23/23)** — وكُشف تشبع المعالج (R-768 يليه)
 
 ---
 
@@ -21,6 +21,10 @@
 
 ## 2) ما الذي يعمل (مُتحقق منه في هذه الدفعة)
 
+- ✅ **R-767 (2026-10-25):** مدخلات `/tools/invoke` نصوص، و`fleet.spawn` كان يستدعي `list(goals)` فيصير كل حرف عاملًا يُرسل إلى العقل الحي. صار `fleet.parse_goals`: قائمة JSON نصًا أو هدف في كل سطر، والهدف المفرد واحد. 3 حالات في `tests/test_fleet_spawn_http_goals.py` (RED: `forensics/R-767_evidence_RED.txt` — 3 فشلت/1207 نجحت).
+- ✅ **تسليم R-766:** CI [40191488202](https://github.com/reeveero-tech/sovereign_ai/actions/runs/40191488202)، `verify.sh --full` على `dca9947`: **1207/0/0** ثلاثيًا؛ نشر [40192127283](https://github.com/reeveero-tech/sovereign_ai/actions/runs/40192127283). بعده حيًا: `/health` `healthy` و23/23 مكونًا بلا خطأ (كان `degraded`).
+- ✅ **٥.٣ حيًا (R-767):** `tools/fleet_scale_report.py` على آلة الإنتاج نفسها (shared-cpu-1x، 512MB) بجانب الخادم: 10/100/1000 عامل اكتملوا كلهم، تزامن مقيس حتى 1000، ذروة RSS 65MB — `forensics/R-767_PROD_SCALE_REPORT.json`.
+- ⚠️ **مكشوف حيًا (يعالجه R-768):** بعد عودة المكونات صار المعالج مشبعًا: steal ≈91% على shared-cpu-1x، وعلى معالج مخصص (performance-1x للقياس مؤقتًا) 100% من نواة. py-spy: ~80% من العينات في `verify_integrity` ← تحقق Ed25519 لكل السجل، يستدعيه `drives`/`instincts`/`watcher` باستمرار — ونتيجة `CORRUPTED` (السطر 1658) لا تُخزَّن فيُعاد الفحص الكامل كل مرة. أثره: `agent.run` حيًا انتهى بمهلة، و`/health` حتى 1.44ث.
 - ✅ **R-766 (2026-10-25، حادثة حية):** `/health` على الإنتاج كان `degraded`: ~20 مكونًا (الوعي، الذاكرة الديناميكية، التنبؤ، المحاكاة، السيادة، ...) تفشل عند الإقلاع بـ«Expecting value». التتبع على الآلة: `MemoryViews._load_from_core` → `SovereignCore.iterate_events` → `json.loads` على السطر الممزق 1658 (شاهد R-763). صار `_parse_ledger_line` يعيد `None` للتالف فيتخطاه `iterate_events` (المساران) و`get_event` و`get_event_by_sequence` — ولا يمسّه. 4 حالات في `tests/test_ledger_corrupt_readers.py` (RED: `forensics/R-766_evidence_RED.txt` — 4 فشلت/1203 نجحت).
 - ✅ **تسليم R-765:** CI [40189661067](https://github.com/reeveero-tech/sovereign_ai/actions/runs/40189661067) أخضر، و`verify.sh --full` على `def6d46`: **1203/0/0** محليًا = CI = استنساخ نظيف؛ نشر [40190105929](https://github.com/reeveero-tech/sovereign_ai/actions/runs/40190105929) نجاح. حيًا: `agent.run` عبر الخادم نفّذ `health.snapshot` (ok/verified) في 105ث و`/health` ≤0.01ث أثناءه.
 - ✅ **R-765 (2026-10-25):** `agent_loop.BrainPlanner` يطلب مخطط JSON مقيِّدًا (اسم الأداة تعداد من المسجل) بسقف 512 رمزًا، و`_extract_json` يقرأ أول كائن صالح، والخطوة المرفوضة تعود للعقل حتى مرتين (لا تُنفَّذ). `ollama_client.chat(json_mode, max_tokens, json_schema)` — الحمولة الافتراضية بلا تغيير. 12 حالة في `tests/test_planner_json_mode.py` (RED في `forensics/R-765_evidence_RED.txt`).

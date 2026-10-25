@@ -19,6 +19,7 @@
 
 from __future__ import annotations
 
+import json
 import math
 import os
 import platform
@@ -241,9 +242,31 @@ def measure_scale(n: int, *, max_concurrency: int, work_ms: int = 20,
                             "note": "بيئة العمل (sandbox) — ليست آلة Fly 512MB؛ قياس Fly يتطلب ١.٧"}}
 
 
-def spawn_goals(goals: List[str], max_concurrency: int = 4) -> Dict[str, Any]:
+def parse_goals(goals: Any) -> List[str]:
+    """R-766: أهداف `fleet.spawn` — قائمة، أو نص قائمة JSON، أو نص بأسطر.
+
+    مدخلات `/tools/invoke` نصوص (`Dict[str, str]`)، و`list(نص)` كان يفكك الهدف إلى حروف
+    فيصير كل حرف عاملًا. نص بلا أسطر = هدف واحد. الفارغ يُسقط.
+    """
+    if isinstance(goals, str):
+        text = goals.strip()
+        items: Any = None
+        if text.startswith("["):
+            try:
+                items = json.loads(text)
+            except ValueError:
+                items = None
+        if not isinstance(items, list):
+            items = text.splitlines()
+    else:
+        items = list(goals)
+    return [str(g).strip() for g in items if str(g).strip()]
+
+
+def spawn_goals(goals: Any, max_concurrency: int = 4) -> Dict[str, Any]:
     """مدخل أداة fleet.spawn: عمال بالعقل الحي فوق السجل العام."""
     from tool_registry import get_registry
+    goals = parse_goals(goals)
     cap = max(1, min(int(max_concurrency), int(os.environ.get("FLEET_MAX_CONCURRENCY", "8"))))
     parts = [{"role": f"w{i}", "goal": g, "planner": {"kind": "brain"}}
              for i, g in enumerate(goals[:1000])]

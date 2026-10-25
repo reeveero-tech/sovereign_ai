@@ -2540,3 +2540,10 @@ Bus إطلاقًا. الواجهة سليمة بعد الإزالة (101 وسم 
   بـ`_parse_ledger_line` الذي يعيد `None` للسطر التالف — كانت تُسقط `MemoryViews` و~20 مكونًا عند
   الإقلاع على الإنتاج. وسطرا الترويسة في PROJECT_STATE وCHANGELOG. محروسة بـ
   `tests/test_ledger_corrupt_readers.py` + `tests/test_ledger_durability.py` القائمة.
+
+## 2026-10-25 — R-767: أسطر مستبدلة (أهداف fleet.spawn)
+- **# DELETION-JUSTIFIED** — في `backend/app.py`: سطر وصف مدخل `goals` وسطر `list(goals)` في معالج
+  `fleet.spawn` (كان يفكك النص حروفًا) استُبدلا بوصف الصيغة وتمرير `goals` إلى `fleet.parse_goals`.
+  في `backend/fleet.py`: توقيع `spawn_goals` (`List[str]` → `Any`). وسطرا الترويسة في PROJECT_STATE
+  وCHANGELOG، وبداية خلية الحالة في صف ٥.٣ بالخارطة («مقيس في بيئة العمل… ينتظر ١.٧» → «مثبت حيًا»).
+  محروسة بـ`tests/test_fleet_spawn_http_goals.py` + `tests/test_fleet.py` القائمة.
