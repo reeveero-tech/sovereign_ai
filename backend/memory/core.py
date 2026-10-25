@@ -251,6 +251,9 @@ class BlobStore:
             tmp_path = path.with_suffix('.tmp')
             with open(tmp_path, 'wb') as f:
                 f.write(to_store)
+                # R-763: تثبيت المحتوى قبل النقل — توقف الآلة لا يترك blob فارغًا
+                f.flush()
+                os.fsync(f.fileno())
             os.replace(tmp_path, path)
             # M1: تحديث العدّادات المخزنة
             self._count += 1
@@ -650,12 +653,27 @@ class SovereignCore:
             try:
                 with open(self.log_file, 'r', encoding='utf-8') as f:
                     last_hash = "GENESIS"
+                    corrupt = 0
+                    blank = 0
                     for line in f:
                         line = line.strip()
                         if not line:
+                            blank += 1
                             continue
-                        last_event = json.loads(line)
+                        # R-763: سطر تالف (كتابة ممزقة) لا يُسقط السجل كله إلى الميتا —
+                        # آخر حدث سليم هو الحقيقة، والسطر التالف يبقى مرئيًا (invalid)
+                        try:
+                            last_event = json.loads(line)
+                        except ValueError:
+                            corrupt += 1
+                            continue
                         last_hash = last_event.get('hash', last_hash)
+                    self._ledger_nonevent_lines = corrupt + blank
+                    if corrupt:
+                        logger.error(
+                            f"R-763: {corrupt} سطر تالف في السجل (كتابة ممزقة؟) — "
+                            f"السلسلة تستمر من آخر حدث سليم؛ الأسطر التالفة باقية كما هي"
+                        )
                     return last_hash
             # TOLERATED: known-safe fallback — non-fatal diagnostic path (R-680)
             except:
@@ -957,6 +975,10 @@ class SovereignCore:
             event_line = json.dumps(event, ensure_ascii=False)
             with open(self.log_file, 'a', encoding='utf-8') as f:
                 f.write(event_line + '\n')
+                # R-763: تثبيت السطر قبل الميتا/الفهرس — حادثة إنتاج: توقف الآلة
+                # ترك 2059 بايت NUL وفقد أحداثًا والميتا تشير إليها
+                f.flush()
+                os.fsync(f.fileno())
             
             # 7) تحديث الحالة الداخلية
             self._last_hash = event_hash
@@ -1473,10 +1495,14 @@ class SovereignCore:
         """R-762: يعيد بناء الفهرس إن خالف عدّاده عدد أسطر السجل."""
         try:
             ledger_n = self._ledger_line_count()
-            if self.index.data.get("events_count", 0) != ledger_n:
+            # R-763: الأسطر غير الحدثية (تالفة/فارغة) لا تُفهرس — تُطرح من المتوقع
+            # (وإلا أعيد البناء مع كل إقلاع بعد كتابة ممزقة)
+            expected = ledger_n - getattr(self, "_ledger_nonevent_lines", 0)
+            seen = self.index.data.get("events_count", 0)
+            if seen != expected:
                 logger.warning(
-                    f"R-762: الفهرس ({self.index.data.get('events_count', 0)}) "
-                    f"لا يطابق السجل ({ledger_n}) — إعادة بناء من السجل"
+                    f"R-762: الفهرس ({seen}) "
+                    f"لا يطابق السجل ({expected} حدثًا سليمًا) — إعادة بناء من السجل"
                 )
                 self.index = self._rebuild_index()
         except Exception as e:  # TOLERATED: الفهرس ذاكرة مؤقتة؛ السجل لم يُمس

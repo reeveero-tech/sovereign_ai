@@ -137,8 +137,10 @@ jobs:
             exit 0
           fi
           echo "$IPS"
-          V4=$(echo "$IPS" | jq '[.[] | ((.Type // .type) // "")] | map(select(. == "public_v4")) | length')
-          V6=$(echo "$IPS" | jq '[.[] | ((.Type // .type) // "")] | map(select(. == "public_v6")) | length')
+          # R-763: flyctl v0.4.x يعيد "v6"/"shared_v4" (لا "public_v6") — العدّ يقبل
+          # الصيغتين؛ كان صفرًا دائمًا فخُصص IPv6 جديد مع كل نشر
+          V4=$(echo "$IPS" | jq '[.[] | ((.Type // .type) // "")] | map(select(test("v4$") and (test("private") | not))) | length')
+          V6=$(echo "$IPS" | jq '[.[] | ((.Type // .type) // "")] | map(select(test("v6$") and (test("private") | not))) | length')
           if [ "$V4" -eq 0 ]; then
             echo "لا IPv4 عام ظاهرًا — تخصيص مشترك (فرضية جذر سجل fly.dev DNS)"
             flyctl ips allocate-v4 --shared -a "$FLY_APP"

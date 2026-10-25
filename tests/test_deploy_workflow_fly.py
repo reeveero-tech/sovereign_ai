@@ -150,3 +150,34 @@ def test_ips_read_failure_not_treated_as_absence():
     assert "|| echo \"[]\"" not in text, (
         "فشل قراءة ips list يجب ألا يعامل كغياب عناوين (تخصيص أعمى)"
     )
+
+
+def _ips_jq_filters():
+    """R-763: استخراج مرشحي jq لعدّ IPv4/IPv6 من خطوة ضمان العناوين."""
+    import re
+    text = WORKFLOW.read_text(encoding="utf-8")
+    v4 = re.search(r"V4=\$\(echo \"\$IPS\" \| jq '([^']+)'\)", text)
+    v6 = re.search(r"V6=\$\(echo \"\$IPS\" \| jq '([^']+)'\)", text)
+    assert v4 and v6, "ips counting filters not found"
+    return v4.group(1), v6.group(1)
+
+
+def test_ips_counting_matches_current_flyctl_types():
+    """R-763 (حادثة حية): flyctl v0.4.x يعيد Type = "v6"/"shared_v4" لا "public_v6" —
+    كان العد صفرًا دائمًا فخُصص IPv6 مخصص جديد مع كل نشر (6 عناوين). العد يجب أن
+    يتعرف على الصيغ الحالية والقديمة معًا."""
+    import json
+    import subprocess
+    f4, f6 = _ips_jq_filters()
+    cases = [
+        ([{"Type": "shared_v4"}, {"Type": "v6"}, {"Type": "v6"}], 1, 2),  # flyctl الحالي
+        ([{"type": "public_v4"}, {"type": "public_v6"}], 1, 1),  # الصيغة القديمة
+        ([{"Type": "v4"}], 1, 0),
+        ([{"Type": "private_v6"}], 0, 0),  # Flycast خاص — ليس عنوانًا عامًا
+        ([], 0, 0),
+    ]
+    for ips, want4, want6 in cases:
+        data = json.dumps(ips)
+        got4 = subprocess.run(["jq", f4], input=data, capture_output=True, text=True, check=True).stdout.strip()
+        got6 = subprocess.run(["jq", f6], input=data, capture_output=True, text=True, check=True).stdout.strip()
+        assert (int(got4), int(got6)) == (want4, want6), (ips, got4, got6)

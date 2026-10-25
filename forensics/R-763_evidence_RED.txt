@@ -1,0 +1,11 @@
+# R-763 RED — tests/test_ledger_durability.py + tests/test_deploy_workflow_fly.py على c2c2699 (قبل الإصلاح)
+# الأمر: python -m pytest tests/test_ledger_durability.py tests/test_deploy_workflow_fly.py -q -p no:cacheprovider -rfE | rg '^(FAILED|ERROR|[0-9]+ (passed|failed))'
+# (أسطر ERROR الثلاثة سجلات تسجيل من إعادة بناء الفهرس عند السطر التالف — ليست أخطاء اختبار)
+ERROR    backend.memory.core:core.py:1510 فشل إعادة بناء الفهرس عند حدث: Expecting value: line 1 column 1 (char 0)
+ERROR    backend.memory.core:core.py:1510 فشل إعادة بناء الفهرس عند حدث: Expecting value: line 1 column 1 (char 0)
+ERROR    backend.memory.core:core.py:1510 فشل إعادة بناء الفهرس عند حدث: Expecting value: line 1 column 1 (char 0)
+FAILED tests/test_ledger_durability.py::test_ledger_line_fsynced_before_meta
+FAILED tests/test_ledger_durability.py::test_torn_nul_line_does_not_fall_back_to_meta
+FAILED tests/test_ledger_durability.py::test_torn_line_does_not_force_rebuild_every_boot
+FAILED tests/test_deploy_workflow_fly.py::test_ips_counting_matches_current_flyctl_types
+4 failed, 12 passed, 2 warnings in 0.29s
