@@ -1,0 +1,8 @@
+# R-772 RED — 9b0f6ae قبل الإصلاح — 2026-10-25T23:39:43Z
+# إنتاج: 27/30 عينة py-spy الماسك للقفل داخل SovereignIndex.save→json.dump؛ 25 خيطًا تنتظر؛ index.json صفري من الحرف 525772
+# محلي، 60 خيطًا مشغولًا: json.dump(file) 8.9s مقابل json.dumps 0.12s (73x)
+E       AssertionError: json.dump (مرمّز Python المتدفق) يحتجز القفل دقائق تحت التزاحم
+E       AssertionError: ['replace']
+FAILED tests/test_index_save_contention.py::test_save_uses_one_shot_encoder_not_streaming_dump
+FAILED tests/test_index_save_contention.py::test_save_fsyncs_tmp_before_replace
+2 failed, 1 passed, 1 warning in 0.07s

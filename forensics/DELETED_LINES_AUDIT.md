@@ -2568,3 +2568,6 @@ Bus إطلاقًا. الواجهة سليمة بعد الإزالة (101 وسم 
 
 ## 2026-10-26 — R-771: أسطر مستبدلة
 - **# DELETION-JUSTIFIED** — سطرا الترويسة في `docs/PROJECT_STATE.md` و`docs/CHANGELOG.md` (تاريخ/عنوان الجولة)، وسطر `CORE_DIR` في `backend/memory/core.py` أعيد كما هو مع إلحاق ثوابت R-771 بعده. لا منطق محذوف.
+
+## 2026-10-26 — R-772: أسطر مستبدلة
+- **# DELETION-JUSTIFIED** — في `SovereignIndex.save` (`backend/memory/core.py`): سطرا `with open(tmp, ...)` + `json.dump(self.data, f, ...)` صارا `json.dumps` ثم `with open` + `write` + `flush` + `fsync` (المحتوى المكتوب نفسه حرفيًا — `test_saved_index_roundtrips`). وسطرا الترويسة في PROJECT_STATE وCHANGELOG.

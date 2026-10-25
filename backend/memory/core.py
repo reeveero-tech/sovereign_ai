@@ -446,8 +446,14 @@ class SovereignIndex:
         """حفظ الفهرس إلى القرص — R-762: ذري (tmp + replace) ومضغوط بلا indent."""
         self.data["updated_at"] = utc_now_iso()
         tmp = self.index_file.with_name(self.index_file.name + ".tmp")
+        # R-772: مرمّز C دفعة واحدة (json.dumps) لا المتدفق (json.dump) — المتدفق مكتوب بـ
+        # Python ويتخلى عن قفل المفسّر بين القطع، فامتد دقائق على الإنتاج وقفل السجل محتجز
+        # (73× محليًا تحت 60 خيطًا). وfsync قبل الاستبدال: بلاه ترك قتلُ العملية فهرسًا صفريًا.
+        payload = json.dumps(self.data, ensure_ascii=False, separators=(",", ":"))
         with open(tmp, 'w', encoding='utf-8') as f:
-            json.dump(self.data, f, ensure_ascii=False, separators=(",", ":"))
+            f.write(payload)
+            f.flush()
+            os.fsync(f.fileno())
         os.replace(tmp, self.index_file)
         self._dirty = False
         self._last_save = time.monotonic()
