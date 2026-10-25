@@ -2555,3 +2555,9 @@ Bus إطلاقًا. الواجهة سليمة بعد الإزالة (101 وسم 
   رأس الحلقة النصي (`open(..., 'r')` + `enumerate`) صار قراءة ثنائية بتتبع الموضع؛ عودة CORRUPTED
   عند غياب آخر تجزئة معروفة (صارت تُخزَّن). وسطرا الترويسة في PROJECT_STATE وCHANGELOG. محروسة بـ
   `tests/test_integrity_incremental.py` + R-606/R-613/multiwriter/R-763/R-766 وأنماط التدوير القائمة.
+
+## 2026-10-25 — R-769: أسطر مستبدلة (فحص واحد في وقت واحد)
+- **# DELETION-JUSTIFIED** — في `backend/memory/core.py` داخل `verify_integrity`: كتلة الاستئناف/الفحص
+  (سبعة أسطر) نُقلت داخل `with self._integrity_lock:` مع إعادة فحص الذاكرة — المنطق نفسه بمسافة
+  بادئة أعمق. وسطرا الترويسة في PROJECT_STATE وCHANGELOG. محروسة بـ`tests/test_integrity_single_flight.py`
+  + `tests/test_integrity_incremental.py` وmultiwriter وR-606 القائمة.

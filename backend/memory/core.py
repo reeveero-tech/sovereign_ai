@@ -589,6 +589,8 @@ class SovereignCore:
         # M1: ذاكرة مؤقتة لنتيجة التحقق من سلامة السجل
         self._integrity_cache = None
         self._integrity_prefix = None  # R-768: نقطة استئناف التحقق (بصمة البادئة)
+        # R-769: فحص واحد في وقت واحد — المتصلون المتزامنون ينتظرون النتيجة المخزنة
+        self._integrity_lock = threading.RLock()
         self._genesis_created = self._load_genesis_status()
         
         logger.info(f"✅ نواة الذاكرة السيادية جاهزة")
@@ -1276,14 +1278,20 @@ class SovereignCore:
         if not verbose and self._integrity_cache is not None:
             if (time.time() - self._integrity_cache.get("ts", 0)) < 60.0:
                 return self._integrity_cache["status"]
-        resume = None if verbose else self._integrity_resume_point()
-        if resume is not None and resume["status"] is not None:
-            # البادئة نفسها (حتى السطر الفاشل) لم تتغير → النتيجة نفسها، بلا إعادة تحقق
-            return self._remember_integrity(resume["status"])
-        status = self._verify_walk(verbose, resume)
-        if status is None:  # الاستئناف لم يرَ آخر تجزئة معروفة في الذيل → فحص كامل
-            status = self._verify_walk(verbose, None)
-        return status
+        # R-769: بلا قفل كان كل خيط (drives/instincts/watcher...) يبدأ الفحص نفسه بالتوازي
+        # عند الإقلاع أو انقضاء المهلة — قطيع متزاحم أشبع معالج الإنتاج بعد R-768.
+        with self._integrity_lock:
+            if not verbose and self._integrity_cache is not None:
+                if (time.time() - self._integrity_cache.get("ts", 0)) < 60.0:
+                    return self._integrity_cache["status"]  # أنجزه خيط سبقنا
+            resume = None if verbose else self._integrity_resume_point()
+            if resume is not None and resume["status"] is not None:
+                # البادئة نفسها (حتى السطر الفاشل) لم تتغير → النتيجة نفسها، بلا إعادة تحقق
+                return self._remember_integrity(resume["status"])
+            status = self._verify_walk(verbose, resume)
+            if status is None:  # الاستئناف لم يرَ آخر تجزئة معروفة في الذيل → فحص كامل
+                status = self._verify_walk(verbose, None)
+            return status
 
     def _keyring_fingerprint(self) -> str:
         """R-768: بصمة المفاتيح التي يعتمد عليها التحقق (تغيّرها يُبطل نقطة الاستئناف)."""

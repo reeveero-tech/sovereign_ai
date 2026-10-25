@@ -1,9 +1,16 @@
 # CHANGELOG.md — سجل التغييرات
 
 > كل تغيير يُسجل هنا (قاعدة الدفعة الذرية).
-> آخر تحديث: 2026-10-25 (R-768 — تحقق سلامة تزايدي: تشبع معالج الإنتاج)
+> آخر تحديث: 2026-10-25 (R-769 — فحص سلامة واحد في وقت واحد + تسليم R-767/R-768)
 
 ---
+
+## [R-769 + تسليم R-767/R-768] — 2026-10-25 — قطيع متزاحم على `verify_integrity`
+
+- **تسليم:** R-767 `4f864af` — CI [40194338456](https://github.com/reeveero-tech/sovereign_ai/actions/runs/40194338456)، **1210/0/0** ثلاثيًا. R-768 `4eff7f8` — CI [40195455737](https://github.com/reeveero-tech/sovereign_ai/actions/runs/40195455737)، **1216/0/0** ثلاثيًا، نشر [40195997354](https://github.com/reeveero-tech/sovereign_ai/actions/runs/40195997354).
+- **الحادثة (بعد نشر R-768):** steal ما زال ≈91% على shared-cpu-1x. py-spy: `verify_hex` ← `_verify_walk` ← `verify_integrity` من `drives.update_survival_drive` و`watcher.check_core_health` في آن. الذاكرة تُملأ بعد أول فحص فقط، ولا قفل — فكل خيط بدأ الفحص الكامل نفسه بالتوازي.
+- **الإصلاح:** `SovereignCore._integrity_lock` (RLock): بعد فحص الذاكرة بلا قفل (المسار السريع كما هو)، يُكتسب القفل ويُعاد فحص الذاكرة — من سبق يُنجز ومن يليه يأخذ النتيجة.
+- **الاختبار:** `tests/test_integrity_single_flight.py` — ستة متصلين متزامنين على معالج مخنوق (محاكاة)، المطلوب فحص واحد (3 توقيعات)؛ RED `forensics/R-769_evidence_RED.txt` (18).
 
 ## [R-768] — 2026-10-25 — `verify_integrity` تزايدي (حادثة تشبع المعالج حيًا)
 
