@@ -1585,8 +1585,11 @@ async def tools_invoke(request: ToolInvokeRequest):
         )
     from tool_registry import get_registry, UnknownToolError
     try:
-        return get_registry().invoke(request.tool, caller="owner",
-                                      inputs=request.inputs)
+        # R-764: تنفيذ الأداة في خيط عام — أدوات العقل/الوكيل/المهام تستدعي
+        # استدلالًا HTTP طويلًا؛ تنفيذها داخل الحلقة كان يحجب /health (صنف R-762)
+        registry = get_registry()
+        return await asyncio.to_thread(registry.invoke, request.tool,
+                                       caller="owner", inputs=request.inputs)
     except UnknownToolError:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

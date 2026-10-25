@@ -2515,3 +2515,9 @@ Bus إطلاقًا. الواجهة سليمة بعد الإزالة (101 وسم 
 ## 2026-10-25 — تسليم R-763: ترويستان مستبدلتان
 - **# DELETION-JUSTIFIED** — سطرا «آخر تحديث» في `docs/PROJECT_STATE.md` و`docs/CHANGELOG.md`
   استُبدلا بترويستي التسليم؛ المحتوى السابق محفوظ في مدخلات السجل.
+
+## 2026-10-25 — R-764: أسطر مستبدلة (/tools/invoke خارج الحلقة)
+- **# DELETION-JUSTIFIED** — في `backend/app.py`: سطرا `return get_registry().invoke(...)`
+  داخل `tools_invoke` استُبدلا بتنفيذ عبر `asyncio.to_thread` (كان الاستدعاء المتزامن يحجب
+  حلقة الأحداث). صف ١.٦ في الخارطة، وترويستا PROJECT_STATE وCHANGELOG. محروسة بـ
+  `tests/test_tools_invoke_offload.py` + اختبارات `/tools/invoke` القائمة.

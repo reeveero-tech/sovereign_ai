@@ -1,0 +1,4 @@
+# R-764 RED — base 3448738 + tests/test_tools_invoke_offload.py (full suite, -m 'not operational')
+E       AssertionError: الأداة نُفّذت داخل خيط حلقة الأحداث
+FAILED tests/test_tools_invoke_offload.py::test_tools_invoke_runs_tool_off_the_event_loop
+1 failed, 1190 passed, 1 deselected, 3 warnings in 372.39s (0:06:12)
