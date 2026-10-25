@@ -1,0 +1,8 @@
+# R-773 RED — f25e66c — ci.yml قبل التعديل (مع ملف القاعدة والاختبار) — 2026-10-25T23:51:50Z
+# الخادم قبل: gh api repos/.../rulesets → [] ؛ branches/main/protection → 404 Branch not protected
+E       AssertionError: assert 'work/**' in ['main']
+E           AssertionError: tools/gate_deletions.py
+E           assert 'python tools/gate_deletions.py --range "${BASE}" "${GITHUB_SHA}"' in 'name: CI — Quality Gates (M4)\n\non:\n  push:\n    branches: [main]\n  pull_request:\n    branches: [main]\n  workflo...overeign_ai.git verify_exec && cd verify_exec && git checkout -q "$TARGET_SHA" && timeout 1500 bash verify.sh --full\n'
+FAILED tests/test_main_ruleset.py::test_ci_runs_on_work_branches_so_main_can_require_it
+FAILED tests/test_main_ruleset.py::test_new_branch_push_checks_every_commit_since_fork_point
+2 failed, 2 passed, 1 warning in 0.08s

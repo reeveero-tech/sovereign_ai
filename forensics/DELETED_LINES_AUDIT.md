@@ -2571,3 +2571,6 @@ Bus إطلاقًا. الواجهة سليمة بعد الإزالة (101 وسم 
 
 ## 2026-10-26 — R-772: أسطر مستبدلة
 - **# DELETION-JUSTIFIED** — في `SovereignIndex.save` (`backend/memory/core.py`): سطرا `with open(tmp, ...)` + `json.dump(self.data, f, ...)` صارا `json.dumps` ثم `with open` + `write` + `flush` + `fsync` (المحتوى المكتوب نفسه حرفيًا — `test_saved_index_roundtrips`). وسطرا الترويسة في PROJECT_STATE وCHANGELOG.
+
+## 2026-10-26 — R-773: أسطر مستبدلة
+- **# DELETION-JUSTIFIED** — `.github/workflows/ci.yml`: `branches: [main]` للدفع صار `[main, 'work/**']`؛ وفي بوابتي الحذف والوثائق سطرا «لا قاعدة دفع صالحة — فحص الرأس وحده» صارا داخل فرع `else` بعد محاولة `merge-base` مع main (السلوك القديم محفوظ حين لا نقطة افتراق). وسطرا الترويسة في PROJECT_STATE وCHANGELOG.

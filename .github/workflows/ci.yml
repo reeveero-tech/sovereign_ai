@@ -2,7 +2,9 @@ name: CI — Quality Gates (M4)
 
 on:
   push:
-    branches: [main]
+    # R-773: فروع العمل work/** تُفحص قبل main — قاعدة main على الخادم لا تقبل التزامًا
+    # لم تنجح عليه هذه البوابة (لا دفع إلى main بلا توثيق — يُرفض الدفع نفسه، لا بعده).
+    branches: [main, 'work/**']
   pull_request:
     branches: [main]
   workflow_dispatch:  # R-682 (Task 3.3): manual trigger for operational job
@@ -43,8 +45,15 @@ jobs:
           BEFORE="${{ github.event.before }}"
           if [ -z "${BEFORE}" ] || [ "${BEFORE}" = "0000000000000000000000000000000000000000" ] \
               || ! git cat-file -e "${BEFORE}"^{commit} 2>/dev/null; then
-            echo "[info] لا قاعدة دفع صالحة — فحص الرأس وحده (حد موثق)"
-            python tools/gate_deletions.py "${GITHUB_SHA}"
+            # R-773: فرع جديد (before صفري) — المدى من نقطة الافتراق عن main لا الرأس وحده
+            BASE="$(git merge-base origin/main "${GITHUB_SHA}" 2>/dev/null || true)"
+            if [ -n "${BASE}" ] && [ "${BASE}" != "${GITHUB_SHA}" ]; then
+              echo "[info] فرع جديد — فحص كل التزام منذ الافتراق عن main (${BASE:0:12})"
+              python tools/gate_deletions.py --range "${BASE}" "${GITHUB_SHA}"
+            else
+              echo "[info] لا قاعدة دفع صالحة — فحص الرأس وحده (حد موثق)"
+              python tools/gate_deletions.py "${GITHUB_SHA}"
+            fi
           else
             python tools/gate_deletions.py --range "${BEFORE}" "${GITHUB_SHA}"
           fi
@@ -65,8 +74,15 @@ jobs:
           BEFORE="${{ github.event.before }}"
           if [ -z "${BEFORE}" ] || [ "${BEFORE}" = "0000000000000000000000000000000000000000" ] \
               || ! git cat-file -e "${BEFORE}"^{commit} 2>/dev/null; then
-            echo "[info] لا قاعدة دفع صالحة — فحص الرأس وحده (حد موثق)"
-            python tools/gate_docs_sync.py "${GITHUB_SHA}"
+            # R-773: فرع جديد (before صفري) — المدى من نقطة الافتراق عن main لا الرأس وحده
+            BASE="$(git merge-base origin/main "${GITHUB_SHA}" 2>/dev/null || true)"
+            if [ -n "${BASE}" ] && [ "${BASE}" != "${GITHUB_SHA}" ]; then
+              echo "[info] فرع جديد — فحص كل التزام منذ الافتراق عن main (${BASE:0:12})"
+              python tools/gate_docs_sync.py --range "${BASE}" "${GITHUB_SHA}"
+            else
+              echo "[info] لا قاعدة دفع صالحة — فحص الرأس وحده (حد موثق)"
+              python tools/gate_docs_sync.py "${GITHUB_SHA}"
+            fi
           else
             python tools/gate_docs_sync.py --range "${BEFORE}" "${GITHUB_SHA}"
           fi

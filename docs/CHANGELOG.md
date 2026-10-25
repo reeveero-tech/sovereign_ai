@@ -1,9 +1,17 @@
 # CHANGELOG.md — سجل التغييرات
 
 > كل تغيير يُسجل هنا (قاعدة الدفعة الذرية).
-> آخر تحديث: 2026-10-26 (R-772 — حفظ الفهرس لا يحتجز قفل السجل؛ fsync قبل الاستبدال)
+> آخر تحديث: 2026-10-26 (R-773 — القاعدة الحاكمة مفروضة على الخادم)
 
 ---
+
+## [R-773] — 2026-10-26 — القاعدة الحاكمة على الخادم (D-047)
+
+- **قبل:** البوابة D-040 ترفض في CI **بعد** دخول الدفعة main؛ pre-commit محلي قابل للتجاوز؛ الخادم بلا قواعد (`rulesets: []`، الحماية 404).
+- **قاعدة main:** `tools/github/main_ruleset.json` — `required_status_checks: [Tests + Atomic Batch Gate]`، `non_fast_forward`، `deletion`، `bypass_actors: []`؛ يطبقها `tools/github/apply_main_ruleset.sh` (إنشاء أو تحديث بالاسم).
+- **CI:** `push.branches: [main, 'work/**']`؛ عند before صفري (فرع جديد) يُفحص المدى من `git merge-base origin/main` لكل من بوابتي الحذف والوثائق (كان الرأس وحده).
+- **المسار:** التزام ذري → `work/<البند>` → CI أخضر → دفع SHA نفسه إلى main. موثق في `docs/GOVERNANCE.md` §1 وD-047.
+- **الاختبار:** `tests/test_main_ruleset.py` (4)؛ RED `forensics/R-773_evidence_RED.txt`.
 
 ## [R-772] — 2026-10-26 — حفظ الفهرس كان يحتجز قفل السجل دقائق
 
