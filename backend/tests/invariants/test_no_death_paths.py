@@ -55,6 +55,8 @@ EXIT_ALLOWED_ENTRY_POINTS = {
     # R-751 (V5 ١.١-ب): بوابة الحذف الموحدة (Issue #8) — CLI تشغّلها CI
     # (التزام/مدى) و.githooks/commit-msg (فهرس+رسالة)؛ رمز الخروج 0/1 عقدها
     "tools/gate_deletions.py",
+    # R-758 (V5 ٥.٣): تقرير قياس الأسطول — CLI رمز خروجها 0/1 (اكتمل الكل أم لا)
+    "tools/fleet_scale_report.py",
 }
 
 BANNED_STRING = "max_tamper_attempts"

@@ -87,8 +87,11 @@ CATALOG: List[Dict[str, Any]] = [
      "note": "مبني (R-757: حزمة→تقييم مرجعي→اعتماد المالك بأثر→أداة تدوم عبر إعادة "
              "التشغيل→تراجع) — الدوام عبر النشر ١.٤، والتقييم بمرجع مستقل يتطلب العقل"},
     {"id": "agent_fleet", "name": "إدارة أسطول وكلاء",
-     "anchor_tool": "fleet.spawn", "flag": None, "requires_signing": True,
-     "roadmap": "V5 §٥", "note": "غير مبني"},
+     "anchor_tool": "fleet.spawn", "flag": "brain", "requires_signing": True,
+     "roadmap": "V5 §٥",
+     "note": "مبني (R-758: عامل=حلقة R-753 بأثر fleet_event، منسق بسقف تزامن وعزل "
+             "وإعادة جدولة، قياس 1000 فعلي في forensics/R-758_SCALE_REPORT.json) — "
+             "العمال الحيون يتطلبون العقل (١.٦) والتوقيع (١.٣)، وقياس آلة Fly يتطلب ١.٧"},
 ]
 
 LIVE_PROOF_NOTE = ("لا مستوى «مثبت حيًا» من داخل العملية — الإثبات الحي دليل "

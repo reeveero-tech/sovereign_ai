@@ -1,0 +1,140 @@
+{
+  "record": "R-758",
+  "roadmap": "V5 ٥.٣",
+  "measured_at": "2026-10-25T05:14:15.931708+00:00",
+  "method": "كل عامل حلقة R-753 تستدعي أداة work (انتظار I/O بمدة work_ms_per_worker) ثم تتحقق من المخرج وتنهي؛ الذروة من عداد حي داخل التنفيذ؛ الذاكرة عينات VmRSS كل 20ms",
+  "ledger": "سجل قياس محلي يعد الأحداث (لا مفتاح توقيع هنا — ١.٣)",
+  "ledger_event_counts": {
+    "fleet_event:worker.spawn": 4110,
+    "agent_run:": 8220,
+    "tool_invoked:": 4110,
+    "fleet_event:worker.result": 4110
+  },
+  "limits": [
+    "العمال خيوط في عملية واحدة — مناسبة لعبء I/O لا الحساب الثقيل (GIL)",
+    "البيئة sandbox وليست آلة Fly 512MB — قياس الإنتاج يتطلب النشر ١.٧",
+    "العبء أداة انتظار مُعلنة لا استدعاءات عقل حية (١.٦)"
+  ],
+  "runs": [
+    {
+      "registered": 10,
+      "runnable_concurrency_cap": 10,
+      "measured_peak_concurrency": 10,
+      "completed": 10,
+      "failures": [],
+      "status": "completed",
+      "wall_s": 0.054,
+      "throughput_per_s": 185.19,
+      "work_ms_per_worker": 50,
+      "rss_mb_base": 37.5,
+      "rss_mb_peak": 38.1,
+      "cpu_count": 2,
+      "mem_total_mb": 7957.7,
+      "environment": {
+        "python": "3.11.17",
+        "platform": "Linux-6.1.155-x86_64-with-glibc2.43",
+        "note": "بيئة العمل (sandbox) — ليست آلة Fly 512MB؛ قياس Fly يتطلب ١.٧"
+      }
+    },
+    {
+      "registered": 100,
+      "runnable_concurrency_cap": 50,
+      "measured_peak_concurrency": 50,
+      "completed": 100,
+      "failures": [],
+      "status": "completed",
+      "wall_s": 0.107,
+      "throughput_per_s": 934.58,
+      "work_ms_per_worker": 50,
+      "rss_mb_base": 39.0,
+      "rss_mb_peak": 39.2,
+      "cpu_count": 2,
+      "mem_total_mb": 7957.7,
+      "environment": {
+        "python": "3.11.17",
+        "platform": "Linux-6.1.155-x86_64-with-glibc2.43",
+        "note": "بيئة العمل (sandbox) — ليست آلة Fly 512MB؛ قياس Fly يتطلب ١.٧"
+      }
+    },
+    {
+      "registered": 1000,
+      "runnable_concurrency_cap": 100,
+      "measured_peak_concurrency": 100,
+      "completed": 1000,
+      "failures": [],
+      "status": "completed",
+      "wall_s": 0.525,
+      "throughput_per_s": 1904.76,
+      "work_ms_per_worker": 50,
+      "rss_mb_base": 40.5,
+      "rss_mb_peak": 43.8,
+      "cpu_count": 2,
+      "mem_total_mb": 7957.7,
+      "environment": {
+        "python": "3.11.17",
+        "platform": "Linux-6.1.155-x86_64-with-glibc2.43",
+        "note": "بيئة العمل (sandbox) — ليست آلة Fly 512MB؛ قياس Fly يتطلب ١.٧"
+      }
+    },
+    {
+      "registered": 1000,
+      "runnable_concurrency_cap": 250,
+      "measured_peak_concurrency": 250,
+      "completed": 1000,
+      "failures": [],
+      "status": "completed",
+      "wall_s": 0.244,
+      "throughput_per_s": 4098.36,
+      "work_ms_per_worker": 50,
+      "rss_mb_base": 43.8,
+      "rss_mb_peak": 45.4,
+      "cpu_count": 2,
+      "mem_total_mb": 7957.7,
+      "environment": {
+        "python": "3.11.17",
+        "platform": "Linux-6.1.155-x86_64-with-glibc2.43",
+        "note": "بيئة العمل (sandbox) — ليست آلة Fly 512MB؛ قياس Fly يتطلب ١.٧"
+      }
+    },
+    {
+      "registered": 1000,
+      "runnable_concurrency_cap": 1000,
+      "measured_peak_concurrency": 505,
+      "completed": 1000,
+      "failures": [],
+      "status": "completed",
+      "wall_s": 0.175,
+      "throughput_per_s": 5714.29,
+      "work_ms_per_worker": 50,
+      "rss_mb_base": 45.0,
+      "rss_mb_peak": 47.8,
+      "cpu_count": 2,
+      "mem_total_mb": 7957.7,
+      "environment": {
+        "python": "3.11.17",
+        "platform": "Linux-6.1.155-x86_64-with-glibc2.43",
+        "note": "بيئة العمل (sandbox) — ليست آلة Fly 512MB؛ قياس Fly يتطلب ١.٧"
+      }
+    },
+    {
+      "registered": 1000,
+      "runnable_concurrency_cap": 1000,
+      "measured_peak_concurrency": 1000,
+      "completed": 1000,
+      "failures": [],
+      "status": "completed",
+      "wall_s": 1.178,
+      "throughput_per_s": 848.9,
+      "work_ms_per_worker": 1000,
+      "rss_mb_base": 47.3,
+      "rss_mb_peak": 52.7,
+      "cpu_count": 2,
+      "mem_total_mb": 7957.7,
+      "environment": {
+        "python": "3.11.17",
+        "platform": "Linux-6.1.155-x86_64-with-glibc2.43",
+        "note": "بيئة العمل (sandbox) — ليست آلة Fly 512MB؛ قياس Fly يتطلب ١.٧"
+      }
+    }
+  ]
+}

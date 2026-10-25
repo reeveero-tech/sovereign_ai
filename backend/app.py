@@ -1687,6 +1687,15 @@ def _register_real_tools() -> None:
         description="تقدم مهمة من نقاط التفتيش على القرص حرفيًا (R-754 — ٣.٣)",
         inputs={"task_id": "معرف المهمة"}, outputs="status/done_steps/steps[]/pending_intents",
         handler=lambda task_id: __import__("durable_tasks").get_runner().progress(task_id)))
+    # R-758 (V5 §٥): أسطول — عمال بأدوار وأهداف جزئية بسقف تزامن مُعلن
+    registry.register(ToolSpec(
+        name="fleet.spawn",
+        description="أسطول وكلاء (R-758): هدف جزئي لكل عامل، سقف تزامن (FLEET_MAX_CONCURRENCY)، "
+                    "عزل وإعادة جدولة الفاشل، تقرير صادق — يتطلب العقل الحي (١.٦)",
+        inputs={"goals": "قائمة الأهداف الجزئية", "max_concurrency": "سقف التزامن (افتراضي 4)"},
+        outputs="status/registered/measured_peak_concurrency/completed/failed[]/results[]",
+        handler=lambda goals, max_concurrency=4: __import__("fleet").spawn_goals(
+            list(goals), int(max_concurrency))))
     registry.register(ToolSpec(
         name="brain.status",
         description="حالة عقل Ollama ومصدر الرد (نفس منطق /brain/status)",

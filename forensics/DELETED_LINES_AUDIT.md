@@ -2460,3 +2460,9 @@ Bus إطلاقًا. الواجهة سليمة بعد الإزالة (101 وسم 
   `docs/ROADMAP_V5.md` → منجز في الكود بحدوده، ترويستا PROJECT_STATE وCHANGELOG،
   وملاحظة `skill_acquisition` في `backend/capability_inventory.py` («غير مبني» → ما
   بُني وحدوده). محروسة بـ11 حالة RED→GREEN.
+
+## 2026-10-25 — R-758: أسطر مستبدلة (أسطول الوكلاء)
+- **# DELETION-JUSTIFIED** — صفوف ٥.١/٥.٢/٥.٣ («لم يبدأ») في `docs/ROADMAP_V5.md` →
+  ما بُني وقيس بحدوده، ترويستا PROJECT_STATE وCHANGELOG، وسطرا قدرة `agent_fleet`
+  في `backend/capability_inventory.py` (علم None + «غير مبني» → علم brain ووصف ما
+  بُني). محروسة بـ10 حالات RED→GREEN.

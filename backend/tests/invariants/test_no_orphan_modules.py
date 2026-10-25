@@ -53,6 +53,9 @@ SCRIPT_ENTRY_POINTS = {
     # R-751 (V5 ١.١-ب): بوابة الحذف الموحدة — CLI تشغّلها CI و.githooks/commit-msg
     # وتستدعيها اختباراتها السلوكية كعملية مستقلة (tests/test_gate_deletions.py)
     "tools/gate_deletions.py",
+    # R-758 (V5 ٥.٣): تقرير قياس الأسطول — CLI يكتب forensics/R-758_SCALE_REPORT.json
+    # ويشغّله اختباره السلوكي كعملية مستقلة (tests/test_fleet.py)
+    "tools/fleet_scale_report.py",
 }
 
 # الجولة <2> (اعتراض المراجع بصير): ملفات تُحمّل ديناميكيًا عبر
