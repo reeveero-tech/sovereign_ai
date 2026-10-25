@@ -1407,6 +1407,43 @@ async def tools_list():
     return {"tools": tools, "count": len(tools)}
 
 
+def _signing_ok() -> bool:
+    """R-750: هل يوجد مفتاح توقيع نشط الآن؟ (نفس حارس R-635 في append_event).
+    تعذر الفحص يُعلن «لا» — الجرد لا يدّعي قدرة لا يستطيع إثباتها."""
+    try:
+        return get_core()._get_current_signing_key_id() is not None
+    except Exception:  # TOLERATED: فحص تعذر → «محجوب» بصدق (fail-closed للإعلان)
+        logger.warning("R-750: تعذر فحص مفتاح التوقيع — يُعلن محجوبًا")
+        return False
+
+
+@app.get("/capabilities")
+async def capabilities():
+    """R-750 (ROADMAP_V5 §١.٢): جرد القدرات الصادق من الحالة الحية — سجل
+    الأدوات الفعلي + الأعلام + مفتاح التوقيع + القرص السحابي. قدرة معطلة أو
+    محجوبة أو غير مبنية لا تُعلن متاحة؛ ولا «مثبت حيًا» من داخل العملية."""
+    import capability_inventory
+    import config
+    from tool_registry import get_registry
+    try:
+        from backend.sovereign.cloud_disk import cloud_disk_enabled
+    except ImportError:  # TOLERATED: نمط الاستيراد المزدوج القائم في /disk/status
+        from sovereign.cloud_disk import cloud_disk_enabled
+    names = [t["name"] for t in get_registry().list_tools()]
+    flags = {
+        "brain": bool(config.OLLAMA_ENABLED and config.OLLAMA_MODEL),
+        "web_tools": bool(getattr(config, "WEB_TOOLS_ENABLED", False)),
+        "media": bool(getattr(config, "MEDIA_ENABLED", False)),
+        "vision": bool(config.VISION_ENABLED and config.VISION_MODEL),
+        "stt": bool(config.STT_ENABLED),
+        "tts": bool(config.TTS_ENABLED and config.TTS_MODEL),
+        "mcp": bool(getattr(config, "MCP_ENABLED", False)),
+    }
+    return capability_inventory.build_inventory(
+        names, flags, signing_ok=_signing_ok(),
+        cloud_disk_enabled=cloud_disk_enabled())
+
+
 @app.post("/tools/invoke")
 async def tools_invoke(request: ToolInvokeRequest):
     """R-729 (البند ٣.١): استدعاء أداة مسجلة — أمر مالك (مفتاح API) وأثر

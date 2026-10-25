@@ -1,0 +1,13 @@
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_capability_inventory.py::test_module_and_levels_declared - ...
+FAILED tests/test_capability_inventory.py::test_disabled_flags_never_announced_enabled
+FAILED tests/test_capability_inventory.py::test_unregistered_tool_is_missing_even_if_flag_on
+FAILED tests/test_capability_inventory.py::test_no_signing_key_blocks_tool_invocation
+FAILED tests/test_capability_inventory.py::test_roadmap_gaps_are_missing_until_their_tool_exists
+FAILED tests/test_capability_inventory.py::test_code_execution_deferred_by_owner
+FAILED tests/test_capability_inventory.py::test_persistent_memory_follows_cloud_disk
+FAILED tests/test_capability_inventory.py::test_summary_counts_and_no_live_proof_claim
+FAILED tests/test_capability_inventory.py::test_endpoint_built_from_live_registry
+9 failed, 3 warnings in 0.74s

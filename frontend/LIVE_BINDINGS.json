@@ -107,6 +107,15 @@
       ]
     },
     {
+      "element": "sovereign-capabilities",
+      "created_by_writer": true,
+      "endpoint": "GET /capabilities",
+      "field": "capabilities",
+      "writers": [
+        "js/modules/capabilities-panel.js"
+      ]
+    },
+    {
       "element": "dialogue-groups",
       "endpoint": "POST /chat",
       "field": "reply",
@@ -307,12 +316,14 @@
       "pane": "tab-tools",
       "endpoints": [
         "GET /tools/list",
+        "GET /capabilities",
         "GET /disk/status",
         "GET /brain/status",
         "GET /scheduler/status"
       ],
       "modules": [
         "js/modules/tools-registry.js",
+        "js/modules/capabilities-panel.js",
         "js/modules/live-system-status.js"
       ]
     },
