@@ -21,6 +21,7 @@ import hashlib
 import hmac
 import json
 import time
+import threading
 import uuid
 import secrets
 from contextlib import asynccontextmanager
@@ -553,8 +554,27 @@ register_circuit_breaker(app)
 # المرحلة 2 (ROADMAP_V2): نقطة نهاية /ledger/verify — تقرير التحقق
 # من اليدجر (KeyRing + Merkle Anchors). للقراءة فقط.
 # ============================================================
+_LEDGER_VERIFY_LOCK = threading.Lock()
+_LEDGER_VERIFY_STATE: Dict[str, Any] = {"gen": 0, "result": None}
+
+
 @app.get("/ledger/verify")
-async def ledger_verify():
+def ledger_verify():
+    """R-762: دالة متزامنة ⇒ FastAPI ينفّذها في مجمّع الخيوط لا في حلقة الأحداث
+    (كانت async تتحقق من كل توقيع داخل الحلقة فتحجب /health وكل الطلبات).
+    single-flight: الطلبات المتزامنة تنتظر الحساب الجاري وتأخذ نتيجته بدل
+    إطلاق حساب O(n) جديد لكل طلب."""
+    gen_seen = _LEDGER_VERIFY_STATE["gen"]
+    with _LEDGER_VERIFY_LOCK:
+        if _LEDGER_VERIFY_STATE["gen"] != gen_seen and _LEDGER_VERIFY_STATE["result"] is not None:
+            return _LEDGER_VERIFY_STATE["result"]
+        result = _ledger_verify_compute()
+        _LEDGER_VERIFY_STATE["result"] = result
+        _LEDGER_VERIFY_STATE["gen"] += 1
+        return result
+
+
+def _ledger_verify_compute():
     """
     تقرير التحقق من اليدجر السيادي:
     - عدد الأحداث المُتحقَّق منها بالمفتاح (KeyRing)

@@ -344,13 +344,54 @@ class BlobStore:
 # الفهرس (للبحث السريع)
 # ============================================================
 
+INDEX_SAVE_INTERVAL_ENV = "SOVEREIGN_INDEX_SAVE_INTERVAL"
+_DEFAULT_INDEX_SAVE_INTERVAL = 5.0
+
+
+def _index_save_interval() -> float:
+    """R-762: أقصى فاصل (ثوانٍ) بين حفظات الفهرس. 0 = حفظ مع كل حدث (السلوك القديم)."""
+    raw = os.environ.get(INDEX_SAVE_INTERVAL_ENV)
+    if raw is None or raw.strip() == "":
+        return _DEFAULT_INDEX_SAVE_INTERVAL
+    try:
+        return max(0.0, float(raw))
+    except ValueError:
+        logger.warning(f"R-762: قيمة {INDEX_SAVE_INTERVAL_ENV} غير صالحة ({raw!r}) — الافتراضي")
+        return _DEFAULT_INDEX_SAVE_INTERVAL
+
+
+import weakref as _weakref
+import atexit as _atexit
+
+_LIVE_INDEXES: "_weakref.WeakSet" = _weakref.WeakSet()
+
+
+def _flush_all_indexes() -> None:
+    """R-762: عند إيقاف العملية تُفرَّغ كل الفهارس المعلّقة (لا فقد عند الإيقاف النظيف)."""
+    for idx in list(_LIVE_INDEXES):
+        try:
+            idx.flush()
+        except Exception as e:  # TOLERATED: إيقاف — الإقلاع التالي يعيد البناء من السجل
+            logger.error(f"R-762: فشل تفريغ الفهرس عند الإيقاف: {e}")
+
+
+_atexit.register(_flush_all_indexes)
+
+
 class SovereignIndex:
     """فهرس متطور للبحث السريع في السجل السيادي"""
     
     def __init__(self, index_file: Path):
         self.index_file = index_file
         self.data: Dict[str, Any] = {}
+        # R-762: خنق حفظ الفهرس — كان يُعاد كتابته كاملًا مع كل حدث (O(n) لكل
+        # إلحاق) فأشبع المعالج على الإنتاج. الفهرس ذاكرة مؤقتة قابلة لإعادة
+        # البناء من السجل (والإقلاع يعيد بناءه إن تأخر)، فالخنق لا يفقد شيئًا.
+        self._dirty = False
+        self._last_save = 0.0
+        self._save_interval = _index_save_interval()
         self._load()
+        _LIVE_INDEXES.add(self)
     
     def _load(self):
         """تحميل الفهرس من القرص"""
@@ -378,10 +419,24 @@ class SovereignIndex:
         }
     
     def save(self):
-        """حفظ الفهرس إلى القرص"""
+        """حفظ الفهرس إلى القرص — R-762: ذري (tmp + replace) ومضغوط بلا indent."""
         self.data["updated_at"] = utc_now_iso()
-        with open(self.index_file, 'w', encoding='utf-8') as f:
-            json.dump(self.data, f, ensure_ascii=False, indent=2)
+        tmp = self.index_file.with_name(self.index_file.name + ".tmp")
+        with open(tmp, 'w', encoding='utf-8') as f:
+            json.dump(self.data, f, ensure_ascii=False, separators=(",", ":"))
+        os.replace(tmp, self.index_file)
+        self._dirty = False
+        self._last_save = time.monotonic()
+
+    def flush(self):
+        """R-762: حفظ أي تغييرات معلّقة (يُستدعى عند الإيقاف وبعد إعادة البناء)."""
+        if self._dirty:
+            self.save()
+
+    def _maybe_save(self):
+        self._dirty = True
+        if time.monotonic() - self._last_save >= self._save_interval:
+            self.save()
     
     def add_event(self, event_hash: str, event_type: str, event_time: str, 
                   prev_hash: str, user: Optional[str] = None):
@@ -414,7 +469,8 @@ class SovereignIndex:
             if len(self.data["by_type"][t]) > 10000:
                 self.data["by_type"][t] = self.data["by_type"][t][-10000:]
         
-        self.save()
+        # R-762: حفظ مخنوق بدل إعادة كتابة كاملة مع كل حدث
+        self._maybe_save()
     
     def get_event(self, event_hash: str) -> Optional[Dict[str, Any]]:
         """الحصول على معلومات الحدث من الفهرس"""
@@ -524,6 +580,9 @@ class SovereignCore:
 
         # حالة السجل
         self._last_hash = self._load_last_hash()
+        # R-762: الفهرس مخنوق الحفظ — إن تأخر عن السجل (انقطاع قبل التفريغ)
+        # يُعاد بناؤه من السجل عند الإقلاع (السجل هو الحقيقة، الفهرس ذاكرة مؤقتة)
+        self._reconcile_index_with_ledger()
         # M1: ذاكرة مؤقتة لنتيجة التحقق من سلامة السجل
         self._integrity_cache = None
         self._genesis_created = self._load_genesis_status()
@@ -1401,6 +1460,28 @@ class SovereignCore:
                     return json.loads(line)
         return None
     
+    def _ledger_line_count(self) -> int:
+        if not self.log_file.exists():
+            return 0
+        n = 0
+        with open(self.log_file, 'rb') as f:
+            for chunk in iter(lambda: f.read(1 << 20), b''):
+                n += chunk.count(b'\n')
+        return n
+
+    def _reconcile_index_with_ledger(self) -> None:
+        """R-762: يعيد بناء الفهرس إن خالف عدّاده عدد أسطر السجل."""
+        try:
+            ledger_n = self._ledger_line_count()
+            if self.index.data.get("events_count", 0) != ledger_n:
+                logger.warning(
+                    f"R-762: الفهرس ({self.index.data.get('events_count', 0)}) "
+                    f"لا يطابق السجل ({ledger_n}) — إعادة بناء من السجل"
+                )
+                self.index = self._rebuild_index()
+        except Exception as e:  # TOLERATED: الفهرس ذاكرة مؤقتة؛ السجل لم يُمس
+            logger.error(f"R-762: فشل مطابقة الفهرس بالسجل: {e}")
+
     def _load_index(self) -> SovereignIndex:
         """تحميل أو إعادة إنشاء الفهرس"""
         # R-606: إصلاح — المسار في self.index.index_file وليس self.index_file

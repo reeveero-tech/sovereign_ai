@@ -1,0 +1,7 @@
+# R-762 RED — tests/test_ledger_write_throughput.py على b0e3ad1 (قبل الإصلاح)
+# الأمر: python -m pytest tests/test_ledger_write_throughput.py -q -p no:cacheprovider -rfE | rg '^(FAILED|ERROR|[0-9]+ (passed|failed))'
+FAILED tests/test_ledger_write_throughput.py::test_index_not_rewritten_on_every_append
+FAILED tests/test_ledger_write_throughput.py::test_flush_persists_pending_index
+FAILED tests/test_ledger_write_throughput.py::test_stale_index_rebuilt_on_startup
+FAILED tests/test_ledger_write_throughput.py::test_ledger_verify_is_sync_and_single_flight
+4 failed, 2 warnings in 1.18s
