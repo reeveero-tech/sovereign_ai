@@ -1534,6 +1534,28 @@ def _register_real_tools() -> None:
         outputs="run_id/status/steps[]/answer (answer فقط عند completed)",
         handler=lambda goal, max_steps=8: __import__("agent_loop").run_goal(goal, max_steps),
     ))
+    # R-754 (V5 §٣): مهام دائمة — نقطة تفتيش بعد كل خطوة، استئناف بعد إعادة التشغيل
+    def _tasks_start(goal):
+        import durable_tasks
+        runner = durable_tasks.get_runner()
+        tid = runner.create(goal, {"kind": "brain"})
+        return runner.run(tid)
+
+    registry.register(ToolSpec(
+        name="tasks.start",
+        description="بدء مهمة دائمة بالعقل الحي (R-754) — نقطة تفتيش على القرص بعد كل خطوة",
+        inputs={"goal": "الهدف"}, outputs="task_id/status/steps[]",
+        handler=_tasks_start))
+    registry.register(ToolSpec(
+        name="tasks.resume",
+        description="استئناف مهمة دائمة من آخر نقطة تفتيش (R-754) — فعل خارجي لا يتكرر",
+        inputs={"task_id": "معرف المهمة"}, outputs="task_id/status/resumed/steps[]",
+        handler=lambda task_id: __import__("durable_tasks").get_runner().run(task_id)))
+    registry.register(ToolSpec(
+        name="tasks.progress",
+        description="تقدم مهمة من نقاط التفتيش على القرص حرفيًا (R-754 — ٣.٣)",
+        inputs={"task_id": "معرف المهمة"}, outputs="status/done_steps/steps[]/pending_intents",
+        handler=lambda task_id: __import__("durable_tasks").get_runner().progress(task_id)))
     registry.register(ToolSpec(
         name="brain.status",
         description="حالة عقل Ollama ومصدر الرد (نفس منطق /brain/status)",

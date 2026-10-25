@@ -25,6 +25,8 @@ data/sovereign_core/.lock
 data/memory_store/
 # R-752: خزينة الأسرار المشفرة — بيانات تشغيل، لا تدخل git أبدًا
 data/vault/
+# R-754: ملفات المهام الدائمة — بيانات تشغيل
+data/tasks/
 data/simulation/
 data/config_backup.json
 data/language_evolution.json

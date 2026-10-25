@@ -2431,3 +2431,12 @@ Bus إطلاقًا. الواجهة سليمة بعد الإزالة (101 وسم 
   و`docs/CHANGELOG.md`، وملاحظة `agent_loop` وعلمها في
   `backend/capability_inventory.py` («غير مبنية» → ما بُني وشرط التفعيل). محروسة
   بـ12 حالة RED→GREEN.
+
+## 2026-10-25 — R-754: أسطر مستبدلة (المهام الدائمة)
+- **# DELETION-JUSTIFIED** — صفوف ٣.١/٣.٢/٣.٣ في `docs/ROADMAP_V5.md` (لم يبدأ →
+  منجز في الكود)، ترويستا PROJECT_STATE وCHANGELOG، ملاحظة `durable_tasks` وعلمها
+  في `backend/capability_inventory.py`، وفي `backend/agent_loop.py`: توقيع
+  `run(goal)` وسطور تهيئة `run_id`/`steps` وسطر أثر البدء واستدعاء
+  `registry.invoke` — استُبدلت بصيغ أوسع (استئناف + نية + نقطة تفتيش) بنفس السلوك
+  عند غياب المعاملات الجديدة، محروسة بـ12 اختبار R-753 القائمة (خضراء كما هي) +
+  6 حالات R-754.

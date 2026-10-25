@@ -71,8 +71,11 @@ CATALOG: List[Dict[str, Any]] = [
      "note": "مبنية (R-753: خطوة→أداة مسجلة→تحقق، ميزانيات، إلغاء، أثر agent_run) "
              "— التخطيط الحي يتطلب العقل (١.٦) والأثر يتطلب مفتاح توقيع (١.٣)"},
     {"id": "durable_tasks", "name": "مهام طويلة قابلة للاستئناف",
-     "anchor_tool": "tasks.resume", "flag": None, "requires_signing": True,
-     "roadmap": "V5 §٣", "note": "غير مبنية"},
+     "anchor_tool": "tasks.resume", "flag": "brain", "requires_signing": True,
+     "roadmap": "V5 §٣",
+     "note": "مبنية (R-754: نقاط تفتيش، استئناف بعد قتل فعلي، منع تكرار الفعل "
+             "الخارجي، تقدم من القرص) — تتطلب العقل (١.٦) والتوقيع (١.٣)، "
+             "والدوام عبر النشر يتطلب ١.٤"},
     {"id": "skill_acquisition", "name": "اكتساب المهارات",
      "anchor_tool": "skills.install", "flag": None, "requires_signing": True,
      "roadmap": "V5 §٤", "note": "غير مبني — سجل التطور والاقتراحات ليسا اكتساب مهارات"},

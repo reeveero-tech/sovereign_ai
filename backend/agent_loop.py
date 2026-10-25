@@ -181,15 +181,23 @@ class AgentLoop:
             return f"نوع تحقق غير معروف: {ctype!r}"
         return None
 
-    def run(self, goal: str) -> Dict[str, Any]:
-        run_id = uuid.uuid4().hex[:12]
+    def run(self, goal: str, *, run_id: Optional[str] = None,
+            initial_steps: Optional[List[Dict[str, Any]]] = None,
+            before_invoke: Optional[Callable[[int, Dict[str, Any]], Dict[str, Any]]] = None,
+            after_step: Optional[Callable[[Dict[str, Any]], None]] = None) -> Dict[str, Any]:
+        """R-754 (§٣): run_id/initial_steps للاستئناف من نقطة تفتيش؛ before_invoke
+        يكتب النية ويعيد مدخلات إضافية (idempotency_key)؛ after_step نقطة التفتيش
+        — فشلها يوقف الحلقة (checkpoint_failed): لا خطوة تالية بلا نقطة محفوظة."""
+        resuming = bool(initial_steps)
+        run_id = run_id or uuid.uuid4().hex[:12]
         start = self.clock()
-        steps: List[Dict[str, Any]] = []
+        steps: List[Dict[str, Any]] = list(initial_steps or [])
         res: Dict[str, Any] = {"run_id": run_id, "goal": goal,
                                "planner": getattr(self.planner, "kind", "custom"),
                                "steps": steps, "answer": None}
         try:
-            self._trace({"run_id": run_id, "phase": "start", "goal": goal[:300],
+            self._trace({"run_id": run_id, "phase": "resume" if resuming else "start",
+                         "goal": goal[:300], "resumed_from": len(steps),
                          "planner": res["planner"],
                          "budget": {"max_steps": self.max_steps,
                                     "max_seconds": self.max_seconds,
@@ -230,9 +238,18 @@ class AgentLoop:
                 res["answer"] = step.get("answer")
                 break
             idx = len(steps)
+            call_inputs = dict(step.get("inputs") or {})
+            if before_invoke is not None:
+                try:
+                    call_inputs.update(before_invoke(idx, step) or {})
+                except Exception as exc:
+                    status, extra = "checkpoint_failed", {
+                        "error": f"تعذر كتابة النية — لا تنفيذ: {type(exc).__name__}",
+                        "failed_step": idx}
+                    break
             try:
                 inv = self.registry.invoke(step["tool"], caller=self.caller,
-                                           inputs=step.get("inputs") or {})
+                                           inputs=call_inputs)
             except RuntimeError as exc:
                 status, extra = "ledger_blocked", {
                     "error": f"تعذر أثر الأداة — توقف: {str(exc)[:160]}", "failed_step": idx}
@@ -244,6 +261,14 @@ class AgentLoop:
                           "verified": ok_check, "result": inv.get("result"),
                           "error": inv.get("error"),
                           "fingerprint": (inv.get("trace") or {}).get("result_fingerprint")})
+            if after_step is not None:
+                try:
+                    after_step(steps[-1])
+                except Exception as exc:
+                    status, extra = "checkpoint_failed", {
+                        "error": f"تعذر حفظ نقطة التفتيش: {type(exc).__name__}",
+                        "failed_step": idx}
+                    break
             if not inv.get("ok"):
                 status, extra = "tool_failed", {"error": inv.get("error"), "failed_step": idx}
             elif not ok_check:
