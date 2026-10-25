@@ -1009,6 +1009,43 @@ def _connector_owner_op(request: "ConnectorGrantRequest", op: str) -> Dict[str, 
                             detail=f"السجل السيادي لا يوقّع — مرفوض (fail-closed): {exc}")
 
 
+# ============================================================
+# R-757 (ROADMAP_V5 ٤.٢ + ٤.٣): اكتساب المهارات — الاعتماد والتراجع للمالك وحده
+# ============================================================
+class SkillOwnerRequest(BaseModel):
+    name: str = Field(..., min_length=1, max_length=64)
+    version: Optional[str] = Field(None, max_length=32)
+    api_key: Optional[str] = Field(None, description="مفتاح API للسيد — غيابه رفض 401")
+
+
+def _skill_owner_op(request: "SkillOwnerRequest", op: str) -> Dict[str, Any]:
+    if not verify_api_key(request.api_key or ""):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
+                            detail="مفتاح API غير صحيح")
+    import skills
+    lib = skills.get_library()
+    try:
+        if op == "approve":
+            return lib.approve(request.name, request.version or "", actor="owner")
+        return lib.rollback(request.name, actor="owner")
+    except skills.SkillError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except RuntimeError as exc:  # السجل لا يوقّع — لا أثر = لا تفعيل
+        raise HTTPException(status_code=503,
+                            detail=f"السجل السيادي لا يوقّع — مرفوض (fail-closed): {exc}")
+
+
+@app.post("/skills/approve")
+async def skills_approve(request: SkillOwnerRequest):
+    """اعتماد مهارة مُقيّمة بنجاح — يشترط تطابق بصمة المحتوى مع المُقيّم."""
+    return _skill_owner_op(request, "approve")
+
+
+@app.post("/skills/rollback")
+async def skills_rollback(request: SkillOwnerRequest):
+    return _skill_owner_op(request, "rollback")
+
+
 @app.post("/connectors/grant")
 async def connectors_grant(request: ConnectorGrantRequest):
     return _connector_owner_op(request, "grant")
@@ -1608,6 +1645,26 @@ def _register_real_tools() -> None:
                     handler=(lambda _n, _a: lambda **kw: _hub.call(_n, _a, kw))(_cname, _act)))
     except Exception as _conn_exc:  # TOLERATED: موصل معطوب لا يكسر الإقلاع — تحذير صادق
         logger.warning("R-756: تعذر تسجيل أفعال الموصلات (%s)", type(_conn_exc).__name__)
+    # R-757 (V5 ٤.٢): اكتساب المهارات — الاقتراح والتقييم أداة؛ الاعتماد للمالك
+    def _skills_install(manifest):
+        import skills
+        lib = skills.get_library()
+        proposed = lib.propose(manifest, actor="agent")
+        return {**lib.evaluate(proposed["skill"], proposed["version"]),
+                "content_hash": proposed["content_hash"],
+                "next": "اعتماد المالك عبر POST /skills/approve (لا تفعيل ذاتي)"}
+
+    registry.register(ToolSpec(
+        name="skills.install",
+        description="اقتراح حزمة مهارة وتقييمها بحالاتها المرجعية (R-757) — التفعيل باعتماد المالك",
+        inputs={"manifest": "حزمة المهارة (name/version/source/description/inputs/"
+                            "permissions/steps/output/eval)"},
+        outputs="state/passed/total/results/content_hash", handler=_skills_install))
+    registry.register(ToolSpec(
+        name="skills.status",
+        description="المهارات وإصداراتها وحالاتها + الأدوات المكتشفة «متاحة غير مُتعلمة» (٤.٣)",
+        inputs={}, outputs="skills[]/discovered[]",
+        handler=lambda: __import__("skills").get_library().status()))
     # R-754 (V5 §٣): مهام دائمة — نقطة تفتيش بعد كل خطوة، استئناف بعد إعادة التشغيل
     def _tasks_start(goal):
         import durable_tasks
@@ -2618,3 +2675,11 @@ except Exception as _mcp_exc:  # لا يكسر الإقلاع أبدًا — ت�
     logging.getLogger("sovereign.mcp").warning(
         "R-738 [MCP]: تعذر تسجيل أدوات MCP (%s) — تُعاد المحاولة عند "
         "إعادة الإقلاع", type(_mcp_exc).__name__)
+
+# R-757: المهارات المفعلة تُحمّل من القرص عند الإقلاع (بصمة تُفحص — لا إعادة تعلم)
+try:
+    import skills as _skills_mod
+    _skills_mod.get_library().load_active()
+except Exception as _skills_exc:  # TOLERATED: مهارة معطوبة لا تكسر الإقلاع — تحذير صادق
+    logging.getLogger("sovereign.skills").warning(
+        "R-757: تعذر تحميل المهارات المفعلة (%s)", type(_skills_exc).__name__)

@@ -55,6 +55,12 @@ class ToolRegistry:
         self._tools[spec.name] = spec
         logger.info("R-729: أداة مسجلة في السجل — %s", spec.name)
 
+    def replace(self, spec: ToolSpec) -> None:
+        """R-757: تسجيل أو استبدال صريح (تفعيل إصدار مهارة/تراجع) — register يبقى
+        رافضًا للتكرار، والاستبدال فعل مقصود يسبقه أثر skill.approve/rollback."""
+        self._tools[spec.name] = spec
+        logger.info("R-757: أداة سُجلت/استُبدلت — %s", spec.name)
+
     def list_tools(self) -> List[Dict[str, Any]]:
         """البيانات الوصفية فقط — لا معالج ولا سر (المادة ٩)."""
         return [

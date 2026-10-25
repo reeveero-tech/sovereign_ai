@@ -83,7 +83,9 @@ CATALOG: List[Dict[str, Any]] = [
              "(المفتاح الرئيسي بيد المالك) وعنوانه SOVEREIGN_WEBHOOK_URL والتوقيع (١.٣)"},
     {"id": "skill_acquisition", "name": "اكتساب المهارات",
      "anchor_tool": "skills.install", "flag": None, "requires_signing": True,
-     "roadmap": "V5 §٤", "note": "غير مبني — سجل التطور والاقتراحات ليسا اكتساب مهارات"},
+     "roadmap": "V5 §٤",
+     "note": "مبني (R-757: حزمة→تقييم مرجعي→اعتماد المالك بأثر→أداة تدوم عبر إعادة "
+             "التشغيل→تراجع) — الدوام عبر النشر ١.٤، والتقييم بمرجع مستقل يتطلب العقل"},
     {"id": "agent_fleet", "name": "إدارة أسطول وكلاء",
      "anchor_tool": "fleet.spawn", "flag": None, "requires_signing": True,
      "roadmap": "V5 §٥", "note": "غير مبني"},

@@ -29,6 +29,8 @@ data/vault/
 data/tasks/
 # R-756: منح الموصلات — بيانات تشغيل
 data/connectors/
+# R-757: حزم المهارات المكتسبة — بيانات تشغيل
+data/skills/
 data/simulation/
 data/config_backup.json
 data/language_evolution.json

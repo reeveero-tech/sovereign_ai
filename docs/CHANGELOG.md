@@ -1,7 +1,18 @@
 # CHANGELOG.md — سجل التغييرات
 
 > كل تغيير يُسجل هنا (قاعدة الدفعة الذرية).
-> آخر تحديث: 2026-10-25 (R-756 — عقد الموصل المعزول + تسليم R-755)
+> آخر تحديث: 2026-10-25 (R-757 — اكتساب المهارات + تسليم R-756)
+
+---
+
+## [R-757 + تسليم R-756] — 2026-10-25 — اكتساب المهارات (V5 ٤.٢ + ٤.٣ — منجزة في الكود)
+
+- **تسليم R-756:** `269ea92` — CI أخضر [40164235983](https://github.com/reeveero-tech/sovereign_ai/actions/runs/40164235983)، و`verify.sh --full` تشغيل واحد: **1141/0/0** محليًا = CI = استنساخ نظيف.
+- **بأمر المالك (2026-10-25: «أسلمك المشروع ابدء ولا تتوقف»).**
+- **RED→GREEN:** `tests/test_skills.py` — RED موثق كاملًا `forensics/R-757_evidence_RED.txt` (11 failed على `269ea92`) ← GREEN 11/11. الحزمة 1141→**1152** (1152/0/0 محليًا).
+- **التنفيذ:** `backend/skills.py` (`SkillStore`/`SkillManager`: propose/evaluate/approve/rollback/load_active)؛ `ToolRegistry.replace` (استبدال مقصود يسبقه أثر)؛ `POST /skills/approve|rollback` (مفتاح المالك)؛ أدوات `skills.install`/`skills.status`؛ تحميل المهارات المفعّلة عند الإقلاع بعد مزامنة MCP؛ `EventType.SKILL_LIFECYCLE`؛ `data/skills/` في `.gitignore`؛ الجرد: `skill_acquisition` من «غير مبني» إلى وصف ما بُني.
+- **حدود صادقة:** التقييم بحالات مرجعية يكتبها مؤلف الحزمة لا بمرجع مستقل (يتطلب العقل ١.٦)؛ المهارة إجراء مركب فوق أدوات مسجلة لا كود جديد (D-041 تنفيذ الكود يبقى مؤجلًا)؛ الدوام عبر إعادة النشر ١.٤.
+- التفصيل: `forensics/R-757_SKILLS.md`.
 
 ---
 
