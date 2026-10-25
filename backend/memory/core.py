@@ -66,6 +66,7 @@ class EventType(str, Enum):
     VERIFICATION = "verification"    # حدث تحقق
     GENESIS = "genesis"              # الحدث الأول
     TOOL_INVOKED = "tool_invoked"    # R-729 (البند ٣.١): استدعاء أداة مسجلة
+    VAULT_ACCESS = "vault_access"    # R-752 (V5 ١.٥): فعل على خزينة الأسرار (بصمة فقط)
 
 
 class IntegrityStatus(str, Enum):

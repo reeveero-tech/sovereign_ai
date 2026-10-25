@@ -949,6 +949,22 @@ def _disk_status_payload() -> Dict[str, Any]:
     return {"cloud_disk": "enabled", **disk.status()}
 
 
+@app.get("/vault/status")
+async def vault_status():
+    """R-752 (ROADMAP_V5 ١.٥): حالة خزينة الأسرار — قراءة فقط: التمكين
+    والبيانات الوصفية والبصمات. لا قيمة سر ولا نص مشفر في المخرجات أبدًا."""
+    return _vault_status_payload()
+
+
+def _vault_status_payload() -> Dict[str, Any]:
+    """حمولة /vault/status — تخدم النقطة وأداة السجل vault.status (R-752)."""
+    try:
+        from backend.sovereign.secrets_vault import get_vault
+    except ImportError:  # TOLERATED: نمط الاستيراد المزدوج القائم في /disk/status
+        from sovereign.secrets_vault import get_vault
+    return get_vault().status()
+
+
 @app.get("/brain/status")
 async def brain_status():
     """حالة عقل Ollama ومصدر الردود (R-726 — البند ١.٦ بأمر المالك).
@@ -1438,6 +1454,7 @@ async def capabilities():
         "stt": bool(config.STT_ENABLED),
         "tts": bool(config.TTS_ENABLED and config.TTS_MODEL),
         "mcp": bool(getattr(config, "MCP_ENABLED", False)),
+        "vault": _vault_status_payload()["enabled"],
     }
     return capability_inventory.build_inventory(
         names, flags, signing_ok=_signing_ok(),
@@ -1501,6 +1518,13 @@ def _register_real_tools() -> None:
         inputs={},
         outputs="cloud_disk/enabled/…",
         handler=_disk_status_payload,
+    ))
+    registry.register(ToolSpec(
+        name="vault.status",
+        description="حالة خزينة الأسرار AES-256-GCM (نفس منطق /vault/status) — بصمات فقط",
+        inputs={},
+        outputs="enabled/cipher/secrets[] (name/scopes/version/fingerprint)",
+        handler=_vault_status_payload,
     ))
     registry.register(ToolSpec(
         name="brain.status",

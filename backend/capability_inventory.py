@@ -60,8 +60,11 @@ CATALOG: List[Dict[str, Any]] = [
      "note": "مؤجل بقرار المالك (D-041)", "deferred": True},
     # فجوات V5 — مرتكزة على أدوات لم تُبنَ بعد: تسجيلها وحده يغير المستوى
     {"id": "secrets_vault", "name": "خزينة أسرار الموصلات",
-     "anchor_tool": "vault.status", "flag": None, "requires_signing": True,
-     "roadmap": "V5 ١.٥", "note": "غير مبنية"},
+     "anchor_tool": "vault.status", "flag": "vault", "requires_signing": True,
+     "roadmap": "V5 ١.٥",
+     "note": "مبنية (R-752: AES-256-GCM + حصر نطاقي + تدقيق إلزامي) — التمكين "
+             "يتطلب المفتاح الرئيسي SOVEREIGN_VAULT_MASTER_KEY بيد المالك، "
+             "والتدقيق يتطلب مفتاح توقيع (١.٣)"},
     {"id": "agent_loop", "name": "حلقة الوكيل العامة (هدف→خطة→تنفيذ→تحقق)",
      "anchor_tool": "agent.run", "flag": None, "requires_signing": True,
      "roadmap": "V5 §٢", "note": "غير مبنية — تتطلب العقل الحي (١.٦)"},

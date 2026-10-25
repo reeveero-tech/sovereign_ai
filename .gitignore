@@ -23,6 +23,8 @@ data/sovereign_core/meta.json
 data/sovereign_core/integrity.json
 data/sovereign_core/.lock
 data/memory_store/
+# R-752: خزينة الأسرار المشفرة — بيانات تشغيل، لا تدخل git أبدًا
+data/vault/
 data/simulation/
 data/config_backup.json
 data/language_evolution.json
