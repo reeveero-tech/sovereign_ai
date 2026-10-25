@@ -1,0 +1,6 @@
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_mcp_boot_sync.py::test_app_boot_registers_mcp_tools_when_enabled
+FAILED tests/test_mcp_boot_sync.py::test_app_boot_without_mcp_registers_none
+2 failed, 1 warning in 1.53s

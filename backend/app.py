@@ -2537,7 +2537,9 @@ _register_real_tools()
 # (MCP_ENABLED) — فشل خادم يُسجل تحذيرًا صادقًا ويُتخطى (لا اتصال ضمني)
 try:
     import mcp_gateway
-    mcp_gateway.sync_into_registry(get_registry())
+    # R-755: get_registry لم يُستورد في نطاق الوحدة قط (NameError مبتلع منذ R-738)
+    from tool_registry import get_registry as _mcp_get_registry
+    mcp_gateway.sync_into_registry(_mcp_get_registry())
 except Exception as _mcp_exc:  # لا يكسر الإقلاع أبدًا — تحذير صادق فقط
     logging.getLogger("sovereign.mcp").warning(
         "R-738 [MCP]: تعذر تسجيل أدوات MCP (%s) — تُعاد المحاولة عند "
