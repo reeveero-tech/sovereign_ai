@@ -66,8 +66,10 @@ CATALOG: List[Dict[str, Any]] = [
              "يتطلب المفتاح الرئيسي SOVEREIGN_VAULT_MASTER_KEY بيد المالك، "
              "والتدقيق يتطلب مفتاح توقيع (١.٣)"},
     {"id": "agent_loop", "name": "حلقة الوكيل العامة (هدف→خطة→تنفيذ→تحقق)",
-     "anchor_tool": "agent.run", "flag": None, "requires_signing": True,
-     "roadmap": "V5 §٢", "note": "غير مبنية — تتطلب العقل الحي (١.٦)"},
+     "anchor_tool": "agent.run", "flag": "brain", "requires_signing": True,
+     "roadmap": "V5 §٢",
+     "note": "مبنية (R-753: خطوة→أداة مسجلة→تحقق، ميزانيات، إلغاء، أثر agent_run) "
+             "— التخطيط الحي يتطلب العقل (١.٦) والأثر يتطلب مفتاح توقيع (١.٣)"},
     {"id": "durable_tasks", "name": "مهام طويلة قابلة للاستئناف",
      "anchor_tool": "tasks.resume", "flag": None, "requires_signing": True,
      "roadmap": "V5 §٣", "note": "غير مبنية"},

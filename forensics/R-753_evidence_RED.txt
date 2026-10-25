@@ -1,0 +1,15 @@
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_agent_loop.py::test_multi_step_goal_completes_with_verified_steps
+FAILED tests/test_agent_loop.py::test_induced_mid_run_failure_stops_honestly
+FAILED tests/test_agent_loop.py::test_corrupt_step_detected_and_not_built_upon
+FAILED tests/test_agent_loop.py::test_step_budget_stops_cleanly - ModuleNotFo...
+FAILED tests/test_agent_loop.py::test_time_budget_with_injected_clock - Modul...
+FAILED tests/test_agent_loop.py::test_cancel_during_run_stops_loop_and_is_traced
+FAILED tests/test_agent_loop.py::test_unregistered_or_forbidden_tool_is_refused
+FAILED tests/test_agent_loop.py::test_agent_cannot_invoke_itself - ModuleNotF...
+FAILED tests/test_agent_loop.py::test_ledger_unavailable_blocks_before_any_tool
+FAILED tests/test_agent_loop.py::test_planner_exhausted_without_finish_is_not_success
+FAILED tests/test_agent_loop.py::test_brain_planner_parses_json_and_rejects_garbage
+FAILED tests/test_agent_loop.py::test_agent_run_tool_registered_and_inventory_moves
+12 failed, 3 warnings in 0.69s

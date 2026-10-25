@@ -2424,3 +2424,10 @@ Bus إطلاقًا. الواجهة سليمة بعد الإزالة (101 وسم 
   الاختبارات في `docs/PROJECT_STATE.md`، ترويسة `docs/CHANGELOG.md`، وملاحظة
   `secrets_vault` وعلمها في `backend/capability_inventory.py` («غير مبنية» → وصف
   ما بُني وشرط التفعيل). محروسة بـ15 حالة RED→GREEN.
+
+## 2026-10-25 — R-753: أسطر حالة مستبدلة (حلقة الوكيل)
+- **# DELETION-JUSTIFIED** — أسطر مستبدلة لا محذوفة المعنى: صفوف ٢.١/٢.٢/٢.٣ في
+  `docs/ROADMAP_V5.md` (لم يبدأ → منجز في الكود)، ترويستا `docs/PROJECT_STATE.md`
+  و`docs/CHANGELOG.md`، وملاحظة `agent_loop` وعلمها في
+  `backend/capability_inventory.py` («غير مبنية» → ما بُني وشرط التفعيل). محروسة
+  بـ12 حالة RED→GREEN.

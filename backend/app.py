@@ -1527,6 +1527,14 @@ def _register_real_tools() -> None:
         handler=_vault_status_payload,
     ))
     registry.register(ToolSpec(
+        name="agent.run",
+        description="حلقة الوكيل (R-753): هدف → خطوة من العقل → أداة مسجلة → تحقق → "
+                    "استمرار أو توقف صادق، بميزانيات وأثر موقّع — تتطلب العقل الحي (١.٦)",
+        inputs={"goal": "الهدف", "max_steps": "سقف الخطوات (افتراضي 8، أقصى 32)"},
+        outputs="run_id/status/steps[]/answer (answer فقط عند completed)",
+        handler=lambda goal, max_steps=8: __import__("agent_loop").run_goal(goal, max_steps),
+    ))
+    registry.register(ToolSpec(
         name="brain.status",
         description="حالة عقل Ollama ومصدر الرد (نفس منطق /brain/status)",
         inputs={},
