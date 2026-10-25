@@ -24,7 +24,7 @@ import math
 import heapq
 from collections import defaultdict, deque
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List, Dict, Any, Optional, Tuple, Set, Iterator
 from enum import Enum
 from pathlib import Path
@@ -859,8 +859,17 @@ class MemoryViews:
         """تحميل الأحداث من السجل السيادي إلى الذاكرة الحية"""
         logger.info("🔄 جاري تحميل السجل السيادي إلى الذاكرة الحية...")
         
+        # R-770: الحدثية تبقي آخر max_size فقط، فتحميل ما قبلها كان يُفك ثم يُرمى —
+        # وعلى سجل 46k حدث أنفد ذاكرة آلة الإنتاج (512MB) عند كل إقلاع. نقرأ الذيل
+        # نفسه الذي كانت ستبقيه (مسار الذيل السريع) بالترتيب الأصلي. السجل لا يُمس.
+        cap = getattr(self.long_term.episodic, "_max_size", LONG_TERM_MAX_UNCOMPRESSED_EVENTS)
+        tail = list(self.core.iterate_events(reverse=True, limit=cap))
+        tail.reverse()
+        sensory_window = getattr(self.sensory, "_ttl", SENSORY_TTL_SECONDS)
+        now = time.time()
+
         event_count = 0
-        for event in self.core.iterate_events(reverse=False):
+        for event in tail:
             try:
                 payload = self.core.get_payload(event)
                 event_hash = event.get("hash", "")
@@ -869,13 +878,17 @@ class MemoryViews:
                 
                 # تحويل الوقت إلى timestamp
                 try:
-                    event_time = datetime.fromisoformat(event_time_str).timestamp()
-                except:
-                    event_time = time.time()
+                    parsed = datetime.fromisoformat(event_time_str)
+                    if parsed.tzinfo is None:
+                        parsed = parsed.replace(tzinfo=timezone.utc)
+                    event_time = parsed.timestamp()
+                except Exception:
+                    event_time = now
                 
-                # إضافة إلى الذاكرة الحسية
+                # R-770: الحسية للحاضر فقط — حدث قديم لا يُعاد «إحساسًا» بتوقيت الآن
                 user = payload.get("user") or payload.get("user_id")
-                self.sensory.add(event_hash, event_type, payload, user)
+                if now - event_time <= sensory_window:
+                    self.sensory.add(event_hash, event_type, payload, user)
                 
                 # إضافة إلى الذاكرة الحدثية
                 self.long_term.episodic.record_event(

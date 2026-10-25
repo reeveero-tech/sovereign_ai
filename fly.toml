@@ -39,8 +39,11 @@ primary_region = 'ams'
   source = 'sovereign_data'
   destination = '/app/data'
 
+# R-770 (2026-10-26): 512MB → 1024MB — الإنتاج قُتل بنفاد الذاكرة (oom_killed) عند كل إقلاع
+# على سجل 46k حدث؛ أُصلح سبب الإقلاع في الكود، والرفع هامش لنمو السجل حتى يُعالج معدل
+# الكتابة الدوري (R-771). # DELETION-JUSTIFIED: السطر القديم memory = '512'.
 [[vm]]
-  memory = '512'
+  memory = '1024'
   cpu_kind = 'shared'
   cpus = 1
 

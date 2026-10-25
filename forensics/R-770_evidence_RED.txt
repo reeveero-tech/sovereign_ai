@@ -1,0 +1,13 @@
+# R-770 RED — cb3b2f0 قبل الإصلاح — 2026-10-25T22:35:59Z
+>           assert counting.payload_calls <= 5, counting.payload_calls
+E           AssertionError: 20
+E           assert 20 <= 5
+E            +  where 20 = <test_memory_boot_bounded._CountingCore object at 0x7fc5a2f20050>.payload_calls
+>           assert len(mv.sensory._items) == 0
+E           AssertionError: assert 20 == 0
+E            +  where 20 = len([SensoryItem(id='cde07337097f', timestamp=1792967760.0139728, event_hash='4a97e7cf616f5b4ef38ba80b99978bb59f55ba4d2067...d4d02359118b02a', event_type='test::r770', user_id=None, input_text=None, output_text=None, raw_payload={'n': 5}), ...])
+E            +    where [SensoryItem(id='cde07337097f', timestamp=1792967760.0139728, event_hash='4a97e7cf616f5b4ef38ba80b99978bb59f55ba4d2067...d4d02359118b02a', event_type='test::r770', user_id=None, input_text=None, output_text=None, raw_payload={'n': 5}), ...] = <backend.memory.views.SensoryMemory object at 0x7fc5a2dbd8d0>._items
+E            +      where <backend.memory.views.SensoryMemory object at 0x7fc5a2dbd8d0> = <backend.memory.views.MemoryViews object at 0x7fc5a2f20c10>.sensory
+FAILED tests/test_memory_boot_bounded.py::test_boot_decodes_at_most_episodic_capacity
+FAILED tests/test_memory_boot_bounded.py::test_boot_does_not_flood_sensory_with_old_events
+2 failed, 2 passed, 2 warnings in 0.24s
