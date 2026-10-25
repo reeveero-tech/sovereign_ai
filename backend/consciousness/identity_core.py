@@ -409,29 +409,57 @@ class IdentityCore:
                 self.seal = IdentitySeal(**seal_dict)
                 self.is_sealed = True
                 logger.info("📜 تم تحميل ختم الهوية")
+                # R-759: ختم قديم (XOR) قُرئ بنجاح → يُعاد حفظه AES-256-GCM دون فقد
+                if getattr(self, "_seal_needs_migration", False):
+                    self._seal_needs_migration = False
+                    self._save_seal()
+                    logger.warning("R-759: رُحّل ختم الهوية من XOR إلى AES-256-GCM")
                 # R-604: ترحيل الأختام القديمة (v3) إلى الصيغة v4 السليمة
                 if getattr(self.seal, "seal_version", 3) < 4:
                     self._migrate_legacy_seal()
         except Exception as e:
             logger.error(f"خطأ في تحميل ختم الهوية: {e}")
     
+    _SEAL_MAGIC = b"SVS1"   # R-759: ختم مصادَق AES-256-GCM (magic + nonce12 + ct + tag16)
+
+    @staticmethod
+    def _seal_key() -> bytes:
+        """مفتاح AES-256 للختم مشتق HKDF من مفتاح غرض encryption (D-033) — لا جذر."""
+        from Crypto.Hash import SHA256
+        from Crypto.Protocol.KDF import HKDF
+        return HKDF(derive_key("encryption"), 32, b"sovereign.identity.seal", SHA256,
+                    context=b"aesgcm-v1")
+
     def _encrypt_seal(self, data: str) -> bytes:
-        """تشفير ختم الهوية — R-697: مفتاح مشتق بغرض encryption (D-033). لا كتابة بالجذر إطلاقًا."""
-        key = derive_key("encryption")
-        data_bytes = data.encode()
-        # تشفير بسيط - في الإنتاج استخدم مكتبة تشفير قوية
-        encrypted = bytes(a ^ b for a, b in zip(data_bytes, key * (len(data_bytes) // 32 + 1)))
-        return encrypted
-    
+        """تشفير ختم الهوية — R-759: AES-256-GCM مصادَق (بدل XOR بمفتاح مكرر)."""
+        from Crypto.Cipher import AES
+        key = self._seal_key()
+        nonce = secrets.token_bytes(12)
+        c = AES.new(key, AES.MODE_GCM, nonce=nonce)
+        c.update(self._SEAL_MAGIC)
+        ct, tag = c.encrypt_and_digest(data.encode())
+        return self._SEAL_MAGIC + nonce + ct + tag
+
     def _decrypt_seal(self, encrypted: bytes) -> str:
-        """فك تشفير ختم الهوية — المسار الحالي (مفتاح مشتق)، وعند الفشل مسار legacy للقراءة فقط."""
+        """فك ختم الهوية. الصيغة الحديثة: تلاعب → ValueError (fail-closed).
+        الصيغ القديمة (XOR بالمفتاح المشتق ثم الجذر) تُقرأ للترحيل فقط ويُعلَّم
+        الختم للترحيل (`_seal_needs_migration`) فيُعاد حفظه بالصيغة الحديثة."""
+        if encrypted[:4] == self._SEAL_MAGIC:
+            from Crypto.Cipher import AES
+            body = encrypted[4:]
+            if len(body) < 12 + 16:
+                raise ValueError("ختم مبتور")
+            c = AES.new(self._seal_key(), AES.MODE_GCM, nonce=body[:12])
+            c.update(self._SEAL_MAGIC)
+            return c.decrypt_and_verify(body[12:-16], body[-16:]).decode()
+        self._seal_needs_migration = True
         try:
             key = derive_key("encryption")
-            decrypted = bytes(a ^ b for a, b in zip(encrypted, key * (len(encrypted) // 32 + 1)))
+            decrypted = bytes(a ^ b for a, b in zip(encrypted, key * (len(encrypted) // 32 + 1)))  # LEGACY-XOR (read-only)
             return decrypted.decode()
         except (UnicodeDecodeError, ValueError):
             return self._decrypt_legacy(encrypted)
-    
+
     def _decrypt_legacy(self, encrypted: bytes) -> str:
         """R-697 — LEGACY-ROOT-KEY (read-only): فك تشفير الأختام التاريخية التي شُفرت
         بمفتاح الجذر (sha3_256) قبل الاشتقاق الغرضي. قراءة فقط — لا كتابة جديدة بهذا المسار."""

@@ -1,0 +1,17 @@
+# R-759 RED — tests/test_authenticated_encryption.py against 97d814a (XOR before AES-GCM), 2026-10-25T05:44:35Z
+=========================== short test summary info ============================
+FAILED tests/test_authenticated_encryption.py::test_ciphertext_hides_plaintext_structure[standard]
+FAILED tests/test_authenticated_encryption.py::test_ciphertext_hides_plaintext_structure[high]
+FAILED tests/test_authenticated_encryption.py::test_ciphertext_hides_plaintext_structure[low]
+FAILED tests/test_authenticated_encryption.py::test_ciphertext_hides_plaintext_structure[medium]
+FAILED tests/test_authenticated_encryption.py::test_tampering_detected[data]
+FAILED tests/test_authenticated_encryption.py::test_tampering_detected[n] - K...
+FAILED tests/test_authenticated_encryption.py::test_tampering_detected[level]
+FAILED tests/test_authenticated_encryption.py::test_wrong_key_fails_closed - ...
+FAILED tests/test_authenticated_encryption.py::test_legacy_packages_read_and_migrated_without_loss[standard]
+FAILED tests/test_authenticated_encryption.py::test_legacy_packages_read_and_migrated_without_loss[high]
+FAILED tests/test_authenticated_encryption.py::test_quantum_level_authenticated_and_keeps_decoherence
+FAILED tests/test_authenticated_encryption.py::test_no_xor_in_write_paths - A...
+FAILED tests/test_authenticated_encryption.py::test_seal_encrypted_authenticated
+FAILED tests/test_authenticated_encryption.py::test_legacy_seal_file_migrated_on_load_without_loss
+14 failed, 1 passed, 2 warnings in 0.54s

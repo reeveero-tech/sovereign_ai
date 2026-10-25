@@ -2466,3 +2466,15 @@ Bus إطلاقًا. الواجهة سليمة بعد الإزالة (101 وسم 
   ما بُني وقيس بحدوده، ترويستا PROJECT_STATE وCHANGELOG، وسطرا قدرة `agent_fleet`
   في `backend/capability_inventory.py` (علم None + «غير مبني» → علم brain ووصف ما
   بُني). محروسة بـ10 حالات RED→GREEN.
+
+## 2026-10-25 — R-759: استبدال XOR بتشفير مصادَق
+- **# DELETION-JUSTIFIED** — في `backend/memory/encoding.py`: جسما `encrypt`
+  و`decrypt` (XOR بمفتاح مكرر) استُبدلا بـAES-256-GCM، وانتقل منطق XOR القديم حرفيًا
+  إلى `_decrypt_legacy_xor` (قراءة فقط للترحيل)؛ و`_generate_quantum_state` حُذفت
+  (كانت تكتب XOR ولا مستدعي لها بعد الاستبدال — الانهيار الكمي محفوظ في `_measure`).
+  في `backend/consciousness/identity_core.py`: جسما `_encrypt_seal` و`_decrypt_seal`
+  استُبدلا (الكتابة GCM؛ مسار XOR المشتق صار قراءة ترحيل موسومة LEGACY-XOR،
+  و`_decrypt_legacy` للجذر باقٍ كما هو). وصف ١.٥-ب في الخارطة («لم يبدأ» → منجز)،
+  وترويستا PROJECT_STATE وCHANGELOG. محروسة بـ15 حالة جديدة + اختبارات
+  `test_key_derivation` و`test_identity_persistence` و`test_return_none_lowrisk`
+  القائمة (خضراء كما هي).

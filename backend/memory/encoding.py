@@ -351,129 +351,124 @@ class QuantumLikeEncryption:
             for rid in to_remove:
                 del self.quantum_states[rid]
     
-    def _generate_quantum_state(self, data: bytes) -> Tuple[str, bytes]:
-        """توليد حالة كمومية وهمية للبيانات"""
-        state_id = secrets.token_hex(16)
-        quantum_noise = secrets.token_bytes(len(data))
-        
-        # XOR مع الضوضاء الكمومية
-        quantum_state = bytes(a ^ b for a, b in zip(data, quantum_noise))
-        
-        # حفظ الحالة الكمومية
-        self.quantum_states[state_id] = {
-            "noise": quantum_noise.hex(),
-            "created_at": time.time(),
-            "measurements": 0
-        }
-        
-        return state_id, quantum_state
-    
+    # ------------------------------------------------------------------
+    # R-759 (V5 ١.٥-ب): تشفير مصادَق AES-256-GCM بدل XOR بمفتاح مكرر.
+    # الكتابة بالصيغ الحديثة وحدها؛ الصيغ القديمة (standard/high/quantum XOR)
+    # تُقرأ للترحيل فقط (`migrate`) — لا كتابة جديدة بها.
+    # ------------------------------------------------------------------
+    _GCM_TYPE = "aesgcm-v1"
+    _QGCM_TYPE = "quantum-gcm-v1"
+
+    def _gcm_key(self, extra: bytes = b"") -> bytes:
+        from Crypto.Hash import SHA256
+        from Crypto.Protocol.KDF import HKDF
+        return HKDF(self.master_key + extra, 32, b"sovereign.memory.encoding",
+                    SHA256, context=b"aesgcm-v1")
+
+    @staticmethod
+    def _gcm_seal(key: bytes, aad: bytes, data: bytes) -> Tuple[bytes, bytes]:
+        from Crypto.Cipher import AES
+        nonce = secrets.token_bytes(12)
+        c = AES.new(key, AES.MODE_GCM, nonce=nonce)
+        c.update(aad)
+        ct, tag = c.encrypt_and_digest(data)
+        return nonce, ct + tag
+
+    @staticmethod
+    def _gcm_open(key: bytes, aad: bytes, nonce: bytes, blob: bytes) -> bytes:
+        from Crypto.Cipher import AES
+        if len(nonce) != 12 or len(blob) < 16:
+            raise ValueError("حزمة GCM مبتورة")
+        c = AES.new(key, AES.MODE_GCM, nonce=nonce)
+        c.update(aad)
+        return c.decrypt_and_verify(blob[:-16], blob[-16:])   # ValueError عند التلاعب
+
     def encrypt(self, data: bytes, level: str = "high") -> str:
-        """
-        تشفير البيانات بمستويات مختلفة.
-        level: "low", "medium", "high", "quantum"
+        """تشفير مصادَق AES-256-GCM (R-759). level: low/medium/standard/high/quantum.
+
+        quantum: مفتاح الرسالة مشتق من المفتاح الرئيسي + مادة عشوائية تبقى في الذاكرة
+        وحدها — بعد انهيار الحالة (انتهاء الصلاحية/القياس الثالث) لا فك ممكن.
         """
         if level == "quantum":
-            # التشفير الكمي الوهمي
-            state_id, quantum_state = self._generate_quantum_state(data)
-            
-            # تشفير الطبقة الثانية بمفتاح رئيسي
-            # R-682 (bug fix): تكرار المفتاح بدل بتره — zip كان يبتر الحمولات
-            # الأطول من المفتاح (64 بايت) فساد بيانات صامت
-            key = self.master_key
-            key_stream = (key * (len(quantum_state) // len(key) + 1))[:len(quantum_state)]
-            encrypted = bytes(a ^ b for a, b in zip(quantum_state, key_stream))
-            
-            result = {
-                "type": "quantum",
-                "state_id": state_id,
-                "data": encrypted.hex(),
-                "timestamp": time.time()
-            }
-            return json.dumps(result)
-        
-        elif level == "high":
-            # تشفير عالي بمفاتيح متعددة
-            key1 = self.master_key[:16]
-            key2 = self.master_key[16:32]
-            key3 = self.master_key[32:48]
-            
-            # ثلاث طبقات من XOR بمفاتيح مختلفة
-            layer1 = bytes(a ^ b for a, b in zip(data, key1 * (len(data) // 16 + 1)))
-            layer2 = bytes(a ^ b for a, b in zip(layer1, key2 * (len(layer1) // 16 + 1)))
-            layer3 = bytes(a ^ b for a, b in zip(layer2, key3 * (len(layer2) // 16 + 1)))
-            
-            return json.dumps({
-                "type": "high",
-                "data": layer3.hex(),
-                "salt": secrets.token_hex(8)
-            })
-        
-        else:
-            # تشفير عادي
-            key = self.master_key[:32]
-            encrypted = bytes(a ^ b for a, b in zip(data, key * (len(data) // 32 + 1)))
-            return json.dumps({
-                "type": "standard",
-                "data": encrypted.hex()
-            })
-    
+            state_id = secrets.token_hex(16)
+            noise = secrets.token_bytes(32)
+            self.quantum_states[state_id] = {"noise": noise.hex(), "created_at": time.time(),
+                                             "measurements": 0}
+            aad = f"quantum|{state_id}".encode()
+            nonce, blob = self._gcm_seal(self._gcm_key(noise), aad, data)
+            return json.dumps({"type": self._QGCM_TYPE, "state_id": state_id,
+                               "n": nonce.hex(), "data": blob.hex(), "timestamp": time.time()})
+        aad = f"level|{level}".encode()
+        nonce, blob = self._gcm_seal(self._gcm_key(), aad, data)
+        return json.dumps({"type": self._GCM_TYPE, "level": level,
+                           "n": nonce.hex(), "data": blob.hex()})
+
+    def _measure(self, state_id: str):
+        """قياس حالة كمومية: (noise | None, رسالة الانهيار | None)."""
+        if state_id not in self.quantum_states:
+            return None, "[QUANTUM_DECOHERED] لا يمكن القراءة - انهارت الحالة الكمومية".encode()
+        state = self.quantum_states[state_id]
+        state["measurements"] += 1
+        if state["measurements"] >= 3:
+            del self.quantum_states[state_id]
+            return None, "[QUANTUM_COLLAPSED] انهارت الحالة الكمومية بسبب القياس المتكرر".encode()
+        return bytes.fromhex(state["noise"]), None
+
     def decrypt(self, encrypted_json: str, level: str = None) -> Optional[bytes]:
-        """
-        فك التشفير. إذا كانت الحالة الكمومية قد انهارت، يفشل الفك.
-        """
+        """فك التشفير. التلاعب/المفتاح الخطأ/الحزمة التالفة → None (fail-closed)."""
         try:
             data = json.loads(encrypted_json)
             enc_type = data.get("type", "standard")
-            
-            if enc_type == "quantum":
-                state_id = data.get("state_id")
-                encrypted = bytes.fromhex(data.get("data", ""))
-                
-                # التحقق من الحالة الكمومية
-                if state_id not in self.quantum_states:
-                    # الانهيار الكمي: حاولت القراءة بعد فوات الأوان
-                    return "[QUANTUM_DECOHERED] لا يمكن القراءة - انهارت الحالة الكمومية".encode()
-                
-                state = self.quantum_states[state_id]
-                state["measurements"] += 1
-                
-                # القياس الثالث ينهار الحالة
-                if state["measurements"] >= 3:
-                    del self.quantum_states[state_id]
-                    return "[QUANTUM_COLLAPSED] انهارت الحالة الكمومية بسبب القياس المتكرر".encode()
-                
-                noise = bytes.fromhex(state["noise"])
-                key = self.master_key
-                
-                # فك التشفير (R-682: تكرار المفتاح بدل بتره — نفس إصلاح التشفير)
-                key_stream = (key * (len(encrypted) // len(key) + 1))[:len(encrypted)]
-                decrypted_quantum = bytes(a ^ b for a, b in zip(encrypted, key_stream))
-                decrypted = bytes(a ^ b for a, b in zip(decrypted_quantum, noise))
-                
-                return decrypted
-            
-            else:
-                # تشفير عادي أو عالي
-                encrypted = bytes.fromhex(data.get("data", ""))
-                if enc_type == "high":
-                    key1 = self.master_key[:16]
-                    key2 = self.master_key[16:32]
-                    key3 = self.master_key[32:48]
-                    
-                    layer3 = encrypted
-                    layer2 = bytes(a ^ b for a, b in zip(layer3, key3 * (len(layer3) // 16 + 1)))
-                    layer1 = bytes(a ^ b for a, b in zip(layer2, key2 * (len(layer2) // 16 + 1)))
-                    decrypted = bytes(a ^ b for a, b in zip(layer1, key1 * (len(layer1) // 16 + 1)))
-                else:
-                    key = self.master_key[:32]
-                    decrypted = bytes(a ^ b for a, b in zip(encrypted, key * (len(encrypted) // 32 + 1)))
-                
-                return decrypted
-                
+            if enc_type == self._GCM_TYPE:
+                aad = f"level|{data['level']}".encode()
+                return self._gcm_open(self._gcm_key(), aad, bytes.fromhex(data["n"]),
+                                      bytes.fromhex(data["data"]))
+            if enc_type == self._QGCM_TYPE:
+                noise, collapsed = self._measure(data["state_id"])
+                if collapsed is not None:
+                    return collapsed
+                aad = f"quantum|{data['state_id']}".encode()
+                return self._gcm_open(self._gcm_key(noise), aad, bytes.fromhex(data["n"]),
+                                      bytes.fromhex(data["data"]))
+            return self._decrypt_legacy_xor(data, enc_type)
         except Exception as e:
             logger.exception(f"R-682: فشل فك التشفير — silently swallowing. exc={e}")
             return None
+
+    def _decrypt_legacy_xor(self, data: Dict, enc_type: str) -> Optional[bytes]:
+        """LEGACY-XOR (read-only, R-759): قراءة الحزم المكتوبة قبل R-759 للترحيل فقط."""
+        logger.warning("R-759: قراءة حزمة بالصيغة القديمة XOR (%s) — رحّلها بـmigrate()", enc_type)
+        encrypted = bytes.fromhex(data.get("data", ""))
+        if enc_type == "quantum":
+            noise, collapsed = self._measure(data.get("state_id"))
+            if collapsed is not None:
+                return collapsed
+            key = self.master_key
+            ks = (key * (len(encrypted) // len(key) + 1))[:len(encrypted)]
+            return bytes(a ^ b for a, b in zip(bytes(a ^ b for a, b in zip(encrypted, ks)), noise))
+        if enc_type == "high":
+            k1, k2, k3 = self.master_key[:16], self.master_key[16:32], self.master_key[32:48]
+            l2 = bytes(a ^ b for a, b in zip(encrypted, k3 * (len(encrypted) // 16 + 1)))
+            l1 = bytes(a ^ b for a, b in zip(l2, k2 * (len(l2) // 16 + 1)))
+            return bytes(a ^ b for a, b in zip(l1, k1 * (len(l1) // 16 + 1)))
+        if enc_type == "standard":
+            key = self.master_key[:32]
+            return bytes(a ^ b for a, b in zip(encrypted, key * (len(encrypted) // 32 + 1)))
+        raise ValueError(f"نوع تشفير غير معروف: {enc_type}")
+
+    def migrate(self, encrypted_json: str) -> Optional[str]:
+        """ترحيل حزمة قديمة (XOR) إلى AES-256-GCM بنفس المستوى دون فقد (R-759).
+        الحديثة تُعاد كما هي؛ تعذر القراءة → None (لا كتابة لبيانات لم تُقرأ)."""
+        try:
+            d = json.loads(encrypted_json)
+        except (TypeError, ValueError):
+            return None
+        if d.get("type") in (self._GCM_TYPE, self._QGCM_TYPE):
+            return encrypted_json
+        plain = self.decrypt(encrypted_json)
+        if plain is None or plain.startswith(b"[QUANTUM_"):
+            return None
+        return self.encrypt(plain, level=d.get("type", "standard"))
 
 
 # ============================================================
