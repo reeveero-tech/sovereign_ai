@@ -34,31 +34,20 @@ jobs:
 
       # قرار المالك (Issue #8): أي التزام يحذف سطراً بلا # DELETION-JUSTIFIED
       # في نفس الالتزام يُرفض تلقائياً (checkout بعمق كامل — fetch-depth: 0).
+      # R-751 (V5 ١.١-ب): تنفيذ موحد tools/gate_deletions.py يفحص كل التزام في
+      # الدفعة بنفسه (--range) لا رأسها وحده؛ رجوع موثق لفحص الرأس عند غياب
+      # قاعدة دفع صالحة. نفس النواة في hook commit-msg المحلي.
       - name: 'Owner rule (Issue #8): reject commits deleting lines without # DELETION-JUSTIFIED'
         run: |
           set -euo pipefail
-          SHA="${GITHUB_SHA}"
-          # الالتزامات الدمجية تُفحص عند وقوعها (git show لا يعطي numstat لها افتراضياً)
-          PARENTS=$(git rev-list --parents -n 1 "${SHA}" | wc -w)
-          if [ "${PARENTS}" -gt 2 ]; then
-            echo "⏭️ التزام دمجي — يُفحص بمعايير خاصة عند وقوعه"
-            exit 0
+          BEFORE="${{ github.event.before }}"
+          if [ -z "${BEFORE}" ] || [ "${BEFORE}" = "0000000000000000000000000000000000000000" ] \
+              || ! git cat-file -e "${BEFORE}"^{commit} 2>/dev/null; then
+            echo "[info] لا قاعدة دفع صالحة — فحص الرأس وحده (حد موثق)"
+            python tools/gate_deletions.py "${GITHUB_SHA}"
+          else
+            python tools/gate_deletions.py --range "${BEFORE}" "${GITHUB_SHA}"
           fi
-          DELETIONS=$(git show --numstat --format= "${SHA}" | awk '$1 != "-" && $2 ~ /^[0-9]+$/ {s+=$2} END {print s+0}')
-          echo "أسطر الحذف في هذا الالتزام: ${DELETIONS}"
-          if [ "${DELETIONS}" -eq 0 ]; then
-            echo "✅ لا حذوفات — لا يلزم تبرير"
-            exit 0
-          fi
-          # ملاحظة إصلاحية (الجولة <2>): grep -q يخرج عند أول تطابق فيُقتل git show
-          # بإشارة SIGPIPE، ومع set -o pipefail يُرفض التطابق الصحيح (رفض زائف).
-          # grep بلا -q يقرأ كل المخرج فلا يحدث SIGPIPE — نفس المنطق بلا العطل.
-          if git log -1 --format=%B "${SHA}" | grep "# DELETION-JUSTIFIED" >/dev/null || git show "${SHA}" | grep "# DELETION-JUSTIFIED" >/dev/null; then
-            echo "✅ الحذوفات مبررة بعلامة # DELETION-JUSTIFIED في نفس الالتزام"
-            exit 0
-          fi
-          echo "❌ مرفوض تلقائياً: الالتزام يحذف ${DELETIONS} سطراً بلا # DELETION-JUSTIFIED في نفس الالتزام — قرار المالك (Issue #8)"
-          exit 1
 
       # القاعدة الحاكمة (D-040 — R-722 بأمر المالك؛ تعزيز R-748 بأمر المالك
       # 2026-10-24 «القاعدة الحاكمة»): أي التزام يغيّر كودًا (backend/frontend/
@@ -206,6 +195,8 @@ jobs:
           # R-749: كل التزام في PR يُفحص بنفسه — كود في التزام ووثائق في
           # التزام آخر مخالفة حرفية (لا تجميع المدى)
           python tools/gate_docs_sync.py --range "${BASE}" "${HEAD}"
+          # R-751: بوابة الحذف لكل التزام في PR (قرار المالك Issue #8)
+          python tools/gate_deletions.py --range "${BASE}" "${HEAD}"
 
   # R-682 (Task 3.3): Separate operational job — manual trigger only.
   # Reads host secrets (KEY_SECRET), writes real data. NOT part of default CI.

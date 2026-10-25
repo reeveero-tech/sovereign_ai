@@ -52,6 +52,9 @@ EXIT_ALLOWED_ENTRY_POINTS = {
     # R-748 (V5 §١.١): حارس القاعدة الحاكمة — CLI تشغّله بوابة CI
     # (التزام/مدى) وpre-commit (فهرس)؛ رمز الخروج 0/1 هو عقده مع git/CI
     "tools/gate_docs_sync.py",
+    # R-751 (V5 ١.١-ب): بوابة الحذف الموحدة (Issue #8) — CLI تشغّلها CI
+    # (التزام/مدى) و.githooks/commit-msg (فهرس+رسالة)؛ رمز الخروج 0/1 عقدها
+    "tools/gate_deletions.py",
 }
 
 BANNED_STRING = "max_tamper_attempts"

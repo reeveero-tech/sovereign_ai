@@ -50,6 +50,9 @@ SCRIPT_ENTRY_POINTS = {
     # (.github/workflows/ci.yml: التزام/مدى) و.githooks/pre-commit (`--staged`)
     # وتستدعيه اختباراته السلوكية كعملية مستقلة (tests/test_gate_docs_sync.py)
     "tools/gate_docs_sync.py",
+    # R-751 (V5 ١.١-ب): بوابة الحذف الموحدة — CLI تشغّلها CI و.githooks/commit-msg
+    # وتستدعيها اختباراتها السلوكية كعملية مستقلة (tests/test_gate_deletions.py)
+    "tools/gate_deletions.py",
 }
 
 # الجولة <2> (اعتراض المراجع بصير): ملفات تُحمّل ديناميكيًا عبر

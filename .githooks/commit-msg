@@ -1,0 +1,9 @@
+#!/bin/sh
+# hook محلي commit-msg — بوابة الحذف الموحدة (قرار المالك Issue #8 — R-751).
+# رسالة الالتزام غير متاحة في pre-commit، فتُفحص هنا: الفهرس + الرسالة
+# بالنواة نفسها التي تستخدمها CI (tools/gate_deletions.py).
+# حدّ معلن: hook محلي يمكن تجاوزه (--no-verify)؛ البوابة الصلبة تبقى CI.
+ROOT="$(git rev-parse --show-toplevel)" || exit 2
+PY="${PYTHON:-python3}"
+command -v "$PY" >/dev/null 2>&1 || PY=python
+exec "$PY" "$ROOT/tools/gate_deletions.py" --staged "$1"
