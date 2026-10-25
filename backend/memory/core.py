@@ -99,6 +99,27 @@ MAX_BLOB_SIZE = 100 * 1024 * 1024  # 100 ميغابايت
 
 # المسارات
 CORE_DIR = DATA_DIR / "sovereign_core"
+
+# R-771: لقطات حالة دورية تكتبها حلقات الخلفية ولا يقرؤها أي كود من السجل (مُتحقق:
+# كل نوع له كاتب واحد ولا قارئ). على الإنتاج أغرقت السجل (~1 حدث/ث، 46,511 في يوم)
+# فأنفدت ذاكرة الآلة (R-770). تُدمج: حدث واحد لكل نوع كل
+# SOVEREIGN_TELEMETRY_MIN_INTERVAL_SECONDS (الافتراضي 300؛ 0 يعطّل)، والحدث المكتوب
+# التالي يحمل عدد ما دُمج في `_coalesced_since_last`. أي نوع خارج القائمة لا يتأثر.
+TELEMETRY_COALESCE_TYPES = frozenset({
+    "defense::full_mutation", "attention::snapshot", "watcher::snapshot",
+    "awareness::moment", "consciousness::moment",
+    "self::snapshot", "introspection::snapshot", "identity::snapshot",
+    "sovereign::will_snapshot", "alignment::snapshot", "controller::snapshot",
+    "directives::snapshot", "homeostasis::snapshot", "predictive::snapshot",
+    "risk::snapshot", "scenario::snapshot",
+    "quantum::transition_applied", "quantum::transition_cycle_completed",
+    "quantum::cycle_completed", "quantum::field_cycle", "quantum::superposition_cycle",
+    "quantum::predictive_integration", "quantum::controller_cycle",
+    "predictive::controller_cycle", "plasticity::cycle_completed",
+    "instinct::cycle_completed", "drives::cycle_completed",
+    "archetypes::cycle_completed", "biological::metabolic_cycle",
+})
+TELEMETRY_DEFAULT_MIN_INTERVAL_SECONDS = 300.0
 BLOBS_DIR = CORE_DIR / "blobs"
 LOG_FILE = CORE_DIR / "ledger.jsonl"
 INDEX_FILE = CORE_DIR / "index.json"
@@ -881,6 +902,27 @@ class SovereignCore:
             logger.exception(f"R-682: Failed to get current signing key — silently swallowing. exc={e}")
             return None
     
+    def _telemetry_gate(self, event_type_str: str) -> Optional[int]:
+        """R-771: None = يُدمج (لا يُكتب)؛ عدد ≥ 0 = يُكتب ومعه عدد ما دُمج قبله."""
+        try:
+            interval = float(os.getenv("SOVEREIGN_TELEMETRY_MIN_INTERVAL_SECONDS",
+                                       TELEMETRY_DEFAULT_MIN_INTERVAL_SECONDS))
+        except ValueError:
+            interval = TELEMETRY_DEFAULT_MIN_INTERVAL_SECONDS
+        if interval <= 0:
+            return 0
+        lock = self.__dict__.setdefault("_telemetry_lock", threading.Lock())
+        with lock:
+            last = self.__dict__.setdefault("_telemetry_last", {})
+            suppressed = self.__dict__.setdefault("_telemetry_suppressed", {})
+            now = time.monotonic()
+            prev = last.get(event_type_str)
+            if prev is not None and now - prev < interval:
+                suppressed[event_type_str] = suppressed.get(event_type_str, 0) + 1
+                return None
+            last[event_type_str] = now
+            return suppressed.pop(event_type_str, 0)
+
     def append_event(self, event_type: EventType, payload: Dict[str, Any],
                      user: Optional[str] = None) -> Dict[str, Any]:
         # M1: قبول EventType أو سلسلة نصية (كان ينهار على السلاسل)
@@ -888,6 +930,13 @@ class SovereignCore:
             event_type_str = event_type.value
         else:
             event_type_str = str(event_type)
+        # R-771: دمج اللقطات الدورية — قبل أي توقيع أو قفل أو كتابة
+        if event_type_str in TELEMETRY_COALESCE_TYPES:
+            coalesced = self._telemetry_gate(event_type_str)
+            if coalesced is None:
+                return {"hash": None, "coalesced": True, "type": event_type_str}
+            if coalesced:
+                payload = {**payload, "_coalesced_since_last": coalesced}
         """
         إضافة حدث جديد إلى السجل السيادي.
         

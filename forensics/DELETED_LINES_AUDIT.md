@@ -2565,3 +2565,6 @@ Bus إطلاقًا. الواجهة سليمة بعد الإزالة (101 وسم 
 
 ## 2026-10-26 — R-770: أسطر مستبدلة (إقلاع الذاكرة المحدود)
 - **# DELETION-JUSTIFIED** — في `backend/memory/views.py` داخل `_load_from_core`: رأس الحلقة `for event in self.core.iterate_events(reverse=False):` صار تكرارًا على ذيل محدود بسعة الحدثية؛ تحويل الوقت (`fromisoformat(...).timestamp()` و`except:` العاري و`time.time()`) صار يقرأ الوقت بلا منطقة UTC ويستخدم `now` واحدًا؛ تعليق «إضافة إلى الذاكرة الحسية» وسطر `self.sensory.add(...)` صارا مشروطين بنافذة TTL؛ سطر استيراد `datetime` أضاف `timezone`. في `fly.toml`: `memory = '512'` → `'1024'`. وسطرا الترويسة في PROJECT_STATE وCHANGELOG. محروسة بـ`tests/test_memory_boot_bounded.py` + `tests/test_ledger_corrupt_readers.py` القائمة.
+
+## 2026-10-26 — R-771: أسطر مستبدلة
+- **# DELETION-JUSTIFIED** — سطرا الترويسة في `docs/PROJECT_STATE.md` و`docs/CHANGELOG.md` (تاريخ/عنوان الجولة)، وسطر `CORE_DIR` في `backend/memory/core.py` أعيد كما هو مع إلحاق ثوابت R-771 بعده. لا منطق محذوف.

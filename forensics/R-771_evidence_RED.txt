@@ -1,0 +1,8 @@
+# R-771 RED — 01e0feb + الثابت فقط بلا سلوك — 2026-10-25T23:00:49Z
+FAILED tests/test_telemetry_coalescing.py::test_periodic_snapshot_written_once_per_interval
+FAILED tests/test_telemetry_coalescing.py::test_coalesced_count_is_carried_by_next_written_event
+FAILED tests/test_telemetry_coalescing.py::test_coalesced_call_returns_marker_not_hash
+3 failed, 3 passed, 2 warnings in 0.28s
+E       AssertionError: assert 50 == 1
+E       AssertionError: assert 11 == 2
+E       AssertionError: assert (None is True)
