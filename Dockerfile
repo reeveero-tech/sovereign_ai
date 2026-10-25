@@ -28,10 +28,13 @@ ENV AI_ENVIRONMENT=production
 
 # R-698 (جاهزية fly.io): مستخدم غير جذري بأقل امتياز — التطبيق لا يحتاج
 # root أبدًا؛ الملفات الجارية تُكتب في /app/data (ملكية sovereign).
+# R-760 (بأمر المالك D-044): /app/data حجم Fly دائم يُنشأ مملوكًا للجذر — لذا
+# لا `USER` هنا؛ نقطة الدخول تبدأ جذرًا لتملّك الحجم ثم تُسقط الامتياز إلى 1001
+# بـsetpriv قبل التطبيق (scripts/container_entrypoint.sh — محروسة باختبار).
 RUN useradd --system --uid 1001 --create-home sovereign \
     && mkdir -p /app/data \
-    && chown -R sovereign:sovereign /app
-USER sovereign
+    && chown -R sovereign:sovereign /app \
+    && chmod 0755 /app/scripts/container_entrypoint.sh
 
 EXPOSE 8080
 
@@ -39,4 +42,5 @@ EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
     CMD ["python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health', timeout=4)"]
 
+ENTRYPOINT ["/app/scripts/container_entrypoint.sh"]
 CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8080"]

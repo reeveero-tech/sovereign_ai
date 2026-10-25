@@ -33,6 +33,12 @@ primary_region = 'ams'
     grace_period = '5s'
     path = '/health'
 
+# R-760 (بأمر المالك D-044): قرص دائم لبيانات الإنتاج — حلقة المفاتيح والسجل
+# السيادي وختم الهوية والمهام والمهارات تبقى عبر إعادة النشر (كانت تُمحى).
+[mounts]
+  source = 'sovereign_data'
+  destination = '/app/data'
+
 [[vm]]
   memory = '512'
   cpu_kind = 'shared'

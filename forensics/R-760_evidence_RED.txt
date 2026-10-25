@@ -1,0 +1,7 @@
+# R-760 RED — tests/test_persistent_data_volume.py against b3d187a (no volume, USER sovereign), 2026-10-25T07:24:00Z
+=========================== short test summary info ============================
+FAILED tests/test_persistent_data_volume.py::test_fly_mounts_persistent_volume_on_data_dir
+FAILED tests/test_persistent_data_volume.py::test_dockerfile_uses_privilege_dropping_entrypoint
+FAILED tests/test_persistent_data_volume.py::test_entrypoint_root_branch_always_drops_privileges
+FAILED tests/test_persistent_data_volume.py::test_entrypoint_non_root_runs_command_unchanged
+4 failed, 1 passed, 1 warning in 0.60s
