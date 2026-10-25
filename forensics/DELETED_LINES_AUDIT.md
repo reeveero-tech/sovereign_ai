@@ -2547,3 +2547,11 @@ Bus إطلاقًا. الواجهة سليمة بعد الإزالة (101 وسم 
   في `backend/fleet.py`: توقيع `spawn_goals` (`List[str]` → `Any`). وسطرا الترويسة في PROJECT_STATE
   وCHANGELOG، وبداية خلية الحالة في صف ٥.٣ بالخارطة («مقيس في بيئة العمل… ينتظر ١.٧» → «مثبت حيًا»).
   محروسة بـ`tests/test_fleet_spawn_http_goals.py` + `tests/test_fleet.py` القائمة.
+
+## 2026-10-25 — R-768: أسطر مستبدلة (تحقق السلامة التزايدي)
+- **# DELETION-JUSTIFIED** — في `backend/memory/core.py` داخل `verify_integrity`: عشرة أسطر
+  `return IntegrityStatus.CORRUPTED/PARTIAL` داخل حلقة الفحص صارت `_fail = …` + `break` (لتُخزَّن
+  النتيجة وتُبصم البادئة)؛ تهيئة `prev_hash`/`event_count` (من نقطة الاستئناف)؛ شرط `_seen_known`؛
+  رأس الحلقة النصي (`open(..., 'r')` + `enumerate`) صار قراءة ثنائية بتتبع الموضع؛ عودة CORRUPTED
+  عند غياب آخر تجزئة معروفة (صارت تُخزَّن). وسطرا الترويسة في PROJECT_STATE وCHANGELOG. محروسة بـ
+  `tests/test_integrity_incremental.py` + R-606/R-613/multiwriter/R-763/R-766 وأنماط التدوير القائمة.

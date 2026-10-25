@@ -1,0 +1,4 @@
+FAILED tests/test_integrity_incremental.py::test_corrupted_result_is_cached_within_ttl
+FAILED tests/test_integrity_incremental.py::test_unchanged_corrupted_prefix_not_reverified_after_ttl
+FAILED tests/test_integrity_incremental.py::test_after_ttl_only_new_events_are_verified
+3 failed, 1212 passed, 1 deselected, 3 warnings in 358.72s (0:05:58)

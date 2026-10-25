@@ -588,6 +588,7 @@ class SovereignCore:
         self._reconcile_index_with_ledger()
         # M1: ذاكرة مؤقتة لنتيجة التحقق من سلامة السجل
         self._integrity_cache = None
+        self._integrity_prefix = None  # R-768: نقطة استئناف التحقق (بصمة البادئة)
         self._genesis_created = self._load_genesis_status()
         
         logger.info(f"✅ نواة الذاكرة السيادية جاهزة")
@@ -1269,27 +1270,112 @@ class SovereignCore:
         # R-606: يُعاد التحقق فقط إذا تغيّر السجل (آخر تجزئة) أو انقضت المهلة (60 ثانية)
         # R-701: المهلة وحدها تحكم الذاكرة — كان تطابق _last_hash في الذاكرة
         # يعيد النتيجة بلا حد زمني، فتعديل سطر سابق أو إلحاق كاتب آخر لا يُرى أبدًا.
+        # R-768: كل نتيجة تُخزَّن للمهلة (كانت VERIFIED وحدها — فـCORRUPTED يعيد فحص كل
+        # التوقيعات في كل استدعاء ويُشبع المعالج على الإنتاج)، وبعدها يُستأنف من آخر موضع
+        # متحقق منه ما دامت بصمة البادئة والمفاتيح لم تتغير. verbose=True فحص كامل دائمًا.
         if not verbose and self._integrity_cache is not None:
             if (time.time() - self._integrity_cache.get("ts", 0)) < 60.0:
                 return self._integrity_cache["status"]
-        
+        resume = None if verbose else self._integrity_resume_point()
+        if resume is not None and resume["status"] is not None:
+            # البادئة نفسها (حتى السطر الفاشل) لم تتغير → النتيجة نفسها، بلا إعادة تحقق
+            return self._remember_integrity(resume["status"])
+        status = self._verify_walk(verbose, resume)
+        if status is None:  # الاستئناف لم يرَ آخر تجزئة معروفة في الذيل → فحص كامل
+            status = self._verify_walk(verbose, None)
+        return status
+
+    def _keyring_fingerprint(self) -> str:
+        """R-768: بصمة المفاتيح التي يعتمد عليها التحقق (تغيّرها يُبطل نقطة الاستئناف)."""
+        parts = [f"root:{self.signing_key is not None}"]
+        try:
+            for rec in (self._keyring.list_keys() if self._keyring else []):
+                parts.append(f"{getattr(rec, 'key_id', '')}|{getattr(rec, 'key_type', '')}|"
+                             f"{getattr(rec, 'public_key', '')}")
+        except Exception as e:  # TOLERATED: بلا بصمة مفاتيح → لا استئناف (فحص كامل)
+            parts.append(f"err:{type(e).__name__}")
+        return hashlib.sha256("\n".join(sorted(parts)).encode("utf-8")).hexdigest()
+
+    def _prefix_sha256(self, length: int) -> Optional[str]:
+        h = hashlib.sha256()
+        remaining = length
+        with open(self.log_file, 'rb') as fh:
+            while remaining > 0:
+                chunk = fh.read(min(1 << 20, remaining))
+                if not chunk:
+                    return None
+                h.update(chunk)
+                remaining -= len(chunk)
+        return h.hexdigest()
+
+    def _integrity_resume_point(self) -> Optional[Dict[str, Any]]:
+        """R-768: نقطة استئناف صالحة فقط إن كانت البادئة المتحقق منها بايتًا ببايت كما هي."""
+        st = getattr(self, "_integrity_prefix", None)
+        if not st or not self.log_file.exists():
+            return None
+        try:
+            if self.log_file.stat().st_size < st["offset"]:
+                return None  # اقتطاع → فحص كامل
+            if st["keys"] != self._keyring_fingerprint():
+                return None
+            if self._prefix_sha256(st["offset"]) != st["sha256"]:
+                return None  # تعديل في البادئة → فحص كامل
+        except OSError:
+            return None
+        return st
+
+    def _remember_integrity(self, status: "IntegrityStatus") -> "IntegrityStatus":
+        self._integrity_cache = {"status": status, "last_hash": self._last_hash,
+                                 "checked_at": utc_now_iso(), "ts": time.time()}
+        return status
+
+    def _record_prefix(self, offset: int, prev_hash: str, count: int, line_num: int,
+                       status: Optional["IntegrityStatus"]) -> None:
+        try:
+            self._integrity_prefix = {
+                "offset": offset, "sha256": self._prefix_sha256(offset), "prev_hash": prev_hash,
+                "count": count, "line_num": line_num, "status": status,
+                "keys": self._keyring_fingerprint()}
+        except OSError:
+            self._integrity_prefix = None
+
+    def _verify_walk(self, verbose: bool, resume: Optional[Dict[str, Any]]) -> Optional["IntegrityStatus"]:
+        """جسم التحقق (R-768: يبدأ من نقطة الاستئناف إن وُجدت). None = أعد فحصًا كاملًا."""
+
         logger.info("🔍 بدء التحقق من سلامة السجل...")
         
         if not self.log_file.exists():
             logger.warning("السجل غير موجود")
             return IntegrityStatus.NOT_CHECKED
         
-        prev_hash = "GENESIS"
-        event_count = 0
+        prev_hash = resume["prev_hash"] if resume else "GENESIS"
+        event_count = resume["count"] if resume else 0
+        start_offset = resume["offset"] if resume else 0
+        line_num = resume["line_num"] if resume else 0
+        offset = start_offset
+        _fail = None
+        _partial_tail = False  # سطر أخير بلا \n — لا تُسجَّل نقطة استئناف عليه
         # R-701: تجزئتنا المعروفة يجب أن تكون ضمن السلسلة (كشف الاقتطاع) — لا أن
         # تكون آخرها بالضرورة (كاتب مشروع آخر قد يكون مدّ السلسلة بعدها).
         _known_last = self._last_hash
-        _seen_known = _known_last == "GENESIS"
+        _seen_known = _known_last == "GENESIS" or _known_last == prev_hash
         
-        with open(self.log_file, 'r', encoding='utf-8') as f:
-            for line_num, line in enumerate(f, 1):
-                line = line.strip()
+        with open(self.log_file, 'rb') as f:
+            f.seek(start_offset)
+            for raw in f:
+                line_num += 1
+                if not raw.endswith(b"\n"):
+                    # سطر أخير غير مكتمل (كاتب في منتصف الإلحاق): يُحكم عليه ولا يدخل البادئة
+                    _line_end = offset
+                    _partial_tail = True
+                else:
+                    _line_end = offset + len(raw)
+                try:
+                    line = raw.decode('utf-8').strip()
+                except UnicodeDecodeError:
+                    line = raw.decode('utf-8', errors='replace').strip()
                 if not line:
+                    offset = _line_end
                     continue
                 
                 try:
@@ -1299,7 +1385,8 @@ class SovereignCore:
                     # 1) التحقق من prev_hash
                     if event.get('prev_hash') != prev_hash:
                         logger.error(f"❌ فشل في السطر {line_num}: prev_hash غير متطابق")
-                        return IntegrityStatus.CORRUPTED
+                        _fail = IntegrityStatus.CORRUPTED
+                        break
                     
                     # 2) التحقق من تجزئة الحدث
                     expected_hash = self._compute_event_hash(
@@ -1310,7 +1397,8 @@ class SovereignCore:
                     )
                     if event['hash'] != expected_hash:
                         logger.error(f"❌ فشل في السطر {line_num}: تجزئة الحدث غير متطابقة")
-                        return IntegrityStatus.CORRUPTED
+                        _fail = IntegrityStatus.CORRUPTED
+                        break
                     
                     # 3) التحقق من التوقيع
                     # R-620: حدثان بصيغتين مختلفتين —
@@ -1330,7 +1418,8 @@ class SovereignCore:
                             _kr_rec = self._keyring.get_key(event.get('key_id')) if self._keyring else None
                             if _kr_rec is None or getattr(_kr_rec, 'key_type', 'hmac') != 'ed25519':
                                 logger.error(f"❌ فشل في السطر {line_num}: حدث ed25519 بمفتاح غير معروف أو نوع غير مطابق")
-                                return IntegrityStatus.CORRUPTED
+                                _fail = IntegrityStatus.CORRUPTED
+                                break
                             _event_data = (
                                 f"{event['hash']}|{event['prev_hash']}|{event['blob']}|"
                                 f"{event['time']}|{event['type']}|{event.get('key_id', '')}"
@@ -1340,7 +1429,8 @@ class SovereignCore:
                                 event['signature']
                             ):
                                 logger.error(f"❌ فشل في السطر {line_num}: توقيع Ed25519 غير صحيح")
-                                return IntegrityStatus.CORRUPTED
+                                _fail = IntegrityStatus.CORRUPTED
+                                break
                         else:
                             # R-625: التحقق يستخدم key_id من الحدث نفسه (وليس المفتاح النشط)
                             # — يضمن أن أحداث المفتاح A تُتحقق بنجاح بعد الدوران إلى B
@@ -1356,7 +1446,8 @@ class SovereignCore:
                             import hmac as _hmac
                             if not _hmac.compare_digest(event['signature'], expected_signature):
                                 logger.error(f"❌ فشل في السطر {line_num}: التوقيع غير صحيح (صيغة KeyRing)")
-                                return IntegrityStatus.CORRUPTED
+                                _fail = IntegrityStatus.CORRUPTED
+                                break
                     else:
                         # صيغة تاريخية — تحقق بالمفتاح القديم
                         # R-699: بلا مفتاح جذر حقيقي لا تحقق ممكن — PARTIAL (لا VERIFIED
@@ -1366,21 +1457,25 @@ class SovereignCore:
                                 f"❌ السطر {line_num}: حدث تاريخي ولا مفتاح جذر حقيقي "
                                 f"للتحقق — R-699: PARTIAL"
                             )
-                            return IntegrityStatus.PARTIAL
+                            _fail = IntegrityStatus.PARTIAL
+                            break
                         if not verify_hmac(
                             f"{event['hash']}|{event['prev_hash']}|{event['blob']}|{event['time']}|{event['type']}".encode('utf-8'),
                             self.signing_key,
                             event['signature']
                         ):
                             logger.error(f"❌ فشل في السطر {line_num}: التوقيع غير صحيح")
-                            return IntegrityStatus.CORRUPTED
+                            _fail = IntegrityStatus.CORRUPTED
+                            break
                     
                     # 4) التحقق من وجود الـ blob
                     if not self.blob_store.exists(event['blob']):
                         logger.error(f"❌ فشل في السطر {line_num}: blob غير موجود: {event['blob'][:16]}...")
-                        return IntegrityStatus.PARTIAL
+                        _fail = IntegrityStatus.PARTIAL
+                        break
                     
                     prev_hash = event['hash']
+                    offset = _line_end
                     if prev_hash == _known_last:
                         _seen_known = True
                     
@@ -1389,17 +1484,33 @@ class SovereignCore:
                     
                 except json.JSONDecodeError as e:
                     logger.error(f"❌ فشل في السطر {line_num}: خطأ في JSON - {e}")
-                    return IntegrityStatus.CORRUPTED
+                    _fail = IntegrityStatus.CORRUPTED
+                    break
                 except Exception as e:
                     logger.error(f"❌ فشل في السطر {line_num}: {e}")
-                    return IntegrityStatus.CORRUPTED
+                    _fail = IntegrityStatus.CORRUPTED
+                    break
         
+        if _fail is not None:
+            # R-768: البادئة حتى نهاية السطر الفاشل تُبصم — ما دامت كما هي فالنتيجة نفسها
+            if _partial_tail:
+                self._integrity_prefix = None  # الحكم على سطر قد يكتمل — لا يُبصم
+            else:
+                self._record_prefix(_line_end, prev_hash, event_count, line_num, _fail)
+            return self._remember_integrity(_fail)
+
         # التحقق من أن آخر تجزئة معروفة لهذه النسخة ما زالت في السلسلة
         # (R-701: عضوية لا مساواة — الاقتطاع يُكشف، وتمديد كاتب مشروع لا يُدان)
+        if not _seen_known and resume is not None:
+            return None  # آخر تجزئتنا في البادئة (كاتب آخر مدّ السلسلة) — تحقق كامل يحكم
         if not _seen_known:
             logger.error(f"❌ آخر تجزئة معروفة غير موجودة في السلسلة (اقتطاع/إعادة كتابة): {_known_last[:16]}... (ذيل الملف {prev_hash[:16]}...)")
-            return IntegrityStatus.CORRUPTED
+            return self._remember_integrity(IntegrityStatus.CORRUPTED)
         
+        if _partial_tail:
+            self._integrity_prefix = None
+        else:
+            self._record_prefix(offset, prev_hash, event_count, line_num, None)
         # حفظ نتيجة التحقق
         integrity_record = {
             "status": IntegrityStatus.VERIFIED.value,
