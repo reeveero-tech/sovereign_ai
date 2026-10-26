@@ -564,6 +564,20 @@ class AttentionEngine:
                           if now - a.last_updated > 30]
         for aid in old_allocations:
             del self.allocations[aid]
+        # R-778: المستدام يُمدَّد في update_sustained فلا يبلغ حد الثلاثين أبدًا، بينما كل دورة
+        # تنشئ تخصيصًا أحدث للهدف نفسه ⇒ نسخ خالدة مكررة. يسقط المستدام الأقدم من 30ث إذا وُجد
+        # أحدث منه للهدف والنوع نفسيهما؛ المستدام الذي لا بديل له يبقى ممدَّدًا كما قُصد.
+        newest: Dict[Tuple[str, str], float] = {}
+        for a in self.allocations.values():
+            key = (a.target, a.attention_type)
+            if a.started_at > newest.get(key, float("-inf")):
+                newest[key] = a.started_at
+        superseded = [aid for aid, a in self.allocations.items()
+                      if a.attention_type == ATTENTION_TYPE_SUSTAINED
+                      and now - a.started_at > 30
+                      and newest[(a.target, a.attention_type)] > a.started_at]
+        for aid in superseded:
+            del self.allocations[aid]
         
         # تحديث البؤرة
         spotlight = self.update_spotlight(list(self.allocations.values()))

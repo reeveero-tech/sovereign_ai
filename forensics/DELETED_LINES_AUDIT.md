@@ -2592,3 +2592,6 @@ Bus إطلاقًا. الواجهة سليمة بعد الإزالة (101 وسم 
 
 ## 2026-10-26 — R-777-ب: أسطر مستبدلة
 - **# DELETION-JUSTIFIED** — بند R-777 في `docs/PROJECT_STATE.md` وخلية ٦.١.٢ في `docs/ROADMAP_V6.md`: إلحاق القياس الحي بعد النشر. لا منطق محذوف.
+
+## 2026-10-26 — R-778: أسطر مستبدلة
+- **# DELETION-JUSTIFIED** — ترويستا `docs/PROJECT_STATE.md` و`docs/CHANGELOG.md` (تحديث التاريخ والملخص)، وخلية ٦.١.٢ في `docs/ROADMAP_V6.md` (إلحاق R-778). لا منطق محذوف في `attention_engine.py` — إضافة فقط.

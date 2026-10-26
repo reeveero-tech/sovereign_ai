@@ -1,0 +1,5 @@
+# R-778 RED — 3c4accc + tests/test_attention_sustained_bounded.py قبل الإصلاح — 2026-10-26T08:18:16Z
+# محرك حي محليًا: مستدام 159→321→401 في 40ث لهدف واحد؛ الأقدم من 30ث +~80/20ث (أولوية 6)
+E       AssertionError: 400 تخصيصًا مستدامًا لهدف واحد بعد 200ث
+FAILED tests/test_attention_sustained_bounded.py::test_superseded_sustained_allocations_expire
+1 failed, 1 passed, 1 warning in 0.07s

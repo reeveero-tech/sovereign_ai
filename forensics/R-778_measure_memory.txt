@@ -1,0 +1,40 @@
+# R-778 — تتبع نمو الذاكرة (ROADMAP_V6 ٦.١.٢): تخصيصات الانتباه المستدام — 2026-10-26
+# محلي، Python 3.11، سجل اصطناعي 46,511 حدثًا، نسخة جديدة لكل تشغيل. لا قياس إنتاج في هذا القسم.
+
+## (أ) محرك الانتباه وحده — قبل الإصلاح (3c4accc)، عينة كل 20ث
+t=120 allocs=461 {'spotlight': 101, 'sustained': 159, 'divided': 201} older30=0 gc_live=461
+t=140 allocs=921 {'sustained': 321, 'spotlight': 180, 'divided': 420} older30=21 prio_of_old={6: 21} gc_live=1061
+t=160 allocs=1001 {'sustained': 401, 'spotlight': 180, 'divided': 420} older30=101 prio_of_old={6: 101} gc_live=1661
+sustained_attention_items=1 ⇒ كل المستدام لهدف واحد. السبب: update_sustained يجدد last_updated لكل مستدام أولويته>5
+فلا يبلغ حد 30ث، وكل دورة 0.5ث تنشئ تخصيصًا أحدث للهدف نفسه.
+
+## (ب) محرك الانتباه وحده — بعد الإصلاح
+t=20 allocs=0 {} older30=0 gc_live=0
+t=40 allocs=0 {} older30=0 gc_live=0
+t=60 allocs=0 {} older30=0 gc_live=0
+t=80 allocs=0 {} older30=0 gc_live=0
+t=100 allocs=0 {} older30=0 gc_live=0
+t=120 allocs=476 {'spotlight': 104, 'sustained': 164, 'divided': 208} older30=0 gc_live=476
+t=140 allocs=900 {'spotlight': 180, 'sustained': 300, 'divided': 420} older30=0 gc_live=1076
+t=160 allocs=900 {'spotlight': 180, 'sustained': 300, 'divided': 420} older30=0 gc_live=1676
+t=180 allocs=900 {'spotlight': 180, 'sustained': 300, 'divided': 420} older30=0 gc_live=2276
+t=200 allocs=900 {'spotlight': 180, 'sustained': 300, 'divided': 420} older30=0 gc_live=2385
+t=220 allocs=900 {'spotlight': 180, 'sustained': 300, 'divided': 420} older30=0 gc_live=2385
+t=240 allocs=900 {'spotlight': 180, 'sustained': 300, 'divided': 420} older30=15 gc_live=2385
+
+## (ج) التطبيق كاملًا 600ث (المتتبع نفسه كل 120ث)
+R-777 (3c4accc):
+  t= 120s rss=192MB pyblocks=624,262 objects=123,863 AttentionAllocation=0 list=18,064 dict=17,094
+  t= 240s rss=197MB pyblocks=685,542 objects=129,480 AttentionAllocation=2,585 list=19,587 dict=17,659
+  t= 360s rss=208MB pyblocks=701,575 objects=132,024 AttentionAllocation=3,063 list=20,281 dict=18,211
+  t= 480s rss=217MB pyblocks=716,358 objects=134,487 AttentionAllocation=3,541 list=21,019 dict=18,736
+  t= 600s rss=217MB pyblocks=730,487 objects=136,860 AttentionAllocation=4,017 list=21,696 dict=19,259
+R-778:
+  t= 120s rss=204MB pyblocks=624,955 objects=123,936 AttentionAllocation=0 list=18,089 dict=17,083
+  t= 240s rss=208MB pyblocks=683,314 objects=129,287 AttentionAllocation=2,385 list=19,603 dict=17,650
+  t= 360s rss=214MB pyblocks=694,513 objects=131,354 AttentionAllocation=2,385 list=20,300 dict=18,204
+  t= 480s rss=215MB pyblocks=704,167 objects=133,317 AttentionAllocation=2,385 list=21,031 dict=18,723
+  t= 600s rss=215MB pyblocks=713,941 objects=135,209 AttentionAllocation=2,385 list=21,699 dict=19,249
+نمو 240→600ث: RSS +20MB → +7MB ، pyblocks +45k → +31k ، AttentionAllocation +1,432 → 0.
+معالج R-778: 89.70ث/580ث = 15.5% من نواة (مطابق لـR-777 محليًا 15.5% — لا أثر على المعالج).
+المتبقي: list +2,096 وdict +1,599 في 6 دقائق ⇒ ٦.١.٢ يبقى مفتوحًا.
