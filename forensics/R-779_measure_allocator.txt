@@ -22,3 +22,20 @@ arenammap: 150s:153MB/576k 300s:153MB/718k 450s:153MB/698k 600s:153MB/710k 750s:
 - الافتراضي يستوي عند 221MB بعد ~10 دقائق ⇒ نمو الكائنات المحلي توقف فعليًا بعد R-777/R-778.
 - القرار: MALLOC_ARENA_MAX=2 + MALLOC_MMAP_THRESHOLD_=131072 + MALLOC_TRIM_THRESHOLD_=131072 في fly.toml [env]
   (−67MB، −30%). يُتحقق حيًا بعد النشر.
+
+## (ج) الإنتاج بعد R-779 (39035bc، نشر 40307171884، قراءة /proc فقط)
+المتغيرات في بيئة العملية الحية: MALLOC_ARENA_MAX=2 MALLOC_MMAP_THRESHOLD_=131072 MALLOC_TRIM_THRESHOLD_=131072
+10:26:04 pid=643 rss=129MB cpu=8s threads=126 load=0.17 3509472 
+10:27:36 pid=643 rss=133MB cpu=11s threads=126 load=0.03 3509470 
+10:29:09 pid=643 rss=134MB cpu=14s threads=126 load=0.09 3509572 
+10:30:41 pid=643 rss=134MB cpu=17s threads=126 load=0.24 3509573 
+10:32:13 pid=643 rss=134MB cpu=19s threads=126 load=0.10 3509582 
+10:33:46 pid=643 rss=135MB cpu=22s threads=126 load=0.14 3509785 
+10:35:18 pid=643 rss=135MB cpu=25s threads=126 load=0.03 3509790 
+10:36:50 pid=643 rss=135MB cpu=28s threads=126 load=0.00 3509973 
+10:38:21 pid=643 rss=136MB cpu=31s threads=126 load=0.03 3510228 
+10:39:53 pid=643 rss=136MB cpu=34s threads=126 load=0.04 3510381 
+الخلاصة (ج): RSS 129→136MB في 14 دقيقة (~0.5MB/دقيقة) مقابل 154→181MB في 12 دقيقة بعد R-777/R-778؛ المعالج ~3% (26ث/829ث)، الحمل ≤0.24. نافذة قصيرة ⇒ ٦.١.٢ يبقى مفتوحًا حتى قياس ساعات.
+
+## (د) مراقب /health المجدول
+أول تشغيل مجدول: 40306287558 event=schedule 2026-10-26T10:17:48Z conclusion=success.

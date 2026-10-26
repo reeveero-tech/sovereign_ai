@@ -2601,3 +2601,6 @@ Bus إطلاقًا. الواجهة سليمة بعد الإزالة (101 وسم 
 
 ## 2026-10-26 — R-779: أسطر مستبدلة
 - **# DELETION-JUSTIFIED** — ترويستا `docs/PROJECT_STATE.md` و`docs/CHANGELOG.md`، وخلية ٦.١.٢ في `docs/ROADMAP_V6.md` (إلحاق). `fly.toml`: إضافة فقط.
+
+## 2026-10-26 — R-779-ب: أسطر مستبدلة
+- **# DELETION-JUSTIFIED** — بند R-779 في `docs/PROJECT_STATE.md` وخلية ٦.١.٢ في `docs/ROADMAP_V6.md`: إلحاق القياس الحي وأول تشغيل مجدول للمراقب. لا منطق محذوف.

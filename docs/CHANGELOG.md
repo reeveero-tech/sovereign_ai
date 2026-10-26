@@ -9,6 +9,8 @@
 - **tracemalloc** (`forensics/R-779_measure_allocator.txt`): الذاكرة المتتبعة +4.6MB في 6 دقائق، منها 1.4MB لأداة القياس و3.5MB كتلة عابرة لسلسلة حفظ الفهرس ⇒ لا تسرب Python متبقٍ يذكر.
 - **A/B ثلاثي 900ث** على الكود نفسه: افتراضي 221MB (يستوي بعد ~10 دقائق)، `MALLOC_ARENA_MAX=2` 167MB، ومعه `MALLOC_MMAP_THRESHOLD_`/`MALLOC_TRIM_THRESHOLD_`=131072 154MB. pyblocks متطابقة، المعالج ~16% للثلاثة (+0.7ث نظام).
 - **التغيير**: الثلاثة في `fly.toml` `[env]`. الصورة `python:3.11-slim` (glibc) فتسري المتغيرات.
+- **حيًا** (نشر [40307171884](https://github.com/reeveero-tech/sovereign_ai/actions/runs/40307171884)): المتغيرات في بيئة العملية؛ RSS 129→136MB في 14 دقيقة (~0.5MB/دقيقة، كان 154→181MB/12د)، المعالج ~3%.
+- **مراقب /health**: أول تشغيل مجدول [40306287558](https://github.com/reeveero-tech/sovereign_ai/actions/runs/40306287558) (10:17:48Z، نجح).
 - اختبار: `tests/test_fly_allocator_env.py` (2).
 
 ## [R-778] — 2026-10-26 — تتبع نمو الذاكرة (٦.١.٢): تخصيصات الانتباه المستدام الخالدة
