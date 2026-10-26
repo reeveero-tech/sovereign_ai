@@ -1,0 +1,42 @@
+# R-782 — كسور سلسلة سجل الإنتاج (فحص قراءة فقط على الآلة، 2026-10-26)
+
+السجل: /app/data/sovereign_core/ledger.jsonl — 80,552 حدثًا، 41.25MB، كلها ed25519 بمفتاح واحد 3cedd169197a8390.
+integrity.json على الآلة آخر كتابة له 2026-10-25T08:23:59Z (884 حدثًا) — لم يكتمل تحقق كامل ناجح منذئذ.
+blobs مفقودة: 0.
+
+## الكسور (12)
+السطر 1659: 1555 بايت NUL ثم حدث سليم (حادثة R-763 المعروفة، 08:49:19→08:50:02) — prev يشير لحدث مفقود.
+باقي الأسطر (11) جديدة — الحقل sig_ok = تحقق Ed25519 من الحقول المخزنة:
+{"line": 13908, "kind": "hash", "time": "2026-10-25T13:15:24.279837+00:00", "type": "homeostasis::disturbance_detected", "sig_ok": false, "prev_points_to_line": 13907, "expected_prev_line": 13907, "dup_hash_line": null, "extra_keys": []}
+{"line": 13914, "kind": "hash", "time": "2026-10-25T13:16:27.640195+00:00", "type": "quantum::transition_cycle_completed", "sig_ok": false, "prev_points_to_line": 13913, "expected_prev_line": 13913, "dup_hash_line": null, "extra_keys": []}
+{"line": 14264, "kind": "hash", "time": "2026-10-25T13:27:49.726393+00:00", "type": "quantum::transition_cycle_completed", "sig_ok": false, "prev_points_to_line": 14263, "expected_prev_line": 14263, "dup_hash_line": null, "extra_keys": []}
+{"line": 14266, "kind": "hash", "time": "2026-10-25T13:27:51.007993+00:00", "type": "controller::decision_executed", "sig_ok": false, "prev_points_to_line": 14265, "expected_prev_line": 14265, "dup_hash_line": null, "extra_keys": []}
+{"line": 14268, "kind": "prev", "time": "2026-10-25T13:27:54.283113+00:00", "type": "quantum::field_cycle", "sig_ok": true, "prev_points_to_line": 14266, "expected_prev_line": 14267, "dup_hash_line": null, "extra_keys": []}
+{"line": 14337, "kind": "hash", "time": "2026-10-25T13:29:37.960800+00:00", "type": "quantum::transition_cycle_completed", "sig_ok": false, "prev_points_to_line": 14336, "expected_prev_line": 14336, "dup_hash_line": null, "extra_keys": []}
+{"line": 14338, "kind": "hash", "time": "2026-10-25T13:29:38.780578+00:00", "type": "controller::snapshot", "sig_ok": false, "prev_points_to_line": 14337, "expected_prev_line": 14337, "dup_hash_line": null, "extra_keys": []}
+{"line": 50672, "kind": "prev", "time": "2026-10-25T23:32:16.951015+00:00", "type": "instinct::protection_executed", "sig_ok": true, "prev_points_to_line": 50667, "expected_prev_line": 50671, "dup_hash_line": null, "extra_keys": []}
+{"line": 56173, "kind": "hash", "time": "2026-10-26T02:47:59.491723+00:00", "type": "sovereign::final_decision", "sig_ok": false, "prev_points_to_line": 56172, "expected_prev_line": 56172, "dup_hash_line": null, "extra_keys": []}
+{"line": 56174, "kind": "prevhash", "time": "2026-10-26T02:48:00.131361+00:00", "type": "controller::decision_executed", "sig_ok": false, "prev_points_to_line": 56172, "expected_prev_line": 56173, "dup_hash_line": null, "extra_keys": []}
+
+## التصنيف
+- تشعب (sig_ok=true، prev يشير إلى حدث أقدم): 14268→14266، 50672→50667، 56174→56172.
+  كاتبان دخلا القسم الحرج بآخر تجزئة واحدة.
+- حدث تجزئته وتوقيعه لا يطابقان حقوله، وprev المخزّن صحيح (8): 13908، 13914، 14264، 14266، 14337، 14338، 56173، 56174.
+  التجزئة والتوقيع حُسبا على _last_hash ثم خُزّن _last_hash بعد أن غيّره كاتب آخر (ثلاث قراءات منفصلة).
+- التوقيت: 2026-10-25 13:15–13:29 (حادثة إشباع المعالج R-768)، 23:32، 2026-10-26 02:47–02:48 (قبل OOM 02:48:41Z).
+
+## السبب
+FileLock يعدّ القفل قديمًا بعد 30ث فيحذفه أي خيط منتظر — والمالك حي لكنه بطيء تحت الإشباع.
+ثم __exit__ المالك يحذف القفل أيًا كان صاحبه، فيدخل خيط ثالث. أُعيد إنتاجه محليًا (اختبار slow_holder: 5/5 تشعب).
+
+## ما لم يُفعل (المادة ٧)
+لم يُعدَّل السجل ولم يُحذف سطر. الكسور الـ12 باقية شاهدًا؛ التحقق الحي يتوقف عند السطر 1659 (CORRUPTED).
+وسمها (شهادة موقعة بكسور معروفة) أو تركها قرار المالك.
+
+## أثر جانبي على ٦.١.٦
+التحقق يتوقف مبكرًا عند 1659 فلا يكلف شيئًا الآن. لو صارت السلسلة سليمة فالتحقق الكامل عند كل إقلاع
+= 80,552 × 2.68ms (مقيس على الآلة) ≈ 215ث معالج، لأن نقطة الاستئناف لا تُحفظ على القرص.
+محليًا على سجل 46,511 حدثًا سليمًا: خيط المراقب استهلك 47.9 من 54.8ث معالج في أول 300ث (2.11ms/توقيع).
+
+## المعالج الحي (٦.١.٦)
+لقطتان /proc/<pid>/task/*/stat بفاصل 120ث: 442 نبضة = 4.42ث ⇒ 3.7% من نواة؛ أكبر خيط 1.35ث (1.1%).

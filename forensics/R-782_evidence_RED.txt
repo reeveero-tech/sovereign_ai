@@ -1,0 +1,11 @@
+# R-782 RED — على HEAD f5d68ef قبل الإصلاح
+E       assert [5] == []
+E       AssertionError: assert (False)
+E           Failed: DID NOT RAISE TimeoutError
+FAILED tests/test_ledger_lock_race.py::test_slow_holder_lock_is_not_broken_by_waiting_threads
+FAILED tests/test_ledger_lock_race.py::test_exit_does_not_remove_a_lock_it_no_longer_owns
+FAILED tests/test_ledger_lock_race.py::test_lock_of_live_other_process_is_not_broken
+FAILED tests/test_ledger_lock_race.py::test_lock_left_by_dead_or_previous_incarnation_is_reclaimed
+4 failed, 1 passed, 2 warnings in 11.55s
+# تكرار slow_holder 5 مرات على الكود القديم: 5/5 فشل (تشعب السلسلة)
+# ملاحظة: test_sixty_threads ينجح على الكود القديم أيضًا (معيار ٦.١.٥ — حارس انحدار لا دليل RED)

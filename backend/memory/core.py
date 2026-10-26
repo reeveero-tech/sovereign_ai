@@ -27,6 +27,7 @@ import base64
 import shutil
 import time
 import threading
+import secrets
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, Any, Optional, List, Iterator, Tuple, BinaryIO
@@ -182,51 +183,130 @@ def safe_json_dumps(obj: Any) -> str:
 # ملف القفل (للوصول الآمن في بيئة متعددة الخيوط/العمليات)
 # ============================================================
 
+_FILELOCK_GUARD = threading.Lock()
+_FILELOCK_INPROC: Dict[str, "threading.RLock"] = {}
+_FILELOCK_DEPTH: Dict[str, int] = {}
+
+
+def _pid_alive(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True  # موجودة لكن لمستخدم آخر
+    except OSError:
+        return False
+    return True
+
+
 class FileLock:
-    """قفل بسيط للملفات لمنع الوصول المتزامن"""
-    
-    # M1: مدة صلاحية القفل — إذا كان القفل أقدم من هذا، يُعتبر قديماً (عملية انهارت)
+    """قفل السجل: قفل داخل العملية ثم ملف O_EXCL بين العمليات.
+
+    R-782 (حادثة إنتاج — 11 كسر سلسلة تحت الإشباع): كان كل خيط منتظر يعدّ القفل «قديمًا» بعد
+    30ث فيحذفه والمالك حي، ثم `__exit__` المالك يحذف قفل غيره. الآن:
+    - خيوط العملية الواحدة تتسلسل على RLock لكل مسار (انتظار حاجب بلا استطلاع؛ إعادة الدخول
+      في الخيط نفسه لا تلمس الملف) — لا يكسر خيط قفل خيط آخر أبدًا.
+    - الملف يحمل `pid رمز`؛ لا يُحذف عند الخروج إلا إن كان ما زال رمزنا.
+    - لا كسر لقفل عملية أخرى حية (TimeoutError بدل الدخول معها). يُستعاد فورًا قفل عملية ميتة،
+      أو قفل يحمل pid هذه العملية ولا يحمله أي خيط منها (بقايا تجسد سابق بعد إعادة الحاوية).
+    - الصيغة القديمة (ملف فارغ) تبقى بقاعدة العمر.
+    """
+
+    # M1: مدة صلاحية القفل — للصيغة القديمة بلا pid فقط (R-782)
     STALE_AFTER_SECONDS = 30.0
-    
+
     def __init__(self, lock_file: Path, timeout: float = 30.0):
         self.lock_file = lock_file
         self.timeout = timeout
         self._acquired = False
-    
+        self._token: Optional[str] = None
+        self._key = str(lock_file)
+        self._rlock = None
+
     def __enter__(self):
-        start = time.time()
+        with _FILELOCK_GUARD:
+            rl = _FILELOCK_INPROC.setdefault(self._key, threading.RLock())
+        if not rl.acquire(timeout=self.timeout):
+            raise TimeoutError(f"لا يمكن الحصول على القفل (داخل العملية): {self.lock_file}")
+        self._rlock = rl
+        try:
+            depth = _FILELOCK_DEPTH.get(self._key, 0)
+            if depth == 0:
+                self._acquire_file(time.time())
+            _FILELOCK_DEPTH[self._key] = depth + 1
+        except BaseException:
+            rl.release()
+            self._rlock = None
+            raise
+        return self
+
+    def _read_owner(self) -> Tuple[Optional[str], Optional[int]]:
+        try:
+            raw = self.lock_file.read_text(encoding="utf-8", errors="replace").strip()
+        except FileNotFoundError:
+            return None, None
+        try:
+            return raw, int(raw.split()[0]) if raw else None
+        except ValueError:
+            return raw, None
+
+    def _acquire_file(self, start: float) -> None:
+        token = f"{os.getpid()} {secrets.token_hex(8)}"
         while True:
             try:
-                self.lock_file.touch(exist_ok=False)
-                self._acquired = True
-                break
+                fd = os.open(str(self.lock_file), os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o644)
             except FileExistsError:
-                # M1: كشف الأقفال القديمة (عملية انهارت وتركت القفل)
-                try:
-                    age = time.time() - self.lock_file.stat().st_mtime
-                    if age > self.STALE_AFTER_SECONDS:
-                        logger.warning(f"🧹 إزالة قفل قديم ({age:.0f}s) — عملية سابقة انهارت")
-                        self.lock_file.unlink()
+                raw, pid = self._read_owner()
+                if raw is None:
+                    continue  # حُرر للتو
+                stale = False
+                if pid is not None:
+                    # pid نحن ولا خيط منا يحمله (نحمل RLock بعمق 0) ⇒ بقايا تجسد سابق
+                    stale = pid == os.getpid() or not _pid_alive(pid)
+                else:
+                    try:
+                        stale = time.time() - self.lock_file.stat().st_mtime > self.STALE_AFTER_SECONDS
+                    except FileNotFoundError:  # R-782: حُرر بين القراءتين — نعيد المحاولة
                         continue
-                # TOLERATED: lock file vanished mid-check (race) — retry loop handles it (R-680)
-                except FileNotFoundError:
+                if stale and self._read_owner()[0] == raw:
+                    logger.warning(f"🧹 R-782: استعادة قفل بلا مالك حي ({raw!r})")
+                    try:
+                        self.lock_file.unlink()
+                    except FileNotFoundError:  # R-782: حرره غيرنا في الأثناء — نعيد المحاولة
+                        pass
                     continue
-                # TOLERATED: known-safe fallback — non-fatal diagnostic path (R-680)
-                except OSError:
-                    pass
                 if time.time() - start > self.timeout:
-                    raise TimeoutError(f"لا يمكن الحصول على القفل: {self.lock_file}")
-                time.sleep(0.1)
-        return self
-    
-    def __exit__(self, *args):
-        if self._acquired:
+                    raise TimeoutError(f"لا يمكن الحصول على القفل: {self.lock_file} (المالك {raw!r})")
+                time.sleep(0.05)
+                continue
             try:
-                self.lock_file.unlink()
-            # TOLERATED: known-safe fallback — non-fatal diagnostic path (R-680)
-            except FileNotFoundError:
-                pass
-            self._acquired = False
+                os.write(fd, (token + "\n").encode("ascii"))
+            finally:
+                os.close(fd)
+            self._token = token
+            self._acquired = True
+            return
+
+    def __exit__(self, *args):
+        try:
+            depth = _FILELOCK_DEPTH.get(self._key, 1) - 1
+            _FILELOCK_DEPTH[self._key] = depth
+            if depth == 0 and self._acquired:
+                raw, _ = self._read_owner()
+                if raw == self._token:
+                    try:
+                        self.lock_file.unlink()
+                    except FileNotFoundError:  # R-782: أزاله غيرنا — لا شيء نحرره
+                        pass
+                elif raw is not None:
+                    logger.error(f"R-782: القفل لم يعد لنا ({raw!r}) — لا نحذفه")
+                self._acquired = False
+                self._token = None
+        finally:
+            if self._rlock is not None:
+                rl, self._rlock = self._rlock, None
+                rl.release()
 
 
 # ============================================================
@@ -1027,22 +1107,25 @@ class SovereignCore:
 
             # 2) تحديد الوقت الحالي
             event_time = utc_now_iso()
+            # R-782: قراءة واحدة لآخر تجزئة — كانت ثلاث قراءات (تجزئة، توقيع، الحقل)، فإن
+            # غيّرها كاتب آخر بينها خُزّن prev_hash لا يطابق التجزئة والتوقيع (8 أحداث حية)
+            _prev = self._last_hash
             
             # 3) حساب تجزئة الحدث
             event_hash = self._compute_event_hash(
-                self._last_hash, blob_hash, event_time, event_type_str
+                _prev, blob_hash, event_time, event_type_str
             )
             
             # 4) حساب التوقيع (R-632: بالمفتاح النشط الحالي — المُختار في الخطوة 0)
             signature = self._compute_event_signature(
-                event_hash, self._last_hash, blob_hash, event_time, event_type_str,
+                event_hash, _prev, blob_hash, event_time, event_type_str,
                 key_id=_current_key_id
             )
             
             # 5) بناء حدث السجل
             event = {
                 "hash": event_hash,
-                "prev_hash": self._last_hash,
+                "prev_hash": _prev,
                 "blob": blob_hash,
                 "time": event_time,
                 "type": event_type_str,
