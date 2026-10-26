@@ -920,10 +920,18 @@ class MemoryViews:
                 # التحقق من الأحداث الجديدة
                 # R-606: حد أقصى 1000 حدث حديث — يكفي لفاصل ثانية واحدة ويتجنب
                 # قراءة السجل الكامل في كل دورة (كان O(n) لكل ثانية)
+                # R-777: اجمع الجديد حتى المؤشر ثم عالجه بالترتيب الزمني، والمؤشر = الأحدث.
+                # # DELETION-JUSTIFIED: كان المؤشر يُحدَّث لكل حدث أثناء المشي من الأحدث للأقدم
+                # فينتهي عند الأقدم، فتعيد كل دورة الدفعة كلها (55k SensoryItem حية محليًا).
+                fresh = []
                 for event in self.core.iterate_events(reverse=True, limit=1000):
                     if event.get("hash") == last_hash:
                         break
-                    
+                    fresh.append(event)
+                if fresh:
+                    last_hash = fresh[0].get("hash")
+                fresh.reverse()
+                for event in fresh:
                     payload = self.core.get_payload(event)
                     event_hash = event.get("hash", "")
                     event_type = event.get("type", "")
@@ -951,8 +959,6 @@ class MemoryViews:
                     working_item = self.working.get_context(user or "system")
                     if working_item:
                         self.long_term.consolidate(working_item)
-                    
-                    last_hash = event.get("hash")
                 
                 # ننتظر ثانية قبل التحقق مرة أخرى — قابل للمقاطعة عند الإيقاف
                 if self._bg_stop.wait(1):

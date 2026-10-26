@@ -1,0 +1,13 @@
+# R-777 RED — 1dde77e + tests/test_views_integration_cursor.py قبل الإصلاح — 2026-10-26T04:59:00Z
+# قياس gc محلي (سجل 46,511، 120ث بعد الإقلاع): 55,000 SensoryItem حية مع TTL 30ث
+E       AssertionError: 69 إضافة لـ5 أحداث جديدة — مكررات: 54
+E       AssertionError: assert ['4542a6a7b01...d46c9ba', ...] == ['21af694d1a0...9978fd676236']
+FAILED tests/test_views_integration_cursor.py::test_each_new_event_is_integrated_exactly_once
+FAILED tests/test_views_integration_cursor.py::test_integration_is_chronological_within_a_batch
+2 failed, 2 warnings in 0.18s
+
+# RED 2 — tests/test_simulation_history_bounded.py قبل الإصلاح
+# gc بعد إصلاح المؤشر: SimulationTrajectory +3,710 بين 240ث و600ث
+E       AssertionError: 25
+FAILED tests/test_simulation_history_bounded.py::test_simulation_snapshots_are_bounded
+1 failed, 2 warnings in 0.19s

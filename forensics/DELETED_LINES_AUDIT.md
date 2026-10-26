@@ -2586,3 +2586,6 @@ Bus إطلاقًا. الواجهة سليمة بعد الإزالة (101 وسم 
 
 ## 2026-10-26 — R-776: أسطر مستبدلة
 - **# DELETION-JUSTIFIED** — `backend/memory/core.py`: حلقة قصّ `by_type` على كل الأنواع مع كل حدث (سقف 10,000) استُبدلت بقصّ النوع المُلحق وحده بسقف من البيئة (افتراضي 500) — لا قارئ لهذه القوائم. `.github/workflows/uptime.yml` + `tests/test_uptime_monitor.py`: `*/15 * * * *` → `7,22,37,52 * * * *` (لم يطلق في 3.5 ساعة). ترويسات PROJECT_STATE/CHANGELOG، وخليتا ٦.١.١ و٦.١.٣ في ROADMAP_V6.
+
+## 2026-10-26 — R-777: أسطر مستبدلة
+- **# DELETION-JUSTIFIED** — `backend/memory/views.py::_background_integration`: سطر `last_hash = event.get("hash")` داخل حلقة المعالجة حُذف (كان يضع المؤشر عند أقدم حدث فتعاد الدفعة كل ثانية — `tests/test_views_integration_cursor.py`)؛ حل محله جمع `fresh` ثم `last_hash = fresh[0].hash` (الأحدث) ومعالجة زمنية؛ وسطر الشرط `if event.get("hash") == last_hash: break` نُقل إلى حلقة الجمع كما هو. ترويستا PROJECT_STATE وCHANGELOG، وخلية ٦.١.٢ في ROADMAP_V6 (إلحاق).

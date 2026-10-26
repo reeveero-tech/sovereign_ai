@@ -1,0 +1,89 @@
+# R-777 — تتبع نمو الذاكرة (ROADMAP_V6 ٦.١.٢) — 2026-10-26
+# البيئة: محلي، Python 3.11، سجل اصطناعي 46,511 حدثًا (نسخة جديدة لكل نسخة)، uvicorn app:app.
+# المتتبع: sitecustomize يكتب كل 120ث: rss، sys.getallocatedblocks (pyblocks)، عدد كائنات gc، أكثر الأنواع.
+# لا شيء من هذا قيس على الإنتاج إلا القسم (د) — قراءة /proc فقط بلا تثبيت.
+
+## (أ) ثلاثي على 1dde77e (قبل الإصلاح): أساس / malloc_trim كل عينة / MALLOC_ARENA_MAX=2
+base:
+  t= 120s rss=266MB pyblocks=1,890,720 objects=222,540 SensoryItem=51,000 SimulationTrajectory=0 AttentionAllocation=0
+  t= 240s rss=295MB pyblocks=2,059,020 objects=234,305 SensoryItem=55,000 SimulationTrajectory=0 AttentionAllocation=0
+  t= 361s rss=308MB pyblocks=2,120,271 objects=236,696 SensoryItem=55,000 SimulationTrajectory=0 AttentionAllocation=2,776
+  t= 481s rss=314MB pyblocks=2,199,460 objects=238,855 SensoryItem=55,000 SimulationTrajectory=0 AttentionAllocation=3,256
+  t= 601s rss=319MB pyblocks=2,252,468 objects=241,833 SensoryItem=56,000 SimulationTrajectory=3,310 AttentionAllocation=3,732
+  t= 722s rss=321MB pyblocks=2,208,311 objects=235,755 SensoryItem=52,000 SimulationTrajectory=4,110 AttentionAllocation=4,210
+  t= 842s rss=322MB pyblocks=2,343,201 objects=241,086 SensoryItem=55,000 SimulationTrajectory=4,910 AttentionAllocation=4,686
+  t= 962s rss=329MB pyblocks=2,391,518 objects=242,976 SensoryItem=56,000 SimulationTrajectory=5,710 AttentionAllocation=5,162
+  t=1082s rss=330MB pyblocks=2,438,832 objects=243,452 SensoryItem=56,000 SimulationTrajectory=6,510 AttentionAllocation=5,636
+  t=1203s rss=332MB pyblocks=2,482,133 objects=243,309 SensoryItem=56,000 SimulationTrajectory=7,310 AttentionAllocation=6,097
+  t=1323s rss=333MB pyblocks=2,556,264 objects=243,439 SensoryItem=56,000 SimulationTrajectory=8,110 AttentionAllocation=6,569
+  t=1443s rss=335MB pyblocks=2,550,819 objects=241,895 SensoryItem=55,000 SimulationTrajectory=8,910 AttentionAllocation=7,041
+trim (malloc_trim(0) كل عينة؛ يسترد 9–20MB فقط):
+  t= 120s rss=258MB pyblocks=1,912,149 objects=224,107 SensoryItem=51,827 SimulationTrajectory=0 AttentionAllocation=0
+  t= 240s rss=263MB pyblocks=2,103,395 objects=236,931 SensoryItem=56,000 SimulationTrajectory=0 AttentionAllocation=0
+  t= 361s rss=272MB pyblocks=2,138,202 objects=237,295 SensoryItem=55,000 SimulationTrajectory=0 AttentionAllocation=2,796
+  t= 481s rss=284MB pyblocks=2,195,071 objects=239,194 SensoryItem=55,000 SimulationTrajectory=2,710 AttentionAllocation=3,274
+  t= 601s rss=288MB pyblocks=2,246,183 objects=240,563 SensoryItem=55,000 SimulationTrajectory=3,510 AttentionAllocation=3,752
+  t= 722s rss=288MB pyblocks=2,249,779 objects=238,086 SensoryItem=53,000 SimulationTrajectory=4,310 AttentionAllocation=4,215
+  t= 842s rss=291MB pyblocks=2,363,794 objects=243,384 SensoryItem=56,000 SimulationTrajectory=5,110 AttentionAllocation=4,704
+  t= 962s rss=296MB pyblocks=2,409,131 objects=243,554 SensoryItem=56,000 SimulationTrajectory=5,910 AttentionAllocation=5,178
+  t=1082s rss=305MB pyblocks=2,459,778 objects=244,326 SensoryItem=56,000 SimulationTrajectory=6,710 AttentionAllocation=5,654
+  t=1202s rss=307MB pyblocks=2,503,457 objects=244,258 SensoryItem=56,000 SimulationTrajectory=7,510 AttentionAllocation=6,128
+  t=1323s rss=308MB pyblocks=2,573,267 objects=244,505 SensoryItem=56,070 SimulationTrajectory=8,310 AttentionAllocation=6,600
+  t=1443s rss=313MB pyblocks=2,592,748 objects=244,409 SensoryItem=56,000 SimulationTrajectory=9,110 AttentionAllocation=7,059
+arena (MALLOC_ARENA_MAX=2):
+  t= 120s rss=246MB pyblocks=1,915,884 objects=224,443 SensoryItem=52,000 SimulationTrajectory=0 AttentionAllocation=0
+  t= 240s rss=252MB pyblocks=2,077,259 objects=234,847 SensoryItem=55,000 SimulationTrajectory=0 AttentionAllocation=0
+  t= 361s rss=256MB pyblocks=2,138,817 objects=237,306 SensoryItem=55,000 SimulationTrajectory=0 AttentionAllocation=2,785
+  t= 481s rss=258MB pyblocks=2,196,763 objects=239,374 SensoryItem=55,000 SimulationTrajectory=2,710 AttentionAllocation=3,263
+  t= 601s rss=261MB pyblocks=2,270,973 objects=242,398 SensoryItem=56,000 SimulationTrajectory=3,510 AttentionAllocation=3,741
+  t= 721s rss=262MB pyblocks=2,260,906 objects=236,989 SensoryItem=52,345 SimulationTrajectory=4,310 AttentionAllocation=4,217
+  t= 841s rss=264MB pyblocks=2,373,699 objects=242,651 SensoryItem=55,632 SimulationTrajectory=5,110 AttentionAllocation=4,693
+  t= 962s rss=268MB pyblocks=2,410,103 objects=243,579 SensoryItem=56,000 SimulationTrajectory=5,910 AttentionAllocation=5,169
+  t=1082s rss=271MB pyblocks=2,439,035 objects=242,664 SensoryItem=55,000 SimulationTrajectory=6,710 AttentionAllocation=5,643
+  t=1202s rss=272MB pyblocks=2,492,651 objects=242,652 SensoryItem=55,000 SimulationTrajectory=7,510 AttentionAllocation=6,117
+  t=1322s rss=275MB pyblocks=2,550,044 objects=244,398 SensoryItem=56,000 SimulationTrajectory=8,310 AttentionAllocation=6,576
+  t=1442s rss=277MB pyblocks=2,573,731 objects=242,853 SensoryItem=55,000 SimulationTrajectory=9,110 AttentionAllocation=7,046
+الخلاصة (أ): pyblocks ينمو في الثلاثة بالقدر نفسه (1.9M→2.25M) ⇒ نمو كائنات Python حية، لا تجزئة فقط.
+MALLOC_ARENA_MAX=2 خفض RSS ~58MB عند 600ث لكنه لا يوقف النمو ⇒ غير مثبت كإصلاح، لم يطبق في fly.toml.
+
+## (ب) A/B متوازٍ 600ث: old = 1dde77e ، new = إصلاح مؤشر التكامل وحده (views.py)
+old:
+  t= 120s rss=263MB pyblocks=1,917,930 objects=224,377 SensoryItem=52,000 SimulationTrajectory=0 AttentionAllocation=0
+  t= 240s rss=296MB pyblocks=2,125,218 objects=238,136 SensoryItem=56,000 SimulationTrajectory=0 AttentionAllocation=2,497
+  t= 361s rss=304MB pyblocks=2,155,522 objects=237,969 SensoryItem=55,000 SimulationTrajectory=0 AttentionAllocation=2,977
+  t= 481s rss=310MB pyblocks=2,206,427 objects=239,272 SensoryItem=55,000 SimulationTrajectory=2,900 AttentionAllocation=3,455
+  t= 601s rss=314MB pyblocks=2,287,741 objects=242,995 SensoryItem=56,000 SimulationTrajectory=3,700 AttentionAllocation=3,931
+new (المؤشر):
+  t= 120s rss=185MB pyblocks=575,808 objects=121,444 SensoryItem=0 SimulationTrajectory=0 AttentionAllocation=0
+  t= 240s rss=196MB pyblocks=707,749 objects=129,611 SensoryItem=0 SimulationTrajectory=0 AttentionAllocation=2,508
+  t= 360s rss=209MB pyblocks=792,599 objects=133,852 SensoryItem=0 SimulationTrajectory=0 AttentionAllocation=2,986
+  t= 480s rss=215MB pyblocks=875,138 objects=137,969 SensoryItem=0 SimulationTrajectory=2,910 AttentionAllocation=3,464
+  t= 600s rss=221MB pyblocks=957,047 objects=141,996 SensoryItem=0 SimulationTrajectory=3,710 AttentionAllocation=3,940
+السبب المثبت: _background_integration يمشي من الأحدث للأقدم ويضع last_hash لكل حدث ⇒ المؤشر عند الأقدم ⇒
+كل دورة (1ث) تعيد حتى 1000 حدث: sensory.add + get_payload من القرص + procedural.execute + long_term.consolidate.
+اختبار RED: 69 إضافة لـ5 أحداث جديدة (54 مكررة) — forensics/R-777_evidence_RED.txt.
+
+## (ج) الإصلاحان معًا (المؤشر + سقف simulation_history_list=10) 600ث
+  t= 120s rss=192MB pyblocks=624,262 objects=123,863 SensoryItem=0 SimulationTrajectory=0 AttentionAllocation=0
+  t= 240s rss=197MB pyblocks=685,542 objects=129,480 SensoryItem=0 SimulationTrajectory=0 AttentionAllocation=2,585
+  t= 360s rss=208MB pyblocks=701,575 objects=132,024 SensoryItem=0 SimulationTrajectory=0 AttentionAllocation=3,063
+  t= 480s rss=217MB pyblocks=716,358 objects=134,487 SensoryItem=0 SimulationTrajectory=0 AttentionAllocation=3,541
+  t= 600s rss=217MB pyblocks=730,487 objects=136,860 SensoryItem=0 SimulationTrajectory=0 AttentionAllocation=4,017
+معالج التطبيق في (ج): 89.78ث معالج خلال 580ث = 15.5% من نواة (محلي؛ لم يقس للقديم في هذه الجولة — لا مقارنة معالج مدعاة).
+
+## مقارنة عند 600ث
+  old:   rss=314MB pyblocks=2,287,741 objects=242,995 SensoryItem=56,000
+  new:   rss=221MB pyblocks=957,047   objects=141,996 SensoryItem=0
+  both:  rss=217MB pyblocks=730,487   objects=136,860 SensoryItem=0
+  نمو pyblocks 240→600ث: old +162k ، new +249k (SimulationTrajectory +3,710) ، both +45k.
+  نمو RSS 240→600ث: old +18MB ، new +25MB ، both +20MB ⇒ ما زال ~3MB/دقيقة رغم ثبات الكائنات تقريبًا.
+  المفتوح: AttentionAllocation +~480 كل 120ث (attention_engine.allocations)، ونمو RSS خارج pyblocks
+  (مخصص الذاكرة/غير متتبع بـgc). ٦.١.٢ يبقى مفتوحًا حتى قياس حي 24 ساعة.
+
+## (د) الإنتاج بعد R-776 (1dde77e، آلة 860772cee10078، قراءة /proc فقط)
+04:19:40 pid=644 rss=205MB cpu=11s threads=126 load=0.53 3470787 
+04:21:42 pid=644 rss=231MB cpu=21s threads=126 load=0.13 3471298 
+04:23:44 pid=644 rss=236MB cpu=30s threads=126 load=0.31 3471680 
+04:25:46 pid=644 rss=249MB cpu=41s threads=126 load=0.13 3472320 
+04:27:48 pid=644 rss=255MB cpu=51s threads=126 load=0.07 3472846 
+الخلاصة (د): index.json ثابت ~3.47MB، الحمل 0.07–0.53، لكن RSS 205→255MB في 8 دقائق.

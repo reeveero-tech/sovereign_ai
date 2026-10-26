@@ -752,6 +752,9 @@ class PredictiveSimulation:
         )
         
         self.simulation_history_list.append(snapshot)
+        # R-777: سقف كسقف simulation_history — كل لقطة تحمل دفعة بمساراتها كاملة
+        if len(self.simulation_history_list) > 10:
+            self.simulation_history_list = self.simulation_history_list[-10:]
         
         # تسجيل
         self.core.append_event(
