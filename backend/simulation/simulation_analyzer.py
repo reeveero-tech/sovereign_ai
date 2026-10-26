@@ -16,6 +16,7 @@
 """
 
 import json
+from runtime.atomic_json import atomic_write_json  # R-781
 import time
 import threading
 import runtime.threads as threads
@@ -834,8 +835,7 @@ class SimulationAnalyzer:
         """حفظ تقرير تحليل"""
         try:
             report_file = ANALYZER_REPORTS_DIR / f"report_{report.id}.json"
-            with open(report_file, 'w', encoding='utf-8') as f:
-                json.dump(report.__dict__, f, ensure_ascii=False, indent=2)
+            atomic_write_json(report_file, report.__dict__, ensure_ascii=False, indent=2)
         except Exception as e:
             logger.error(f"خطأ في حفظ التقرير: {e}")
     
@@ -847,8 +847,7 @@ class SimulationAnalyzer:
                 "historical_data_keys": list(self.historical_data.keys()),
                 "saved_at": time.time()
             }
-            with open(ANALYZER_STATE_FILE, 'w', encoding='utf-8') as f:
-                json.dump(state, f, ensure_ascii=False, indent=2)
+            atomic_write_json(ANALYZER_STATE_FILE, state, ensure_ascii=False, indent=2)
         except Exception as e:
             logger.error(f"خطأ في حفظ حالة المحلل: {e}")
     

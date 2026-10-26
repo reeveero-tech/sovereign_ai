@@ -1,0 +1,53 @@
+# R-781 — مواضع json.dump( الباقية في backend/ بعد R-781 (5) — كلها ذرية مسبقًا (مؤقت + os.replace)
+sovereign/secrets_vault.py — mkstemp + fsync (أضيف R-781) + chmod 0600 + replace؛ أذونات مقصودة
+connectors.py — mkstemp + flush + fsync + replace
+durable_tasks.py — mkstemp + fsync + replace + fsync الدليل
+skills.py — mkstemp + fsync + replace
+memory/defense/ransomware.py — مؤقت + fsync + replace + تقرير فشل مفصل (R-682)
+
+# 82 موضعًا حُوِّلت آليًا (AST) إلى runtime.atomic_json.atomic_write_json:
+ backend/config.py                             |  4 ++--
+ backend/consciousness/attention_engine.py     |  4 ++--
+ backend/consciousness/awareness.py            |  4 ++--
+ backend/consciousness/field.py                |  7 +++----
+ backend/consciousness/identity_core.py        |  7 +++----
+ backend/consciousness/introspection.py        |  7 +++----
+ backend/consciousness/self_model.py           |  7 +++----
+ backend/memory/biological/archetypes.py       |  4 ++--
+ backend/memory/biological/drives.py           |  4 ++--
+ backend/memory/biological/evolution.py        | 10 ++++------
+ backend/memory/biological/forgetting.py       |  4 ++--
+ backend/memory/biological/homeostasis.py      |  4 ++--
+ backend/memory/biological/immune.py           |  7 +++----
+ backend/memory/biological/instincts.py        |  4 ++--
+ backend/memory/biological/learning.py         |  7 +++----
+ backend/memory/biological/metabolism.py       | 16 ++++++----------
+ backend/memory/biological/plasticity.py       |  7 +++----
+ backend/memory/biological/regeneration.py     |  7 +++----
+ backend/memory/core.py                        | 10 ++++------
+ backend/memory/defense/bootkit.py             |  7 +++----
+ backend/memory/defense/polymorphic.py         |  4 ++--
+ backend/memory/defense/stealth.py             | 10 ++++------
+ backend/memory/encoding.py                    |  4 ++--
+ backend/memory/store/__init__.py              | 16 ++++++----------
+ backend/predictive/predictive_controller.py   |  4 ++--
+ backend/predictive/predictive_engine.py       |  7 +++----
+ backend/predictive/predictive_risk_manager.py |  7 +++----
+ backend/predictive/predictive_scenarios.py    |  7 +++----
+ backend/predictive/predictive_simulation.py   |  4 ++--
+ backend/quantum/quantum_controller.py         |  4 ++--
+ backend/quantum/quantum_field.py              |  4 ++--
+ backend/quantum/quantum_state.py              |  4 ++--
+ backend/quantum/quantum_superposition.py      |  4 ++--
+ backend/quantum/quantum_transition.py         |  4 ++--
+ backend/safety.py                             | 10 ++++------
+ backend/simulation/simulation_analyzer.py     |  7 +++----
+ backend/simulation/simulation_controller.py   |  4 ++--
+ backend/simulation/simulation_core.py         |  7 +++----
+ backend/simulation/simulation_environment.py  | 10 ++++------
+ backend/simulation/simulation_scheduler.py    | 10 ++++------
+ backend/sovereign/alignment.py                |  7 +++----
+ backend/sovereign/controller.py               |  7 +++----
+ backend/sovereign/directives.py               |  7 +++----
+ backend/sovereign/secrets_vault.py            |  2 ++
+ backend/sovereign/will.py                     |  7 +++----

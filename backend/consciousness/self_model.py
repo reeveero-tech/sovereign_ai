@@ -16,6 +16,7 @@
 """
 
 import json
+from runtime.atomic_json import atomic_write_json  # R-781
 import hashlib
 import secrets
 import time
@@ -743,8 +744,7 @@ class SelfModel:
                 "snapshots_count": len(self.snapshots),
                 "saved_at": time.time()
             }
-            with open(SELF_STATE_FILE, 'w', encoding='utf-8') as f:
-                json.dump(state, f, ensure_ascii=False, indent=2)
+            atomic_write_json(SELF_STATE_FILE, state, ensure_ascii=False, indent=2)
         except Exception as e:
             logger.error(f"خطأ في حفظ حالة نموذج الذات: {e}")
     
@@ -780,8 +780,7 @@ class SelfModel:
     def _save_journal(self):
         """حفظ اليوميات"""
         try:
-            with open(SELF_JOURNAL_FILE, 'w', encoding='utf-8') as f:
-                json.dump(self.journal[-500:], f, ensure_ascii=False, indent=2)
+            atomic_write_json(SELF_JOURNAL_FILE, self.journal[-500:], ensure_ascii=False, indent=2)
         except Exception as e:
             logger.error(f"خطأ في حفظ اليوميات: {e}")
     

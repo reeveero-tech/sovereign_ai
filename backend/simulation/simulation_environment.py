@@ -16,6 +16,7 @@
 """
 
 import json
+from runtime.atomic_json import atomic_write_json  # R-781
 import hashlib
 import time
 import threading
@@ -720,8 +721,7 @@ class SimulationEnvironmentManager:
         """حفظ قالب بيئة"""
         try:
             template_file = ENV_TEMPLATES_DIR / f"{template.id}.json"
-            with open(template_file, 'w', encoding='utf-8') as f:
-                json.dump(template.__dict__, f, ensure_ascii=False, indent=2)
+            atomic_write_json(template_file, template.__dict__, ensure_ascii=False, indent=2)
         except Exception as e:
             logger.error(f"خطأ في حفظ القالب: {e}")
     
@@ -729,8 +729,7 @@ class SimulationEnvironmentManager:
         """حفظ مجموعة معلمات"""
         try:
             param_file = ENV_PARAMS_DIR / f"{param_set.id}.json"
-            with open(param_file, 'w', encoding='utf-8') as f:
-                json.dump(param_set.__dict__, f, ensure_ascii=False, indent=2)
+            atomic_write_json(param_file, param_set.__dict__, ensure_ascii=False, indent=2)
         except Exception as e:
             logger.error(f"خطأ في حفظ مجموعة المعلمات: {e}")
     
@@ -771,8 +770,7 @@ class SimulationEnvironmentManager:
             }
             # M1: كتابة ذرية عبر ملف مؤقت لتجنب قراءة ملف نصف مكتوب
             tmp = ENV_STATE_FILE.with_suffix('.json.tmp')
-            with open(tmp, 'w', encoding='utf-8') as f:
-                json.dump(state, f, ensure_ascii=False, indent=2)
+            atomic_write_json(tmp, state, ensure_ascii=False, indent=2)
             tmp.replace(ENV_STATE_FILE)
         except Exception as e:
             logger.error(f"خطأ في حفظ حالة مدير البيئات: {e}")

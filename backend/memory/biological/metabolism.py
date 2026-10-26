@@ -16,6 +16,7 @@
 """
 
 import json
+from runtime.atomic_json import atomic_write_json  # R-781
 import hashlib
 import secrets
 import time
@@ -430,8 +431,7 @@ class CognitiveMetabolism:
                 path = self.store.FILE_MAP["semantic"]
                 raw = [i.__dict__ for i in items]
                 tmp = path.with_suffix(".tmp")
-                with open(tmp, "w", encoding="utf-8") as f:
-                    json.dump(raw, f, ensure_ascii=False, indent=2)
+                atomic_write_json(tmp, raw, ensure_ascii=False, indent=2)
                 tmp.replace(path)
                 
                 return True
@@ -465,8 +465,7 @@ class CognitiveMetabolism:
         path = self.store.FILE_MAP["associative"]
         raw = [i.__dict__ for i in assoc_items]
         tmp = path.with_suffix(".tmp")
-        with open(tmp, "w", encoding="utf-8") as f:
-            json.dump(raw, f, ensure_ascii=False, indent=2)
+        atomic_write_json(tmp, raw, ensure_ascii=False, indent=2)
         tmp.replace(path)
         
         # إنتاج الطاقة: تركيز
@@ -503,8 +502,7 @@ class CognitiveMetabolism:
             
             raw = [i.__dict__ for i in kept]
             tmp = path.with_suffix(".tmp")
-            with open(tmp, "w", encoding="utf-8") as f:
-                json.dump(raw, f, ensure_ascii=False, indent=2)
+            atomic_write_json(tmp, raw, ensure_ascii=False, indent=2)
             tmp.replace(path)
         
         # إنتاج الطاقة: إبداع
@@ -768,8 +766,7 @@ class CognitiveMetabolism:
                 "total_energy_produced": dict(self.total_energy_produced),
                 "saved_at": time.time()
             }
-            with open(METABOLISM_STATE_FILE, 'w', encoding='utf-8') as f:
-                json.dump(state, f, ensure_ascii=False, indent=2)
+            atomic_write_json(METABOLISM_STATE_FILE, state, ensure_ascii=False, indent=2)
         except Exception as e:
             logger.error(f"خطأ في حفظ حالة الأيض: {e}")
     
@@ -789,8 +786,7 @@ class CognitiveMetabolism:
     def _save_energy(self):
         """حفظ مستويات الطاقة"""
         try:
-            with open(METABOLISM_ENERGY_FILE, 'w', encoding='utf-8') as f:
-                json.dump(self.energy.to_dict(), f, ensure_ascii=False, indent=2)
+            atomic_write_json(METABOLISM_ENERGY_FILE, self.energy.to_dict(), ensure_ascii=False, indent=2)
         except Exception as e:
             logger.error(f"خطأ في حفظ الطاقة: {e}")
     

@@ -16,6 +16,7 @@
 """
 
 import json
+from runtime.atomic_json import atomic_write_json  # R-781
 import time
 import threading
 import runtime.threads as threads
@@ -799,8 +800,7 @@ class PredictiveRiskManager:
                 "history_count": len(self.risk_history),
                 "saved_at": time.time()
             }
-            with open(RISK_STATE_FILE, 'w', encoding='utf-8') as f:
-                json.dump(state, f, ensure_ascii=False, indent=2)
+            atomic_write_json(RISK_STATE_FILE, state, ensure_ascii=False, indent=2)
         except Exception as e:
             logger.error(f"خطأ في حفظ حالة المخاطر: {e}")
     
@@ -837,8 +837,7 @@ class PredictiveRiskManager:
                 ],
                 "saved_at": time.time()
             }
-            with open(RISK_REGISTRY_FILE, 'w', encoding='utf-8') as f:
-                json.dump(registry_data, f, ensure_ascii=False, indent=2)
+            atomic_write_json(RISK_REGISTRY_FILE, registry_data, ensure_ascii=False, indent=2)
         except Exception as e:
             logger.error(f"خطأ في حفظ سجل المخاطر: {e}")
     

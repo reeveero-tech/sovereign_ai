@@ -16,6 +16,7 @@
 """
 
 import json
+from runtime.atomic_json import atomic_write_json  # R-781
 import time
 import threading
 import runtime.threads as threads
@@ -604,8 +605,7 @@ class SimulationScheduler:
         """حفظ وظيفة"""
         try:
             job_file = SCHEDULER_JOBS_DIR / f"{job.id}.json"
-            with open(job_file, 'w', encoding='utf-8') as f:
-                json.dump(job.__dict__, f, ensure_ascii=False, indent=2)
+            atomic_write_json(job_file, job.__dict__, ensure_ascii=False, indent=2)
         except Exception as e:
             logger.error(f"خطأ في حفظ الوظيفة: {e}")
     
@@ -613,8 +613,7 @@ class SimulationScheduler:
         """حفظ تنفيذ"""
         try:
             exec_file = SCHEDULER_JOBS_DIR / f"exec_{execution.id}.json"
-            with open(exec_file, 'w', encoding='utf-8') as f:
-                json.dump(execution.__dict__, f, ensure_ascii=False, indent=2)
+            atomic_write_json(exec_file, execution.__dict__, ensure_ascii=False, indent=2)
         except Exception as e:
             logger.error(f"خطأ في حفظ التنفيذ: {e}")
     
@@ -648,8 +647,7 @@ class SimulationScheduler:
             }
             # M1: كتابة ذرية عبر ملف مؤقت لتجنب قراءة ملف نصف مكتوب
             tmp = SCHEDULER_STATE_FILE.with_suffix('.json.tmp')
-            with open(tmp, 'w', encoding='utf-8') as f:
-                json.dump(state, f, ensure_ascii=False, indent=2)
+            atomic_write_json(tmp, state, ensure_ascii=False, indent=2)
             tmp.replace(SCHEDULER_STATE_FILE)
         except Exception as e:
             logger.error(f"خطأ في حفظ حالة المجدول: {e}")

@@ -16,6 +16,7 @@
 """
 
 import json
+from runtime.atomic_json import atomic_write_json  # R-781
 import hashlib
 import secrets
 import time
@@ -795,8 +796,7 @@ class IntrospectionEngine:
                 "snapshots_count": len(self.snapshots),
                 "saved_at": time.time()
             }
-            with open(INTROSPECTION_STATE_FILE, 'w', encoding='utf-8') as f:
-                json.dump(state, f, ensure_ascii=False, indent=2)
+            atomic_write_json(INTROSPECTION_STATE_FILE, state, ensure_ascii=False, indent=2)
         except Exception as e:
             logger.error(f"خطأ في حفظ حالة الاستبطان: {e}")
     
@@ -827,8 +827,7 @@ class IntrospectionEngine:
                 ],
                 "saved_at": time.time()
             }
-            with open(SOVEREIGN_SERVICE_FILE, 'w', encoding='utf-8') as f:
-                json.dump(data, f, ensure_ascii=False, indent=2)
+            atomic_write_json(SOVEREIGN_SERVICE_FILE, data, ensure_ascii=False, indent=2)
         except Exception as e:
             logger.error(f"خطأ في حفظ خدمة السيد: {e}")
     

@@ -16,6 +16,7 @@
 """
 
 import json
+from runtime.atomic_json import atomic_write_json  # R-781
 import hashlib
 import secrets
 import base64
@@ -221,8 +222,7 @@ class SovereignLanguage:
                 "evolution_counter": self.evolution_counter,
                 "saved_at": time.time()
             }
-            with open(LANGUAGE_FILE, 'w', encoding='utf-8') as f:
-                json.dump(data, f, ensure_ascii=False, indent=2)
+            atomic_write_json(LANGUAGE_FILE, data, ensure_ascii=False, indent=2)
         except Exception as e:
             logger.error(f"فشل حفظ اللغة: {e}")
     

@@ -16,6 +16,7 @@
 """
 
 import json
+from runtime.atomic_json import atomic_write_json  # R-781
 import time
 import threading
 import runtime.threads as threads
@@ -881,8 +882,7 @@ class PredictiveScenarioEngine:
                 "triggered_warnings_count": len(self.triggered_warnings),
                 "saved_at": time.time()
             }
-            with open(SCENARIOS_STATE_FILE, 'w', encoding='utf-8') as f:
-                json.dump(state, f, ensure_ascii=False, indent=2)
+            atomic_write_json(SCENARIOS_STATE_FILE, state, ensure_ascii=False, indent=2)
         except Exception as e:
             logger.error(f"خطأ في حفظ حالة السيناريوهات: {e}")
     
@@ -912,8 +912,7 @@ class PredictiveScenarioEngine:
                 ],
                 "saved_at": time.time()
             }
-            with open(SCENARIOS_HISTORY_FILE, 'w', encoding='utf-8') as f:
-                json.dump(history_data, f, ensure_ascii=False, indent=2)
+            atomic_write_json(SCENARIOS_HISTORY_FILE, history_data, ensure_ascii=False, indent=2)
         except Exception as e:
             logger.error(f"خطأ في حفظ سجل السيناريوهات: {e}")
     

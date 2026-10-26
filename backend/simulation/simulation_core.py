@@ -16,6 +16,7 @@
 """
 
 import json
+from runtime.atomic_json import atomic_write_json  # R-781
 import time
 import threading
 import runtime.threads as threads
@@ -765,8 +766,7 @@ class SimulationCore:
                 "max_workers": self.max_workers,
                 "saved_at": time.time()
             }
-            with open(SIMCORE_STATE_FILE, 'w', encoding='utf-8') as f:
-                json.dump(state, f, ensure_ascii=False, indent=2)
+            atomic_write_json(SIMCORE_STATE_FILE, state, ensure_ascii=False, indent=2)
         except Exception as e:
             logger.error(f"خطأ في حفظ حالة نواة المحاكاة: {e}")
     
@@ -786,8 +786,7 @@ class SimulationCore:
         """حفظ تقرير محاكاة"""
         try:
             report_file = SIMCORE_RESULTS_DIR / f"report_{report.batch_id}_{int(report.timestamp)}.json"
-            with open(report_file, 'w', encoding='utf-8') as f:
-                json.dump(report.__dict__, f, ensure_ascii=False, indent=2)
+            atomic_write_json(report_file, report.__dict__, ensure_ascii=False, indent=2)
         except Exception as e:
             logger.error(f"خطأ في حفظ التقرير: {e}")
     

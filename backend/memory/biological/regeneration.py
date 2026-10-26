@@ -16,6 +16,7 @@
 """
 
 import json
+from runtime.atomic_json import atomic_write_json  # R-781
 import hashlib
 import secrets
 import time
@@ -725,8 +726,7 @@ class MemoryRegeneration:
         """حفظ خلية جذعية"""
         try:
             cell_file = REGEN_STEM_CELLS_DIR / f"{stem_cell.id}.json"
-            with open(cell_file, 'w', encoding='utf-8') as f:
-                json.dump(stem_cell.__dict__, f, ensure_ascii=False, indent=2)
+            atomic_write_json(cell_file, stem_cell.__dict__, ensure_ascii=False, indent=2)
         except Exception as e:
             logger.error(f"خطأ في حفظ الخلية الجذعية: {e}")
     
@@ -764,8 +764,7 @@ class MemoryRegeneration:
                 "operations_count": len(self.operations_history),
                 "saved_at": time.time()
             }
-            with open(REGEN_STATE_FILE, 'w', encoding='utf-8') as f:
-                json.dump(state, f, ensure_ascii=False, indent=2)
+            atomic_write_json(REGEN_STATE_FILE, state, ensure_ascii=False, indent=2)
         except Exception as e:
             logger.error(f"خطأ في حفظ حالة التجديد: {e}")
     

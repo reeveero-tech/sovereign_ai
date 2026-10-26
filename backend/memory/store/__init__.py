@@ -17,6 +17,7 @@
 """
 
 import json
+from runtime.atomic_json import atomic_write_json  # R-781
 import uuid
 import time
 import hashlib
@@ -316,8 +317,7 @@ class MemoryIndex:
                 "updated_at": time.time()
             }
             
-            with open(self.index_file, 'w', encoding='utf-8') as f:
-                json.dump(data, f, ensure_ascii=False, indent=2)
+            atomic_write_json(self.index_file, data, ensure_ascii=False, indent=2)
     
     def add_item(self, item_id: str, kind: str, tags: List[str], 
                  text_content: str, importance: float, timestamp: float):
@@ -459,8 +459,7 @@ class SolidMemoryStore:
                     logger.debug(f"📁 تم حذف ملف {kind}، نسخة احتياطية في {backup_file}")
                     
                     # إعادة إنشاء ملف فارغ
-                    with open(path, 'w', encoding='utf-8') as f:
-                        json.dump([], f)
+                    atomic_write_json(path, [])
         
         # إعادة تحميل الفهرس
         self.index = MemoryIndex(FILE_MAP["index"])
@@ -526,8 +525,7 @@ class SolidMemoryStore:
             
             # كتابة ذرية
             tmp_path = path.with_suffix('.tmp')
-            with open(tmp_path, 'w', encoding='utf-8') as f:
-                json.dump(items_data, f, ensure_ascii=False, indent=2)
+            atomic_write_json(tmp_path, items_data, ensure_ascii=False, indent=2)
             tmp_path.replace(path)
         
         # R-719 (بأمر المالك): مرآة سحابية بعد نجاح الكتابة المحلية — best-effort:
@@ -560,8 +558,7 @@ class SolidMemoryStore:
             payload = disk.load_blob("memory", kind)
             if not payload or not isinstance(payload.get("items"), list):
                 return
-            with open(path, 'w', encoding='utf-8') as f:
-                json.dump(payload["items"], f, ensure_ascii=False, indent=2)
+            atomic_write_json(path, payload["items"], ensure_ascii=False, indent=2)
             logger.info(f"☁️ R-719: استرجاع {kind} من القرص السحابي ({len(payload['items'])} عنصر)")
         except Exception as e:  # noqa: BLE001 — فشل الاسترجاع لا يمنع الإقلاع
             logger.warning(f"R-719 [DISK]: فشل استرجاع {kind}: {e}")
@@ -1083,8 +1080,7 @@ class SolidMemoryStore:
             for kind, items in self._data.items():
                 all_data[kind] = [item.to_dict() for item in items.values()]
             
-            with open(backup_file, 'w', encoding='utf-8') as f:
-                json.dump(all_data, f, ensure_ascii=False, indent=2)
+            atomic_write_json(backup_file, all_data, ensure_ascii=False, indent=2)
         
         # تنظيف النسخ القديمة
         backups = sorted(STORE_DIR.glob("backup_*.json"))

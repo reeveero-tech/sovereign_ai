@@ -15,6 +15,7 @@
 """
 
 import json
+from runtime.atomic_json import atomic_write_json  # R-781
 import os
 import secrets
 import hashlib
@@ -420,8 +421,7 @@ class StealthDefense:
         
         # تخزين بيانات الشبح
         ghost_file = GHOST_DIR / f"{ghost_id}.json"
-        with open(ghost_file, 'w') as f:
-            json.dump({"location": location, "payload": payload, "created_at": ghost.created_at}, f)
+        atomic_write_json(ghost_file, {"location": location, "payload": payload, "created_at": ghost.created_at})
         
         self.ghosts[ghost_id] = ghost
         
@@ -595,8 +595,7 @@ class StealthDefense:
         
         # تخزين الوعاء
         honey_file = STEALTH_DIR / f"{honey_id}.json"
-        with open(honey_file, 'w') as f:
-            json.dump(fake_content, f)
+        atomic_write_json(honey_file, fake_content)
         
         self.core.append_event(
             event_type="stealth::honeypot_deployed",
@@ -744,8 +743,7 @@ class StealthDefense:
                 "saved_at": time.time()
             }
             
-            with open(STEALTH_STATE_FILE, 'w', encoding='utf-8') as f:
-                json.dump(state, f, ensure_ascii=False, indent=2)
+            atomic_write_json(STEALTH_STATE_FILE, state, ensure_ascii=False, indent=2)
         except Exception as e:
             logger.error(f"خطأ في حفظ حالة التخفي: {e}")
     

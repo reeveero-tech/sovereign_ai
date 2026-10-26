@@ -3,6 +3,7 @@
 # الإصدار: 2.0.0 | لا يمكن تجاوزها | السيد هو السيد
 
 import json
+from runtime.atomic_json import atomic_write_json  # R-781
 import time
 import hashlib
 import hmac
@@ -159,8 +160,7 @@ class SafetyGuard:
     def _save_approval_cache(self):
         """حفظ سجل الموافقات"""
         try:
-            with open(self.approval_cache_file, "w", encoding="utf-8") as f:
-                json.dump(self.approval_cache, f, ensure_ascii=False, indent=2)
+            atomic_write_json(self.approval_cache_file, self.approval_cache, ensure_ascii=False, indent=2)
         # TOLERATED: known-safe fallback — non-fatal diagnostic path (R-680)
         except:
             pass
@@ -368,8 +368,7 @@ class SafetyGuard:
             "timeout_seconds": timeout_seconds
         }
         
-        with open(request_file, "w", encoding="utf-8") as f:
-            json.dump(request_data, f, ensure_ascii=False, indent=2)
+        atomic_write_json(request_file, request_data, ensure_ascii=False, indent=2)
         
         self._log_security_event("approval_request_created", {
             "action_id": action_id,
@@ -522,8 +521,7 @@ class SafetyGuard:
         
         # حفظ
         try:
-            with open(self.security_log_file, "w", encoding="utf-8") as f:
-                json.dump(log, f, ensure_ascii=False, indent=2)
+            atomic_write_json(self.security_log_file, log, ensure_ascii=False, indent=2)
         # TOLERATED: known-safe fallback — non-fatal diagnostic path (R-680)
         except:
             pass

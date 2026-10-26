@@ -16,6 +16,7 @@
 """
 
 import json
+from runtime.atomic_json import atomic_write_json  # R-781
 import hashlib
 import time
 import threading
@@ -993,8 +994,7 @@ class PredictiveEngine:
                 "accuracy_history": self.accuracy_history[-50:],
                 "saved_at": time.time()
             }
-            with open(PREDICTIVE_STATE_FILE, 'w', encoding='utf-8') as f:
-                json.dump(state, f, ensure_ascii=False, indent=2)
+            atomic_write_json(PREDICTIVE_STATE_FILE, state, ensure_ascii=False, indent=2)
         except Exception as e:
             logger.error(f"خطأ في حفظ حالة التنبؤ: {e}")
     
@@ -1026,8 +1026,7 @@ class PredictiveEngine:
                 ],
                 "saved_at": time.time()
             }
-            with open(PREDICTIVE_FORECASTS_FILE, 'w', encoding='utf-8') as f:
-                json.dump(forecasts_data, f, ensure_ascii=False, indent=2)
+            atomic_write_json(PREDICTIVE_FORECASTS_FILE, forecasts_data, ensure_ascii=False, indent=2)
         except Exception as e:
             logger.error(f"خطأ في حفظ التوقعات: {e}")
     

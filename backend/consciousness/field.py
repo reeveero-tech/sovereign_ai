@@ -16,6 +16,7 @@
 """
 
 import json
+from runtime.atomic_json import atomic_write_json  # R-781
 import hashlib
 import time
 import threading
@@ -661,8 +662,7 @@ class ConsciousnessFieldEngine:
         """حفظ لحظة وعي"""
         try:
             moment_file = CONSCIOUSNESS_MOMENTS_DIR / f"{moment.id}.json"
-            with open(moment_file, 'w', encoding='utf-8') as f:
-                json.dump(moment.__dict__, f, ensure_ascii=False, indent=2)
+            atomic_write_json(moment_file, moment.__dict__, ensure_ascii=False, indent=2)
         except Exception as e:
             logger.error(f"خطأ في حفظ لحظة الوعي: {e}")
     
@@ -678,8 +678,7 @@ class ConsciousnessFieldEngine:
                 "field_history_count": len(self.field_history),
                 "saved_at": time.time()
             }
-            with open(CONSCIOUSNESS_STATE_FILE, 'w', encoding='utf-8') as f:
-                json.dump(state, f, ensure_ascii=False, indent=2)
+            atomic_write_json(CONSCIOUSNESS_STATE_FILE, state, ensure_ascii=False, indent=2)
         except Exception as e:
             logger.error(f"خطأ في حفظ حالة الوعي: {e}")
     

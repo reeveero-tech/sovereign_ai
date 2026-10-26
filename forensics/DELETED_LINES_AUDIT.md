@@ -2610,3 +2610,7 @@ Bus إطلاقًا. الواجهة سليمة بعد الإزالة (101 وسم 
 - `ransomware.get_resurrection_history`: `history.append(event.get("payload", {}))` استُبدل به `self.core.get_payload(event)`، لأن الحدث لا يحمل payload فكانت النتيجة `{}` دائمًا.
 - `instincts._detect_external_control`: سطر `attempts.append({` أُعيدت صياغته ليضم `hash`.
 - ترويستا PROJECT_STATE وCHANGELOG، وخليتا ٦.١.٢ و٦.١.٩ في ROADMAP_V6.
+
+## 2026-10-26 — R-781: أسطر مستبدلة
+- **# DELETION-JUSTIFIED**: 82 كتلة `with open(path, "w") as f: json.dump(obj, f, ...)` في 44 ملفًا تحت `backend/` استُبدلت بكل منها `atomic_write_json(path, obj, ...)` بالوسائط نفسها (تحويل AST؛ القائمة في `forensics/R-781_json_dump_sites.txt`). السبب: الاقتطاع قبل الكتابة يُفقد الحالة عند أي فشل. لا بيانات محذوفة ولا سلوك محذوف.
+- ترويستا PROJECT_STATE وCHANGELOG، وخلية ٦.١.٨ في ROADMAP_V6.

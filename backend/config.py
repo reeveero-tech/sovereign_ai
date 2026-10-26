@@ -5,6 +5,7 @@
 import os
 import sys
 import json
+from runtime.atomic_json import atomic_write_json  # R-781
 import secrets
 from pathlib import Path
 from typing import Optional, Dict, Any, List
@@ -483,8 +484,7 @@ def save_config_backup():
     """حفظ نسخة احتياطية من الإعدادات الحالية"""
     backup = get_config_summary()
     try:
-        with open(CONFIG_BACKUP_FILE, "w", encoding="utf-8") as f:
-            json.dump(backup, f, ensure_ascii=False, indent=2)
+        atomic_write_json(CONFIG_BACKUP_FILE, backup, ensure_ascii=False, indent=2)
     # TOLERATED: config backup is best-effort diagnostic — not required for correct startup (R-680)
     except:
         pass

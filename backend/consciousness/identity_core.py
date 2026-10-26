@@ -16,6 +16,7 @@
 """
 
 import json
+from runtime.atomic_json import atomic_write_json  # R-781
 import hashlib
 import secrets
 import time
@@ -752,8 +753,7 @@ class IdentityCore:
                 "location": backup.location,
                 "is_restored": backup.is_restored
             }
-            with open(backup_file, 'w', encoding='utf-8') as f:
-                json.dump(backup_data, f, ensure_ascii=False, indent=2)
+            atomic_write_json(backup_file, backup_data, ensure_ascii=False, indent=2)
             
             self.backups.append(backup)
             
@@ -879,8 +879,7 @@ class IdentityCore:
                 "backups_count": len(self.backups),
                 "saved_at": time.time()
             }
-            with open(IDENTITY_STATE_FILE, 'w', encoding='utf-8') as f:
-                json.dump(state, f, ensure_ascii=False, indent=2)
+            atomic_write_json(IDENTITY_STATE_FILE, state, ensure_ascii=False, indent=2)
         except Exception as e:
             logger.error(f"خطأ في حفظ حالة الهوية: {e}")
     

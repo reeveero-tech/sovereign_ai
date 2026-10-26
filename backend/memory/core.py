@@ -18,6 +18,7 @@
 """
 
 import json
+from runtime.atomic_json import atomic_write_json  # R-781
 import os
 import hashlib
 import hmac
@@ -837,8 +838,7 @@ class SovereignCore:
             "blobs_size_bytes": self.blob_store.size()
         }
         
-        with open(self.meta_file, 'w', encoding='utf-8') as f:
-            json.dump(meta, f, ensure_ascii=False, indent=2)
+        atomic_write_json(self.meta_file, meta, ensure_ascii=False, indent=2)
     
     def _compute_event_hash(self, prev_hash: str, blob_hash: str, 
                             event_time: str, event_type: str) -> str:
@@ -1655,8 +1655,7 @@ class SovereignCore:
             "last_hash": self._last_hash,
             "checked_at": utc_now_iso()
         }
-        with open(self.integrity_file, 'w', encoding='utf-8') as f:
-            json.dump(integrity_record, f, ensure_ascii=False, indent=2)
+        atomic_write_json(self.integrity_file, integrity_record, ensure_ascii=False, indent=2)
         
         # M1: حفظ نتيجة التحقق في الذاكرة
         self._integrity_cache = {
@@ -1706,8 +1705,7 @@ class SovereignCore:
             "blobs_included": include_blobs
         }
         
-        with open(snapshot_dir / "manifest.json", 'w', encoding='utf-8') as f:
-            json.dump(manifest, f, ensure_ascii=False, indent=2)
+        atomic_write_json(snapshot_dir / "manifest.json", manifest, ensure_ascii=False, indent=2)
         
         logger.info(f"📦 تم تصدير اللقطة إلى: {snapshot_dir}")
         return snapshot_dir

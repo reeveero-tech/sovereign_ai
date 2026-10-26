@@ -16,6 +16,7 @@
 """
 
 import json
+from runtime.atomic_json import atomic_write_json  # R-781
 import hashlib
 import secrets
 import time
@@ -703,8 +704,7 @@ class AdaptiveLearning:
                 "schemas_count": len(self.schemas),
                 "saved_at": time.time()
             }
-            with open(LEARNING_STATE_FILE, 'w', encoding='utf-8') as f:
-                json.dump(state, f, ensure_ascii=False, indent=2)
+            atomic_write_json(LEARNING_STATE_FILE, state, ensure_ascii=False, indent=2)
         except Exception as e:
             logger.error(f"خطأ في حفظ حالة التعلم: {e}")
     
@@ -738,8 +738,7 @@ class AdaptiveLearning:
                 ],
                 "saved_at": time.time()
             }
-            with open(LEARNING_PATTERNS_FILE, 'w', encoding='utf-8') as f:
-                json.dump(patterns_data, f, ensure_ascii=False, indent=2)
+            atomic_write_json(LEARNING_PATTERNS_FILE, patterns_data, ensure_ascii=False, indent=2)
         except Exception as e:
             logger.error(f"خطأ في حفظ الأنماط: {e}")
     

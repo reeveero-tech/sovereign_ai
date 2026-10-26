@@ -1,0 +1,18 @@
+# R-781 RED — 5cae36e + tests/test_atomic_json_writes.py قبل الإصلاح — 2026-10-26T12:28:39Z
+E       AssertionError: اقتطاع ثم json.dump (غير ذري): ['config.py:486', 'safety.py:371', 'safety.py:162', 'safety.py:525', 'predictive/predictive_scenarios.py:884', 'predictive/predictive_scenarios.py:915', 'predictive/predictive_simulation.py:837', 'predictive/predictive_engine.py:996', 'predictive/predictive_engine.py:1029', 'predictive/predictive_controller.py:550', 'predictive/predictive_risk_manager.py:802', 'predictive/predictive_risk_manager.py:840', 'memory/encoding.py:224', 'memory/core.py:840', 'memory/core.py:1658', 'memory/core.py:1709', 'memory/defense/bootkit.py:626', 'memory/defense/bootkit.py:751', 'memory/defense/stealth.py:423', 'memory/defense/stealth.py:598', 'memory/defense/stealth.py:747', 'memory/defense/polymorphic.py:587', 'memory/store/__init__.py:319', 'memory/store/__init__.py:529', 'memory/store/__init__.py:563', 'memory/store/__init__.py:1086', 'memory/store/__init__.py:462', 'memory/biological/evolution.py:710', 'memory/biological/evolution.py:733', 'memory/biological/evolution.py:750', 'memory/biological/metabolism.py:468', 'memory/biological/metabolism.py:506', 'memory/biological/metabolism.py:771', 'memory/biological/metabolism.py:792', 'memory/biological/metabolism.py:433', 'memory/biological/learning.py:706', 'memory/biological/learning.py:741', 'memory/biological/forgetting.py:832', 'memory/biological/instincts.py:822', 'memory/biological/archetypes.py:833', 'memory/biological/drives.py:808', 'memory/biological/plasticity.py
+__________________ test_failed_save_keeps_previous_approvals ___________________
+tmp_path = PosixPath('/tmp/pytest-of-user/pytest-162/test_failed_save_keeps_previou0')
+    def test_failed_save_keeps_previous_approvals(tmp_path):
+E       AssertionError: assert {} == {'approved::a': {'ok': True}}
+E       ModuleNotFoundError: No module named 'runtime.atomic_json'
+tests/test_atomic_json_writes.py::test_failed_save_keeps_previous_approvals
+FAILED tests/test_atomic_json_writes.py::test_no_truncate_then_dump_pattern
+FAILED tests/test_atomic_json_writes.py::test_failed_save_keeps_previous_approvals
+FAILED tests/test_atomic_json_writes.py::test_helper_is_atomic_and_preserves_mode
+3 failed, 1 passed, 2 warnings in 1.29s
+# json.dump sites before: 87
+
+# RED 2 — test_secrets_vault_save_fsyncs_before_replace
+E       AssertionError: ['replace']
+FAILED tests/test_atomic_json_writes.py::test_secrets_vault_save_fsyncs_before_replace
+1 failed, 4 deselected, 2 warnings in 0.11s

@@ -16,6 +16,7 @@
 """
 
 import json
+from runtime.atomic_json import atomic_write_json  # R-781
 import math
 import random
 import secrets
@@ -977,8 +978,7 @@ class QuantumStateEngine:
                 "policies": self.policies,
                 "saved_at": time.time()
             }
-            with open(QUANTUM_STATE_FILE, 'w', encoding='utf-8') as f:
-                json.dump(state_data, f, ensure_ascii=False, indent=2)
+            atomic_write_json(QUANTUM_STATE_FILE, state_data, ensure_ascii=False, indent=2)
         except Exception as e:
             logger.error(f"خطأ في حفظ الحالة الكمومية: {e}")
     

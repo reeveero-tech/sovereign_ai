@@ -16,6 +16,7 @@
 """
 
 import json
+from runtime.atomic_json import atomic_write_json  # R-781
 import hashlib
 import secrets
 import time
@@ -707,8 +708,7 @@ class MemoryEvolution:
                 "saved_at": time.time()
             }
             
-            with open(EVOLUTION_GENOME_FILE, 'w', encoding='utf-8') as f:
-                json.dump(genome_data, f, ensure_ascii=False, indent=2)
+            atomic_write_json(EVOLUTION_GENOME_FILE, genome_data, ensure_ascii=False, indent=2)
         except Exception as e:
             logger.error(f"خطأ في حفظ الجينوم: {e}")
     
@@ -730,8 +730,7 @@ class MemoryEvolution:
         """حفظ طفرة"""
         try:
             mut_file = EVOLUTION_MUTATIONS_DIR / f"{mutation.id}.json"
-            with open(mut_file, 'w', encoding='utf-8') as f:
-                json.dump(mutation.__dict__, f, ensure_ascii=False, indent=2)
+            atomic_write_json(mut_file, mutation.__dict__, ensure_ascii=False, indent=2)
         except Exception as e:
             logger.error(f"خطأ في حفظ الطفرة: {e}")
     
@@ -747,8 +746,7 @@ class MemoryEvolution:
                 "mutations_count": len(self.mutations),
                 "saved_at": time.time()
             }
-            with open(EVOLUTION_STATE_FILE, 'w', encoding='utf-8') as f:
-                json.dump(state, f, ensure_ascii=False, indent=2)
+            atomic_write_json(EVOLUTION_STATE_FILE, state, ensure_ascii=False, indent=2)
         except Exception as e:
             logger.error(f"خطأ في حفظ حالة التطور: {e}")
     

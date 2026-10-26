@@ -118,6 +118,8 @@ class SecretsVault:
         try:
             with os.fdopen(fd, "w", encoding="utf-8") as fh:
                 json.dump(data, fh, ensure_ascii=False, indent=1)
+                fh.flush()
+                os.fsync(fh.fileno())  # R-781: قبل الاستبدال — لا خزينة فارغة بعد انقطاع
             os.chmod(tmp, 0o600)
             os.replace(tmp, self.path)
         except Exception:

@@ -16,6 +16,7 @@
 """
 
 import json
+from runtime.atomic_json import atomic_write_json  # R-781
 import time
 import threading
 import runtime.threads as threads
@@ -731,8 +732,7 @@ class QuantumController:
                 "policies": self.policies,
                 "saved_at": time.time()
             }
-            with open(QUANTUM_CONTROLLER_STATE_FILE, 'w', encoding='utf-8') as f:
-                json.dump(state, f, ensure_ascii=False, indent=2)
+            atomic_write_json(QUANTUM_CONTROLLER_STATE_FILE, state, ensure_ascii=False, indent=2)
         except Exception as e:
             logger.error(f"خطأ في حفظ حالة المتحكم: {e}")
     

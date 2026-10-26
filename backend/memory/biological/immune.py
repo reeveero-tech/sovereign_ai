@@ -16,6 +16,7 @@
 """
 
 import json
+from runtime.atomic_json import atomic_write_json  # R-781
 import hashlib
 import secrets
 import time
@@ -841,8 +842,7 @@ class ImmuneMemory:
     def _save_memory_cells(self):
         """حفظ خلايا الذاكرة"""
         try:
-            with open(IMMUNE_MEMORY_CELLS_FILE, 'w', encoding='utf-8') as f:
-                json.dump([cell.__dict__ for cell in self.memory_cells], f, ensure_ascii=False, indent=2)
+            atomic_write_json(IMMUNE_MEMORY_CELLS_FILE, [cell.__dict__ for cell in self.memory_cells], ensure_ascii=False, indent=2)
         except Exception as e:
             logger.error(f"خطأ في حفظ خلايا الذاكرة: {e}")
     
@@ -872,8 +872,7 @@ class ImmuneMemory:
                 "saved_at": time.time()
             }
             
-            with open(IMMUNE_STATE_FILE, 'w', encoding='utf-8') as f:
-                json.dump(state, f, ensure_ascii=False, indent=2)
+            atomic_write_json(IMMUNE_STATE_FILE, state, ensure_ascii=False, indent=2)
         except Exception as e:
             logger.error(f"خطأ في حفظ حالة المناعة: {e}")
     

@@ -16,6 +16,7 @@
 """
 
 import json
+from runtime.atomic_json import atomic_write_json  # R-781
 import hashlib
 import secrets
 import collections
@@ -819,8 +820,7 @@ class CognitiveInstincts:
         """حفظ ملف السيد"""
         if self.sovereign_profile:
             try:
-                with open(SOVEREIGN_PROTECTION_FILE, 'w', encoding='utf-8') as f:
-                    json.dump(self.sovereign_profile.__dict__, f, ensure_ascii=False, indent=2)
+                atomic_write_json(SOVEREIGN_PROTECTION_FILE, self.sovereign_profile.__dict__, ensure_ascii=False, indent=2)
             except Exception as e:
                 logger.error(f"خطأ في حفظ ملف السيد: {e}")
     
