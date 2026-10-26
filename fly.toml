@@ -15,6 +15,11 @@ primary_region = 'ams'
   # ⚠️ SECURITY (جولة المجلس <1> — أمين 2.2): الإنتاج صريح — الرفض المغلق يعمل
   # (SOVEREIGN_KEY يُمرّر عبر `fly secrets`، لا عبر هذا الملف).
   AI_ENVIRONMENT = 'production'
+  # R-779: مخصص glibc — 900ث محليًا: افتراضي 221MB، هذا الضبط 154MB، المعالج نفسه
+  # (forensics/R-779_measure_allocator.txt). عدد الساحات مقيد لأن الخيوط ~126.
+  MALLOC_ARENA_MAX = '2'
+  MALLOC_MMAP_THRESHOLD_ = '131072'
+  MALLOC_TRIM_THRESHOLD_ = '131072'
 
 [http_service]
   internal_port = 8080

@@ -1,0 +1,4 @@
+# R-779 RED — af11665 + tests/test_fly_allocator_env.py قبل التعديل — 2026-10-26T10:05:43Z
+FAILED tests/test_fly_allocator_env.py::test_arena_max_is_bounded - Assertion...
+FAILED tests/test_fly_allocator_env.py::test_mmap_and_trim_thresholds_are_fixed
+2 failed, 1 warning in 0.05s
