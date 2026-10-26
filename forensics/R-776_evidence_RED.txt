@@ -1,0 +1,11 @@
+# R-776 RED — 6537d3c + tests/test_index_bounded.py قبل الإصلاح — 2026-10-26T03:51:56Z
+# الإنتاج: index.json 16.7MB (by_hash 13.5MB/55,434) يُعاد كتابته + fsync كل 5ث؛ الحمل 4.9–6.9 ومعالج التطبيق ~8%
+E       AssertionError: assert 50 == 10
+E       AssertionError: assert 12000 == 10000
+E       AssertionError: assert ['h000000', '...h000005', ...] == ['h000015', '...8', 'h000019']
+E       AssertionError: assert (101 == 10)
+FAILED tests/test_index_bounded.py::test_by_hash_keeps_only_the_newest_entries
+FAILED tests/test_index_bounded.py::test_default_cap_bounds_production_scale
+FAILED tests/test_index_bounded.py::test_by_type_capped_per_type - AssertionE...
+FAILED tests/test_index_bounded.py::test_oversized_index_from_disk_is_trimmed_on_next_event
+4 failed, 1 warning in 121.06s (0:02:01)

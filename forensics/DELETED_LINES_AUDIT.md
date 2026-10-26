@@ -2583,3 +2583,6 @@ Bus إطلاقًا. الواجهة سليمة بعد الإزالة (101 وسم 
 
 ## 2026-10-26 — R-775: أسطر مستبدلة
 - **# DELETION-JUSTIFIED** — `backend/consciousness/field.py`: `iterate_events(limit=5)` → `iterate_events(reverse=True, limit=5)` (كان يقرأ أقدم حدث على أنه الأخير). `backend/memory/core.py`: لا حذف — المسار الأمامي يُحوَّل قبل الكتلة القديمة التي بقيت للمسار العكسي. ترويسات `docs/PROJECT_STATE.md` و`docs/CHANGELOG.md`، وصف «المرحلة» (V5→V6 مع إبقاء ذكر V5)، وخلية ٦.١.٢ في `docs/ROADMAP_V6.md`.
+
+## 2026-10-26 — R-776: أسطر مستبدلة
+- **# DELETION-JUSTIFIED** — `backend/memory/core.py`: حلقة قصّ `by_type` على كل الأنواع مع كل حدث (سقف 10,000) استُبدلت بقصّ النوع المُلحق وحده بسقف من البيئة (افتراضي 500) — لا قارئ لهذه القوائم. `.github/workflows/uptime.yml` + `tests/test_uptime_monitor.py`: `*/15 * * * *` → `7,22,37,52 * * * *` (لم يطلق في 3.5 ساعة). ترويسات PROJECT_STATE/CHANGELOG، وخليتا ٦.١.١ و٦.١.٣ في ROADMAP_V6.

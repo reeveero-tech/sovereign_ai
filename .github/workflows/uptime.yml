@@ -4,7 +4,8 @@ name: Uptime — external /health monitor
 
 on:
   schedule:
-    - cron: "*/15 * * * *"
+    # R-776: دقائق غير دائرية — جدولة GitHub تُسقط/تؤخر ذروة رأس الساعة؛ لم يطلق */15 أي تشغيل في 3.5 ساعة
+    - cron: "7,22,37,52 * * * *"
   workflow_dispatch:
 
 permissions:

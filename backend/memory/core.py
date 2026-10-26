@@ -384,6 +384,24 @@ def _index_save_interval() -> float:
         return _DEFAULT_INDEX_SAVE_INTERVAL
 
 
+INDEX_BY_HASH_MAX_ENV = "SOVEREIGN_INDEX_BY_HASH_MAX"
+INDEX_BY_TYPE_MAX_ENV = "SOVEREIGN_INDEX_BY_TYPE_MAX"
+_DEFAULT_INDEX_BY_HASH_MAX = 10000
+_DEFAULT_INDEX_BY_TYPE_MAX = 500
+
+
+def _env_cap(name: str, default: int) -> int:
+    """R-776: سقف عددي من البيئة (≥1)؛ القيمة غير الصالحة ⇒ الافتراضي."""
+    raw = os.environ.get(name)
+    if raw is None or raw.strip() == "":
+        return default
+    try:
+        return max(1, int(raw))
+    except ValueError:
+        logger.warning(f"R-776: قيمة {name} غير صالحة ({raw!r}) — الافتراضي {default}")
+        return default
+
+
 import weakref as _weakref
 import atexit as _atexit
 
@@ -479,6 +497,13 @@ class SovereignIndex:
             "user": user
         }
         
+        # R-776: by_hash محدود (الأحدث فقط، ترتيب الإدراج) — كان بلا حد (13.5MB/55k على
+        # الإنتاج) ويُعاد كتابته كله كل 5ث. لا قارئ له خارج get_event؛ السجل مصدر الحقيقة.
+        by_hash = self.data["by_hash"]
+        cap = _env_cap(INDEX_BY_HASH_MAX_ENV, _DEFAULT_INDEX_BY_HASH_MAX)
+        while len(by_hash) > cap:
+            del by_hash[next(iter(by_hash))]
+
         # حسب النوع
         self.data["by_type"].setdefault(event_type, []).append(event_hash)
         
@@ -494,10 +519,14 @@ class SovereignIndex:
         
         self.data["last_event"] = event_hash
         
-        # الحد من طول القوائم (الاحتفاظ بآخر 10,000 لكل نوع)
-        for t in self.data["by_type"]:
-            if len(self.data["by_type"][t]) > 10000:
-                self.data["by_type"][t] = self.data["by_type"][t][-10000:]
+        # الحد من طول القوائم لكل نوع — R-776: السقف 500 افتراضيًا (كان 10,000 × 52 نوعًا؛
+        # لا قارئ لـget_events_by_type وحدّه الافتراضي 100). # DELETION-JUSTIFIED: حلقة على كل
+        # الأنواع مع كل حدث استُبدلت بقصّ النوع المُلحق وحده (الوحيد الذي يكبر) + قصّ أي نوع
+        # محمّل من فهرس قديم أكبر من السقف عند أول حدث له.
+        tcap = _env_cap(INDEX_BY_TYPE_MAX_ENV, _DEFAULT_INDEX_BY_TYPE_MAX)
+        lst = self.data["by_type"][event_type]
+        if len(lst) > tcap:
+            del lst[:len(lst) - tcap]
         
         # R-762: حفظ مخنوق بدل إعادة كتابة كاملة مع كل حدث
         self._maybe_save()

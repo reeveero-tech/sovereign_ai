@@ -101,7 +101,7 @@ def test_confirms_failure_with_retry_before_alerting():
 def test_workflow_is_scheduled_every_15_minutes_with_minimal_permissions():
     wf = yaml.safe_load(WF.read_text(encoding="utf-8"))
     on = wf.get("on", wf.get(True))
-    assert {"cron": "*/15 * * * *"} in on["schedule"]
+    assert {"cron": "7,22,37,52 * * * *"} in on["schedule"]  # R-776: كل 15 دقيقة بدقائق غير دائرية
     assert "workflow_dispatch" in on
     assert wf["permissions"] == {"issues": "write", "contents": "read"}
     text = WF.read_text(encoding="utf-8")
