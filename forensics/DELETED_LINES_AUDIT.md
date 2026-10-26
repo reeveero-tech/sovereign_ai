@@ -2580,3 +2580,6 @@ Bus إطلاقًا. الواجهة سليمة بعد الإزالة (101 وسم 
 
 ## 2026-10-26 — R-774-ب: أسطر مستبدلة
 - **# DELETION-JUSTIFIED** — سطر بند R-774 في `docs/PROJECT_STATE.md` (أُلحق به سطر R-774-ب) وخلية ٦.١.١ في `docs/ROADMAP_V6.md` (أُلحق بها ذكر قائمة السماح). لا منطق محذوف؛ قائمة `EXIT_ALLOWED_ENTRY_POINTS` إضافة فقط.
+
+## 2026-10-26 — R-775: أسطر مستبدلة
+- **# DELETION-JUSTIFIED** — `backend/consciousness/field.py`: `iterate_events(limit=5)` → `iterate_events(reverse=True, limit=5)` (كان يقرأ أقدم حدث على أنه الأخير). `backend/memory/core.py`: لا حذف — المسار الأمامي يُحوَّل قبل الكتلة القديمة التي بقيت للمسار العكسي. ترويسات `docs/PROJECT_STATE.md` و`docs/CHANGELOG.md`، وصف «المرحلة» (V5→V6 مع إبقاء ذكر V5)، وخلية ٦.١.٢ في `docs/ROADMAP_V6.md`.

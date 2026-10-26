@@ -1,0 +1,13 @@
+# R-775 RED — 560ee72 + tests/test_iterate_events_streaming.py قبل الإصلاح — 2026-10-26T02:53:11Z
+# الإنتاج: OOM exit_code=137 عند 2026-10-26T02:48:41Z؛ py-spy محليًا: 38% من العينات gather_conscious_inputs <- iterate_events
+E       AssertionError: حلّل 300 سطرًا لإرجاع 5 — يحمّل السجل كله
+E       assert 300 <= 5
+E       assert 300 <= 14
+E       AssertionError: assert 'test::r775' == 'test::r775_newest'
+E         
+E         - test::r775_newest
+E         + test::r775
+FAILED tests/test_iterate_events_streaming.py::test_forward_limit_parses_only_what_it_returns
+FAILED tests/test_iterate_events_streaming.py::test_forward_from_hash_streams_and_keeps_contract
+FAILED tests/test_iterate_events_streaming.py::test_consciousness_attention_focus_reads_the_latest_event
+3 failed, 3 passed, 2 warnings in 4.29s

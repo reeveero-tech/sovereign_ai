@@ -282,7 +282,9 @@ class ConsciousnessFieldEngine:
         }
         
         # 6) بؤرة الانتباه من آخر حدث
-        recent_events = list(self.core.iterate_events(limit=5))
+        # R-775: «آخر حدث» = الأحدث (reverse=True يقرأ الذيل فقط). كان limit=5 بلا reverse
+        # يحلل السجل كله ويعيد أقدم 5 أحداث — فبؤرة الانتباه كانت أول حدث في التاريخ.
+        recent_events = list(self.core.iterate_events(reverse=True, limit=5))
         if recent_events:
             last_event = recent_events[0]
             inputs["attention_focus"] = {

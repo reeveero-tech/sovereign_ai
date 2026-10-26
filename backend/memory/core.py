@@ -1132,6 +1132,13 @@ class SovereignCore:
             except Exception:
                 pass
         
+        if not reverse:
+            # R-775: الأمامي يتدفق — كان يحلل السجل كله إلى قائمة ثم يأخذ أول limit
+            # (16 نداءً دوريًا بـlimit؛ 38% من المعالج وعشرات MB مؤقتة لكل نداء ⇒ OOM).
+            # العقد نفسه: الأقدم أولًا، ولقطة السجل عند النداء (لا يرى ما يُلحق بعده).
+            yield from self._stream_forward(from_hash, limit)
+            return
+
         events = []
         with open(self.log_file, 'r', encoding='utf-8') as f:
             for line in f:
@@ -1160,6 +1167,44 @@ class SovereignCore:
         for event in events[start_index:end_index]:
             yield event
     
+    def _stream_forward(self, from_hash: Optional[str], limit: Optional[int]) -> Iterator[Dict[str, Any]]:
+        """R-775: قراءة أمامية متدفقة بذاكرة O(سطر) — حتى حجم السجل لحظة النداء."""
+        if limit is not None and limit <= 0:
+            return
+        try:
+            end = self.log_file.stat().st_size
+        except OSError:
+            return
+        started = from_hash is None
+        yielded = 0
+        consumed = 0
+        with open(self.log_file, 'rb') as f:
+            for raw in f:
+                consumed += len(raw)
+                if consumed > end:  # سطر أُلحق بعد بدء النداء
+                    break
+                line = raw.decode('utf-8', errors='replace').strip()
+                if not line:
+                    continue
+                if not started:
+                    # فحص نصي رخيص قبل التحليل: تخطٍّ حتى حدث from_hash
+                    if from_hash not in line:
+                        continue
+                    event = self._parse_ledger_line(line)
+                    if event is not None and event.get('hash') == from_hash:
+                        started = True
+                    continue
+                event = self._parse_ledger_line(line)
+                if event is None:  # R-766: السطر التالف يُتخطى
+                    continue
+                yield event
+                yielded += 1
+                if limit is not None and yielded >= limit:
+                    return
+        if not started:
+            # العقد القديم: from_hash غير موجود ⇒ من البداية
+            yield from self._stream_forward(None, limit)
+
     def verify_content_integrity(self) -> "IntegrityStatus":
         """
         R-639: سلامة المحتوى فقط — فصل سلامة المحتوى عن قابلية توثيق التوقيع.

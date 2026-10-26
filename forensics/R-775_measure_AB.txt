@@ -1,0 +1,34 @@
+# R-775 قياس A/B محلي — نفس السجل الاصطناعي (46,511 حدثًا)، نفس الآلة، متزامنان، 900ث
+# OLD = 560ee72 (قبل)، NEW = الشجرة العاملة (بعد). cpu = utime+stime التراكمي للعملية
+30s OLD rss=328MB cpu=29s | NEW rss=209MB cpu=29s
+60s OLD rss=332MB cpu=58s | NEW rss=262MB cpu=57s
+90s OLD rss=334MB cpu=87s | NEW rss=278MB cpu=87s
+120s OLD rss=327MB cpu=116s | NEW rss=281MB cpu=112s
+150s OLD rss=361MB cpu=126s | NEW rss=302MB cpu=115s
+180s OLD rss=398MB cpu=136s | NEW rss=294MB cpu=117s
+210s OLD rss=398MB cpu=145s | NEW rss=296MB cpu=119s
+240s OLD rss=387MB cpu=156s | NEW rss=298MB cpu=122s
+270s OLD rss=381MB cpu=165s | NEW rss=299MB cpu=124s
+300s OLD rss=383MB cpu=175s | NEW rss=316MB cpu=126s
+330s OLD rss=405MB cpu=186s | NEW rss=317MB cpu=129s
+360s OLD rss=405MB cpu=196s | NEW rss=318MB cpu=131s
+390s OLD rss=407MB cpu=207s | NEW rss=318MB cpu=134s
+420s OLD rss=407MB cpu=217s | NEW rss=306MB cpu=136s
+450s OLD rss=422MB cpu=228s | NEW rss=318MB cpu=139s
+480s OLD rss=421MB cpu=238s | NEW rss=319MB cpu=141s
+510s OLD rss=421MB cpu=250s | NEW rss=316MB cpu=144s
+540s OLD rss=421MB cpu=260s | NEW rss=316MB cpu=147s
+570s OLD rss=434MB cpu=271s | NEW rss=319MB cpu=149s
+600s OLD rss=434MB cpu=282s | NEW rss=334MB cpu=152s
+630s OLD rss=437MB cpu=293s | NEW rss=337MB cpu=155s
+660s OLD rss=437MB cpu=304s | NEW rss=337MB cpu=157s
+690s OLD rss=444MB cpu=315s | NEW rss=332MB cpu=160s
+720s OLD rss=445MB cpu=325s | NEW rss=334MB cpu=163s
+750s OLD rss=476MB cpu=336s | NEW rss=339MB cpu=166s
+780s OLD rss=503MB cpu=347s | NEW rss=340MB cpu=168s
+810s OLD rss=476MB cpu=358s | NEW rss=340MB cpu=171s
+840s OLD rss=478MB cpu=368s | NEW rss=341MB cpu=174s
+870s OLD rss=476MB cpu=379s | NEW rss=327MB cpu=177s
+900s OLD rss=463MB cpu=390s | NEW rss=327MB cpu=179s
+# من 120ث إلى 900ث: OLD +274ث معالج (35% نواة)، NEW +67ث (8.6%) ⇒ 4.1× أقل؛ RSS عند 900ث: 463MB مقابل 327MB
+# py-spy قبل (60ث، 558 عينة): 212 عينة gather_conscious_inputs <- iterate_events (38%)
