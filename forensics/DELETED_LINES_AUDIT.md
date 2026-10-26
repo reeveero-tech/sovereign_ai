@@ -2589,3 +2589,6 @@ Bus إطلاقًا. الواجهة سليمة بعد الإزالة (101 وسم 
 
 ## 2026-10-26 — R-777: أسطر مستبدلة
 - **# DELETION-JUSTIFIED** — `backend/memory/views.py::_background_integration`: سطر `last_hash = event.get("hash")` داخل حلقة المعالجة حُذف (كان يضع المؤشر عند أقدم حدث فتعاد الدفعة كل ثانية — `tests/test_views_integration_cursor.py`)؛ حل محله جمع `fresh` ثم `last_hash = fresh[0].hash` (الأحدث) ومعالجة زمنية؛ وسطر الشرط `if event.get("hash") == last_hash: break` نُقل إلى حلقة الجمع كما هو. ترويستا PROJECT_STATE وCHANGELOG، وخلية ٦.١.٢ في ROADMAP_V6 (إلحاق).
+
+## 2026-10-26 — R-777-ب: أسطر مستبدلة
+- **# DELETION-JUSTIFIED** — بند R-777 في `docs/PROJECT_STATE.md` وخلية ٦.١.٢ في `docs/ROADMAP_V6.md`: إلحاق القياس الحي بعد النشر. لا منطق محذوف.

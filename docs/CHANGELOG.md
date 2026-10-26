@@ -11,6 +11,7 @@
 - **السبب 2** (`backend/predictive/predictive_simulation.py`): `simulation_history_list` بلا سقف ولا قارئ، وكل لقطة تحمل دفعة بمساراتها (`SimulationTrajectory` +3,710 في 6 دقائق). الإصلاح: سقف 10 كجارتها `simulation_history`. RED: 25 لقطة بعد 25 دورة.
 - **عند 600ث محليًا**: RSS 314→217MB، pyblocks 2.29M→0.73M، كائنات 243k→137k. **ما زال مفتوحًا**: RSS +~3MB/دقيقة مع كائنات شبه ثابتة، و`AttentionAllocation` +~480/120ث. `MALLOC_ARENA_MAX=2` خفّض 58MB ولم يوقف النمو ⇒ غير مطبق.
 - **R-776 حيًا** (04:19–04:27Z): `index.json` ثابت 3.47MB، الحمل 0.07–0.53، RSS 205→255MB.
+- **R-777 حيًا** (نشر [40275627014](https://github.com/reeveero-tech/sovereign_ai/actions/runs/40275627014)، 05:44–05:54Z): RSS 154→181MB (~2.7MB/دقيقة مقابل ~6 بعد R-776)، معالج التطبيق ~3% من نواة (كان ~8%)، الحمل ≤0.14. جدولة المراقب لم تطلق بعد (تشغيل يدوي وحيد 00:32Z).
 - اختبارات: `tests/test_views_integration_cursor.py` (2) + `tests/test_simulation_history_bounded.py` (1).
 
 ## [R-776] — 2026-10-26 — فهرس السجل محدود (٦.١.٣)؛ R-775 منشور حيًا؛ جدولة المراقب لم تطلق
