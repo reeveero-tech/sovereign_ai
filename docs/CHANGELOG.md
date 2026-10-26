@@ -11,6 +11,7 @@
 - **الخارطة:** `docs/ROADMAP_V6.md` نشطة (المؤشر `docs/ROADMAP_ACTIVE.txt`)؛ جرد صدق لأسئلة المالك بمستوى الدليل، و§6.1 تشغيل موثوق، §6.2 عقل (موجّه نماذج المالك، نفق، جودة تخطيط)، §6.3 موصلات، §6.4 أدوات (تنفيذ الكود محجوب D-041)، §6.5 مهارات، §6.6 أسطول 1000 بعقل، §6.7 واجهة، §6.8 أمن. V5 تبقى مرجعًا؛ لا بند أُغلق.
 - **٦.١.١:** `tools/uptime_monitor.py` + `.github/workflows/uptime.yml` (كل 15 دقيقة + يدوي؛ صلاحيات `issues: write` و`contents: read` فقط). سليم = 200 + JSON + `healthy`؛ `degraded`/5xx/مهلة/رفض = عطل بعد 3 محاولات؛ Issue واحدة `uptime-incident` تُفتح ويُعلَّق عليها وتُغلق عند التعافي. السبب: انقطاع R-770 بقي ~6 ساعات بلا علم.
 - **الاختبار:** `tests/test_uptime_monitor.py` (8)؛ RED `forensics/R-774_evidence_RED.txt`. تشغيل محلي ضد الإنتاج: `http 200, healthy, 0.61s`.
+- **R-774-ب (التزام تالٍ، لا تعديل للسابق):** `verify.sh` على `12d2286` أعطى 1241/1 فشل: الثابت R-686 `test_no_exit_calls_outside_entry_points` رفض `sys.exit` في `tools/uptime_monitor.py`. أُضيف إلى `EXIT_ALLOWED_ENTRY_POINTS` بتعليل (رمز خروجه 1 عند العطل هو عقده مع Actions) — كسابقة `tools/fleet_scale_report.py`. `12d2286` لم يُدفع.
 
 ## [R-773] — 2026-10-26 — القاعدة الحاكمة على الخادم (D-047)
 

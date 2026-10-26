@@ -2577,3 +2577,6 @@ Bus إطلاقًا. الواجهة سليمة بعد الإزالة (101 وسم 
 
 ## 2026-10-26 — R-774: أسطر مستبدلة
 - **# DELETION-JUSTIFIED** — `docs/ROADMAP_ACTIVE.txt`: `docs/ROADMAP_V5.md` → `docs/ROADMAP_V6.md` (V5 باقية كاملة مرجعًا، لا بند أُغلق). وسطرا الترويسة في `docs/PROJECT_STATE.md` و`docs/CHANGELOG.md`. لا منطق محذوف.
+
+## 2026-10-26 — R-774-ب: أسطر مستبدلة
+- **# DELETION-JUSTIFIED** — سطر بند R-774 في `docs/PROJECT_STATE.md` (أُلحق به سطر R-774-ب) وخلية ٦.١.١ في `docs/ROADMAP_V6.md` (أُلحق بها ذكر قائمة السماح). لا منطق محذوف؛ قائمة `EXIT_ALLOWED_ENTRY_POINTS` إضافة فقط.

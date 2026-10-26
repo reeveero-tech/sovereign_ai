@@ -57,6 +57,9 @@ EXIT_ALLOWED_ENTRY_POINTS = {
     "tools/gate_deletions.py",
     # R-758 (V5 ٥.٣): تقرير قياس الأسطول — CLI رمز خروجها 0/1 (اكتمل الكل أم لا)
     "tools/fleet_scale_report.py",
+    # R-774 (V6 ٦.١.١): مراقب /health الخارجي — CLI في GitHub Actions؛ رمز الخروج 1
+    # عند العطل يجعل التشغيل المجدول أحمر (إشارة ثانية بجانب Issue)
+    "tools/uptime_monitor.py",
 }
 
 BANNED_STRING = "max_tamper_attempts"
