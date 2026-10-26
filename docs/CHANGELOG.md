@@ -1,9 +1,16 @@
 # CHANGELOG.md — سجل التغييرات
 
 > كل تغيير يُسجل هنا (قاعدة الدفعة الذرية).
-> آخر تحديث: 2026-10-26 (R-773 — القاعدة الحاكمة مفروضة على الخادم)
+> آخر تحديث: 2026-10-26 (R-774 — خارطة V6 + مراقب /health خارجي)
 
 ---
+
+## [R-774] — 2026-10-26 — خارطة V6 نشطة + مراقب خارجي لـ/health (٦.١.١)
+
+- **إثبات R-773 حيًا:** `tools/github/apply_main_ruleset.sh` → قاعدة `25843109` (`enforcement: active`، `bypass_actors: []`، `deletion` + `non_fast_forward` + `required_status_checks`). التزام تجريبي فارغ دُفع مباشرة إلى main فرُفض: `GH013: Repository rule violations … Required status check "Tests + Atomic Batch Gate" is expected … push declined`. وR-773 نفسه دخل main بالمسار: `work/R-773` CI [40247434429](https://github.com/reeveero-tech/sovereign_ai/actions/runs/40247434429) أخضر ثم SHA نفسه.
+- **الخارطة:** `docs/ROADMAP_V6.md` نشطة (المؤشر `docs/ROADMAP_ACTIVE.txt`)؛ جرد صدق لأسئلة المالك بمستوى الدليل، و§6.1 تشغيل موثوق، §6.2 عقل (موجّه نماذج المالك، نفق، جودة تخطيط)، §6.3 موصلات، §6.4 أدوات (تنفيذ الكود محجوب D-041)، §6.5 مهارات، §6.6 أسطول 1000 بعقل، §6.7 واجهة، §6.8 أمن. V5 تبقى مرجعًا؛ لا بند أُغلق.
+- **٦.١.١:** `tools/uptime_monitor.py` + `.github/workflows/uptime.yml` (كل 15 دقيقة + يدوي؛ صلاحيات `issues: write` و`contents: read` فقط). سليم = 200 + JSON + `healthy`؛ `degraded`/5xx/مهلة/رفض = عطل بعد 3 محاولات؛ Issue واحدة `uptime-incident` تُفتح ويُعلَّق عليها وتُغلق عند التعافي. السبب: انقطاع R-770 بقي ~6 ساعات بلا علم.
+- **الاختبار:** `tests/test_uptime_monitor.py` (8)؛ RED `forensics/R-774_evidence_RED.txt`. تشغيل محلي ضد الإنتاج: `http 200, healthy, 0.61s`.
 
 ## [R-773] — 2026-10-26 — القاعدة الحاكمة على الخادم (D-047)
 

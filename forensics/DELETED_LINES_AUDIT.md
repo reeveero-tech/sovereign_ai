@@ -2574,3 +2574,6 @@ Bus إطلاقًا. الواجهة سليمة بعد الإزالة (101 وسم 
 
 ## 2026-10-26 — R-773: أسطر مستبدلة
 - **# DELETION-JUSTIFIED** — `.github/workflows/ci.yml`: `branches: [main]` للدفع صار `[main, 'work/**']`؛ وفي بوابتي الحذف والوثائق سطرا «لا قاعدة دفع صالحة — فحص الرأس وحده» صارا داخل فرع `else` بعد محاولة `merge-base` مع main (السلوك القديم محفوظ حين لا نقطة افتراق). وسطرا الترويسة في PROJECT_STATE وCHANGELOG.
+
+## 2026-10-26 — R-774: أسطر مستبدلة
+- **# DELETION-JUSTIFIED** — `docs/ROADMAP_ACTIVE.txt`: `docs/ROADMAP_V5.md` → `docs/ROADMAP_V6.md` (V5 باقية كاملة مرجعًا، لا بند أُغلق). وسطرا الترويسة في `docs/PROJECT_STATE.md` و`docs/CHANGELOG.md`. لا منطق محذوف.

@@ -1,0 +1,5 @@
+# R-774 RED — 6b2f22d + tests/test_uptime_monitor.py قبل tools/uptime_monitor.py و.github/workflows/uptime.yml — 2026-10-26T00:10:29Z
+# لا مراقب خارجي: انقطاع R-770 لم يُكتشف ~6 ساعات
+ImportError while importing test module '/home/user/workspace/sovereign_ai/tests/test_uptime_monitor.py'.
+E   ImportError: cannot import name 'uptime_monitor' from 'tools' (unknown location)
+1 warning, 1 error in 0.12s

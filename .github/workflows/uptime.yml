@@ -1,0 +1,30 @@
+# R-774 (ROADMAP_V6 ٦.١.١): مراقب خارجي لـ/health — انقطاع R-770 لم يُكتشف ~6 ساعات.
+# مصدر مستقل عن Fly؛ يفتح Issue موسومة uptime-incident عند العطل ويغلقها عند التعافي.
+name: Uptime — external /health monitor
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+permissions:
+  issues: write
+  contents: read
+
+concurrency:
+  group: uptime
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    name: Probe /health
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Probe and open/close incident issue
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: python tools/uptime_monitor.py
