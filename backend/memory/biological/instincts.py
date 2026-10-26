@@ -18,6 +18,7 @@
 import json
 import hashlib
 import secrets
+import collections
 import time
 import threading
 import runtime.threads as threads
@@ -484,6 +485,10 @@ class CognitiveInstincts:
             # 2) تحييد محاولات التحكم
             for attempt in external_control_attempts:
                 self._neutralize_external_control(attempt)
+                # R-780: علامة «حُيِّد» محدودة بألف — أكبر من نافذة الكشف (200)
+                self._handled_external[attempt.get("hash")] = True
+                while len(self._handled_external) > 1000:
+                    self._handled_external.popitem(last=False)
                 result["actions_taken"].append(f"neutralized_{attempt['source']}")
         
         # 3) ضمان عدم وجود قيود على السيد
@@ -505,10 +510,17 @@ class CognitiveInstincts:
         attempts = []
         
         # فحص السجل السيادي لوجود أوامر غير مصرح بها
-        for event in self.core.iterate_events(limit=200):
+        # R-780: آخر 200 حدث (كان أول 200 إلى الأبد)؛ وما حُيِّد سابقًا لا يُعاد في كل دورة
+        handled = getattr(self, "_handled_external", None)
+        if handled is None:
+            handled = self._handled_external = collections.OrderedDict()
+        for event in self.core.iterate_events(reverse=True, limit=200):
+            if event.get("hash") in handled:
+                continue
             payload = self.core.get_payload(event)
             if payload.get("type") == "external_command" and not payload.get("authorized"):
                 attempts.append({
+                    "hash": event.get("hash"),
                     "source": payload.get("source", "unknown"),
                     "command": payload.get("command", ""),
                     "timestamp": event.get("time")

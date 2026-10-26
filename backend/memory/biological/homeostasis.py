@@ -294,7 +294,7 @@ class CognitiveHomeostasis:
         
         # 1) معدل ضربات الذاكرة (Memory Heart Rate)
         recent_events = 0
-        for event in self.core.iterate_events(limit=100):
+        for event in self.core.iterate_events(reverse=True, limit=100):
             recent_events += 1
         vital_signs["heart_rate"] = min(100, recent_events)
         

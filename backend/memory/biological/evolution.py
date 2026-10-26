@@ -246,7 +246,7 @@ class MemoryEvolution:
         
         # تكرار الاستخدام من السجل
         use_count = 0
-        for event in self.core.iterate_events(limit=500):
+        for event in self.core.iterate_events(reverse=True, limit=500):
             payload = self.core.get_payload(event)
             if concept_name.lower() in str(payload).lower():
                 use_count += 1
@@ -524,7 +524,7 @@ class MemoryEvolution:
         
         # تحليل أنماط الاستخدام من السجل
         usage_patterns = defaultdict(int)
-        for event in self.core.iterate_events(limit=1000):
+        for event in self.core.iterate_events(reverse=True, limit=1000):
             payload = self.core.get_payload(event)
             text = str(payload).lower()
             

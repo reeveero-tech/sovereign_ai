@@ -1,0 +1,13 @@
+# R-780 RED — fba2c7e + tests/test_recent_event_reads.py قبل الإصلاح — 2026-10-26T11:51:52Z
+E       AssertionError: iterate_events(limit=…) بلا reverse=True يقرأ أقدم الأحداث: [('memory/biological/evolution.py', 'adapt_to_environment'), ('memory/biological/evolution.py', 'calculate_fitness'), ('memory/biological/homeostasis.py', 'monitor_vital_signs'), ('memory/biological/instincts.py', '_detect_external_control'), ('memory/biological/metabolism.py', '_calculate_concept_fitness'), ('memory/biological/plasticity.py', '_analyze_usage_patterns'), ('memory/biological/plasticity.py', '_extract_candidate_concepts'), ('memory/biological/regeneration.py', '_gather_fragments'), ('memory/biological/regeneration.py', 'full_regeneration'), ('memory/defense/ransomware.py', 'get_resurrection_history')]
+E       AssertionError: assert [] == ['intruder']
+E       AssertionError: assert [] == [{'duration':...method': 'm'}]
+FAILED tests/test_recent_event_reads.py::test_no_new_oldest_first_limited_reads
+FAILED tests/test_recent_event_reads.py::test_external_control_detection_sees_recent_commands
+FAILED tests/test_recent_event_reads.py::test_resurrection_history_returns_real_payloads
+3 failed, 2 warnings in 2.27s
+
+# RED 2 — test_external_command_is_neutralized_once (بعد إصلاح القراءة، قبل منع التكرار)
+E       AssertionError: assert ['neutralized_intruder'] == []
+FAILED tests/test_recent_event_reads.py::test_external_command_is_neutralized_once
+1 failed, 3 passed, 2 warnings in 3.05s

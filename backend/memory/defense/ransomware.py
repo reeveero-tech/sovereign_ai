@@ -2015,10 +2015,13 @@ class RansomwareDefense:
     def get_resurrection_history(self) -> List[Dict]:
         """سجل القيامات السابقة"""
         # جمع من core events
+        # R-780: آخر 100 حدث (لا أول 100)، والـpayload من الـblob — الحدث لا يحمل مفتاح payload
+        # # DELETION-JUSTIFIED: كان event.get("payload", {}) يعيد {} دائمًا.
         history = []
-        for event in self.core.iterate_events(limit=100):
+        for event in self.core.iterate_events(reverse=True, limit=100):
             if event.get("type") == "phoenix::resurrected":
-                history.append(event.get("payload", {}))
+                history.append(self.core.get_payload(event))
+        history.reverse()  # ترتيب زمني كما كان مقصودًا
         return history
     
     def stop(self):

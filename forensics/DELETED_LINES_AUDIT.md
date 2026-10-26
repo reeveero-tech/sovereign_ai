@@ -2604,3 +2604,9 @@ Bus إطلاقًا. الواجهة سليمة بعد الإزالة (101 وسم 
 
 ## 2026-10-26 — R-779-ب: أسطر مستبدلة
 - **# DELETION-JUSTIFIED** — بند R-779 في `docs/PROJECT_STATE.md` وخلية ٦.١.٢ في `docs/ROADMAP_V6.md`: إلحاق القياس الحي وأول تشغيل مجدول للمراقب. لا منطق محذوف.
+
+## 2026-10-26 — R-780: أسطر مستبدلة
+- **# DELETION-JUSTIFIED**: 11 سطرًا `self.core.iterate_events(limit=N)` في `regeneration` ×3 و`evolution` ×2 و`plasticity` ×2 و`homeostasis` و`metabolism` و`instincts` و`ransomware`، استُبدل بكل منها `iterate_events(reverse=True, limit=N)` (كانت تقرأ أقدم N حدث، والحارس في `tests/test_recent_event_reads.py`).
+- `ransomware.get_resurrection_history`: `history.append(event.get("payload", {}))` استُبدل به `self.core.get_payload(event)`، لأن الحدث لا يحمل payload فكانت النتيجة `{}` دائمًا.
+- `instincts._detect_external_control`: سطر `attempts.append({` أُعيدت صياغته ليضم `hash`.
+- ترويستا PROJECT_STATE وCHANGELOG، وخليتا ٦.١.٢ و٦.١.٩ في ROADMAP_V6.

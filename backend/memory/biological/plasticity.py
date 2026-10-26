@@ -296,7 +296,7 @@ class NeuralPlasticity:
         """تحليل أنماط الاستخدام من السجل"""
         patterns = defaultdict(int)
         
-        for event in self.core.iterate_events(limit=500):
+        for event in self.core.iterate_events(reverse=True, limit=500):
             payload = self.core.get_payload(event)
             text = str(payload).lower()
             
@@ -610,7 +610,7 @@ class NeuralPlasticity:
         """استخراج مفاهيم مرشحة من الأحداث الأخيرة"""
         candidates = set()
         
-        for event in self.core.iterate_events(limit=200):
+        for event in self.core.iterate_events(reverse=True, limit=200):
             payload = self.core.get_payload(event)
             text = str(payload).lower()
             

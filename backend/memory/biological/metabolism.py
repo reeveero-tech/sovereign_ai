@@ -565,7 +565,7 @@ class CognitiveMetabolism:
         
         # من الاستخدام في السجل
         use_count = 0
-        for event in self.core.iterate_events(limit=500):
+        for event in self.core.iterate_events(reverse=True, limit=500):
             payload = self.core.get_payload(event)
             if concept.lower() in str(payload).lower():
                 use_count += 1

@@ -430,7 +430,7 @@ class MemoryRegeneration:
         if method == REGEN_MODE_CORE:
             # من السجل السيادي
             fragments = []
-            for event in self.core.iterate_events(limit=500):
+            for event in self.core.iterate_events(reverse=True, limit=500):
                 payload = self.core.get_payload(event)
                 if payload.get("user") == user_id or payload.get("user_id") == user_id:
                     fragments.append(MemoryFragment(
@@ -632,7 +632,7 @@ class MemoryRegeneration:
         
         # 1) تجديد المستخدمين
         users = set()
-        for event in self.core.iterate_events(limit=1000):
+        for event in self.core.iterate_events(reverse=True, limit=1000):
             payload = self.core.get_payload(event)
             user = payload.get("user") or payload.get("user_id")
             if user:
@@ -647,7 +647,7 @@ class MemoryRegeneration:
         if deep:
             # استخراج مفاهيم من الأحداث
             concepts = set()
-            for event in self.core.iterate_events(limit=500):
+            for event in self.core.iterate_events(reverse=True, limit=500):
                 payload = self.core.get_payload(event)
                 text = str(payload)
                 words = text.split()
