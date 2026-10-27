@@ -657,6 +657,7 @@ class SovereignCore:
                  meta_file: Path = META_FILE,
                  integrity_file: Path = INTEGRITY_FILE,
                  sovereign_key: str = SOVEREIGN_KEY,  # LEGACY-ROOT-KEY (read-only): تحقق الأحداث التاريخية فقط
+                 integrity_checkpoint_file: Optional[Path] = None,  # R-783: نقطة استئناف دائمة
                  keyring=None):
         
         self.log_file = log_file
@@ -726,6 +727,14 @@ class SovereignCore:
         # M1: ذاكرة مؤقتة لنتيجة التحقق من سلامة السجل
         self._integrity_cache = None
         self._integrity_prefix = None  # R-768: نقطة استئناف التحقق (بصمة البادئة)
+        # R-783 (٦.١.١١): نقطة الاستئناف دائمة على القرص بجانب integrity.json —
+        # الإقلاع على سجل سليم لا يعيد التحقق من البادئة المبصومة (كانت في الذاكرة
+        # فقط فكل إقلاع يعيد فحص السجل كاملًا ≈215ث معالج على الإنتاج).
+        # التحميل هنا هيكلي فقط؛ صلاحية البادئة (sha256 + بصمة المفاتيح) تُفحص
+        # عند الاستخدام في _integrity_resume_point — ملف تالف/غائب يُتجاهل.
+        self.integrity_checkpoint_file = (integrity_checkpoint_file or
+                                         integrity_file.with_name("integrity_checkpoint.json"))
+        self._integrity_prefix = self._load_disk_integrity_checkpoint()
         # R-769: فحص واحد في وقت واحد — المتصلون المتزامنون ينتظرون النتيجة المخزنة
         self._integrity_lock = threading.RLock()
         self._genesis_created = self._load_genesis_status()
@@ -1558,6 +1567,53 @@ class SovereignCore:
                 "keys": self._keyring_fingerprint()}
         except OSError:
             self._integrity_prefix = None
+            return
+        # R-783: حفظ دائم على القرص — الإقلاع التالي يستأنف من هنا فلا يعاد
+        # التحقق من البادئة المبصومة (٦.١.١١). فشل الحفظ لا يبطل الاستئناف داخل العملية.
+        self._save_disk_integrity_checkpoint()
+
+    def _save_disk_integrity_checkpoint(self) -> None:
+        """R-783: كتابة نقطة الاستئناف على القرص كتابة ذرية (R-781)."""
+        st = getattr(self, "_integrity_prefix", None)
+        if st is None:
+            return
+        try:
+            payload = dict(st)
+            if payload.get("status") is not None:
+                payload["status"] = payload["status"].value
+            atomic_write_json(self.integrity_checkpoint_file, payload,
+                              ensure_ascii=False, indent=2)
+        except OSError as e:
+            logger.warning(f"⚠️ تعذر حفظ نقطة استئناف التحقق على القرص: {e}")
+
+    def _load_disk_integrity_checkpoint(self) -> Optional[Dict[str, Any]]:
+        """R-783: تحميل نقطة الاستئناف من القرص إن كانت سليمة البنية.
+
+        هيكلي فقط هنا: البادئة تُفحص بصمةً عند الاستخدام (_integrity_resume_point —
+        sha256 للبادئة + بصمة المفاتيح)؛ أي تعديل أو اقتطاع يفرض فحصًا كاملًا.
+        ملف تالف/غائب/بِنية غريبة يُتجاهل بصمت (فحص كامل صادق، لا ثقة عمياء).
+        """
+        try:
+            if not self.integrity_checkpoint_file.exists():
+                return None
+            st = json.loads(self.integrity_checkpoint_file.read_text(encoding="utf-8"))
+            if not isinstance(st, dict):
+                return None
+            required = {"offset", "sha256", "prev_hash", "count", "line_num", "keys"}
+            if not required.issubset(st):
+                return None
+            if not (isinstance(st["offset"], int) and st["offset"] >= 0
+                    and isinstance(st["count"], int) and st["count"] >= 0
+                    and isinstance(st["line_num"], int) and st["line_num"] >= 0):
+                return None
+            if st.get("status") is not None:
+                try:
+                    st["status"] = IntegrityStatus(st["status"])
+                except ValueError:
+                    return None
+            return st
+        except (OSError, json.JSONDecodeError):
+            return None
 
     def _verify_walk(self, verbose: bool, resume: Optional[Dict[str, Any]]) -> Optional["IntegrityStatus"]:
         """جسم التحقق (R-768: يبدأ من نقطة الاستئناف إن وُجدت). None = أعد فحصًا كاملًا."""
