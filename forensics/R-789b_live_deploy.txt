@@ -1,0 +1,26 @@
+R-789b/R-789c — live verification after deploy
+Deploy run: https://github.com/reeveero-tech/sovereign_ai/actions/runs/40562621015 (main d02a186) — success
+Public URL: https://sovereign-ai-k20elq.fly.dev
+
+/health -> healthy (0.13s)
+/capabilities (R-789c):
+  web_tools  implemented_disabled  البحث في الويب          (no search provider configured — no false claim)
+  web_fetch  enabled               قراءة صفحات الويب ومستودعات GitHub
+  research   implemented_disabled  خط البحث الثابت
+/sovereignty/score -> 202 computing in 20.2s, /health 200 in 0.13s at the same time (no outage)
+
+/chat (field "text"), sequential single client:
+  "كم حدثا في ذاكرتك الآن؟"   completed tools ['memory.stats']        77.1s
+     -> "في ذاكرتي حالياً، حدثت 146,186 حدثاً."
+  "ما هي قدراتك الحقيقية؟"     completed tools ['system.capabilities'] 97.4s
+  "هل القرص ممتلئ؟"            completed tools ['disk.status']         116.1s
+     -> "... لا يوجد معلومات محددة تشير إلى أن القرص ممتلئ ..." (weak phrasing by 3B model; data was real)
+  "اكتب جملة واحدة عن البحر"   completed tools []                      7.6s
+     -> "البحر يغطي ثلث مساحة سطح الأرض ..." (FACTUALLY WRONG: ~71%; 3B model limit, no tool involved)
+  GitHub repo URL              completed tools ['github.repo']         75.3s
+     -> describes "Sovereign AI (SOVRA)" from the real README, last update 27 Oct 2026
+
+Honest failure observed: when two clients ran at the same time (my overlapping test runs), the brain
+call hit the 150s read timeout -> agent_status planner_failed with the real error text
+("العقل اللغوي لم يرد: ... Read...") — no template answer was substituted.
+Open: latency 75–116s per tool question (3B model ~7 tok/s + app CPU steal); WebSocket path still legacy.

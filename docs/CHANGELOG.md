@@ -11,6 +11,7 @@
 - **الجديد:** `ChatPlanner.route()` يطلب JSON `{tool, inputs}` فقط (enum = الأدوات المسموحة + none، max_tokens 120)، و`answer()` يولد نصًا حرًا من النتائج الحقيقية بهوية النظام. تكرار نفس النداء ⇒ مرحلة الجواب. `_compact()` تسطيح عام للنتائج (بلا قوالب). `_github_repo_tool` يقبل `repo`.
 - **دليل حي:** `forensics/R-789b_live_routing.txt` — 8/8 توجيهًا صحيحًا على qwen2.5:3b؛ E2E: memory.stats 81.4ث «144200 حدثًا»، disk.status 18.3ث، جملة البحر بلا أداة 7.0ث.
 - **اختبارات:** `tests/test_chat_agent.py` (16).
+- **حيًا (نشر 40562621015):** `forensics/R-789b_live_deploy.txt` — memory.stats «146,186 حدثًا» 77.1ث؛ system.capabilities 97.4ث؛ disk.status 116.1ث؛ github.repo 75.3ث من README الحقيقي؛ جملة البحر 7.6ث (خطأ معرفي من النموذج 3B: «ثلث» والصحيح نحو 71%)؛ `/sovereignty/score` 202 خلال 20.2ث و`/health` 0.13ث.
 
 ## [R-789c] — 2026-10-27 — لا ادعاء «البحث في الويب مفعّل» بلا مزود
 

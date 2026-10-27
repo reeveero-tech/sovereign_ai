@@ -2721,3 +2721,6 @@ Bus إطلاقًا. الواجهة سليمة بعد الإزالة (101 وسم 
   - `backend/capability_inventory.py`: مدخلا web_tools وresearch (علم web_search) + مدخل web_fetch جديد.
   - `tests/test_capability_inventory.py`: سطر `ALL_FLAGS_ON` (+web_search). `tests/test_chat_agent.py`: تسلسلات ردود العقل الوهمية للتصميم ذي المرحلتين.
   - وثائق: سطرا «آخر تحديث»؛ صف الاختبارات (1333→1339)؛ خلية ٦.٧.٤.
+
+## 2026-10-27 — R-789b إثبات حي: أسطر مستبدلة
+- **# DELETION-JUSTIFIED** — توثيق فقط: خلية ٦.٧.٤ في ROADMAP_V6 (+الإثبات الحي وتغيير الحالة إلى «مُثبت حيًا»).
