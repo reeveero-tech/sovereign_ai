@@ -238,6 +238,7 @@ class AgentManager:
     def _finish(self, rep: Dict[str, Any], results: List[Dict[str, Any]]) -> None:
         import experience
         tools = [t for r in results for t in (r.get("tools") or [])]
+        rep["tools_used"] = sorted(set(tools))  # R-792a: أساس حارس الخطة في goals.check
         experience.record_run(self.source, rep.get("goal") or "",
                               {"status": rep.get("status"), "answer": rep.get("answer"),
                                "error": rep.get("error"), "duration_s": rep.get("duration_s"),

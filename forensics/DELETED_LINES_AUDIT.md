@@ -2736,3 +2736,8 @@ Bus إطلاقًا. الواجهة سليمة بعد الإزالة (101 وسم 
   - `backend/consciousness/field.py`: سطرا ترويسة `_save_moment` (الاسم والوثيقة) — الجسم القديم نفسه صار `_save_moment_per_file` خلف العلم.
   - `backend/app.py`: وصف/مخرجات/معالج أداة `disk.status` في السجل (⇒ `_disk_tool_payload` = الحمولة نفسها + `local_volume`). `/disk/status` بلا تغيير.
   - وثائق: سطرا «آخر تحديث»؛ صف الاختبارات (1367→1373).
+
+## 2026-10-27 — R-792a: أسطر مستبدلة
+- **# DELETION-JUSTIFIED** — استبدال بتوسيع، لا حذف منطق:
+  - `backend/goals.py`: سطر مفاتيح التشغيل في مختزل الحالة (+`tools`)، سطر `goals.log(... manager_run=...)` (+`tools`)، سطر نهاية `done_so_far` في مدخل القرار (+`plan_tools_not_run`).
+  - وثائق: سطرا «آخر تحديث»؛ صف الاختبارات (1373→1378)؛ خلية ٦.٩.٦.

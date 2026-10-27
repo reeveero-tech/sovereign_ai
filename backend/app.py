@@ -1115,6 +1115,10 @@ def _local_volume_status(path=None) -> Dict[str, Any]:
         "inodes_total": st.f_files,
         "inodes_free": st.f_favail,
         "inodes_used_pct": inodes_pct,
+        # R-792a: قيم محسوبة جاهزة — حيًا قرأ العقل البايتات 86.3 GB بدل 8.63
+        "kind": "قرص محلي للبيانات (ليس السحابي)",
+        "total_gb": round(st.f_blocks * st.f_frsize / 1e9, 2),
+        "free_gb": round(st.f_bavail * st.f_frsize / 1e9, 2),
         "state": "critical" if worst >= 95 else ("warning" if worst >= 85 else "ok"),
     }
 

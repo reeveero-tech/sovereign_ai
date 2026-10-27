@@ -155,7 +155,8 @@ class GoalStore:
                     g["plan"] = list(e.get("plan") or [])
                 elif op == "run":
                     g["runs"].append({k: e.get(k) for k in ("task", "status", "answer", "error",
-                                                            "agents", "manager_run", "ts")})
+                                                            "agents", "manager_run", "ts",
+                                                            "tools")})
                     g["last_worked"] = e.get("ts")
                 elif op == "status":
                     g["status"] = e.get("status")
@@ -267,7 +268,8 @@ class GoalEngine:
             user = json.dumps({"goal": g["title"], "why": g.get("why"), "plan": g["plan"],
                                "done_so_far": [{"task": r["task"], "status": r["status"],
                                                 "answer": (r.get("answer") or "")[:300],
-                                                "error": r.get("error")} for r in g["runs"]]},
+                                                "error": r.get("error")} for r in g["runs"]],
+                               "plan_tools_not_run": self.unrun_plan_tools(g)},
                               ensure_ascii=False, default=str)[:8000]
             d = self._json(_NEXT_SYSTEM.format(
                 tools=catalog, lessons=("تجارب سابقة:\n" + lessons + "\n") if lessons else ""),
@@ -303,7 +305,8 @@ class GoalEngine:
             rep = self._manager(tools).run(task)
             self.goals.log(gid, "run", task=task[:400], status=rep.get("status"),
                            answer=(rep.get("answer") or "")[:800], error=rep.get("error"),
-                           agents=rep.get("agents_created"), manager_run=rep.get("run_id"))
+                           agents=rep.get("agents_created"), manager_run=rep.get("run_id"),
+                           tools=rep.get("tools_used"))
             out = {"status": "worked", "goal_id": gid, "task": task,
                    "run_status": rep.get("status"), "answer": rep.get("answer"),
                    "agents_created": rep.get("agents_created"), "error": rep.get("error")}
@@ -312,6 +315,23 @@ class GoalEngine:
             out["goal_status"] = "done"
         return out
 
+    def unrun_plan_tools(self, g: Dict[str, Any]) -> List[str]:
+        """R-792a: أدوات في خطة الهدف نفسها (أسماء أدوات مسجلة) لم تُنفذ بنجاح في أي تشغيل.
+
+        حي 2026-10-27: الخطة [memory.stats, disk.status]، نُفذ disk.status وحده، فأعلن
+        العقل «تحقق» — نجاح زائف. الحارس بنيوي (خطة النظام نفسه ⇔ الأدوات المنفذة فعلًا)
+        لا جواب مزروع. تشغيلات قديمة بلا حقل tools ⇒ لا حكم (لا نعرف ما نُفذ)."""
+        runs = g.get("runs") or []
+        if not any("tools" in r and r.get("tools") is not None for r in runs):
+            return []
+        try:
+            names = {t["name"] for t in self.registry.list_tools()}
+        except Exception:  # TOLERATED: بلا سجل لا حارس
+            return []
+        used = {t for r in runs if r.get("status") in ("completed", "partial")
+                for t in (r.get("tools") or [])}
+        return [p for p in (g.get("plan") or []) if p in names and p not in used]
+
     def check(self, gid: str) -> Dict[str, Any]:
         """R-791a: هل تحقق الهدف بالنتائج المنجزة؟ — قرار العقل في مرحلة مستقلة."""
         g = self.goals.state().get(gid)
@@ -319,6 +339,10 @@ class GoalEngine:
                 and r.get("answer")]
         if not g or not done:
             return {"achieved": False, "missing": "لا نتائج منجزة بعد"}
+        pending = self.unrun_plan_tools(g)
+        if pending:  # R-792a: لا «تحقق» وخطوات الخطة لم تُنفذ
+            return {"achieved": False, "missing": "خطوات من الخطة لم تُنفذ: " + "، ".join(pending),
+                    "guard": "plan_tools_not_run"}
         user = json.dumps({"goal": g["title"], "results": [{"task": r["task"],
                                                             "answer": (r["answer"] or "")[:600]}
                                                            for r in done[-4:]]},

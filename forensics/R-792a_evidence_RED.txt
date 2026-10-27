@@ -1,0 +1,8 @@
+# R-792a RED: tests/test_r792a_plan_guard.py vs HEAD ebdb07f
+FAILED tests/test_r792a_plan_guard.py::test_lenient_check_cannot_close_goal_while_plan_tools_unrun
+FAILED tests/test_r792a_plan_guard.py::test_legacy_runs_without_tools_field_are_not_judged
+FAILED tests/test_r792a_plan_guard.py::test_natural_language_plan_steps_are_not_guarded
+FAILED tests/test_r792a_plan_guard.py::test_manager_reports_tools_used - KeyE...
+FAILED tests/test_r792a_plan_guard.py::test_local_volume_gives_computed_gb_not_raw_bytes_only
+5 failed, 2 warnings in 0.60s
+# GREEN after fix: 5 passed
