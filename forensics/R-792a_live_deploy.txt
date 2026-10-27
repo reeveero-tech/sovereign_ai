@@ -1,0 +1,27 @@
+# R-792a live proof — 63523fa, deploy https://github.com/reeveero-tech/sovereign_ai/actions/runs/40594918724 — 2026-10-27
+
+# 1) First fully autonomous tick (before redeploy, ebdb07f), 22:21:58Z — no human request:
+== autonomy.status 0.1s ok=True
+{"enabled": true, "reason": "مفعّلة — دورة كل 1800 ثانية", "interval_s": 1800.0, "ticks": 1, "last_at": 1793139718.6840427, "next_at": 1793141518.6841052, "running": true, "last": {"tick": "reflect", "status": "reflected", "added": [], "rejected": [{"title": "قم بتفعيل بحث ويب للتحقق من حالة القرص السحابي", "evidence": "الفحص الذاتي للعيوب يشير إلى أن الحارس غير متصل أو قديم", "reason": "الدليل لا يرد في الملاحظات الحقيقية"}]}}
+
+# 2) Same owner goal after R-792a (plan guard live):
+== goals.add 0.0s ok=True
+{"id": "G-ede9d4e0", "title": "اعرف عدد أحداث ذاكرتك وحالة قرصك المحلي (المساحة والعقد) وأبلغ بالأرقام", "why": "", "origin": "owner", "priority": 3, "status": "active", "plan": [], "runs": [], "created": 1793140303.260409, "last_worked": null, "summary": null}
+== goals.work 147.1s ok=True
+{"status": "worked", "goal_id": "G-ede9d4e0", "task": "disk.status", "run_status": "completed", "answer": "تم إكمال任务 \"disk.status\". إليك التفاصيل:\n\nحالة القرص السحابي: مفعّلة\nحالة العناوين: مفعّلة\ncloud_disk: مفعّلة\n\nالعنصر الأساسي:\n- الواجهة بالكيلوبايت (ال مجموع): 10533376000\n- الواجهة بالكيلوبايت (المتبقي): 8631107584\n- نسبة الواجهة بالكيلوبايت (المحدّث): 18.1%\n- العناوين المتاحة (المجموع): 645120\n- العناوين المتبقية (المجموع): 317361\n- نسبة العناوين المتبقية (المجموع): 50.8%\n- نوع: قرص محلي للبيانات (ليس السحابي)\n- الواجهة بالجيجابايت (المجموع): 10.53\n- الواجهة بالجيجابايت (المتبقي): 8.63\n- الحالة: ok", "agents_created": 1, "error": null, "check": {"achieved": false, "missing": "خطوات من الخطة لم تُنفذ: memory.stats", "guard": "plan_tools_not_run"}}
+== goals.work 188.8s ok=True
+{"status": "worked", "goal_id": "G-ede9d4e0", "task": "memory.stats", "run_status": "completed", "answer": "تم نجاح وكيل دور في إنجاز مهمة إيجاد المعلومات حول الذاكرة. نتائج الذاكرة الحالية تشير إلى وجود 22 سجلًا ذاكرى، جميعها سحابية. لم يتم معالجة أي مهمة في ذاكرة التخزين الحالية، ولم يتم رصده أحداث ملاحظة أو ذكريات، وidak وجود تأثيرات احتمالية مؤثرة.", "agents_created": 1, "error": null, "check": {"achieved": true, "summary": "تم الإبلاغ عن عدد أحداث ذاكرتك وحالة قرصك المحلي. عدد الأحداث ذاكرة التخزين الحالية: 22. حالة قرصك المحلي: حجم الواجهة بالجيجابايت 10.53 جيجابايت، حجم الواجهة بالكيلوبايت 10533376000 كيلوبايت، نسبة الواجهة بالكيلوبايت 18.1%، العناوين المتاحة 645120، العناوين المتبقية 317361، نسبة العناوين المتبقية 50.8%، نوع القرص محلي للبيانات وليس السحابي، حالة القرص: ok"}, "goal_status": "done"}
+== goals.list 0.0s ok=True
+{"goals": [{"id": "G-3f02bde3", "title": "اعرف عدد أحداث ذاكرتك وحالة قرصك المحلي (المساحة والعقد) وأبلغ بالأرقام", "why": "", "origin": "owner", "priority": 3, "status": "done", "plan": ["memory.stat
+== experience.stats 0.0s ok=True
+{"root": "/app/data/experience", "experiences": 6, "facts": 0, "by_status": {"completed": 6}, "by_source": {"worker": 3, "goal": 3}, "corrupt_lines": {}, "chain": {"entries": 6, "broken": [], "intact": true}, "last": "memory.stats", "tools": {"disk.status": {"calls": 4, "ok": 4, "failed": 0, "last_error": null, "success_rate": 1.0}, "memory.stats": {"calls": 2, "ok": 2, "failed": 0, "last_error": null, "success_rate": 1.0}}}
+
+# 3) Raw memory.stats at the same time (ground truth):
+== memory.stats 0.1s ok=True
+{"core": {"core": {"last_hash": "b2e55a8dfe890093b892ec294554e21c47a5d0223f980068ad00dfcf8f054277", "genesis_created": true}, "index": {"total_events": 152413, "total_types": 56, "total_users": 9, "first_event": "6f84420d44bf27c7568b9856bfc4d12ac1264ee7154fde6eebce6855a4462ebb", "last_event": "b2e55a8dfe890093b892ec294554e21c47a5d0223f980068ad00dfcf8f054277", "updated_at": "2026-10-27T22:37:19.072181+00:00"}, "storage": {"blobs_count": 41892, "blobs_size_bytes": 4696023, "blobs_size_mb": 4.48}, "files": {"log_file": "/app/data/sovereign_core/ledger.jsonl", "log_exists": true, "log_size_mb": 74.61}}, "dynamic": {"sensory": {"total_events": 0, "attention_events": 0, "channels": []}, "buffer": {"size": 0, "processed_total": 0, "by_priority": {"critical": 0, "high": 0, "normal": 0, "low": 0, "background": 0}}, "working": {"active_users": 0, "total_items": 0, "by_user": {}}, "cache": {"size": 0, "hot_items": 0, "hit_rate": 0.0, "hits": 0, "misses": 0, "predictions": 0}, "emotional": {"active_emotions": 0, "current_mood": ["neutral", 0.0], "all_moods": {}}, "dreaming": {"last_dream": 1793140501.9080079, "dreams_count": 0}}, "store": {"total_items": 22, "total_size_kb": 33.9228515625, "by_type": {"procedural": 0, "semantic": 0, "episodic": 22, "spatial": 0, "emotional": 0, "associative": 0}, "index_size": 191, "timestamp": 1793140652.669113}, "timestamp": 1793140652.6691139}
+
+# Findings:
+# - Guard works live: step 1 check achieved=false guard=plan_tools_not_run (memory.stats missing); the system ran memory.stats next on its own; goal done after 2 steps (147.1s + 188.8s).
+# - GB values now correct (10.53 / 8.63), local disk labelled local.
+# - REMAINING FALSE FACT: the agent reported '22' memory records; truth total_events=152413 (22 = store.total_items, episodic). The checker sees answers only, not raw tool results, so it accepted it. Open item ٦.٩.٧.
+# - Model quality: mixed-script tokens ('任务', 'idak') from qwen2.5:3b.
