@@ -254,12 +254,22 @@ async def lifespan(app: FastAPI):
     app.state.scheduler = _build_scheduler()
     app.state.scheduler.start()
     logger.info(f"⏱️ المجدول: {app.state.scheduler.reason}")
+    # R-791 (V6 ٦.٩.٤): حلقة الاستقلال — أهداف دائمة يعمل عليها العقل بلا طلب
+    try:
+        import goals as _goals_mod
+        app.state.autonomy = _goals_mod.build_from_env()
+        app.state.autonomy.start()
+        logger.info(f"🧭 الاستقلال: {app.state.autonomy.reason}")
+    except Exception as _auto_exc:  # TOLERATED: الحلقة إضافة؛ فشل بنائها يُعلن ولا يكسر الإقلاع
+        logger.warning("R-791: تعذر بناء حلقة الاستقلال (%s)", type(_auto_exc).__name__)
     
     yield
     
     # إيقاف التشغيل
     logger.info("🛑 إيقاف خادم Sovereign AI...")
     await app.state.scheduler.stop()
+    if getattr(app.state, "autonomy", None) is not None:
+        app.state.autonomy.stop()
     app.state.orchestrator.stop()
     logger.info("✅ تم إيقاف الخادم")
 
@@ -1649,6 +1659,15 @@ def _signing_ok() -> bool:
         return False
 
 
+def _autonomy_enabled() -> bool:
+    """R-791: حلقة الاستقلال تعمل فعلًا (مبنية من البيئة ومفعّلة) — لا ادعاء بالعلم وحده."""
+    try:
+        import goals as _g
+        return bool(_g.get_loop().enabled)
+    except Exception:  # TOLERATED: تعذر القراءة ⇒ غير مفعّلة
+        return False
+
+
 def _search_configured() -> bool:
     """R-789c: مزود بحث فعلي — المصدر الواحد chat_tools.search_configured."""
     try:
@@ -1679,6 +1698,7 @@ def _capabilities_payload():
         "vault": _vault_status_payload()["enabled"],
     }
     flags["web_search"] = flags["web_tools"] and _search_configured()  # R-789c
+    flags["autonomy"] = _autonomy_enabled()  # R-791
     return capability_inventory.build_inventory(
         names, flags, signing_ok=_signing_ok(),
         cloud_disk_enabled=cloud_disk_enabled())
@@ -1708,6 +1728,7 @@ async def capabilities():
         "vault": _vault_status_payload()["enabled"],
     }
     flags["web_search"] = flags["web_tools"] and _search_configured()  # R-789c
+    flags["autonomy"] = _autonomy_enabled()  # R-791
     return capability_inventory.build_inventory(
         names, flags, signing_ok=_signing_ok(),
         cloud_disk_enabled=cloud_disk_enabled())
@@ -1881,6 +1902,72 @@ def _register_real_tools() -> None:
         outputs="status/registered/measured_peak_concurrency/completed/failed[]/results[]",
         handler=lambda goals, max_concurrency=4: __import__("fleet").spawn_goals(
             goals, int(max_concurrency))))
+    # R-790 (V6 ٦.٩): المدير ينشئ الوكلاء بنفسه + الخبرة والمعرفة المكتسبة
+    registry.register(ToolSpec(
+        name="agent.manage",
+        description="مدير الوكلاء (R-790): العقل يقرر بنفسه كم وكيلًا يلزم ودور كل منهم وهدفه، "
+                    "ينشئهم وينظم عملهم ويجمع نتائجهم ويتعلم من التجربة — يتطلب العقل الحي",
+        inputs={"goal": "الهدف", "max_agents": "سقف الوكلاء (افتراضي 4)"},
+        outputs="status/plan/agents_created/agents[]/answer",
+        handler=lambda goal, max_agents=None: __import__("manager").manage(goal, max_agents)))
+    registry.register(ToolSpec(
+        name="experience.stats",
+        description="الخبرة المكتسبة: عدد التجارب والحقائق، توزيع النتائج، سلامة السلسلة، "
+                    "ونسبة نجاح كل أداة من الوقائع المسجلة (R-790)",
+        inputs={}, outputs="experiences/facts/by_status/chain/tools{}",
+        handler=lambda: {**__import__("experience").get_store().stats(),
+                         "tools": __import__("experience").get_store().tool_stats()}))
+    registry.register(ToolSpec(
+        name="experience.recall",
+        description="أقرب التجارب السابقة لهدف: ما الأدوات التي استُخدمت وما النتيجة والخطأ (R-790)",
+        inputs={"goal": "الهدف أو السؤال", "k": "العدد (افتراضي 5)"},
+        outputs="items[] (goal/status/tools/error/score)",
+        handler=lambda goal, k=5: {"items": __import__("experience").get_store().recall(goal, int(k))}))
+    registry.register(ToolSpec(
+        name="knowledge.remember",
+        description="حفظ حقيقة تعلمها الوكيل مع مصدرها في المعرفة الدائمة (إلحاق فقط، R-790)",
+        inputs={"fact": "الحقيقة", "source": "المصدر (رابط أو أداة)", "topic": "الموضوع"},
+        outputs="id/hash/duplicate",
+        handler=lambda fact, source="", topic="": __import__("experience").get_store().remember(
+            fact, source, topic=topic)))
+    registry.register(ToolSpec(
+        name="knowledge.recall",
+        description="استرجاع حقائق محفوظة في المعرفة الدائمة بالسؤال، مع مصادرها (R-790)",
+        inputs={"query": "السؤال", "k": "العدد (افتراضي 5)"},
+        outputs="facts[] (fact/source/score)",
+        handler=lambda query, k=5: {"facts": __import__("experience").get_store().recall_facts(
+            query, int(k))}))
+    # R-791 (V6 ٦.٩.٣/٦.٩.٤): أهداف وخطط دائمة + حلقة الاستقلال
+    registry.register(ToolSpec(
+        name="goals.add",
+        description="إضافة هدف دائم يعمل عليه العقل بنفسه (يخطط وينشئ وكلاء وينفذ ويتعلم) — R-791",
+        inputs={"title": "الهدف", "priority": "الأولوية 1 (أعلى) إلى 5", "why": "السبب"},
+        outputs="id/title/status/priority",
+        handler=lambda title, priority=3, why="": __import__("goals").GoalStore().add(
+            title, origin="owner", why=why, priority=int(priority or 3))))
+    registry.register(ToolSpec(
+        name="goals.list",
+        description="الأهداف الدائمة: من وضعها (المالك أو العقل نفسه)، حالتها، خطتها، "
+                    "وما أُنجز فيها فعلًا (R-791)",
+        inputs={}, outputs="goals[] (id/title/origin/status/plan/runs/summary)",
+        handler=lambda: {"goals": [{**g, "runs": g["runs"][-5:], "runs_total": len(g["runs"])}
+                                   for g in __import__("goals").GoalStore().state().values()]}))
+    registry.register(ToolSpec(
+        name="goals.work",
+        description="خطوة عمل واحدة الآن على هدف: العقل يقرر (عمل/إعادة تخطيط/تحقق/تعذر) "
+                    "وينفذ بوكلاء ينشئهم — R-791",
+        inputs={"goal_id": "معرف الهدف"}, outputs="status/task/answer/agents_created",
+        handler=lambda goal_id: __import__("goals").GoalEngine().work(goal_id)))
+    registry.register(ToolSpec(
+        name="autonomy.status",
+        description="حالة حلقة الاستقلال: مفعّلة أم لا ولماذا، الفاصل، عدد الدورات، آخر دورة (R-791)",
+        inputs={}, outputs="enabled/reason/interval_s/ticks/last",
+        handler=lambda: __import__("goals").get_loop().status()))
+    registry.register(ToolSpec(
+        name="autonomy.tick",
+        description="تشغيل دورة استقلال واحدة الآن (عمل على أعلى هدف أو تأمل واقتراح أهداف) — R-791",
+        inputs={}, outputs="tick/status/...",
+        handler=lambda: __import__("goals").get_loop().run_once()))
     registry.register(ToolSpec(
         name="brain.status",
         description="حالة عقل Ollama ومصدر الرد (نفس منطق /brain/status)",

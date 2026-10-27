@@ -2724,3 +2724,9 @@ Bus إطلاقًا. الواجهة سليمة بعد الإزالة (101 وسم 
 
 ## 2026-10-27 — R-789b إثبات حي: أسطر مستبدلة
 - **# DELETION-JUSTIFIED** — توثيق فقط: خلية ٦.٧.٤ في ROADMAP_V6 (+الإثبات الحي وتغيير الحالة إلى «مُثبت حيًا»).
+
+## 2026-10-27 — R-790 / R-791: أسطر مستبدلة
+- **# DELETION-JUSTIFIED** — استبدال بتوسيع، لا حذف منطق:
+  - `backend/fleet.py`: توقيع `Worker.__init__` (+`allowed_tools`)، سطر نداء `run` (+الأدوات المقيدة)، قاموس النتيجة (+`tools`/`step_log`)، توقيع `FleetCoordinator.__init__` (+`worker_max_seconds`)، نداء `Worker` في `_run_part`.
+  - `backend/chat_agent.py`: توقيع `ChatPlanner.__init__` (+`lessons`)، سطر إنشاء المخطِّط في `respond()` (+الدروس).
+  - وثائق: سطرا «آخر تحديث» (CHANGELOG، PROJECT_STATE)؛ صف الاختبارات (1339→1367)؛ ROADMAP_V6 إضافة §6.9 فقط.

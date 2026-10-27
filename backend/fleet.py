@@ -56,7 +56,8 @@ class _Gauge:
 class Worker:
     def __init__(self, role: str, goal: str, planner: Dict[str, Any], registry, *,
                  max_steps: int = 8, max_seconds: float = 120.0,
-                 gauge: Optional[_Gauge] = None, attempt: int = 1):
+                 gauge: Optional[_Gauge] = None, attempt: int = 1,
+                 allowed_tools: Optional[List[str]] = None):
         from agent_loop import CancelToken
         self.role, self.goal, self.planner_spec = role, goal, planner
         self.registry = registry
@@ -64,6 +65,8 @@ class Worker:
         self.cancel = CancelToken()
         self.gauge = gauge
         self.attempt = attempt
+        # R-790: المدير يحدد أدوات كل عامل (لا مدير داخل عامل)؛ None = كل السجل كما كان
+        self.allowed_tools = list(allowed_tools) if allowed_tools is not None else None
         self.result: Optional[Dict[str, Any]] = None
 
     def stop(self, by: str = "owner") -> None:
@@ -88,7 +91,8 @@ class Worker:
         try:
             loop = AgentLoop(self.registry, default_planner_factory(self.planner_spec),
                              max_steps=self.max_steps, max_seconds=self.max_seconds,
-                             cancel=self.cancel, caller=f"worker:{self.role}")
+                             cancel=self.cancel, caller=f"worker:{self.role}",
+                             allowed_tools=self.allowed_tools)
             res = loop.run(self.goal)
         except Exception as exc:  # عزل: عامل ينهار لا يُسقط الأسطول
             res = {"status": "crashed", "answer": None, "steps": [],
@@ -98,7 +102,12 @@ class Worker:
                 self.gauge.leave()
         self.result = {"role": self.role, "status": res["status"], "answer": res.get("answer"),
                        "error": res.get("error"), "steps": len(res.get("steps") or []),
-                       "attempt": self.attempt}
+                       "attempt": self.attempt,
+                       # R-790: وقائع الخطوات للخبرة — أداة/نجاح/خطأ ومفاتيح المدخلات فقط
+                       "tools": [s.get("tool") for s in res.get("steps") or [] if s.get("tool")],
+                       "step_log": [{"tool": s.get("tool"), "ok": s.get("ok"),
+                                     "inputs": s.get("inputs") or {}, "error": s.get("error")}
+                                    for s in res.get("steps") or []]}
         try:
             _trace("worker.result", {"role": self.role, "status": res["status"],
                                      "attempt": self.attempt})
@@ -109,13 +118,14 @@ class Worker:
 
 class FleetCoordinator:
     def __init__(self, registry, *, max_concurrency: int = 8, max_retries: int = 1,
-                 worker_max_steps: int = 8):
+                 worker_max_steps: int = 8, worker_max_seconds: float = 120.0):
         if max_concurrency < 1:
             raise ValueError("سقف التزامن ≥ 1")
         self.registry = registry
         self.max_concurrency = int(max_concurrency)
         self.max_retries = int(max_retries)
         self.worker_max_steps = worker_max_steps
+        self.worker_max_seconds = float(worker_max_seconds)
         self.gauge = _Gauge()
         self.workers: Dict[str, Worker] = {}
         self._lock = threading.Lock()
@@ -131,7 +141,9 @@ class FleetCoordinator:
         while attempts <= self.max_retries:
             attempts += 1
             w = Worker(part["role"], part["goal"], part["planner"], self.registry,
-                       max_steps=self.worker_max_steps, gauge=self.gauge, attempt=attempts)
+                       max_steps=self.worker_max_steps, max_seconds=self.worker_max_seconds,
+                       gauge=self.gauge, attempt=attempts,
+                       allowed_tools=part.get("allowed_tools"))
             with self._lock:
                 self.workers[part["role"]] = w
             last = w.run()

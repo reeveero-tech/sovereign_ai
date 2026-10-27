@@ -81,6 +81,10 @@ def default_planner_factory(spec: Dict[str, Any]):
         return ScriptedPlanner(spec.get("steps") or [])
     if kind == "brain":
         return BrainPlanner()
+    if kind == "brain-chat":
+        # R-790: مخطط المرحلتين (R-789b — 8/8 حيًا) للعمال، مع خبرتهم السابقة المشابهة
+        from chat_agent import ChatPlanner
+        return ChatPlanner(lessons=spec.get("lessons") or "", chat_fn=spec.get("chat_fn"))
     raise ValueError(f"نوع مخطط غير معروف: {kind!r}")
 
 

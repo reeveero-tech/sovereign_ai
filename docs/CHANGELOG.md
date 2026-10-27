@@ -1,7 +1,23 @@
 # CHANGELOG.md — سجل التغييرات
 
 > كل تغيير يُسجل هنا (قاعدة الدفعة الذرية).
-> آخر تحديث: 2026-10-27 (R-789b — توجيه بمرحلتين: العقل يختار الأداة الحقيقية ثم يجيب من نتيجتها — ٦.٧.٤؛ R-789c — لا ادعاء بحث ويب بلا مزود)
+> آخر تحديث: 2026-10-27 (R-790/R-791 — العقل المدير: خبرة، وكلاء ينشئهم بنفسه، أهداف وخطط، حلقة استقلال — §6.9)
+
+---
+
+## [R-790] — 2026-10-27 — ٦.٩.١/٦.٩.٢/٦.٩.٥: الخبرة والمعرفة والمدير الذي ينشئ وكلاءه
+
+- **من الكود قبلها:** لا خبرة بين التشغيلات، والأسطول لا يُنشأ إلا بأجزاء يحددها المستدعي.
+- **الجديد:** `backend/experience.py` (ExperienceStore: experience/knowledge/goals JSONL إلحاقي، fsync، سلسلة sha256، `recall` بثلاثيات حروف بعد تطبيع عربي، الأسطر التالفة تُعد ولا تُسقط). `backend/manager.py` (AgentManager: تخطيط بمخطط JSON ⇒ وكلاء Worker بمخطِّط brain-chat وأدوات مقيدة ⇒ تركيب ⇒ خبرة + أحداث `manager_run`). `fleet.Worker(allowed_tools)` + `tools`/`step_log` في النتيجة؛ `FleetCoordinator(worker_max_seconds)`؛ `durable_tasks` نوع `brain-chat`؛ `ChatPlanner(lessons)` و`respond()` تتعلم. أدوات: agent.manage، experience.stats/recall، knowledge.remember/recall.
+- **[R-790a]** أداة إلزامية لكل مهمة فرعية من enum الأدوات الحقيقية + none، دمج الوكلاء ذوي الأداة نفسها، أهداف بالعربية — بعد تجربة حية أولى أنتجت وكيلًا بلا أداة وجوابًا بلا أرقام.
+- **دليل:** RED `forensics/R-790_evidence_RED.txt` (ModuleNotFoundError على HEAD)؛ حي `forensics/R-790_live_sideload.txt` (تجربتان على آلة الإنتاج).
+
+## [R-791] — 2026-10-27 — ٦.٩.٣/٦.٩.٤: أهداف دائمة وخطط وحلقة استقلال
+
+- **الجديد:** `backend/goals.py` — GoalStore بالأحداث، GoalEngine (`work`/`reflect`/`tick`)، AutonomyLoop خيط معطل افتراضيًا (`SOVEREIGN_AUTONOMY=1`، `SOVEREIGN_AUTONOMY_INTERVAL` ≥60، يحترم `SOVEREIGN_DISABLE_BACKGROUND_THREADS`). أدوات: goals.add/list/work، autonomy.status/tick؛ علم `autonomy`؛ الفهرس: agent_manager/experience/goals/autonomy.
+- **[R-791a]** منع تكرار مهمة مماثلة لمنجزة (≥0.6)، مرحلة فحص تحقق مستقلة بعد كل خطوة، أهداف التأمل تتطلب `evidence` مؤسسًا على الملاحظات الحقيقية وإلا تُرفض.
+- **حي (sideload):** الهدف أُغلق «achieved» في خطوة واحدة (305.6ث) مقابل 3 خطوات بلا إغلاق قبل R-791a.
+- **اختبارات:** `tests/test_manager_experience.py` (28). المجموع 1367.
 
 ---
 

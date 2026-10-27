@@ -28,6 +28,11 @@ CHAT_READ_TOOLS = frozenset({
     "vault.status", "brain.status", "connectors.status", "skills.status",
     "defects.scan", "sovereignty.score", "web.fetch", "github.repo",
 })
+# R-790: قراءة الخبرة والمعرفة المكتسبة — بيانات وقائع النظام نفسه، بلا أسرار
+CHAT_READ_TOOLS = CHAT_READ_TOOLS | frozenset({"experience.stats", "experience.recall",
+                                               "knowledge.recall",
+                                               # R-791: قراءة الأهداف وحالة الاستقلال
+                                               "goals.list", "autonomy.status"})
 # web.search يُضاف فقط إن وُجد مزود فعلي — لا أداة تعرض على العقل وهي لا تعمل
 SEARCH_TOOL = "web.search"
 
@@ -150,8 +155,10 @@ class ChatPlanner:
     accepts_feedback = True
 
     def __init__(self, history: Optional[List[Dict[str, str]]] = None,
-                 deadline: Optional[float] = None, chat_fn=None):
+                 deadline: Optional[float] = None, chat_fn=None, lessons: str = ""):
         self.history = list(history or [])[-6:]
+        # R-790: وقائع تجارب سابقة مشابهة (experience.lessons_text) — العقل يتعلم مما وقع
+        self.lessons = lessons or ""
         self.deadline = deadline
         self._chat = chat_fn
 
@@ -182,6 +189,9 @@ class ChatPlanner:
             inp = ", ".join(f"{k}" for k in (t.get("inputs") or {})) or "بلا مدخلات"
             lines.append(f"- {t['name']} (المدخلات: {inp}): {t.get('description', '')[:140]}")
         system = _ROUTER_SYSTEM + "\n".join(lines) + '\nأجب JSON فقط: {"tool":"<اسم أو none>","inputs":{}}'
+        if self.lessons:
+            system += ("\nتجارب سابقة مشابهة (وقائع مسجلة — كرر ما نجح وتجنب ما فشل):\n"
+                       + self.lessons)
         payload: Dict[str, Any] = {}
         if self.history:
             payload["conversation"] = self._conversation()
@@ -242,6 +252,15 @@ def _brain_failure_reason() -> str:
     return "العقل اللغوي لم يرد (غير متاح أو انتهت المهلة)"
 
 
+def _learn(text: str, res: Dict[str, Any]) -> None:
+    """R-790: كل محادثة تُسجل خبرةً كما وقعت (الأدوات، الحالة، الخطأ) — لا تفسير مختلق."""
+    try:
+        import experience
+        experience.record_run("chat", text, res)
+    except Exception:  # TOLERATED: الخبرة إضافة؛ لا تكسر الرد
+        pass
+
+
 def brain_enabled() -> bool:
     try:
         import config
@@ -264,11 +283,18 @@ def respond(text: str, history: Optional[List[Dict[str, str]]] = None, *,
                 "status": "brain_disabled", "tools_used": [], "steps": []}
     budget = float(max_seconds if max_seconds is not None else MAX_SECONDS)
     deadline = time.monotonic() + budget
-    planner = ChatPlanner(history, deadline=deadline, chat_fn=chat_fn)
+    lessons = ""
+    try:
+        import experience
+        lessons = experience.lessons_text(text, k=3)
+    except Exception:  # TOLERATED: بلا خبرة يعمل الموجّه كما كان
+        lessons = ""
+    planner = ChatPlanner(history, deadline=deadline, chat_fn=chat_fn, lessons=lessons)
     names = allowed_tools(registry, owner)
     loop = AgentLoop(registry, planner, max_steps=MAX_STEPS, max_seconds=budget,
                      allowed_tools=names, caller="chat")
     res = loop.run(text)
+    _learn(text, res)
     steps = res.get("steps") or []
     used = [s.get("tool") for s in steps if s.get("tool")]
     out = {"status": res.get("status"), "tools_used": used, "run_id": res.get("run_id"),

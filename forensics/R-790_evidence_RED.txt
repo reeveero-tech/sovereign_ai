@@ -1,0 +1,16 @@
+# R-790/R-791 RED: new tests vs HEAD 4156dcf (new modules absent)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_manager_experience.py:15: in <module>
+    import experience  # noqa: E402
+    ^^^^^^^^^^^^^^^^^
+E   ModuleNotFoundError: No module named 'experience'
+=============================== warnings summary ===============================
+backend/config.py:453
+  /tmp/redwt/wt/backend/config.py:453: UserWarning: ⚠️ CORS مفتوح للجميع — مقبول في التطوير فقط (D-034)
+    warnings.warn("⚠️ CORS مفتوح للجميع — مقبول في التطوير فقط (D-034)")
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+ERROR tests/test_manager_experience.py
+!!!!!!!!!!!!!!!!!!!! Interrupted: 1 error during collection !!!!!!!!!!!!!!!!!!!!
+1 warning, 1 error in 0.14s
