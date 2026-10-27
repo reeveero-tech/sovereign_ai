@@ -166,6 +166,8 @@ class ChatResponse(BaseModel):
     cycle_id: str
     processing_time_ms: float
     timestamp: float
+    # R-787: أدوات النظام الحقيقية التي استُدعيت لهذا الرد (أثر موقّع لكل منها)
+    tools_used: List[str] = []
 
 
 class SovereignCommand(BaseModel):
@@ -1565,6 +1567,31 @@ def _signing_ok() -> bool:
         return False
 
 
+def _capabilities_payload():
+    """R-787: الجرد الحي نفسه كدالة متزامنة — يستعمله /capabilities وجسر المحادثة."""
+    import capability_inventory
+    import config
+    from tool_registry import get_registry
+    try:
+        from backend.sovereign.cloud_disk import cloud_disk_enabled
+    except ImportError:  # TOLERATED: نمط الاستيراد المزدوج القائم في /disk/status
+        from sovereign.cloud_disk import cloud_disk_enabled
+    names = [t["name"] for t in get_registry().list_tools()]
+    flags = {
+        "brain": bool(config.OLLAMA_ENABLED and config.OLLAMA_MODEL),
+        "web_tools": bool(getattr(config, "WEB_TOOLS_ENABLED", False)),
+        "media": bool(getattr(config, "MEDIA_ENABLED", False)),
+        "vision": bool(config.VISION_ENABLED and config.VISION_MODEL),
+        "stt": bool(config.STT_ENABLED),
+        "tts": bool(config.TTS_ENABLED and config.TTS_MODEL),
+        "mcp": bool(getattr(config, "MCP_ENABLED", False)),
+        "vault": _vault_status_payload()["enabled"],
+    }
+    return capability_inventory.build_inventory(
+        names, flags, signing_ok=_signing_ok(),
+        cloud_disk_enabled=cloud_disk_enabled())
+
+
 @app.get("/capabilities")
 async def capabilities():
     """R-750 (ROADMAP_V5 §١.٢): جرد القدرات الصادق من الحالة الحية — سجل
@@ -1858,7 +1885,8 @@ async def system_status():
     )
 
 
-async def _compose_chat_reply(text: str, result, orchestrator, default: str, history=None) -> str:
+async def _compose_chat_reply(text: str, result, orchestrator, default: str, history=None,
+                              tool_context: str = "") -> str:
     """
     R-715: تركيب الرد المشترك بين POST /chat و WebSocket.
     منقول حرفيًا من /chat (R-614/S-9، R-704) — لا تغيير سلوكي لـ /chat.
@@ -1880,6 +1908,8 @@ async def _compose_chat_reply(text: str, result, orchestrator, default: str, his
             from sovereign_response import build_reply
             # R-786: السياق يُمرَّر فقط عند وجوده — النداء بلا سياق كما كان حرفيًا
             _extra = {"history": history} if history else {}
+            if tool_context:
+                _extra["tool_context"] = tool_context  # R-787
             reply = await asyncio.to_thread(
                 build_reply, intent_name, text, result, orchestrator=orchestrator, **_extra
             )
@@ -1978,10 +2008,22 @@ async def chat(message: ChatMessage, background_tasks: BackgroundTasks):
         if turn.role == "user" and enforce_input_safety(turn.content, is_sovereign=False) is not None:
             continue
         history.append({"role": turn.role, "content": turn.content})
+    # R-787: جسر المحادثة ↔ الأدوات — جرد القدرات وقراءة الروابط عبر السجل (أثر موقّع)
+    tools_used: List[str] = []
+    tool_context = ""
+    try:
+        import chat_tools
+        bridged = await asyncio.to_thread(chat_tools.gather, message.text, _capabilities_payload)
+        tool_context = bridged.get("context") or ""
+        tools_used = list(bridged.get("tools_used") or [])
+    except Exception as e:  # TOLERATED: الجسر مكمّل — فشله لا يسقط المحادثة ويُسجل
+        logger.warning("R-787: فشل جسر الأدوات (%s)", type(e).__name__)
+    _bridge_kw = {"tool_context": tool_context} if tool_context else {}
     reply = await _compose_chat_reply(
         message.text, result, orchestrator,
         default="تم استلام رسالتك. أنا الذكاء السيادي، جاهز لخدمتك.",
         history=history or None,
+        **_bridge_kw,
     )
     
     return ChatResponse(
@@ -1989,7 +2031,8 @@ async def chat(message: ChatMessage, background_tasks: BackgroundTasks):
         status="ok" if result.success else "error",
         cycle_id=result.cycle_id,
         processing_time_ms=round(processing_time, 2),
-        timestamp=start_time
+        timestamp=start_time,
+        tools_used=tools_used,
     )
 
 

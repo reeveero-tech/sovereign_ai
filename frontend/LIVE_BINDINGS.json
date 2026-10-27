@@ -222,6 +222,7 @@
     "proposals-list"
   ],
   "control": [
+    "r787-back-to-chat",
     "btn-reset-system",
     "btn-export-data",
     "main-tabs",

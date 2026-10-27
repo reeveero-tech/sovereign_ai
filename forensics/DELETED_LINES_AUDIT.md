@@ -2667,3 +2667,11 @@ Bus إطلاقًا. الواجهة سليمة بعد الإزالة (101 وسم 
 
 ## 2026-10-27 — R-786-ب: أسطر مستبدلة (1)
 - **# DELETION-JUSTIFIED** — سطر مدخل R-786 في §2 من PROJECT_STATE أُلحق به دليل التحقق الحي (استبدال بتوسيع، لا حذف).
+
+## 2026-10-27 — R-787: أسطر مستبدلة
+- **# DELETION-JUSTIFIED** — كله استبدال/توسيع، لا حذف منطق أو بيانات:
+  - وثائق: سطرا «آخر تحديث» في PROJECT_STATE وCHANGELOG؛ صف الاختبارات (1283→1301 — الرقم القديم كان متأخرًا عن الترويسة).
+  - `backend/app.py`: توقيع `_compose_chat_reply` (+tool_context)، و`return ChatResponse(...)` في `/chat` (+tools_used)، ونداء `_compose_chat_reply` فيه (+`**_bridge_kw`)؛ جسم `/capabilities` انتقل حرفيًا إلى `_capabilities_payload()`.
+  - `backend/sovereign_response.py`: توقيعا `_llm_reply` و`build_reply` (+tool_context)، ونداء `_llm_reply` (صار بوسائط مسماة شرطية — النداء بلا سياق كما كان).
+  - `frontend/chat/index.html`: قائمة الأسئلة المقترحة، وسطرا زري الرأس (+title)، ونداءا `bubble` (+tools)، وكائن رسالة الرد (+tools).
+  - `frontend/LIVE_BINDINGS.json`: سطر `"control": [` (أُدرج بعده المعرّف الجديد).

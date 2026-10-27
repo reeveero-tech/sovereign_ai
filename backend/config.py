@@ -286,6 +286,8 @@ OLLAMA_API_KEY = _ollama_env("OLLAMA_API_KEY", None)
 
 # مهلة توليد الرد بالثواني — بعدها سقوط آمن للمحرك القالبي
 OLLAMA_TIMEOUT_SECONDS = float(_ollama_env("OLLAMA_TIMEOUT_SECONDS", "60"))
+# R-787: نافذة سياق العقل (0 = افتراض الخادم) — نتائج الأدوات تحتاج نافذة أوسع
+OLLAMA_NUM_CTX = int(_ollama_env("OLLAMA_NUM_CTX", "0") or 0)
 
 # ============================================================
 # R-737 (البند ٢.٣ — أذنان): إعدادات السمع (تحويل كلام لنص)

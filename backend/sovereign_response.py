@@ -172,7 +172,8 @@ def _risk_label(level) -> str:
     return str(level)
 
 
-def _llm_reply(intent_name: str, text: str, ev: Dict[str, Any], history=None) -> Optional[str]:
+def _llm_reply(intent_name: str, text: str, ev: Dict[str, Any], history=None,
+               tool_context: str = "") -> Optional[str]:
     """R-704: الرد عبر عقل Ollama المحلي إن كان مفعّلًا — سقوط آمن للقوالب.
 
     النموذج يولّد النص فقط: يُرسل له سياق مسموح (النية المكتشفة + لقطة
@@ -199,6 +200,18 @@ def _llm_reply(intent_name: str, text: str, ev: Dict[str, Any], history=None) ->
         system_prompt += "\nحالة النظام الحية (JSON):\n" + json.dumps(
             ev, ensure_ascii=False, default=str
         )
+        # R-787: الهوية الحقيقية — النموذج ليس هو المشروع، بل «عقله اللغوي» فقط
+        system_prompt += (
+            "\nهويتك الحقيقية: أنت واجهة محادثة مشروع sovereign_ai (نظام سيادي ذاتي الاستضافة "
+            "بسجل موقّع غير قابل للمحو، وذاكرة دائمة، وأدوات مسجلة). النموذج اللغوي "
+            f"«{_config.OLLAMA_MODEL}» هو عقلك اللغوي فقط وليس هويتك. "
+            "النظام يستدعي أدواته الحقيقية قبل أن يصلك السؤال: جرد القدرات الحي، وقراءة "
+            "الروابط ومستودعات GitHub العامة. إن وُجدت أدناه «نتائج أدوات النظام» فهي محتوى "
+            "حقيقي جُلب الآن — حلّله واستند إليه، ولا تقل أبدًا إنك لا تستطيع الوصول إلى "
+            "الإنترنت أو إلى الرابط. إن لم توجد نتائج لرابط فقل إن القراءة لم تتم ولا تختلق."
+        )
+        if tool_context:
+            system_prompt += "\nنتائج أدوات النظام (حقيقية، جُلبت الآن):\n" + tool_context
         if history:
             return ollama_client.chat(system_prompt, text, history=history)
         return ollama_client.chat(system_prompt, text)
@@ -211,6 +224,7 @@ def build_reply(
     intent_name: str, text: str, orchestrator_result: Any = None,
     orchestrator: Any = None,
     history: Any = None,
+    tool_context: str = "",
 ) -> str:
     """
     بناء رد حقيقي مبني على حالة النظام الحية.
@@ -237,7 +251,12 @@ def build_reply(
 
     # R-704: عقل Ollama المحلي إن فُعّل — نص النموذج هو الرد؛
     # عند التعطل أو التعطيل تسقط المسارات القالبية القائمة أدناه كما هي
-    llm = _llm_reply(intent_name, text, ev, history=history) if history else _llm_reply(intent_name, text, ev)
+    _kw = {}
+    if history:
+        _kw["history"] = history
+    if tool_context:
+        _kw["tool_context"] = tool_context  # R-787: نتائج أدوات النظام الحقيقية
+    llm = _llm_reply(intent_name, text, ev, **_kw)
     if llm:
         return llm
 

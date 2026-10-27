@@ -20,6 +20,9 @@ primary_region = 'ams'
   MALLOC_ARENA_MAX = '2'
   MALLOC_MMAP_THRESHOLD_ = '131072'
   MALLOC_TRIM_THRESHOLD_ = '131072'
+  # R-787: جسر المحادثة ↔ الأدوات — قراءة الروابط (web.fetch محروس SSRF) بأمر المالك
+  WEB_TOOLS_ENABLED = 'true'
+  OLLAMA_NUM_CTX = '8192'
 
 [http_service]
   internal_port = 8080

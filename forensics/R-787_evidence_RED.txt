@@ -1,0 +1,16 @@
+R-787 RED evidence — tests/test_chat_tools_bridge.py on base cd792bd (pre-change code), 2026-10-27T11:29:59Z
+  /home/user/venv311/lib/python3.11/site-packages/starlette/testclient.py:40: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.
+    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_chat_tools_bridge.py::test_capability_question_injects_live_inventory
+FAILED tests/test_chat_tools_bridge.py::test_identity_declares_project_and_model_as_brain_only
+FAILED tests/test_chat_tools_bridge.py::test_github_url_fetched_through_registry_with_signed_trace
+FAILED tests/test_chat_tools_bridge.py::test_fetch_failure_is_reported_not_invented
+FAILED tests/test_chat_tools_bridge.py::test_plain_message_uses_no_tools - Ke...
+FAILED tests/test_chat_tools_bridge.py::test_num_ctx_only_when_configured - K...
+FAILED tests/test_chat_tools_bridge.py::test_console_has_back_to_chat_link - ...
+FAILED tests/test_chat_tools_bridge.py::test_chat_ui_renders_tools_used_and_explains_buttons
+FAILED tests/test_chat_tools_bridge.py::test_fly_enables_web_tools_and_context_window
+9 failed, 3 warnings in 4.16s

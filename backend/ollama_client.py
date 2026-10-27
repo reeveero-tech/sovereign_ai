@@ -92,6 +92,10 @@ def chat(system_prompt: str, user_message: str, timeout=None,
                 payload["format"] = "json"
             if max_tokens:
                 payload["options"] = {"num_predict": int(max_tokens)}
+            # R-787: نافذة السياق — افتراض Ollama (2048/4096) يقطع نتائج الأدوات بصمت
+            _num_ctx = int(getattr(config, "OLLAMA_NUM_CTX", 0) or 0)
+            if _num_ctx > 0:
+                payload.setdefault("options", {})["num_ctx"] = _num_ctx
         base = str(config.OLLAMA_BASE_URL).rstrip("/")
         if protocol == "openai":
             # BASE_URL بادئة الإصدار كاملة (مثل .../openai/v1) — يُلحق

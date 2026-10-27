@@ -70,6 +70,8 @@
   .msg.user .bubble { background: var(--user); border-color: #2f4b47; }
   .msg.error .bubble { border-color: var(--danger); color: #f3c9c6; }
   .meta { font-size: 12px; color: var(--muted); margin-top: 4px; padding: 0 4px; display: flex; gap: 10px; align-items: center; }
+  .meta .tools { color: var(--accent); }
+  .meta { flex-wrap: wrap; }
   .meta button { background: none; border: none; color: var(--accent); padding: 0; font-size: 12px; }
 
   .typing { display: inline-flex; gap: 5px; align-items: center; }
@@ -118,8 +120,8 @@
   <div class="brand">الذكاء السيادي</div>
   <div class="status" id="status" title="حالة الخادم والعقل"><span class="dot" id="dot"></span><span id="statusText">جارٍ الفحص…</span></div>
   <div class="spacer"></div>
-  <a class="link" href="/console">اللوحة التقنية</a>
-  <button class="btn" id="newChat" type="button">محادثة جديدة</button>
+  <a class="link" href="/console" title="لوحة المراقبة القديمة: السجل والذاكرة والأدوات والمهام بالتفصيل. فيها زر للعودة إلى المحادثة">اللوحة التقنية</a>
+  <button class="btn" id="newChat" type="button" title="يمسح المحادثة الحالية من الشاشة ويبدأ جلسة جديدة بلا سياق سابق">محادثة جديدة</button>
 </header>
 
 <main id="scroller">
@@ -168,7 +170,7 @@
     box.appendChild(el("h1", null, "كيف أساعدك؟"));
     box.appendChild(el("p", null, "اكتب سؤالك بالأسفل، أو ابدأ بأحد هذه:"));
     var chips = el("div", "chips");
-    ["عرّف بنفسك في جملتين", "ما حالة النظام الآن؟", "اكتب لي خطة يومية منظمة للعمل"].forEach(function (q) {
+    ["أخبرني عن قدراتك الحقيقية", "حلل المشروع https://github.com/reeveero-tech/sovereign_ai", "ما حالة النظام الآن؟"].forEach(function (q) {
       var c = el("button", "chip", q); c.type = "button";
       c.addEventListener("click", function () { input.value = q; send(); });
       chips.appendChild(c);
@@ -183,6 +185,11 @@
     var meta = el("div", "meta");
     if (extra && extra.ts) meta.appendChild(el("span", null, fmtTime(extra.ts)));
     if (extra && extra.secs != null) meta.appendChild(el("span", null, extra.secs + " ث"));
+    if (extra && extra.tools && extra.tools.length) {
+      var tl = el("span", "tools", "أدوات النظام المستخدمة: " + extra.tools.map(function (t) { return "\u2068" + t + "\u2069"; }).join(" · "));
+      tl.title = "استدعاءات حقيقية لأدوات المشروع، كل منها مسجل بأثر موقّع في السجل السيادي";
+      meta.appendChild(tl);
+    }
     if (extra && extra.retry) {
       var r = el("button", null, "إعادة المحاولة"); r.type = "button";
       r.addEventListener("click", extra.retry); meta.appendChild(r);
@@ -195,7 +202,7 @@
   function renderAll() {
     thread.textContent = "";
     if (!state.messages.length) { renderEmpty(); return; }
-    state.messages.forEach(function (m) { bubble(m.role, m.content, { ts: m.ts, secs: m.secs }); });
+    state.messages.forEach(function (m) { bubble(m.role, m.content, { ts: m.ts, secs: m.secs, tools: m.tools }); });
     scrollDown();
   }
 
@@ -257,9 +264,9 @@
     request(text, history).then(function (data) {
       p.stop();
       var secs = Math.round((Date.now() - p.start) / 1000);
-      var bm = { role: "assistant", content: data.reply.trim(), ts: Date.now(), secs: secs };
+      var bm = { role: "assistant", content: data.reply.trim(), ts: Date.now(), secs: secs, tools: data.tools_used || [] };
       state.messages.push(bm); save();
-      bubble("assistant", bm.content, { ts: bm.ts, secs: secs });
+      bubble("assistant", bm.content, { ts: bm.ts, secs: secs, tools: bm.tools });
     }).catch(function (err) {
       p.stop();
       var node = bubble("assistant", err.message, { error: true, retry: function () { node.remove(); send(text); } });
