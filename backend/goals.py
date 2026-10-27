@@ -349,6 +349,14 @@ class GoalEngine:
                     obs[name] = f"فشل: {inv.get('error')}"
             except Exception as exc:  # TOLERATED: ملاحظة ناقصة تُعلن
                 obs[name] = f"تعذر: {type(exc).__name__}"
+        if "disk.status" in registered:  # R-792: مساحة/عُقد القرص الحقيقية
+            try:
+                inv = self.registry.invoke("disk.status", caller="autonomy", inputs={})
+                res = inv.get("result") if inv.get("ok") else None
+                if isinstance(res, dict) and res.get("local_volume"):
+                    obs["local_volume"] = res["local_volume"]
+            except Exception as exc:  # TOLERATED: ملاحظة ناقصة تُعلن
+                obs["local_volume"] = f"تعذر: {type(exc).__name__}"
         st = experience.get_store()
         stats = st.stats()
         obs["experience"] = {"experiences": stats["experiences"], "by_status": stats["by_status"]}

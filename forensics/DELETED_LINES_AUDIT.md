@@ -2730,3 +2730,9 @@ Bus إطلاقًا. الواجهة سليمة بعد الإزالة (101 وسم 
   - `backend/fleet.py`: توقيع `Worker.__init__` (+`allowed_tools`)، سطر نداء `run` (+الأدوات المقيدة)، قاموس النتيجة (+`tools`/`step_log`)، توقيع `FleetCoordinator.__init__` (+`worker_max_seconds`)، نداء `Worker` في `_run_part`.
   - `backend/chat_agent.py`: توقيع `ChatPlanner.__init__` (+`lessons`)، سطر إنشاء المخطِّط في `respond()` (+الدروس).
   - وثائق: سطرا «آخر تحديث» (CHANGELOG، PROJECT_STATE)؛ صف الاختبارات (1339→1367)؛ ROADMAP_V6 إضافة §6.9 فقط.
+
+## 2026-10-27 — R-792: أسطر مستبدلة
+- **# DELETION-JUSTIFIED** — استبدال بتوسيع، لا حذف منطق:
+  - `backend/consciousness/field.py`: سطرا ترويسة `_save_moment` (الاسم والوثيقة) — الجسم القديم نفسه صار `_save_moment_per_file` خلف العلم.
+  - `backend/app.py`: وصف/مخرجات/معالج أداة `disk.status` في السجل (⇒ `_disk_tool_payload` = الحمولة نفسها + `local_volume`). `/disk/status` بلا تغيير.
+  - وثائق: سطرا «آخر تحديث»؛ صف الاختبارات (1367→1373).

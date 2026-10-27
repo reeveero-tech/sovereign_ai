@@ -1,7 +1,17 @@
 # CHANGELOG.md — سجل التغييرات
 
 > كل تغيير يُسجل هنا (قاعدة الدفعة الذرية).
-> آخر تحديث: 2026-10-27 (R-790/R-791 — العقل المدير: خبرة، وكلاء ينشئهم بنفسه، أهداف وخطط، حلقة استقلال — §6.9)
+> آخر تحديث: 2026-10-27 (R-792 — استنفاد عُقد القرص أسقط الخادم: ملف يومي للحظات الوعي، رصد العقد، تفعيل الاستقلال — ٦.٩.٦)
+
+---
+
+## [R-792] — 2026-10-27 — ٦.٩.٦: استنفاد inodes حيًا + تفعيل حلقة الاستقلال
+
+- **حي:** نشر R-790 (run 40583108756) فشل بفحص الصحة؛ السجلات: `[Errno 28] No space left on device: '/app/data/sovereign_core/index.json.tmp'` مع `df -h` 29%؛ `df -i` 322560/322560؛ `find`: 281117 ملفًا في `consciousness/moments`، 41298 في `sovereign_core/blobs`.
+- **استعادة بلا حذف (المادة ٧):** `fly volumes extend vol_r1j71zm86kp03l3r -s 10` ⇒ 645120 عقدة (50%)، `/health` 200 بلا إعادة تشغيل.
+- **الإصلاح:** `ConsciousnessFieldEngine._save_moment` يلحق بملف يومي `moments_daily/YYYY-MM-DD.jsonl` بفاصل `SOVEREIGN_MOMENT_SAVE_INTERVAL` (5ث)؛ القديم `_save_moment_per_file` خلف `SOVEREIGN_MOMENTS_PER_FILE=1`. `_local_volume_status()` من `os.statvfs` في أداة `disk.status` (`_disk_tool_payload`؛ عقد `/disk/status` بلا تغيير)؛ `GoalEngine.observations()` تضيف `local_volume`. fly.toml: `SOVEREIGN_AUTONOMY=1`، الفاصل 1800ث.
+- **لم يُحل بعد:** 41298 ملف blob في السجل يتزايد (أبطأ بكثير)؛ تلف قديم معروف في السجل (سطر 1659 بايتات NUL) يبقى بقرار المالك R-703.
+- **اختبارات:** `tests/test_r792_inodes.py` (6)، RED `forensics/R-792_evidence_RED.txt` (6/6 على HEAD).
 
 ---
 

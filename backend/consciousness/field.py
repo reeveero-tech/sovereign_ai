@@ -16,6 +16,7 @@
 """
 
 import json
+import os
 from runtime.atomic_json import atomic_write_json  # R-781
 import hashlib
 import time
@@ -61,6 +62,8 @@ CONSCIOUSNESS_DIR = DATA_DIR / "consciousness"
 CONSCIOUSNESS_LOG = CONSCIOUSNESS_DIR / "consciousness_log.jsonl"
 CONSCIOUSNESS_STATE_FILE = CONSCIOUSNESS_DIR / "consciousness_state.json"
 CONSCIOUSNESS_MOMENTS_DIR = CONSCIOUSNESS_DIR / "moments"
+# R-792: ملف يومي واحد بدل ملف لكل لحظة (استنفاد inodes حيًا)
+CONSCIOUSNESS_MOMENTS_DAILY_DIR = CONSCIOUSNESS_DIR / "moments_daily"
 
 for d in [CONSCIOUSNESS_DIR, CONSCIOUSNESS_MOMENTS_DIR]:
     d.mkdir(parents=True, exist_ok=True)
@@ -659,7 +662,36 @@ class ConsciousnessFieldEngine:
     # ============================================================
     
     def _save_moment(self, moment: ConsciousnessMoment):
-        """حفظ لحظة وعي"""
+        """حفظ لحظة وعي.
+
+        R-792: المسار القديم (ملف JSON لكل لحظة، ~لحظتان/ث) استنفد عُقد القرص
+        (inodes 322560/322560 حيًا، 281117 ملفًا في moments/) فأسقط الخادم.
+        الافتراضي الآن: إلحاق مضغوط بملف يومي واحد `moments_daily/YYYY-MM-DD.jsonl`
+        بفاصل أدنى `SOVEREIGN_MOMENT_SAVE_INTERVAL` (افتراضي 5ث، 0 = كل لحظة).
+        المسار القديم باقٍ خلف `SOVEREIGN_MOMENTS_PER_FILE=1`؛ الملفات الموجودة لا تُمس.
+        """
+        if os.environ.get("SOVEREIGN_MOMENTS_PER_FILE", "").strip() == "1":
+            return self._save_moment_per_file(moment)
+        try:
+            interval = float(os.environ.get("SOVEREIGN_MOMENT_SAVE_INTERVAL", "5"))
+        except ValueError:
+            interval = 5.0
+        now = time.time()
+        last = getattr(self, "_last_moment_saved", 0.0)
+        if interval > 0 and now - last < interval:
+            return
+        self._last_moment_saved = now
+        try:
+            day = time.strftime("%Y-%m-%d", time.gmtime(moment.timestamp or now))
+            CONSCIOUSNESS_MOMENTS_DAILY_DIR.mkdir(parents=True, exist_ok=True)
+            line = json.dumps(moment.__dict__, ensure_ascii=False, default=str)
+            with open(CONSCIOUSNESS_MOMENTS_DAILY_DIR / f"{day}.jsonl", "a", encoding="utf-8") as f:
+                f.write(line + "\n")
+        except Exception as e:
+            logger.error(f"خطأ في حفظ لحظة الوعي: {e}")
+
+    def _save_moment_per_file(self, moment: ConsciousnessMoment):
+        """المسار القديم (قبل R-792): ملف لكل لحظة — خلف SOVEREIGN_MOMENTS_PER_FILE=1."""
         try:
             moment_file = CONSCIOUSNESS_MOMENTS_DIR / f"{moment.id}.json"
             atomic_write_json(moment_file, moment.__dict__, ensure_ascii=False, indent=2)

@@ -1,0 +1,12 @@
+# R-792 RED: tests/test_r792_inodes.py vs HEAD a490cd2 (field.py/app.py/goals.py at HEAD)
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_r792_inodes.py::test_local_volume_reports_inodes_exhaustion_even_with_free_space
+FAILED tests/test_r792_inodes.py::test_local_volume_real_statvfs_and_disk_status_payload
+FAILED tests/test_r792_inodes.py::test_autonomy_observations_include_local_volume
+ERROR tests/test_r792_inodes.py::test_default_appends_one_daily_file_not_one_file_per_moment
+ERROR tests/test_r792_inodes.py::test_min_interval_throttles_writes - Attribu...
+ERROR tests/test_r792_inodes.py::test_legacy_per_file_path_kept_behind_flag_and_old_files_untouched
+3 failed, 2 warnings, 3 errors in 0.64s
+
+# GREEN after fix: 6 passed

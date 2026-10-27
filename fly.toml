@@ -23,6 +23,11 @@ primary_region = 'ams'
   # R-787: جسر المحادثة ↔ الأدوات — قراءة الروابط (web.fetch محروس SSRF) بأمر المالك
   WEB_TOOLS_ENABLED = 'true'
   OLLAMA_NUM_CTX = '8192'
+  # R-791/R-792: حلقة الاستقلال (§6.9.٤) بأمر المالك — تأمل من ملاحظات حقيقية ثم عمل، كل 30 دقيقة
+  SOVEREIGN_AUTONOMY = '1'
+  SOVEREIGN_AUTONOMY_INTERVAL = '1800'
+  # R-792: لحظة وعي محفوظة كل 5ث بملف يومي (لا ملف لكل لحظة — استنفاد inodes حيًا)
+  SOVEREIGN_MOMENT_SAVE_INTERVAL = '5'
 
 [http_service]
   internal_port = 8080

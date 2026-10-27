@@ -1083,6 +1083,42 @@ def _disk_status_payload() -> Dict[str, Any]:
     return {"cloud_disk": "enabled", **disk.status()}
 
 
+def _disk_tool_payload() -> Dict[str, Any]:
+    """R-792: أداة disk.status = حمولة /disk/status كما هي + القرص المحلي (مساحة وعُقد).
+    عقد النقطة /disk/status لا يتغير (المعطّل بلا تفاصيل)."""
+    return {**_disk_status_payload(), "local_volume": _local_volume_status()}
+
+
+def _local_volume_status(path=None) -> Dict[str, Any]:
+    """R-792: مساحة وعُقد (inodes) القرص المحلي للبيانات من os.statvfs — قراءة فعلية.
+    حيًا 2026-10-27 سقط الخادم بـENOSPC والمساحة 29% فقط لأن العُقد 100%."""
+    import os as _os
+    try:
+        from config import DATA_DIR as _dd
+    except ImportError:  # TOLERATED: نمط الاستيراد المزدوج
+        from backend.config import DATA_DIR as _dd
+    p = str(path or _dd)
+    try:
+        st = _os.statvfs(p)
+    except OSError as e:
+        return {"path": p, "error": str(e)[:200]}
+    def _pct(total, free):
+        return round(100.0 * (total - free) / total, 1) if total else None
+    bytes_pct = _pct(st.f_blocks, st.f_bavail)
+    inodes_pct = _pct(st.f_files, st.f_favail)
+    worst = max(x for x in (bytes_pct or 0, inodes_pct or 0))
+    return {
+        "path": p,
+        "bytes_total": st.f_blocks * st.f_frsize,
+        "bytes_free": st.f_bavail * st.f_frsize,
+        "bytes_used_pct": bytes_pct,
+        "inodes_total": st.f_files,
+        "inodes_free": st.f_favail,
+        "inodes_used_pct": inodes_pct,
+        "state": "critical" if worst >= 95 else ("warning" if worst >= 85 else "ok"),
+    }
+
+
 @app.get("/vault/status")
 async def vault_status():
     """R-752 (ROADMAP_V5 ١.٥): حالة خزينة الأسرار — قراءة فقط: التمكين
@@ -1811,10 +1847,11 @@ def _register_real_tools() -> None:
     ))
     registry.register(ToolSpec(
         name="disk.status",
-        description="حالة القرص السحابي Supabase (نفس منطق /disk/status)",
+        description="حالة القرص السحابي Supabase (نفس منطق /disk/status) + القرص المحلي: "
+                    "المساحة والعُقد (inodes) وحالتها",
         inputs={},
-        outputs="cloud_disk/enabled/…",
-        handler=_disk_status_payload,
+        outputs="cloud_disk/enabled/…/local_volume",
+        handler=_disk_tool_payload,
     ))
     registry.register(ToolSpec(
         name="vault.status",
