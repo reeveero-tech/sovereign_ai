@@ -126,7 +126,8 @@ def ledger_spy(monkeypatch):
 
 
 def test_capability_question_injects_live_inventory(brain):
-    text = "أخبرني عن قدراتك"
+    # R-787b: السؤال المباشر صار يُجاب حتميًا (أدناه)؛ هنا سؤال مركب يمر بالعقل مع الجرد
+    text = "هل تستطيع أن تشرح لي أدوات المشروع وكيف أستفيد منها في عملي اليومي؟"
     with _client() as c:
         r = c.post("/chat", json={"text": text})
     assert r.status_code == 200, r.text
@@ -265,3 +266,34 @@ def test_capabilities_context_forbids_unavailable_claims(monkeypatch):
     monkeypatch.setattr(config, "SEARCH_PROVIDER", "tavily", raising=False)
     monkeypatch.setattr(config, "SEARCH_API_KEY", "x", raising=False)
     assert chat_tools.search_configured() is True
+
+
+# ---------------------------------------------------------------------------
+# R-787b: مشاهد حيًا بعد R-787a — «أخبرني عن قدراتك» ⇒ النموذج ادّعى «تنفيذ البحث»
+# رغم المنع الصريح. السؤال المباشر يُجاب الآن من الجرد الحي حرفيًا بلا نموذج.
+# ---------------------------------------------------------------------------
+
+def test_direct_capability_question_answered_from_inventory_without_model(brain, monkeypatch):
+    monkeypatch.setattr(config, "SEARCH_PROVIDER", "searxng", raising=False)
+    monkeypatch.setattr(config, "SEARCH_BASE_URL", "http://127.0.0.1:8888", raising=False)
+    text = "أخبرني عن قدراتك"
+    with _client() as c:
+        r = c.post("/chat", json={"text": text})
+    assert r.status_code == 200
+    d = r.json()
+    assert d["tools_used"] == ["جرد القدرات الحي"]
+    assert not [b for b in brain if b.get("messages") and b["messages"][-1].get("content") == text], \
+        "direct capability answers must not depend on the model"
+    reply = d["reply"]
+    assert reply.startswith("أنا واجهة مشروع sovereign_ai")
+    assert "البحث العام في الإنترنت (لا مزود بحث مضبوط)" in reply
+    assert "web.fetch" in reply and "health.snapshot" in reply
+    assert "مؤجلة بقرار المالك" in reply, "deferred capabilities must be listed as deferred"
+
+
+def test_general_can_you_question_still_goes_to_model(brain):
+    text = "هل تستطيع كتابة قصيدة قصيرة عن جدة؟"
+    with _client() as c:
+        r = c.post("/chat", json={"text": text})
+    assert r.status_code == 200
+    assert r.json()["reply"] == "رد العقل"

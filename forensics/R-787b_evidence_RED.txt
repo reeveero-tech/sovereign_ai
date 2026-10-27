@@ -1,0 +1,9 @@
+R-787b RED evidence — tests/test_chat_tools_bridge.py on 149461c code, 2026-10-27T13:08:47Z
+(test_general_can_you_question_still_goes_to_model يمر على القديم أيضًا — حارس انحدار لا دليل RED)
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_chat_tools_bridge.py::test_direct_capability_question_answered_from_inventory_without_model
+1 failed, 13 passed, 3 warnings in 6.08s
+
+الدليل الحي الدافع (نشر 40508239238 على 149461c): POST /chat «أخبرني عن قدراتك» (50ث) ⇒ tools_used=['جرد القدرات الحي'] لكن الرد: «قدرتي تشمل … تنفيذ البحث عن المعلومات … وتحديث الذكاء العام بناءً على تجربتي» — ادعاءات غير صحيحة رغم المنع الصريح في السياق.
+دليل R-787a الحي: POST /chat «https://github.com/reeveero-tech/sovereign_ai قم بتحليل المشروع تحليل دقيق» ⇒ 111ث، tools_used=['قراءة GitHub: reeveero-tech/sovereign_ai']، رد من العقل مبني على البيانات المجلوبة (لا قالب). /console → زر العودة → / (Playwright حي).

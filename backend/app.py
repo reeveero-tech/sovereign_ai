@@ -2011,20 +2011,25 @@ async def chat(message: ChatMessage, background_tasks: BackgroundTasks):
     # R-787: جسر المحادثة ↔ الأدوات — جرد القدرات وقراءة الروابط عبر السجل (أثر موقّع)
     tools_used: List[str] = []
     tool_context = ""
+    direct_reply = None
     try:
         import chat_tools
         bridged = await asyncio.to_thread(chat_tools.gather, message.text, _capabilities_payload)
         tool_context = bridged.get("context") or ""
         tools_used = list(bridged.get("tools_used") or [])
+        direct_reply = bridged.get("direct_reply")
     except Exception as e:  # TOLERATED: الجسر مكمّل — فشله لا يسقط المحادثة ويُسجل
         logger.warning("R-787: فشل جسر الأدوات (%s)", type(e).__name__)
     _bridge_kw = {"tool_context": tool_context} if tool_context else {}
-    reply = await _compose_chat_reply(
-        message.text, result, orchestrator,
-        default="تم استلام رسالتك. أنا الذكاء السيادي، جاهز لخدمتك.",
-        history=history or None,
-        **_bridge_kw,
-    )
+    if direct_reply:
+        reply = direct_reply  # R-787b: سؤال القدرات يُجاب من الجرد الحي حرفيًا بلا نموذج
+    else:
+        reply = await _compose_chat_reply(
+            message.text, result, orchestrator,
+            default="تم استلام رسالتك. أنا الذكاء السيادي، جاهز لخدمتك.",
+            history=history or None,
+            **_bridge_kw,
+        )
     
     return ChatResponse(
         reply=reply,

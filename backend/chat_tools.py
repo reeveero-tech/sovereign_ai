@@ -162,10 +162,76 @@ def page_context(url: str) -> str:
     return f"محتوى الصفحة {r.get('url', url)} (العنوان: {r.get('title') or '—'}), جُلب الآن:\n{(r.get('text') or '')[:2500]}"
 
 
+# R-787b: مشاهد حيًا بعد R-787a — حتى مع المنع الصريح ادّعى النموذج (3B) «تنفيذ البحث».
+# سؤال القدرات/الهوية المباشر يُجاب من الجرد الحي حرفيًا بلا نموذج: فوري وصادق دائمًا.
+_DIRECT_CAP_RE = re.compile(
+    r"(قدرات|قدراتك|ماذا تستطيع|ما الذي تستطيع|ماذا تقدر|وش تقدر|ايش تقدر|إيش تقدر|أدواتك|ادواتك|"
+    r"من أنت|من انت|عرف بنفسك|عرّف بنفسك|capabilit|what can you)",
+    re.IGNORECASE,
+)
+
+
+def wants_direct_capabilities(text: str) -> bool:
+    t = (text or "").strip()
+    return bool(t) and len(t) <= 120 and not extract_urls(t) and bool(_DIRECT_CAP_RE.search(t))
+
+
+def capabilities_reply(caps: Dict[str, Any], tool_names: List[str]) -> str:
+    """رد حتمي من الجرد الحي — لا نموذج، لا ادعاء."""
+    import config
+    searchable = search_configured()
+    groups: Dict[str, List[str]] = {}
+    for c in caps.get("capabilities", []):
+        name = c.get("name", c.get("id", ""))
+        level = c.get("level", "missing")
+        if not searchable and c.get("id") == "web_tools" and level == "enabled":
+            name += " (القراءة من رابط فقط — البحث العام بلا مزود)"
+        if not searchable and c.get("id") == "research" and level == "enabled":
+            level = "implemented_disabled"
+            name += " (يحتاج مزود بحث غير موجود في هذا النشر)"
+        groups.setdefault(level, []).append(name)
+    model = getattr(config, "OLLAMA_MODEL", None) or "غير مضبوط"
+    out = [
+        "أنا واجهة مشروع sovereign_ai. هذا جردي الحي الآن، مقروء من النظام مباشرة لا من النموذج اللغوي:",
+        "",
+    ]
+    for lv in ("enabled", "implemented_disabled", "blocked", "deferred", "missing"):
+        if groups.get(lv):
+            out.append(f"{LEVEL_AR[lv]}:")
+            out.extend(f"  - {n}" for n in groups[lv])
+    out += [
+        "",
+        "ما أفعله داخل هذه المحادثة فعليًا:",
+        f"  - أجيب بمعرفة عامة عبر عقلي اللغوي «{model}» (نموذج صغير على معالج بلا GPU — الرد يستغرق 20 إلى 120 ثانية).",
+        "  - أقرأ أي رابط تضعه في رسالتك، وأحلل مستودعات GitHub العامة (عبر الأداة web.fetch، وكل قراءة تُسجل بأثر موقّع).",
+        "  - أعرض هذا الجرد عند سؤالك عن قدراتي.",
+        "",
+        "ما لا أستطيعه الآن:",
+    ]
+    if not searchable:
+        out.append("  - البحث العام في الإنترنت (لا مزود بحث مضبوط).")
+    out += [
+        "  - تشغيل الأدوات الأخرى من المحادثة تلقائيًا (الوكيل والمهام والأسطول تعمل عبر واجهة API لا من هنا بعد).",
+        "  - قراءة المستودعات الخاصة (لا رمز GitHub).",
+        "  - أي قدرة مؤجلة أو معطلة في القائمة أعلاه.",
+    ]
+    if tool_names:
+        out += ["", f"الأدوات المسجلة فعلًا ({len(tool_names)}): " + "، ".join(tool_names)]
+    return "\n".join(out)
+
+
 def gather(text: str, capabilities_fn: Optional[Callable[[], Dict[str, Any]]] = None) -> Dict[str, Any]:
     """يعيد {"context": نص للعقل أو "", "tools_used": [وصف عربي لكل أداة استُخدمت]}."""
     blocks: List[str] = []
     used: List[str] = []
+    if capabilities_fn is not None and wants_direct_capabilities(text):
+        try:
+            from tool_registry import get_registry
+            names = [t["name"] for t in get_registry().list_tools()]
+            return {"context": "", "tools_used": ["جرد القدرات الحي"],
+                    "direct_reply": capabilities_reply(capabilities_fn(), names)}
+        except Exception:  # TOLERATED: يسقط إلى المسار العادي (سياق للعقل) — يُعلن هناك
+            pass
     if capabilities_fn is not None and wants_capabilities(text):
         try:
             from tool_registry import get_registry
