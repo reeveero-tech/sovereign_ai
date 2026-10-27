@@ -128,6 +128,23 @@ def test_supabase_secrets_sync_step_conditional():
     )
 
 
+def test_ollama_secrets_sync_step_conditional():
+    """R-784 (بأمر المالك 2026-10-27 — بند ٦.٢.٢ عقل المالك المحلي): خطوة مزامنة
+    أسرار Ollama إلى Fly — مشروطة بوجود OLLAMA_BASE_URL في أسرار المستودع
+    (تخطي صامت عند الغياب: إعداد العقل الحالي في Fly يبقى كما هو، لا فشل
+    للنشر — نمط R-719). العنوان الخاص لا يدخل المستودع أبدًا (حارس العناوين
+    الخاصة) — الجسر عنوان عام (cloudflared بأمر المالك) يُمرَّر سرًا فقط،
+    والقيم لا تُطبع في السجل."""
+    text, _, _ = _load()
+    for secret in ("OLLAMA_BASE_URL", "OLLAMA_MODEL"):
+        assert f"secrets.{secret}" in text, f"السر {secret} يجب أن يأتي من أسرار المستودع"
+    assert "flyctl secrets set" in text, "المزامنة عبر flyctl secrets set"
+    # مشروطة: فحص فراغ قبل المزامنة (لا فشل نشر عند غياب السر)
+    assert re.search(r'\[ -z "\$OLLAMA_BASE_URL" \]', text), (
+        "المزامنة يجب أن تتخطى عند غياب OLLAMA_BASE_URL (لا فشل نشر — الإعداد الحالي يبقى)"
+    )
+
+
 def test_smoke_window_covers_dns_ttl():
     """R-718: فحص الدخان كان ينتظر 3 دقائق فقط — سجل fly.dev الجديد يحتاج
     وقت نشر DNS (TTL 5 دقائق وفق توثيق Fly). النافذة يجب أن تغطي ≥ 10 دقائق."""

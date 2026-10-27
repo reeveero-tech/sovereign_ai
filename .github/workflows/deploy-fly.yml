@@ -89,6 +89,33 @@ jobs:
           fi
           flyctl secrets set -a "$FLY_APP" SUPABASE_URL="$SUPABASE_URL" SUPABASE_SECRET_KEY="$SUPABASE_SECRET_KEY"
 
+      # R-784 (بأمر المالك 2026-10-27 — بند ٦.٢.٢ عقل المالك المحلي): مزامنة أسرار
+      # Ollama إلى Fly — مشروطة بوجود OLLAMA_BASE_URL في أسرار المستودع. الغياب ليس
+      # خطأً: إعداد العقل الحالي في Fly يبقى (نمط R-719). العنوان الخاص لا يدخل
+      # المستودع أبدًا (حارس العناوين الخاصة) — الجسر عنوان عام (cloudflared بأمر
+      # المالك) يُمرَّر سرًا، والقيم لا تُطبع في السجل. OLLAMA_ENABLED يُضبط من سر
+      # المستودع إن وُجد، وإلا فالافتراض "true" عند وجود العنوان (مزامنة العقل تعني
+      # تفعيله).
+      - name: 'R-784: Sync Ollama secrets to Fly (brain — ٦.٢.٢)'
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          OLLAMA_ENABLED: ${{ secrets.OLLAMA_ENABLED }}
+          OLLAMA_BASE_URL: ${{ secrets.OLLAMA_BASE_URL }}
+          OLLAMA_MODEL: ${{ secrets.OLLAMA_MODEL }}
+          OLLAMA_PROTOCOL: ${{ secrets.OLLAMA_PROTOCOL }}
+          OLLAMA_TIMEOUT_SECONDS: ${{ secrets.OLLAMA_TIMEOUT_SECONDS }}
+        run: |
+          if [ -z "$OLLAMA_BASE_URL" ]; then
+            echo "سر OLLAMA_BASE_URL غير مضبوط — تخطي (إعداد العقل الحالي في Fly يبقى)"
+            exit 0
+          fi
+          ARGS=(-a "$FLY_APP" OLLAMA_BASE_URL="$OLLAMA_BASE_URL" OLLAMA_ENABLED="${OLLAMA_ENABLED:-true}")
+          if [ -n "$OLLAMA_MODEL" ]; then ARGS+=(OLLAMA_MODEL="$OLLAMA_MODEL"); fi
+          if [ -n "$OLLAMA_PROTOCOL" ]; then ARGS+=(OLLAMA_PROTOCOL="$OLLAMA_PROTOCOL"); fi
+          if [ -n "$OLLAMA_TIMEOUT_SECONDS" ]; then ARGS+=(OLLAMA_TIMEOUT_SECONDS="$OLLAMA_TIMEOUT_SECONDS"); fi
+          flyctl secrets set "${ARGS[@]}"
+          echo "✅ مزامنة أسرار Ollama تمت (القيم لا تُطبع)"
+
       # R-718: سجل التشغيل 39746031804 أثبت أن flyctl deploy يحدّث الآلة ويتركها
       # stopped (d891e26ea24d38 «reached stopped state») — بلا خطوة تشغيل صريحة
       # يبقى التطبيق بلا سجل DNS ويفشل فحص الدخان دومًا.

@@ -1,0 +1,15 @@
+>           assert f"secrets.{secret}" in text, f"السر {secret} يجب أن يأتي من أسرار المستودع"
+E           AssertionError: السر OLLAMA_BASE_URL يجب أن يأتي من أسرار المستودع
+E           assert 'secrets.OLLAMA_BASE_URL' in '# R-717 — النشر على Fly.io (يدوي فقط — بأمر المالك 2026-10-22)\n#\n# لماذا هنا لا من بيئة الوكيل؟ بنّاء Fly البعيد يت...i\n            sleep 10\n          done\n          echo "❌ $URL لم يصبح healthy"; echo "$BODY" | head -c 500; exit 1\n'
+
+tests/test_deploy_workflow_fly.py:140: AssertionError
+=============================== warnings summary ===============================
+backend/config.py:451
+  /home/user/workspace/sovereign_ai/backend/config.py:451: UserWarning: ⚠️ CORS مفتوح للجميع — مقبول في التطوير فقط (D-034)
+    warnings.warn("⚠️ CORS مفتوح للجميع — مقبول في التطوير فقط (D-034)")
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_deploy_workflow_fly.py::test_ollama_secrets_sync_step_conditional
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+========================= 1 failed, 1 warning in 0.07s =========================
