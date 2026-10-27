@@ -1,0 +1,16 @@
+RED — R-783a (تصويب R-783: توقيع نقطة الاستئناف + متانة الحمل) على كود R-783 (f006a61) قبل التصويب
+Command: python -m pytest tests/test_integrity_checkpoint_durable.py -q (مع git stash لتغييرات core.py)
+Date: 2026-10-27
+
+FAILED tests/test_integrity_checkpoint_durable.py::test_forged_checkpoint_cannot_skip_prefix
+FAILED tests/test_integrity_checkpoint_durable.py::test_checkpoint_missing_status_field_is_ignored
+FAILED tests/test_integrity_checkpoint_durable.py::test_checkpoint_invalid_utf8_is_ignored
+3 failed, 6 passed, 2 warnings in 0.43s
+
+التفسير (ثغرات كشفها مراجعة R-783a):
+1) نقطة الاستئناف على القرص كانت غير موقعة — ملف مزوّر (عبث توقيع حدث + إعادة حساب
+   بصمة sha256 للبادئة المعبوثة) كان يُقبل ويجعل الفحص يستأنف ⇒ VERIFIED كاذب.
+2) حذف حقل status وحده من الملف كان يمر الحمل ثم ينهار الفحص بـ KeyError.
+3) ملف غير UTF-8 كان يرفع UnicodeDecodeError عند الإقلاع (غير ملتقط).
+
+GREEN بعد التصويب (نفس الأمر): 9 passed, 2 warnings in 0.34s

@@ -657,8 +657,8 @@ class SovereignCore:
                  meta_file: Path = META_FILE,
                  integrity_file: Path = INTEGRITY_FILE,
                  sovereign_key: str = SOVEREIGN_KEY,  # LEGACY-ROOT-KEY (read-only): تحقق الأحداث التاريخية فقط
-                 integrity_checkpoint_file: Optional[Path] = None,  # R-783: نقطة استئناف دائمة
-                 keyring=None):
+                 keyring=None,
+                 integrity_checkpoint_file: Optional[Path] = None):  # R-783: نقطة استئناف دائمة
         
         self.log_file = log_file
         self.meta_file = meta_file
@@ -730,8 +730,11 @@ class SovereignCore:
         # R-783 (٦.١.١١): نقطة الاستئناف دائمة على القرص بجانب integrity.json —
         # الإقلاع على سجل سليم لا يعيد التحقق من البادئة المبصومة (كانت في الذاكرة
         # فقط فكل إقلاع يعيد فحص السجل كاملًا ≈215ث معالج على الإنتاج).
-        # التحميل هنا هيكلي فقط؛ صلاحية البادئة (sha256 + بصمة المفاتيح) تُفحص
-        # عند الاستخدام في _integrity_resume_point — ملف تالف/غائب يُتجاهل.
+        # R-783a: ملف على القرص = حد ثقة جديد ⇒ الحمل والتخزين موقّعان بمفتاح
+        # KeyRing (فشل مغلِق: بلا مفتاح توقيع لا تُخزّن نقطة على القرص إطلاقًا؛
+        # وتوقيعًا غير صالح يُتجاهل الملف كله ويُفرض فحص كامل — لا ثقة عمياء).
+        # الصلاحية الهيكلية (sha256 للبادئة + بصمة المفاتيح) تُفحص عند الاستخدام
+        # في _integrity_resume_point — ملف تالف/غائب يُتجاهل.
         self.integrity_checkpoint_file = (integrity_checkpoint_file or
                                          integrity_file.with_name("integrity_checkpoint.json"))
         self._integrity_prefix = self._load_disk_integrity_checkpoint()
@@ -1572,8 +1575,59 @@ class SovereignCore:
         # التحقق من البادئة المبصومة (٦.١.١١). فشل الحفظ لا يبطل الاستئناف داخل العملية.
         self._save_disk_integrity_checkpoint()
 
+    def _checkpoint_canonical_bytes(self, payload: Dict[str, Any]) -> bytes:
+        """R-783a: تمثيل معياري موحد للتوقيع والتحقق (مفتاح المرجع نفسه)."""
+        return json.dumps(payload, sort_keys=True, ensure_ascii=False,
+                          separators=(",", ":")).encode("utf-8")
+
+    def _sign_checkpoint_payload(self, payload: Dict[str, Any]) -> Optional[Tuple[str, str]]:
+        """R-783a: توقيع حمولة نقطة الاستئناف بمفتاح KeyRing النشط.
+
+        إيد25519 للمفاتيح الجديدة وHMAC للتاريخية (نفس منطق توقيع الأحداث — R-698).
+        لا مفتاح ⇒ None (فشل مغلِق: لا تُخزّن نقطة غير موقعة على القرص).
+        """
+        key_id = self._keyring_key_id
+        if self._keyring is None or key_id is None:
+            return None
+        record = self._keyring.get_key(key_id)
+        if record is None or getattr(record, "private_key", None) is None:
+            return None
+        canonical = self._checkpoint_canonical_bytes(payload)
+        if getattr(record, "key_type", "hmac") == "ed25519":
+            try:
+                from backend.sovereign.keys import ed25519_verifier as _ed
+            except ImportError:
+                from sovereign.keys import ed25519_verifier as _ed
+            return key_id, _ed.sign_hex(canonical, record.private_key)
+        import hmac as _hmac
+        return key_id, _hmac.new(record.private_key.encode("utf-8"), canonical,
+                                  __import__("hashlib").sha256).hexdigest()
+
+    def _verify_checkpoint_signature(self, key_id: str, payload: Dict[str, Any], sig: str) -> bool:
+        """R-783a: تحقق توقيع حمولة نقطة الاستئناف ضد مفتاح KeyRing (بأي حالة —
+        التقاعد لا يبطل التحقق). فشل/غياب مفتاح ⇒ False (يُتجاهل الملف)."""
+        if self._keyring is None or not isinstance(sig, str) or not isinstance(key_id, str):
+            return False
+        record = self._keyring.get_key(key_id)
+        if record is None:
+            return False
+        canonical = self._checkpoint_canonical_bytes(payload)
+        if getattr(record, "key_type", "hmac") == "ed25519":
+            # تحقق لا-متماثل: المفتاح العام يكفي (مفتاح متقاعد بلا خاصي يبقى قابلًا للتحقق)
+            try:
+                from backend.sovereign.keys import ed25519_verifier as _ed
+            except ImportError:
+                from sovereign.keys import ed25519_verifier as _ed
+            return _ed.verify_hex(record.public_key, canonical, sig)
+        if getattr(record, "private_key", None) is None:
+            return False
+        import hmac as _hmac
+        expected = _hmac.new(record.private_key.encode("utf-8"), canonical,
+                             __import__("hashlib").sha256).hexdigest()
+        return _hmac.compare_digest(expected, sig)
+
     def _save_disk_integrity_checkpoint(self) -> None:
-        """R-783: كتابة نقطة الاستئناف على القرص كتابة ذرية (R-781)."""
+        """R-783/783a: كتابة نقطة الاستئناف على القرص كتابة ذرية موقعة (R-781)."""
         st = getattr(self, "_integrity_prefix", None)
         if st is None:
             return
@@ -1581,17 +1635,27 @@ class SovereignCore:
             payload = dict(st)
             if payload.get("status") is not None:
                 payload["status"] = payload["status"].value
+            signed = self._sign_checkpoint_payload(payload)
+            if signed is None:
+                # R-783a فشل مغلِق: بلا مفتاح توقيع لا تُخزّن نقطة على القرص —
+                # الاستئناف داخل العملية يبقى، والإقلاع التالي يفحص كاملًا (صادق).
+                logger.warning("⚠️ لا مفتاح KeyRing نشط لتوقيع نقطة الاستئناف — لن تُخزّن على القرص")
+                return
+            payload["key_id"], payload["sig"] = signed
             atomic_write_json(self.integrity_checkpoint_file, payload,
                               ensure_ascii=False, indent=2)
         except OSError as e:
             logger.warning(f"⚠️ تعذر حفظ نقطة استئناف التحقق على القرص: {e}")
 
     def _load_disk_integrity_checkpoint(self) -> Optional[Dict[str, Any]]:
-        """R-783: تحميل نقطة الاستئناف من القرص إن كانت سليمة البنية.
+        """R-783/783a: تحميل نقطة الاستئناف من القرص إن كانت موقعة صحيحًا وسليمة البنية.
 
-        هيكلي فقط هنا: البادئة تُفحص بصمةً عند الاستخدام (_integrity_resume_point —
-        sha256 للبادئة + بصمة المفاتيح)؛ أي تعديل أو اقتطاع يفرض فحصًا كاملًا.
-        ملف تالف/غائب/بِنية غريبة يُتجاهل بصمت (فحص كامل صادق، لا ثقة عمياء).
+        حد الثقة الجديد: الملف على القرص ليس ذاكرة — كل حمولة تُوقّع بمفتاح KeyRing
+        عند الحفظ ويُتحقق توقيعها عند الحمل (تزوير بصمة sha256 متسقة مع عبث في
+        التوقيعات لا ينفع: التوقيع على الحمولة يُكشفه). هيكليًا: البادئة تُفحص
+        بصمةً عند الاستخدام (_integrity_resume_point — sha256 للبادئة + بصمة
+        المفاتيح). ملف تالف/غائب/بِنية غريبة/توقيع غير صالح يُتجاهل بصمت (فحص
+        كامل صادق، لا ثقة عمياء).
         """
         try:
             if not self.integrity_checkpoint_file.exists():
@@ -1599,20 +1663,30 @@ class SovereignCore:
             st = json.loads(self.integrity_checkpoint_file.read_text(encoding="utf-8"))
             if not isinstance(st, dict):
                 return None
-            required = {"offset", "sha256", "prev_hash", "count", "line_num", "keys"}
+            required = {"offset", "sha256", "prev_hash", "count", "line_num",
+                        "status", "keys", "key_id", "sig"}
             if not required.issubset(st):
                 return None
             if not (isinstance(st["offset"], int) and st["offset"] >= 0
                     and isinstance(st["count"], int) and st["count"] >= 0
-                    and isinstance(st["line_num"], int) and st["line_num"] >= 0):
+                    and isinstance(st["line_num"], int) and st["line_num"] >= 0
+                    and isinstance(st["sha256"], str) and isinstance(st["prev_hash"], str)
+                    and isinstance(st["keys"], str)):
                 return None
-            if st.get("status") is not None:
+            sig = st.pop("sig")
+            key_id = st.pop("key_id")
+            # R-783a: التحقق من التوقيع قبل أي قبول — فشله = تجاهل كامل
+            if not self._verify_checkpoint_signature(key_id, st, sig):
+                return None
+            if st["status"] is not None:
                 try:
                     st["status"] = IntegrityStatus(st["status"])
                 except ValueError:
                     return None
             return st
-        except (OSError, json.JSONDecodeError):
+        except (OSError, ValueError):
+            # OSError لعمليات القراءة، وValueError يغطي json.JSONDecodeError
+            # وUnicodeDecodeError (ملف غير UTF-8) — التجاهل الصامت فحصٌ كامل صادق.
             return None
 
     def _verify_walk(self, verbose: bool, resume: Optional[Dict[str, Any]]) -> Optional["IntegrityStatus"]:
