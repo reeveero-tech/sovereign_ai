@@ -1,0 +1,7 @@
+R-787a RED evidence — new tests in tests/test_chat_tools_bridge.py on 8abc28c code, 2026-10-27T12:30:36Z
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_chat_tools_bridge.py::test_tool_prompt_is_bounded_and_generation_capped
+FAILED tests/test_chat_tools_bridge.py::test_brain_timeout_with_tools_returns_fetched_data_not_template
+FAILED tests/test_chat_tools_bridge.py::test_capabilities_context_forbids_unavailable_claims
+3 failed, 9 passed, 3 warnings in 4.67s

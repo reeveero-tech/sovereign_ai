@@ -217,3 +217,51 @@ def test_fly_enables_web_tools_and_context_window():
     toml = (ROOT / "fly.toml").read_text(encoding="utf-8")
     assert "WEB_TOOLS_ENABLED = 'true'" in toml
     assert "OLLAMA_NUM_CTX = '8192'" in toml
+
+
+# ---------------------------------------------------------------------------
+# R-787a: مشاهد حيًا بعد نشر R-787 — تحليل GitHub انتهت مهلته (~152ث) فسقط إلى
+# قالب «التحليل» التنبئي؛ والعقل ادّعى «تنفيذ الكود» (مؤجل) و«البحث» (بلا مزود).
+# ---------------------------------------------------------------------------
+
+def test_tool_prompt_is_bounded_and_generation_capped(brain, fake_web):
+    text = "حلل https://github.com/acme/demo"
+    with _client() as c:
+        r = c.post("/chat", json={"text": text})
+    assert r.status_code == 200
+    call = [b for b in brain if b.get("messages") and b["messages"][-1].get("content") == text][-1]
+    system = call["messages"][0]["content"]
+    assert "حالة النظام الحية (JSON)" not in system, "state snapshot must be dropped when tool results are present"
+    block = system.split("نتائج أدوات النظام (حقيقية، جُلبت الآن):\n", 1)[1]
+    import chat_tools
+    assert len(block) <= chat_tools.MAX_CONTEXT_CHARS + 20
+    assert call["options"]["num_predict"] == chat_tools.TOOL_REPLY_MAX_TOKENS
+
+
+def test_brain_timeout_with_tools_returns_fetched_data_not_template(monkeypatch, fake_web):
+    monkeypatch.setattr(config, "OLLAMA_ENABLED", True)
+    monkeypatch.setattr(config, "OLLAMA_MODEL", "fake-model")
+    monkeypatch.setattr(config, "OLLAMA_BASE_URL", "http://127.0.0.1:9")  # لا خادم — فشل العقل
+    monkeypatch.setattr(config, "OLLAMA_API_KEY", None)
+    monkeypatch.setattr(config, "OLLAMA_PROTOCOL", "ollama", raising=False)
+    monkeypatch.setattr(config, "OLLAMA_TIMEOUT_SECONDS", 2.0)
+    with _client() as c:
+        r = c.post("/chat", json={"text": "قم بتحليل المشروع https://github.com/acme/demo تحليلًا دقيقًا"})
+    assert r.status_code == 200
+    reply = r.json()["reply"]
+    assert "لم يُكمل العقل اللغوي التحليل في المهلة" in reply
+    assert "وصف-المستودع-المزيف-787" in reply, "honest fallback must carry the real fetched data"
+    assert "المخاطر الكلية" not in reply, "must not fall back to the unrelated predictive template"
+
+
+def test_capabilities_context_forbids_unavailable_claims(monkeypatch):
+    import chat_tools
+    monkeypatch.setattr(config, "SEARCH_PROVIDER", "searxng", raising=False)
+    monkeypatch.setattr(config, "SEARCH_BASE_URL", "http://127.0.0.1:8888", raising=False)
+    ctx = chat_tools.capabilities_context({"capabilities": [
+        {"id": "code_execution", "name": "تنفيذ الكود", "level": "deferred"}]}, ["web.fetch"])
+    assert "web.search) لا مزود بحث له" in ctx
+    assert "لا تدّعِ أبدًا قدرة مؤجلة" in ctx
+    monkeypatch.setattr(config, "SEARCH_PROVIDER", "tavily", raising=False)
+    monkeypatch.setattr(config, "SEARCH_API_KEY", "x", raising=False)
+    assert chat_tools.search_configured() is True

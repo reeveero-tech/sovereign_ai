@@ -2675,3 +2675,9 @@ Bus إطلاقًا. الواجهة سليمة بعد الإزالة (101 وسم 
   - `backend/sovereign_response.py`: توقيعا `_llm_reply` و`build_reply` (+tool_context)، ونداء `_llm_reply` (صار بوسائط مسماة شرطية — النداء بلا سياق كما كان).
   - `frontend/chat/index.html`: قائمة الأسئلة المقترحة، وسطرا زري الرأس (+title)، ونداءا `bubble` (+tools)، وكائن رسالة الرد (+tools).
   - `frontend/LIVE_BINDINGS.json`: سطر `"control": [` (أُدرج بعده المعرّف الجديد).
+
+## 2026-10-27 — R-787a: أسطر مستبدلة
+- **# DELETION-JUSTIFIED** — كله استبدال/ضبط، لا حذف منطق أو بيانات:
+  - `backend/chat_tools.py`: `MAX_CONTEXT_CHARS` (5000→2200 بقياس حي)، سطر `return` في `capabilities_context` (صار بعد سطري منع الادعاء)، وسقوف GitHub (40→30 ملفًا، 6→4 التزامات، 110→80 حرفًا، README 1600→700، الحالة 1400→450).
+  - `backend/sovereign_response.py`: أسطر إلحاق لقطة الحالة JSON (صارت مشروطة بغياب نتائج الأدوات — مزاحة لا محذوفة).
+  - وثائق: سطرا «آخر تحديث» في PROJECT_STATE وCHANGELOG؛ صف الاختبارات (1301→1304)؛ خلية حالة ٦.٧.٣ في ROADMAP_V6 (أُلحقت ملاحظة R-787a — تبقى «جزئي»).

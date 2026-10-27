@@ -21,7 +21,11 @@ import json
 import re
 from typing import Any, Callable, Dict, List, Optional
 
-MAX_CONTEXT_CHARS = 5000
+# R-787a: مقيس حيًا — العقل (qwen2.5:3b على performance-2x) يقيّم المطالبة بنحو 20
+# رمزًا/ث ويولّد بنحو 7 رموز/ث؛ 4.5 ألف حرف سياق ⇒ ~150ث فانتهت المهلة. السقف الآن
+# يبقي المطالبة كلها ضمن ~1400 رمز (forensics/R-787a_brain_speed.txt).
+MAX_CONTEXT_CHARS = 2200
+TOOL_REPLY_MAX_TOKENS = 380
 MAX_URLS = 2
 
 _URL_RE = re.compile(r"https?://[^\s<>\"'()\[\]{}]+", re.IGNORECASE)
@@ -86,7 +90,24 @@ def capabilities_context(caps: Dict[str, Any], tool_names: List[str]) -> str:
         "- داخل هذه المحادثة يستخدم النظام تلقائيًا: جرد القدرات عند السؤال عنها، "
         "وقراءة أي رابط أو مستودع GitHub عام يضعه المالك في رسالته (عبر الأداة web.fetch بأثر موقّع)."
     )
+    # R-787a: مشاهد حيًا — العقل ادّعى «تنفيذ الكود» (مؤجل) و«البحث» (بلا مزود)
+    if not search_configured():
+        lines.append("- تنبيه صدق: البحث العام (web.search) لا مزود بحث له في هذا النشر — غير متاح فعليًا؛ "
+                     "المتاح من الويب هو قراءة رابط محدد فقط.")
+    lines.append("- لا تدّعِ أبدًا قدرة مؤجلة أو معطلة أو غير مبنية (مثل تنفيذ الكود) كأنها متاحة.")
     return "\n".join(lines)
+
+
+def search_configured() -> bool:
+    """مزود بحث مضبوط فعلًا: tavily بمفتاح، أو searxng على عنوان غير الافتراضي المحلي."""
+    import config
+    provider = str(getattr(config, "SEARCH_PROVIDER", "") or "").lower()
+    base = str(getattr(config, "SEARCH_BASE_URL", "") or "")
+    if provider == "tavily":
+        return bool(getattr(config, "SEARCH_API_KEY", None))
+    if provider == "searxng":
+        return bool(base) and "127.0.0.1" not in base and "localhost" not in base
+    return False
 
 
 def github_context(owner: str, repo: str) -> str:
@@ -111,20 +132,20 @@ def github_context(owner: str, repo: str) -> str:
     try:
         items = _fetch_json(base + "/contents") or []
         names = [(i.get("name", "") + ("/" if i.get("type") == "dir" else "")) for i in items if isinstance(i, dict)]
-        parts.append("- الملفات والمجلدات الجذرية: " + "، ".join(names[:40]))
+        parts.append("- الملفات والمجلدات الجذرية: " + "، ".join(names[:30]))
     except Exception as e:  # TOLERATED
         parts.append(f"- الملفات الجذرية: تعذر الجلب ({str(e)[:80]})")
     try:
         commits = _fetch_json(base + "/commits?per_page=6") or []
         parts.append("- آخر الالتزامات:")
-        for c in commits[:6]:
-            msg = ((c.get("commit") or {}).get("message") or "").splitlines()[0][:110]
+        for c in commits[:4]:
+            msg = ((c.get("commit") or {}).get("message") or "").splitlines()[0][:80]
             date = str(((c.get("commit") or {}).get("author") or {}).get("date", ""))[:10]
             parts.append(f"  • {str(c.get('sha', ''))[:7]} {date} {msg}")
     except Exception as e:  # TOLERATED
         parts.append(f"- الالتزامات: تعذر الجلب ({str(e)[:80]})")
     raw = f"https://raw.githubusercontent.com/{owner}/{repo}/{branch}"
-    for label, path, limit in (("README", "README.md", 1600), ("وثيقة حالة المشروع", "docs/PROJECT_STATE.md", 1400)):
+    for label, path, limit in (("README", "README.md", 700), ("وثيقة حالة المشروع", "docs/PROJECT_STATE.md", 450)):
         if path == "docs/PROJECT_STATE.md" and "docs/" not in names:
             continue
         try:

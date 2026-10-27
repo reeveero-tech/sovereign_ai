@@ -197,9 +197,10 @@ def _llm_reply(intent_name: str, text: str, ev: Dict[str, Any], history=None,
             "ولا تدّعِ بيانات أو قدرات ليست فيها؛ ولا تذكر أرقام النظام في غير ذلك. "
             f"النية المكتشفة للرسالة: {intent_name or 'غير محددة'}."
         )
-        system_prompt += "\nحالة النظام الحية (JSON):\n" + json.dumps(
-            ev, ensure_ascii=False, default=str
-        )
+        if not tool_context:  # R-787a: مع نتائج الأدوات تُحذف اللقطة — كل رمز ~0.05ث على العقل الحالي
+            system_prompt += "\nحالة النظام الحية (JSON):\n" + json.dumps(
+                ev, ensure_ascii=False, default=str
+            )
         # R-787: الهوية الحقيقية — النموذج ليس هو المشروع، بل «عقله اللغوي» فقط
         system_prompt += (
             "\nهويتك الحقيقية: أنت واجهة محادثة مشروع sovereign_ai (نظام سيادي ذاتي الاستضافة "
@@ -212,6 +213,12 @@ def _llm_reply(intent_name: str, text: str, ev: Dict[str, Any], history=None,
         )
         if tool_context:
             system_prompt += "\nنتائج أدوات النظام (حقيقية، جُلبت الآن):\n" + tool_context
+            # R-787a: سقف التوليد (~7 رموز/ث حيًا) كي لا تنتهي المهلة قبل الرد
+            from chat_tools import TOOL_REPLY_MAX_TOKENS
+            if history:
+                return ollama_client.chat(system_prompt, text, history=history,
+                                          max_tokens=TOOL_REPLY_MAX_TOKENS)
+            return ollama_client.chat(system_prompt, text, max_tokens=TOOL_REPLY_MAX_TOKENS)
         if history:
             return ollama_client.chat(system_prompt, text, history=history)
         return ollama_client.chat(system_prompt, text)
@@ -259,6 +266,11 @@ def build_reply(
     llm = _llm_reply(intent_name, text, ev, **_kw)
     if llm:
         return llm
+    if tool_context:
+        # R-787a: مشاهد حيًا — انتهت مهلة العقل فسقط الرد إلى قالب «التحليل» التنبئي
+        # الذي لا علاقة له بالسؤال. الآن: إعلان صادق + البيانات الحقيقية التي جلبتها الأدوات.
+        return ("لم يُكمل العقل اللغوي التحليل في المهلة (نموذج صغير يعمل على معالج بلا GPU). "
+                "هذه البيانات الحقيقية التي جلبتها أدوات النظام الآن، بلا تعديل:\n\n" + tool_context)
 
     # --- تحية: رد شخصي بحالة النظام ---
     if intent_name == "greet":

@@ -1,0 +1,19 @@
+R-787a — قياس حي لسرعة العقل (2026-10-27)
+البيئة: آلة العقل sovereign-brain (ollama/ollama، performance-2x، 4GB)، النموذج qwen2.5:3b، num_ctx=8192.
+الطريقة: طلب /api/chat من داخل آلة التطبيق (fly ssh) بمطالبة عربية ~2700 حرف و num_predict=60.
+النتيجة الخام (من استجابة Ollama):
+  prompt_eval_count=1105  prompt_eval_duration=54.67s  ⇒ ~20 رمزًا/ث تقييمًا
+  eval_count=21           eval_duration=3.03s          ⇒ ~7 رموز/ث توليدًا
+  total_duration=57.80s
+الاستنتاج: العربية ~2.5 حرف/رمز ⇒ سياق أدوات 4500 حرف + تعليمات ~1300 ≈ 2500–3000 رمز ⇒ 125–150ث تقييمًا وحده،
+فانتهت مهلة 150ث في الطلب الحي «حلل https://github.com/reeveero-tech/sovereign_ai» (استغرق 152ث، /brain/status: ReadTimeout)
+وسقط الرد إلى قالب «التحليل» التنبئي. الإصلاح: سقف سياق 2200 حرف، حذف لقطة الحالة مع نتائج الأدوات، num_predict=380،
+وسقوط صادق يعرض البيانات المجلوبة نفسها.
+
+دليل R-787 الحي (نشر 40502904982 على 8abc28c):
+- /capabilities summary: enabled=12 (كان 10 — web_tools/research صارا مفعّلين بـWEB_TOOLS_ENABLED)، implemented_disabled=5، deferred=1.
+- /console يحوي r787-back-to-chat (grep=1).
+- POST /chat «أخبرني عن قدراتك» ⇒ tools_used=['جرد القدرات الحي']، الرد سرد أسماء الأدوات الـ27 الحقيقية (82ث، أول نداء بعد النشر)
+  لكنه ادّعى «تنفيذ الكود» (مؤجل D-041) ⇒ أُضيف منع صريح في R-787a.
+- POST /chat «https://github.com/reeveero-tech/sovereign_ai قم بتحليل المشروع» ⇒ tools_used=['قراءة GitHub: reeveero-tech/sovereign_ai']
+  (الجلب نجح) لكن العقل انتهت مهلته ⇒ قالب غير ذي صلة. هذا ما يصلحه R-787a.
