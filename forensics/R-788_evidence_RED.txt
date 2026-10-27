@@ -1,0 +1,13 @@
+R-788 RED — tests/test_score_nonblocking.py على الكود السابق (7874d5f) — 2026-10-27
+الدليل الحي: GET /sovereignty/score على sovereign-ai-k20elq ⇒ /health بلا رد دقائق، فحص Fly critical؛ py-spy: MainThread في sovereignty_score (async) → SovereigntyScorer.compute → _score_ledger_integrity → verify_event → Crypto.Signature.eddsa (~138k حدث × ~2.45ms).
+قياس محلي: pycryptodome verify ~2.45ms، cryptography(OpenSSL) ~0.12ms.
+
+=========================== short test summary info ============================
+FAILED tests/test_score_nonblocking.py::test_score_endpoint_is_not_a_coroutine
+FAILED tests/test_score_nonblocking.py::test_fast_path_available_and_matches_legacy_semantics
+FAILED tests/test_score_nonblocking.py::test_legacy_path_alone_when_fast_unavailable
+FAILED tests/test_score_nonblocking.py::test_fast_path_is_materially_faster
+ERROR tests/test_score_nonblocking.py::test_health_stays_responsive_while_score_computes
+ERROR tests/test_score_nonblocking.py::test_concurrent_score_requests_single_flight_then_cached
+ERROR tests/test_score_nonblocking.py::test_score_cache_expires - AttributeEr...
+4 failed, 2 warnings, 3 errors in 1.17s

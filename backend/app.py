@@ -723,16 +723,39 @@ async def agent_ledger_report():
     return ledger.full_report()
 
 
+# R-788: كانت async تحسب الدرجة داخل حلقة الأحداث — التحقق من كل توقيع في السجل
+# (138k حدثًا حيًا) حجب /health وكل الطلبات دقائق (Fly أعلن الفحص critical، py-spy:
+# MainThread في _score_ledger_integrity). الآن نمط R-762: دالة متزامنة (مجمّع الخيوط)
+# + single-flight + نتيجة مخزنة SOVEREIGNTY_SCORE_TTL ثانية (افتراضي 300) — طلب عام
+# واحد لم يعد يوقف الخادم، وطلبات متزامنة لا تطلق حسابًا O(n) لكل منها.
+_SCORE_LOCK = threading.Lock()
+_SCORE_STATE: Dict[str, Any] = {"ts": 0.0, "result": None}
+
+
+def _sovereignty_score_cached() -> Dict[str, Any]:
+    ttl = float(os.getenv("SOVEREIGNTY_SCORE_TTL", "300") or 300)
+    st = _SCORE_STATE
+    if st["result"] is not None and (time.time() - st["ts"]) < ttl:
+        return st["result"]
+    with _SCORE_LOCK:
+        if st["result"] is not None and (time.time() - st["ts"]) < ttl:
+            return st["result"]  # أنجزه طلب سبقنا
+        result = _sovereignty_score_payload()
+        st["result"], st["ts"] = result, time.time()
+        return result
+
+
 @app.get("/sovereignty/score")
-async def sovereignty_score():
+def sovereignty_score():
     """
     درجة السيادة (Sovereignty Score) — المرحلة 5 من ROADMAP_V2.
     يقيس المسافة بين 'يعمل' و 'سيادي' برقم واحد (0-100).
 
     R-680: يُعيد جدول المؤشرات الأولية (primitives) + المقياس
     المُركّب (composite) في آخر سطر مع علامة "قابل للجدل".
+    R-788: متزامنة عمدًا (مجمّع الخيوط) + single-flight + تخزين مؤقت.
     """
-    return _sovereignty_score_payload()
+    return _sovereignty_score_cached()
 
 
 def _sovereignty_score_payload() -> Dict[str, Any]:

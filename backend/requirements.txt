@@ -10,5 +10,7 @@ numpy==1.26.4
 scikit-learn==1.3.0
 scipy==1.13.0
 pycryptodome==3.24.1
+# R-788: تحقق Ed25519 عبر OpenSSL (~0.12ms مقابل ~2.45ms) — المسار السريع، والقديم احتياط
+cryptography==44.0.2
 
 pytest==9.1.1

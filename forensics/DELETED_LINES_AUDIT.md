@@ -2690,3 +2690,9 @@ Bus إطلاقًا. الواجهة سليمة بعد الإزالة (101 وسم 
 
 ## 2026-10-27 — R-787-ب: أسطر مستبدلة (1)
 - **# DELETION-JUSTIFIED** — خلية حالة ٦.٧.٣ في ROADMAP_V6 أُلحق بها دليل التسليم الحي (استبدال بتوسيع، تبقى «جزئي»).
+
+## 2026-10-27 — R-788: أسطر مستبدلة
+- **# DELETION-JUSTIFIED** — استبدال، لا حذف منطق أو بيانات:
+  - `backend/app.py`: `async def sovereignty_score` ⇒ `def` (إصلاح حجب الخدمة)، و`return _sovereignty_score_payload()` ⇒ `return _sovereignty_score_cached()` (الحساب نفسه خلف single-flight + تخزين)؛ أُلحق سطر R-788 بالوثيقة.
+  - `backend/sovereign/keys/ed25519_verifier.py`: لا حذف — أُدرج المسار السريع قبل كتلة `try` القائمة.
+  - وثائق: سطرا «آخر تحديث» في PROJECT_STATE وCHANGELOG؛ صف الاختبارات (1306→1313، وأُكمل تسلسل R-787*).

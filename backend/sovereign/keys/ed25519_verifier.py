@@ -49,12 +49,46 @@ def sign_hex(data: bytes, seed_hex: str) -> str:
     return binascii.hexlify(sig).decode()
 
 
+# R-788: مسار سريع عبر OpenSSL (مكتبة cryptography). مقيس محليًا: ~0.12ms للتحقق مقابل
+# ~2.45ms في pycryptodome (حساب النقاط بلغة Python). السجل الحي 138k حدثًا ⇒ /sovereignty/score
+# كان يحتاج دقائق معالج ويحجب الخادم (forensics/R-788_evidence_RED.txt). الدلالة محفوظة:
+# فشل المسار السريع لا يُعتمد وحده — يُعاد الحكم بالمسار القديم (فلا يتحول توقيع كان صالحًا
+# إلى غير صالح أبدًا)؛ وبغياب المكتبة يعمل القديم وحده كما كان حرفيًا.
+try:
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey as _FastPub
+    from cryptography.exceptions import InvalidSignature as _FastInvalid
+    FAST_ED25519 = True
+except ImportError:  # TOLERATED: المسار القديم (pycryptodome) يبقى صحيحًا وحده
+    _FastPub = None
+    _FastInvalid = Exception
+    FAST_ED25519 = False
+
+import functools as _functools
+
+
+@_functools.lru_cache(maxsize=64)
+def _fast_public_key(public_hex: str):
+    return _FastPub.from_public_bytes(binascii.unhexlify(public_hex))
+
+
+def _fast_verify(public_hex: str, data: bytes, sig_hex: str) -> bool:
+    if not FAST_ED25519:
+        return False
+    try:
+        _fast_public_key(public_hex).verify(binascii.unhexlify(sig_hex), data)
+        return True
+    except (_FastInvalid, ValueError, TypeError, binascii.Error):
+        return False
+
+
 def verify_hex(public_hex: str, data: bytes, sig_hex: str) -> bool:
     """يتحقق بالتوقيع بالمفتاح العام — يعيد False عند أي فشل (لا استثناءات).
 
     المفتاح العام يُخزن خامًا (32 بايتًا) ويُغلَّف هنا بصيغة X.509 SPKI
     ثابتة البنية (OID Ed25519 = 1.3.101.112) للاستيراد — لا مفاتيح خاصة أبدًا.
     """
+    if _fast_verify(public_hex, data, sig_hex):
+        return True  # R-788: OpenSSL — الحكم بالقبول نهائي؛ الرفض يُعاد بالمسار القديم أدناه
     try:
         raw = binascii.unhexlify(public_hex)
         spki = bytes.fromhex("302a300506032b6570032100") + raw
