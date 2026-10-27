@@ -1,0 +1,33 @@
+R-789b / R-789c — live routing evidence (app machine, brain qwen2.5:3b on Fly)
+==========================================================================
+Problem (live, after R-789 deploy 3b13ba8): single-stage planner (decide + answer in one JSON)
+answered "كم حدثا في ذاكرتك" from its own head without calling memory.stats.
+  single-stage planner : 1/4 questions used the correct tool
+  single-stage + few-shot: 2/4
+
+Experiment: two-stage router (stage 1 = JSON {tool, inputs} only, enum-constrained, max_tokens 120)
+  "كم حدثا في ذاكرتك الآن؟"        -> memory.stats          13.0s
+  "ما هي قدراتك الحقيقية؟"          -> system.capabilities   3.9s
+  "هل القرص ممتلئ؟"                 -> disk.status           3.1s
+  "اكتب جملة واحدة عن البحر"        -> none                  3.0s
+  "هل تعمل بشكل سليم"               -> health.snapshot       2.9s
+  GitHub URL                         -> github.repo {"repo":...} 5.1s
+  "من أنت"                          -> none
+  "مرحبا"                           -> none
+  result: 8/8 correct. No hard-coded answers: routing is a model decision constrained to the
+  registered tool enum; answers are free text generated from the real tool output.
+
+E2E on live machine with new backend/chat_agent.py (sideloaded to /tmp/ca2, not yet deployed):
+  Q: كم حدثا في ذاكرتك الآن؟  | completed | tools ['memory.stats'] | 81.4s
+  A: في ذاكرتي الحالية، حدثت 144200 حدثاً.
+  Q: ما هي قدراتك الحقيقية؟   | completed | tools ['system.capabilities'] | 87.3s
+  A: ... قدرة على البحث عبر الإنترنت ...   <- repeats the FALSE claim of live /capabilities
+  Q: هل القرص ممتلئ؟          | completed | tools ['disk.status'] | 18.3s
+  A: لا، القرص متاح ومستعد للعمل.
+  Q: اكتب جملة واحدة عن البحر | completed | tools [] | 7.0s
+
+R-789c root cause: live /capabilities reported web_tools/research level "enabled" while no search
+provider is configured (only fetch works). Fix: new flag web_search = web_tools AND a configured
+search provider; catalog split into web_tools (search, flag web_search) and web_fetch (flag web_tools).
+Known limits (honest): 3B model is slow on this hardware (7 tok/s, app CPU steal ~95%) and can mix
+languages / phrase awkwardly; tool data itself is real.

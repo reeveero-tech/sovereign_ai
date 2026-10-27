@@ -2713,3 +2713,11 @@ Bus إطلاقًا. الواجهة سليمة بعد الإزالة (101 وسم 
   - `tests/test_ollama_brain.py`: توقيع `test_chat_endpoint_uses_llm` (+monkeypatch) ووثيقته.
   - `tests/test_brain_openai_protocol.py`: توقيع `test_chat_endpoint_uses_openai_model` (+monkeypatch) ووثيقته.
   - وثائق: سطرا «آخر تحديث»؛ صف الاختبارات (1319→1333)؛ خلية ٦.٨.٣ (ملاحظة R-788a/R-789a).
+
+## 2026-10-27 — R-789b / R-789c: أسطر مستبدلة
+- **# DELETION-JUSTIFIED** — استبدال، لا حذف منطق:
+  - `backend/chat_agent.py`: جسم `ChatPlanner` (أحادي المرحلة ⇒ route/answer)، قص النتائج في `_results` ⇒ `_compact`، نهاية نص الجواب. `_CHAT_SYSTEM` القديم باقٍ.
+  - `backend/app.py`: توقيع `_github_repo_tool` ووسيط التعبير (+`repo`)، وكتلتا إرجاع الأعلام (+`web_search`).
+  - `backend/capability_inventory.py`: مدخلا web_tools وresearch (علم web_search) + مدخل web_fetch جديد.
+  - `tests/test_capability_inventory.py`: سطر `ALL_FLAGS_ON` (+web_search). `tests/test_chat_agent.py`: تسلسلات ردود العقل الوهمية للتصميم ذي المرحلتين.
+  - وثائق: سطرا «آخر تحديث»؛ صف الاختبارات (1333→1339)؛ خلية ٦.٧.٤.

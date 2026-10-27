@@ -67,15 +67,19 @@ def test_brain_picks_real_tool_and_answers_from_its_result():
     import chat_agent
     reg = _registry()
     brain = FakeBrain([
-        {"action": "call", "tool": "memory.stats", "inputs": {}},
-        {"action": "finish", "answer": "في السجل 140807 حدثًا."},
+        {"tool": "memory.stats", "inputs": {}},   # توجيه
+        {"tool": "none", "inputs": {}},           # توجيه بعد النتيجة: تكفي
+        "في السجل 140807 حدثًا.",                 # جواب نصي من العقل
     ])
     out = chat_agent.respond("كم حدثًا في ذاكرتك؟", registry=reg, chat_fn=brain)
     assert out["reply"] == "في السجل 140807 حدثًا."
     assert out["status"] == "completed" and out["tools_used"] == ["memory.stats"]
     assert reg.calls == [("memory.stats", "chat", {})]
     # النتيجة الحقيقية وصلت العقل قبل جوابه
-    assert "140807" in brain.seen[1]["user"]
+    assert "140807" in brain.seen[2]["user"]
+    # مرحلة التوجيه مقيدة بمخطط: الأدوات المسموحة + none فقط
+    enum = brain.seen[0]["kw"]["json_schema"]["properties"]["tool"]["enum"]
+    assert "none" in enum and "tasks.start" not in enum and "agent.run" not in enum
     # الفهرس في تعليمات النظام (بادئة ثابتة)، والرسالة في رسالة المستخدم
     assert "memory.stats" in brain.seen[0]["system"]
     assert "كم حدثًا" in brain.seen[0]["user"]
@@ -85,14 +89,14 @@ def test_general_question_answered_by_brain_without_tools():
     import chat_agent
     reg = _registry()
     out = chat_agent.respond("اكتب بيت شعر عن البحر", registry=reg,
-                             chat_fn=FakeBrain([{"action": "finish", "answer": "بيت من العقل"}]))
+                             chat_fn=FakeBrain([{"tool": "none", "inputs": {}}, "بيت من العقل"]))
     assert out["reply"] == "بيت من العقل" and reg.calls == []
 
 
 def test_public_chat_cannot_run_action_tools():
     import chat_agent
     reg = _registry()
-    brain = FakeBrain([{"action": "call", "tool": "tasks.start", "inputs": {"goal": "x"}}] * 3)
+    brain = FakeBrain([{"tool": "tasks.start", "inputs": {"goal": "x"}}] * 3)
     out = chat_agent.respond("ابدأ مهمة", registry=reg, chat_fn=brain, owner=False)
     assert reg.calls == [], "non-owner chat must never invoke an action tool"
     assert out["reply"].startswith("لم أُكمل الجواب بصدق")
@@ -104,8 +108,8 @@ def test_owner_key_unlocks_action_tools_but_never_agent_run():
     reg = _registry()
     names = chat_agent.allowed_tools(reg, owner=True)
     assert "tasks.start" in names and "agent.run" not in names
-    brain = FakeBrain([{"action": "call", "tool": "tasks.start", "inputs": {"goal": "x"}},
-                       {"action": "finish", "answer": "بدأت المهمة t1"}])
+    brain = FakeBrain([{"tool": "tasks.start", "inputs": {"goal": "x"}},
+                       {"tool": "none", "inputs": {}}, "بدأت المهمة t1"])
     out = chat_agent.respond("ابدأ مهمة", registry=reg, chat_fn=brain, owner=True)
     assert reg.calls == [("tasks.start", "chat", {"goal": "x"})]
     assert out["reply"] == "بدأت المهمة t1"
@@ -129,7 +133,7 @@ def test_budget_exhausted_after_results_brain_answers_from_them(monkeypatch):
     import chat_agent
     monkeypatch.setattr(chat_agent, "MAX_STEPS", 1)
     reg = _registry()
-    brain = FakeBrain([{"action": "call", "tool": "web.fetch", "inputs": {"url": "https://x"}},
+    brain = FakeBrain([{"tool": "web.fetch", "inputs": {"url": "https://x"}},
                        "الصفحة عنوانها T."])
     out = chat_agent.respond("ماذا في https://x", registry=reg, chat_fn=brain)
     assert out["status"] == "answered_from_results" and out["reply"] == "الصفحة عنوانها T."
@@ -151,8 +155,8 @@ def test_chat_endpoint_uses_agent_not_planted_capabilities_reply(monkeypatch):
     import ollama_client
     from fastapi.testclient import TestClient
     monkeypatch.setattr(chat_agent, "brain_enabled", lambda: True)
-    brain = FakeBrain([{"action": "call", "tool": "system.capabilities", "inputs": {}},
-                       {"action": "finish", "answer": "جواب العقل من الجرد الحي"}])
+    brain = FakeBrain([{"tool": "system.capabilities", "inputs": {}},
+                       {"tool": "none", "inputs": {}}, "جواب العقل من الجرد الحي"])
     monkeypatch.setattr(ollama_client, "chat", brain)
     with TestClient(app_mod.app) as c:
         r = c.post("/chat", json={"text": "ما هي قدراتك؟"})
@@ -162,7 +166,7 @@ def test_chat_endpoint_uses_agent_not_planted_capabilities_reply(monkeypatch):
     assert body["tools_used"] == ["system.capabilities"]
     assert body["agent_status"] == "completed"
     # النتيجة الحقيقية للأداة (الجرد) وصلت العقل
-    assert "levels" in brain.seen[1]["user"] or "tools" in brain.seen[1]["user"]
+    assert "levels" in brain.seen[2]["user"] or "tools" in brain.seen[2]["user"]
 
 
 def test_github_repo_tool_registered_and_parses_url(monkeypatch):
@@ -186,7 +190,7 @@ def test_chat_endpoint_passes_history_to_brain(monkeypatch):
     import ollama_client
     from fastapi.testclient import TestClient
     monkeypatch.setattr(chat_agent, "brain_enabled", lambda: True)
-    brain = FakeBrain([{"action": "finish", "answer": "نعم، تحدثنا عن الذاكرة"}])
+    brain = FakeBrain([{"tool": "none", "inputs": {}}, "نعم، تحدثنا عن الذاكرة"])
     monkeypatch.setattr(ollama_client, "chat", brain)
     hist = [{"role": "user", "content": "حدثني عن الذاكرة"},
             {"role": "assistant", "content": "الذاكرة دائمة وموقعة"}]
@@ -215,3 +219,41 @@ def test_owner_key_checked_by_endpoint(monkeypatch):
         c.post("/chat", json={"text": "مرحبا", "api_key": "wrong-key"})
     assert seen["owner"] is False
     assert real is not spy
+
+
+def test_repeating_same_tool_call_goes_to_answer_not_loop():
+    import chat_agent
+    reg = _registry()
+    brain = FakeBrain([{"tool": "memory.stats", "inputs": {}},
+                       {"tool": "memory.stats", "inputs": {}},  # تكرار ⇒ يُعامل كاكتفاء
+                       "140807 حدثًا"])
+    out = chat_agent.respond("كم حدثًا؟", registry=reg, chat_fn=brain)
+    assert out["reply"] == "140807 حدثًا" and len(reg.calls) == 1
+
+
+def test_answer_stage_is_free_text_not_json():
+    import chat_agent
+    brain = FakeBrain([{"tool": "none", "inputs": {}}, "طوكيو"])
+    chat_agent.respond("ما عاصمة اليابان؟", registry=_registry(), chat_fn=brain)
+    assert brain.seen[0]["kw"].get("json_mode") is True
+    assert not brain.seen[1]["kw"].get("json_mode") and "json_schema" not in brain.seen[1]["kw"]
+
+
+def test_github_repo_accepts_repo_alias(monkeypatch):
+    import app as app_mod
+    import chat_tools
+    monkeypatch.setattr(chat_tools, "github_context", lambda o, r: f"{o}/{r}")
+    assert app_mod._github_repo_tool(repo="reeveero-tech/sovereign_ai") == "reeveero-tech/sovereign_ai"
+
+
+def test_compact_is_generic_and_drops_empty_values():
+    import chat_agent
+    txt = chat_agent._compact({"capabilities": [
+        {"id": "brain", "level": "enabled", "flag": None},
+        {"id": "web_tools", "level": "implemented_disabled", "note": ""}],
+        "summary": {"enabled": 1}, "empty": []})
+    assert "capabilities[0]: id=brain، level=enabled" in txt
+    assert "capabilities[1]: id=web_tools، level=implemented_disabled" in txt
+    assert "summary: enabled=1" in txt
+    assert "None" not in txt and "empty" not in txt
+    assert len(chat_agent._compact({"x": "a" * 5000}, 100)) < 200

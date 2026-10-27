@@ -56,6 +56,47 @@ def _clip(obj: Any, n: int = RESULT_CHARS) -> str:
     return s if len(s) <= n else s[:n] + f"… [مقتطع — {len(s)} حرفًا]"
 
 
+def _compact(obj: Any, n: int = RESULT_CHARS) -> str:
+    """R-789c: تحويل عام (لا يعرف أي أداة) من JSON إلى أسطر «مفتاح: قيمة» بلا قيم فارغة —
+    قياس حي: نتيجة الجرد (~5000 حرف JSON) أخذت 136ث تقييمًا للمدخل وقرأها العقل خطأً."""
+    if isinstance(obj, str):
+        return _clip(obj, n)
+    out: List[str] = []
+
+    def scalar(v):
+        return isinstance(v, (str, int, float, bool))
+
+    def walk(v, path):
+        if v is None or v == "" or v == [] or v == {}:
+            return
+        if scalar(v):
+            out.append(f"{path}: {v}")
+        elif isinstance(v, dict):
+            flat = {k: x for k, x in v.items() if scalar(x) and x != ""}
+            nested = {k: x for k, x in v.items() if not scalar(x)}
+            if path and flat and len(flat) == len([k for k, x in v.items() if x not in (None, "")]):
+                out.append(f"{path}: " + "، ".join(f"{k}={x}" for k, x in flat.items()))
+                return
+            for k, x in flat.items():
+                out.append(f"{path + '.' if path else ''}{k}: {x}")
+            for k, x in nested.items():
+                walk(x, f"{path + '.' if path else ''}{k}")
+        elif isinstance(v, (list, tuple)):
+            if all(scalar(x) for x in v):
+                out.append(f"{path}: " + "، ".join(str(x) for x in v))
+            else:
+                for i, x in enumerate(v):
+                    walk(x, f"{path}[{i}]")
+        else:
+            out.append(f"{path}: {v}")
+
+    try:
+        walk(obj, "")
+    except Exception:  # TOLERATED: يعود إلى JSON المقتطع
+        return _clip(obj, n)
+    return _clip("\n".join(out), n)
+
+
 def search_available() -> bool:
     try:
         import chat_tools
@@ -78,9 +119,32 @@ def allowed_tools(registry, owner: bool) -> List[str]:
     return [n for n in names if n in read]
 
 
+_ROUTER_SYSTEM = (
+    "أنت موجّه نظام sovereign_ai. مهمتك الوحيدة: اختيار الأداة التي تجلب الحقيقة اللازمة "
+    "للإجابة عن رسالة المالك. أي سؤال عن النظام نفسه (ذاكرته، أحداثه، صحته، قدراته، قرصه، "
+    "أرقامه، مفاتيحه، موصلاته) يحتاج أداة دائمًا. أي رابط أو مستودع في الرسالة يحتاج أداة القراءة. "
+    "اختر none فقط إن كانت الرسالة لا تحتاج بيانات من النظام أو الويب (تحية، كتابة، معرفة عامة)، "
+    "أو إن كانت النتائج المجموعة تكفي للإجابة.\nالأدوات:\n"
+)
+
+_ANSWER_SYSTEM = (
+    "أنت عقل نظام sovereign_ai — نظام ذكاء سيادي ذاتي الاستضافة لمالكه: سجل أحداث موقّع "
+    "(Ed25519)، ذاكرة دائمة، وأدوات مسجلة حقيقية؛ وأنت النموذج اللغوي الذي يفهم ويجيب. "
+    "أجب المالك بالعربية الفصحى (أو بلغته إن كتب بغيرها) — لا كلمات إنجليزية داخل الجملة "
+    "العربية ولا حروف صينية — بإيجاز ودقة. إن وُجدت نتائج أدوات فابنِ الجواب عليها حرفيًا "
+    "واذكر الأرقام كما هي؛ لا تختلق رقمًا أو قدرة. إن فشلت أداة فقل ذلك بصدق. "
+    "إن لم تكن متأكدًا من معلومة عامة فقل ذلك. "
+    "معاني مستويات القدرات في النتائج: enabled = مفعّلة تعمل الآن، implemented_disabled = "
+    "مبنية لكنها معطلة، missing = غير مبنية، blocked = محجوبة، deferred = مؤجلة بقرار المالك."
+)
+
+
 class ChatPlanner:
-    """مخطط محادثة فوق العقل الحي — الفهرس في تعليمات النظام (بادئة ثابتة يعيد Ollama
-    استخدام ذاكرتها بين الطلبات)، والرسالة وسياقها ونتائج الخطوات في رسالة المستخدم."""
+    """R-789b: مرحلتان بقرار العقل في كلتيهما (قياس حي: 8/8 توجيهًا صحيحًا مقابل 1/4
+    حين طُلب القرار والجواب معًا من qwen2.5:3b — forensics/R-789b_live_routing.txt):
+      1. توجيه: JSON مقيّد {tool: <أداة مسموحة أو none>, inputs} — لا جواب في هذه المرحلة.
+      2. جواب: نص حر من العقل مبني على الرسالة والسياق ونتائج الأدوات الحقيقية.
+    يعمل داخل AgentLoop (صلاحيات + أثر موقّع + ميزانية) كأي مخطط."""
 
     kind = "brain-chat"
     accepts_feedback = True
@@ -101,42 +165,70 @@ class ChatPlanner:
             timeout = max(5.0, self.deadline - time.monotonic())
         return chat(system, user, timeout=timeout, **kw)
 
-    def next_step(self, goal: str, tools: List[Dict[str, Any]],
-                  history: List[Dict[str, Any]],
-                  feedback: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
-        from agent_loop import PlannerError, _extract_json, step_schema, PLANNER_MAX_TOKENS
-        catalog = [{"name": t["name"], "description": t.get("description", "")[:140],
-                    "inputs": t.get("inputs", {})} for t in tools]
-        system = _CHAT_SYSTEM + "الأدوات المتاحة الآن:\n" + json.dumps(
-            catalog, ensure_ascii=False)
+    def _results(self, history: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        return [{"tool": h.get("tool"), "inputs": h.get("inputs"), "ok": h.get("ok"),
+                 "result": _compact(h.get("result")), "error": h.get("error")}
+                for h in (history or [])]
+
+    def _conversation(self) -> List[Dict[str, Any]]:
+        return [{"role": h.get("role"), "content": _clip(h.get("content", ""), 400)}
+                for h in self.history]
+
+    def route(self, goal: str, tools: List[Dict[str, Any]],
+              history: List[Dict[str, Any]], feedback=None) -> Dict[str, Any]:
+        from agent_loop import PlannerError, _extract_json
+        lines = []
+        for t in tools:
+            inp = ", ".join(f"{k}" for k in (t.get("inputs") or {})) or "بلا مدخلات"
+            lines.append(f"- {t['name']} (المدخلات: {inp}): {t.get('description', '')[:140]}")
+        system = _ROUTER_SYSTEM + "\n".join(lines) + '\nأجب JSON فقط: {"tool":"<اسم أو none>","inputs":{}}'
         payload: Dict[str, Any] = {}
         if self.history:
-            payload["conversation"] = [{"role": h.get("role"), "content": _clip(h.get("content", ""), 400)}
-                                       for h in self.history]
+            payload["conversation"] = self._conversation()
         payload["message"] = goal
         if history:
-            payload["tool_results"] = [
-                {"tool": h.get("tool"), "inputs": h.get("inputs"), "ok": h.get("ok"),
-                 "result": _clip(h.get("result")), "error": h.get("error")}
-                for h in history]
+            payload["gathered_results"] = self._results(history)
         if feedback:
             payload["rejected"] = feedback
+        schema = {"type": "object",
+                  "properties": {"tool": {"type": "string",
+                                          "enum": [t["name"] for t in tools] + ["none"]},
+                                 "inputs": {"type": "object"}},
+                  "required": ["tool", "inputs"]}
         reply = self._call(system, json.dumps(payload, ensure_ascii=False, default=str),
-                           json_mode=True,
-                           max_tokens=max(PLANNER_MAX_TOKENS, ANSWER_MAX_TOKENS),
-                           json_schema=step_schema([t["name"] for t in tools]))
+                           json_mode=True, max_tokens=120, json_schema=schema)
         if reply is None:
             raise PlannerError(_brain_failure_reason())
         return _extract_json(reply)
 
+    def answer(self, goal: str, history: List[Dict[str, Any]]) -> Optional[str]:
+        payload: Dict[str, Any] = {}
+        if self.history:
+            payload["conversation"] = self._conversation()
+        payload["message"] = goal
+        if history:
+            payload["tool_results"] = self._results(history)
+        user = json.dumps(payload, ensure_ascii=False, default=str) if (self.history or history) else goal
+        return self._call(_ANSWER_SYSTEM, user, max_tokens=ANSWER_MAX_TOKENS)
+
+    def next_step(self, goal: str, tools: List[Dict[str, Any]],
+                  history: List[Dict[str, Any]],
+                  feedback: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
+        from agent_loop import PlannerError
+        decision = self.route(goal, tools, history, feedback)
+        tool = str(decision.get("tool") or "none")
+        inputs = decision.get("inputs") if isinstance(decision.get("inputs"), dict) else {}
+        already = any(h.get("tool") == tool and (h.get("inputs") or {}) == inputs for h in history or [])
+        if tool != "none" and not already:
+            return {"action": "call", "tool": tool, "inputs": inputs}
+        text = self.answer(goal, history)
+        if not text or not text.strip():
+            raise PlannerError(_brain_failure_reason())
+        return {"action": "finish", "answer": text.strip()}
+
     def final_answer(self, goal: str, steps: List[Dict[str, Any]]) -> Optional[str]:
-        """نفدت الميزانية بعد نتائج حقيقية ⇒ العقل يجيب منها نصًا (لا قالب)."""
-        system = (_CHAT_SYSTEM.split("أجب بكائن JSON")[0]
-                  + "أجب الآن نصًا عاديًا (لا JSON) من نتائج الأدوات أدناه وحدها.")
-        user = json.dumps({"message": goal, "tool_results": [
-            {"tool": s.get("tool"), "ok": s.get("ok"), "result": _clip(s.get("result")),
-             "error": s.get("error")} for s in steps]}, ensure_ascii=False, default=str)
-        return self._call(system, user, max_tokens=ANSWER_MAX_TOKENS)
+        """نفدت الخطوات بعد نتائج حقيقية ⇒ العقل يجيب منها نصًا (لا قالب)."""
+        return self.answer(goal, steps)
 
 
 def _brain_failure_reason() -> str:

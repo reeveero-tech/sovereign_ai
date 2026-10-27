@@ -25,7 +25,8 @@ ALL_TOOLS = {
     "media.image", "sovereignty.score", "reasoning.plan",
 }
 ALL_FLAGS_ON = {"brain": True, "web_tools": True, "media": True,
-                "vision": True, "stt": True, "tts": True, "mcp": True}
+                "vision": True, "stt": True, "tts": True, "mcp": True,
+                "web_search": True}  # R-789c: علم البحث المشتق (مزود فعلي)
 ALL_FLAGS_OFF = {k: False for k in ALL_FLAGS_ON}
 
 
@@ -131,3 +132,23 @@ def test_endpoint_built_from_live_registry():
     blob = r.text.lower()
     for bad in ("api_key", "secret_key", "private_key", "password"):
         assert bad not in blob, bad
+
+
+
+def test_web_search_not_enabled_by_flag_alone():
+    """R-789c — دليل حي: /capabilities أعلن «البحث» مفعّلًا بلا مزود بحث، فكرر العقل الادعاء."""
+    flags = dict(ALL_FLAGS_ON, web_search=False)
+    caps = _by_id(_build(flags=flags))
+    assert caps["web_tools"]["level"] == "implemented_disabled"
+    assert caps["research"]["level"] == "implemented_disabled"
+    assert caps["web_fetch"]["level"] == "enabled"
+
+
+def test_endpoint_web_search_requires_provider(monkeypatch):
+    import app as app_mod
+    import config
+    monkeypatch.setattr(config, "WEB_TOOLS_ENABLED", True, raising=False)
+    monkeypatch.setattr(app_mod, "_search_configured", lambda: False)
+    caps = _by_id(app_mod._capabilities_payload())
+    assert caps["web_tools"]["level"] != "enabled"
+    assert caps["research"]["level"] != "enabled"

@@ -1649,6 +1649,15 @@ def _signing_ok() -> bool:
         return False
 
 
+def _search_configured() -> bool:
+    """R-789c: مزود بحث فعلي — المصدر الواحد chat_tools.search_configured."""
+    try:
+        import chat_tools
+        return bool(chat_tools.search_configured())
+    except Exception:  # TOLERATED: بلا تأكيد ⇒ غير مفعّل (لا ادعاء)
+        return False
+
+
 def _capabilities_payload():
     """R-787: الجرد الحي نفسه كدالة متزامنة — يستعمله /capabilities وجسر المحادثة."""
     import capability_inventory
@@ -1669,6 +1678,7 @@ def _capabilities_payload():
         "mcp": bool(getattr(config, "MCP_ENABLED", False)),
         "vault": _vault_status_payload()["enabled"],
     }
+    flags["web_search"] = flags["web_tools"] and _search_configured()  # R-789c
     return capability_inventory.build_inventory(
         names, flags, signing_ok=_signing_ok(),
         cloud_disk_enabled=cloud_disk_enabled())
@@ -1697,6 +1707,7 @@ async def capabilities():
         "mcp": bool(getattr(config, "MCP_ENABLED", False)),
         "vault": _vault_status_payload()["enabled"],
     }
+    flags["web_search"] = flags["web_tools"] and _search_configured()  # R-789c
     return capability_inventory.build_inventory(
         names, flags, signing_ok=_signing_ok(),
         cloud_disk_enabled=cloud_disk_enabled())
@@ -1741,12 +1752,13 @@ def _chat_agent_mode() -> bool:
     return chat_agent.brain_enabled()
 
 
-def _github_repo_tool(url: str) -> str:
-    """R-789: معالج github.repo — يقبل رابطًا كاملًا أو owner/repo."""
+def _github_repo_tool(url: str = "", repo: str = "", **_ignored) -> str:
+    """R-789: معالج github.repo — يقبل رابطًا كاملًا أو owner/repo.
+    R-789b: يقبل الاسم البديل repo (قياس حي: العقل أرسل {"repo": "owner/name"})."""
     import re as _re
     import chat_tools
     m = _re.search(r"(?:github\.com/)?([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+?)(?:\.git)?(?:[/?#]|$)",
-                   str(url or "").strip())
+                   str(url or repo or "").strip())
     if not m:
         raise ValueError("صيغة غير مفهومة — المطلوب رابط github.com/owner/repo أو owner/repo")
     return chat_tools.github_context(m.group(1), m.group(2))
