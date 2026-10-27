@@ -270,3 +270,29 @@ def test_ledger_axis_no_longer_crashes_on_missing_verified_key(monkeypatch):
     assert axis.details["unclassified_events"] == 0
     assert axis.details["anchors_verified"] == 0
     assert axis.score == 50  # 0 تغطية + 30 تصنيف + 20 مراسٍ سليمة (لا فشل)
+
+
+# ---------------------------------------------------------------------------
+# R-789a: صورة الإنتاج بلا git — الدليل الحي: 503 «FileNotFoundError: 'git'»
+# ---------------------------------------------------------------------------
+
+def test_score_evidence_survives_missing_git(monkeypatch, tmp_path):
+    from backend.sovereign import score as sc
+
+    def no_git(*a, **k):
+        raise FileNotFoundError(2, "No such file or directory", "git")
+
+    monkeypatch.setattr(sc._subprocess, "run", no_git)
+    monkeypatch.setenv("SOVEREIGN_GIT_SHA", "abc123")
+    ev = sc._v2_invariants_evidence(tmp_path)
+    assert ev["head_sha"] == "abc123"
+    assert ev["tree_fingerprint"] == "unavailable:no-git"
+    assert ev["passing"] == 0  # لا ملف JUnit ⇒ لا نقاط بلا دليل
+    monkeypatch.delenv("SOVEREIGN_GIT_SHA")
+    assert sc._git_head(tmp_path) == ""
+
+
+def test_deploy_passes_git_sha_to_runtime():
+    from pathlib import Path
+    wf = (Path(__file__).resolve().parents[1] / ".github/workflows/deploy-fly.yml").read_text()
+    assert "--env SOVEREIGN_GIT_SHA=${{ github.sha }}" in wf

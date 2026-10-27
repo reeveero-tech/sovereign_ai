@@ -121,6 +121,7 @@
   <div class="status" id="status" title="حالة الخادم والعقل"><span class="dot" id="dot"></span><span id="statusText">جارٍ الفحص…</span></div>
   <div class="spacer"></div>
   <a class="link" href="/console" title="لوحة المراقبة القديمة: السجل والذاكرة والأدوات والمهام بالتفصيل. فيها زر للعودة إلى المحادثة">اللوحة التقنية</a>
+  <button class="btn" id="ownerKey" type="button" title="مفتاح المالك (SOVEREIGN_KEY): بدونه تستطيع المحادثة قراءة حالة النظام والويب فقط؛ معه تستطيع تنفيذ الأفعال (المهام، البحث، الأسطول…). يُحفظ في هذا المتصفح فقط">مفتاح المالك</button>
   <button class="btn" id="newChat" type="button" title="يمسح المحادثة الحالية من الشاشة ويبدأ جلسة جديدة بلا سياق سابق">محادثة جديدة</button>
 </header>
 
@@ -133,7 +134,7 @@
     <textarea id="input" rows="1" placeholder="اكتب رسالتك…" aria-label="الرسالة" maxlength="10000"></textarea>
     <button class="send" id="send" type="submit">إرسال</button>
   </form>
-  <div class="hint">Enter للإرسال · Shift+Enter لسطر جديد · العقل يعمل على خادم خاص وقد يستغرق الرد 15–40 ثانية</div>
+  <div class="hint">Enter للإرسال · Shift+Enter لسطر جديد · العقل يفهم رسالتك ويستدعي أدوات النظام الحقيقية عند الحاجة — على معالج بلا GPU قد يستغرق الرد حتى دقيقتين ونصف</div>
 </footer>
 
 <script>
@@ -224,13 +225,30 @@
     return messages.slice(-HISTORY_TURNS).map(function (m) { return { role: m.role, content: String(m.content).slice(0, 4000) }; });
   }
 
+  // R-789: مفتاح المالك اختياري — يُرسل حقل api_key فقط إن ضُبط، ولا يغادر هذا المتصفح غير ذلك
+  var KEY_STORE = "sovereign.ownerKey";
+  function ownerKey() { try { return localStorage.getItem(KEY_STORE) || ""; } catch (e) { return ""; } }
+  function withKey(body) { var k = ownerKey(); if (k) body.api_key = k; return body; }
+  function paintKey() {
+    var b = document.getElementById("ownerKey");
+    b.textContent = ownerKey() ? "مفتاح المالك: مضبوط" : "مفتاح المالك";
+  }
+  document.getElementById("ownerKey").addEventListener("click", function () {
+    var cur = ownerKey();
+    var v = window.prompt(cur ? "المفتاح مضبوط. أدخل مفتاحًا جديدًا، أو اترك الحقل فارغًا لإزالته:" : "أدخل مفتاح المالك (SOVEREIGN_KEY):", "");
+    if (v === null) return;
+    try { if (v.trim()) localStorage.setItem(KEY_STORE, v.trim()); else localStorage.removeItem(KEY_STORE); } catch (e) {}
+    paintKey();
+  });
+  paintKey();
+
   function request(text, history) {
     var ctrl = new AbortController();
     var to = setTimeout(function () { ctrl.abort(); }, TIMEOUT_MS);
     return fetch("/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text: text, session_id: state.id, user_id: "owner", history: history }),
+      body: JSON.stringify(withKey({ text: text, session_id: state.id, user_id: "owner", history: history })),
       signal: ctrl.signal
     }).then(function (r) {
       clearTimeout(to);

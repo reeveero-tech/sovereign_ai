@@ -2703,3 +2703,13 @@ Bus إطلاقًا. الواجهة سليمة بعد الإزالة (101 وسم 
   - `backend/sovereign/score.py`: حلقة التصنيف الكاملة انتقلت حرفيًا إلى `_classify_one` + `_classify_ledger_incremental`؛ `verification["verified"]` ⇒ `.get("root_verified_count", 0)` (KeyError)؛ سطر استيراد typing (+Any).
   - `tests/test_score_nonblocking.py`: ثلاثة أسطر تهيئة الحالة في الأداة المساعدة صارت `_reset_state`.
   - وثائق: سطرا «آخر تحديث»؛ صف الاختبارات (1313→1319)؛ خلية ٦.٨.٣ (ملاحظة R-788a — تبقى «منجز محليًا»).
+
+## 2026-10-27 — R-789 / R-789a: أسطر مستبدلة
+- **# DELETION-JUSTIFIED** — استبدال، لا حذف منطق:
+  - `backend/app.py`: كتلة جسر الأدوات صارت داخل `if not _chat_agent_mode()` (إزاحة)، و`elif direct_reply` بدل `if` (فرع الوكيل قبله)، و`processing_time_ms` يُحسب بعد الرد.
+  - `backend/sovereign/score.py`: أربعة نداءات `_subprocess.run(["git",...])` صارت `_git_head`/`_git_out` (المنطق نفسه + تحمّل غياب git).
+  - `.github/workflows/deploy-fly.yml`: سطر `flyctl deploy` (+`--env SOVEREIGN_GIT_SHA`).
+  - `frontend/chat/index.html`: نص التلميح («15–40 ثانية» غير صحيح) وسطر `body` (+`withKey`).
+  - `tests/test_ollama_brain.py`: توقيع `test_chat_endpoint_uses_llm` (+monkeypatch) ووثيقته.
+  - `tests/test_brain_openai_protocol.py`: توقيع `test_chat_endpoint_uses_openai_model` (+monkeypatch) ووثيقته.
+  - وثائق: سطرا «آخر تحديث»؛ صف الاختبارات (1319→1333)؛ خلية ٦.٨.٣ (ملاحظة R-788a/R-789a).

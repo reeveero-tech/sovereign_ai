@@ -1,0 +1,19 @@
+R-789 / R-789a RED — على main = feb5c76 — 2026-10-27
+
+## سلوكي: /chat «ما هي قدراتك؟» والعقل مفعّل (عقل بديل يعيد «جواب العقل»)
+reply_is_brain: False | brain_calls: 0
+reply_head: أنا واجهة مشروع sovereign_ai. هذا جردي الحي الآن، مقروء من النظام مباشرة لا من النموذج اللغوي:  مفعّلة:   - العقل (نموذج لغوي حي) مبنية لكنها معطلة:   - البحث و
+⇒ الرد نص حتمي مكتوب في chat_tools.capabilities_reply، والعقل لم يُستدعَ (0 نداءات) — جواب مزروع.
+
+## الاختبارات الجديدة على الكود السابق
+     12 E       ModuleNotFoundError: No module named 'chat_agent'
+      1 FAILED tests/test_score_nonblocking.py::test_score_evidence_survives_missing_git
+      1 FAILED tests/test_score_nonblocking.py::test_deploy_passes_git_sha_to_runtime
+      1 ERROR tests/test_chat_agent.py::test_search_tool_hidden_when_no_provider - Mo...
+      1 ERROR tests/test_chat_agent.py::test_public_chat_cannot_run_action_tools - Mo...
+      1 ERROR tests/test_chat_agent.py::test_owner_key_unlocks_action_tools_but_never_agent_run
+      1 ERROR tests/test_chat_agent.py::test_general_question_answered_by_brain_without_tools
+      1 ERROR tests/test_chat_agent.py::test_brain_picks_real_tool_and_answers_from_its_result
+      1 E       FileNotFoundError: [Errno 2] No such file or directory: 'git'
+
+## حي (R-789a): GET /sovereignty/score بعد نشر R-788a ⇒ 503 «فشل الحساب: FileNotFoundError: [Errno 2] No such file or directory: 'git'» — الصورة بلا git (السبب المرجح لـ500 الأول في R-788a).

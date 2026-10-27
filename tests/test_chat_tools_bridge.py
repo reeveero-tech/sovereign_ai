@@ -23,6 +23,14 @@ import pytest
 
 import config
 
+
+@pytest.fixture(autouse=True)
+def _legacy_chat_path(monkeypatch):
+    """R-789: هذه الاختبارات تحرس المسار القديم (الجسر الحتمي + التعليمات المباشرة) الباقي
+    خلف CHAT_AGENT_MODE=0 — الوضع الافتراضي صار حلقة الوكيل (tests/test_chat_agent.py)."""
+    monkeypatch.setenv("CHAT_AGENT_MODE", "0")
+
+
 ROOT = Path(__file__).resolve().parent.parent
 CHAT_UI = ROOT / "frontend" / "chat" / "index.html"
 LEGACY_UI = ROOT / "frontend" / "index.html"

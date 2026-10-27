@@ -147,6 +147,8 @@ class ChatMessage(BaseModel):
     session_id: Optional[str] = Field(default=None, description="معرف الجلسة")
     # R-786: آخر أدوار المحادثة (اختياري) — بدونها كان كل سؤال يصل العقل يتيمًا بلا سياق
     history: Optional[List[ChatTurn]] = Field(default=None, max_length=20, description="أدوار سابقة (حتى 20)")
+    # R-789: مفتاح المالك (اختياري) — يوسّع أدوات المحادثة من القراءة إلى كل السجل؛ لا يُسجل
+    api_key: Optional[str] = Field(default=None, max_length=512, description="مفتاح المالك (اختياري)", repr=False)
     
     model_config = ConfigDict(
         json_schema_extra={
@@ -168,6 +170,8 @@ class ChatResponse(BaseModel):
     timestamp: float
     # R-787: أدوات النظام الحقيقية التي استُدعيت لهذا الرد (أثر موقّع لكل منها)
     tools_used: List[str] = []
+    # R-789: حالة حلقة الوكيل (completed/answered_from_results/planner_failed/...) — None في المسار القديم
+    agent_status: Optional[str] = None
 
 
 class SovereignCommand(BaseModel):
@@ -1728,6 +1732,26 @@ async def tools_invoke(request: ToolInvokeRequest):
         )
 
 
+def _chat_agent_mode() -> bool:
+    """R-789: المحادثة عبر حلقة الوكيل حين يكون العقل مفعّلًا (CHAT_AGENT_MODE=0 يعيد المسار
+    القديم صراحةً). بلا عقل يبقى المسار القائم كما هو."""
+    if str(os.getenv("CHAT_AGENT_MODE", "1")).strip().lower() in ("0", "false", "no", "off"):
+        return False
+    import chat_agent
+    return chat_agent.brain_enabled()
+
+
+def _github_repo_tool(url: str) -> str:
+    """R-789: معالج github.repo — يقبل رابطًا كاملًا أو owner/repo."""
+    import re as _re
+    import chat_tools
+    m = _re.search(r"(?:github\.com/)?([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+?)(?:\.git)?(?:[/?#]|$)",
+                   str(url or "").strip())
+    if not m:
+        raise ValueError("صيغة غير مفهومة — المطلوب رابط github.com/owner/repo أو owner/repo")
+    return chat_tools.github_context(m.group(1), m.group(2))
+
+
 def _register_real_tools() -> None:
     """R-729 (البند ٣.١): تسجيل القدرات الحقيقية الموجودة فعلًا في النظام.
 
@@ -1939,6 +1963,22 @@ def _register_real_tools() -> None:
         # R-788a: عبر المخزن نفسه — الأداة لم تعد تطلق حسابًا O(n) لكل نداء
         handler=lambda: _sovereignty_score_cached(),
     ))
+    # R-789: أداتان حقيقيتان للمحادثة — كانتا جسرًا حتميًا يسبق العقل (R-787)، الآن يختارهما
+    # العقل بنفسه عبر حلقة الوكيل كأي أداة مسجلة (أثر موقّع لكل نداء).
+    registry.register(ToolSpec(
+        name="system.capabilities",
+        description="جرد قدرات النظام الحي: المستويات والأدوات والمعطل والمؤجل (نفس منطق /capabilities)",
+        inputs={},
+        outputs="levels/tools/deferred/disabled",
+        handler=_capabilities_payload,
+    ))
+    registry.register(ToolSpec(
+        name="github.repo",
+        description="قراءة مستودع GitHub عام: الوصف واللغات والملفات وآخر الالتزامات وREADME",
+        inputs={"url": "رابط المستودع أو owner/repo"},
+        outputs="نص بيانات المستودع",
+        handler=_github_repo_tool,
+    ))
 
 
 @app.get("/status", response_model=SystemStatusResponse)
@@ -2092,15 +2132,27 @@ async def chat(message: ChatMessage, background_tasks: BackgroundTasks):
     tool_context = ""
     direct_reply = None
     try:
-        import chat_tools
-        bridged = await asyncio.to_thread(chat_tools.gather, message.text, _capabilities_payload)
-        tool_context = bridged.get("context") or ""
-        tools_used = list(bridged.get("tools_used") or [])
-        direct_reply = bridged.get("direct_reply")
+        if not _chat_agent_mode():  # R-789: في وضع الوكيل العقل يقرر ما يُجلب، لا الجسر
+            import chat_tools
+            bridged = await asyncio.to_thread(chat_tools.gather, message.text, _capabilities_payload)
+            tool_context = bridged.get("context") or ""
+            tools_used = list(bridged.get("tools_used") or [])
+            direct_reply = bridged.get("direct_reply")
     except Exception as e:  # TOLERATED: الجسر مكمّل — فشله لا يسقط المحادثة ويُسجل
         logger.warning("R-787: فشل جسر الأدوات (%s)", type(e).__name__)
     _bridge_kw = {"tool_context": tool_context} if tool_context else {}
-    if direct_reply:
+    agent_status = None
+    if _chat_agent_mode():
+        # R-789 (أمر المالك: لا أجوبة مزروعة): العقل يفهم الرسالة ويختار الأدوات الحقيقية
+        # بنفسه ويجيب من نتائجها؛ الجسر الحتمي والقوالب لا يُستعملان في هذا المسار.
+        import chat_agent
+        owner = bool(message.api_key) and verify_api_key(message.api_key)
+        agent_out = await asyncio.to_thread(chat_agent.respond, message.text,
+                                            history or None, owner=owner)
+        reply = agent_out["reply"]
+        tools_used = list(agent_out.get("tools_used") or [])
+        agent_status = agent_out.get("status")
+    elif direct_reply:
         reply = direct_reply  # R-787b: سؤال القدرات يُجاب من الجرد الحي حرفيًا بلا نموذج
     else:
         reply = await _compose_chat_reply(
@@ -2114,9 +2166,11 @@ async def chat(message: ChatMessage, background_tasks: BackgroundTasks):
         reply=reply,
         status="ok" if result.success else "error",
         cycle_id=result.cycle_id,
-        processing_time_ms=round(processing_time, 2),
+        # R-789: الزمن بعد تكوين الرد (كان يُقاس قبله فلا يشمل العقل)
+        processing_time_ms=round((time.time() - start_time) * 1000, 2),
         timestamp=start_time,
         tools_used=tools_used,
+        agent_status=agent_status,
     )
 
 

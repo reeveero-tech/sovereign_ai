@@ -72,7 +72,8 @@ jobs:
       - name: Deploy
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-        run: flyctl deploy -a sovereign-ai-k20elq --remote-only --ha=false --wait-timeout 5m0s
+        # R-789a: الصورة بلا git — هوية النسخة المنشورة لدرجة السيادة (ربط دليل JUnit بـSHA)
+        run: flyctl deploy -a sovereign-ai-k20elq --remote-only --ha=false --wait-timeout 5m0s --env SOVEREIGN_GIT_SHA=${{ github.sha }}
 
       # R-719 (بأمر المالك 2026-10-22: «قاعدة البيانات قرص للمشروع وذاكرة له»):
       # مزامنة أسرار Supabase إلى Fly — مشروطة بوجودهما في أسرار المستودع.

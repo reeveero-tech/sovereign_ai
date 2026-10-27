@@ -781,6 +781,8 @@ class SovereigntyScorer:
 
 import ast as _ast
 import subprocess as _subprocess
+from typing import Optional as _Optional
+_Optional_str = _Optional[str]
 from pathlib import Path as _Path
 
 
@@ -912,6 +914,26 @@ def seal_junit_identity(junit_path, repo_root: _Path,
                                 fingerprint=captured_fingerprint)
 
 
+def _git_out(args, repo_root) -> _Optional_str:
+    """R-789a: صورة الإنتاج بلا git (دليل حي: «FileNotFoundError: 'git'» أسقط حساب
+    /sovereignty/score كله بعد دقائق). غياب git ⇒ None صريح — لا استثناء ولا قيمة مختلقة."""
+    try:
+        return _subprocess.run(args, capture_output=True, text=True,
+                               cwd=str(repo_root)).stdout.strip()
+    except (FileNotFoundError, NotADirectoryError, PermissionError):
+        return None
+
+
+def _git_head(repo_root) -> str:
+    """HEAD من git، وإلا SOVEREIGN_GIT_SHA (يضبطه deploy-fly.yml من github.sha)، وإلا ""
+    (فيُرفض دليل JUnit لعدم تطابق الهوية — لا نقاط بلا دليل)."""
+    import os as _os
+    head = _git_out(["git", "rev-parse", "HEAD"], repo_root)
+    if head:
+        return head
+    return (_os.getenv("SOVEREIGN_GIT_SHA") or "").strip()
+
+
 def embed_junit_identity(junit_path, repo_root: _Path, fingerprint=None) -> dict:
     """تضمين هوية التشغيل في JUnit (SHA + بصمة المحتوى).
 
@@ -921,10 +943,7 @@ def embed_junit_identity(junit_path, repo_root: _Path, fingerprint=None) -> dict
 
     junit_path = _Path(junit_path)
     repo_root = _Path(repo_root)
-    head = _subprocess.run(
-        ["git", "rev-parse", "HEAD"],
-        capture_output=True, text=True, cwd=str(repo_root),
-    ).stdout.strip()
+    head = _git_head(repo_root)  # R-789a
     if fingerprint is None:
         fingerprint = _v2_content_fingerprint(repo_root)
     tree = _ET.parse(junit_path)
@@ -1050,12 +1069,11 @@ def _parse_junit_evidence(junit_path: _Path, head: str,
 def _v2_tree_fingerprint(repo_root: _Path) -> str:
     """بصمة حالة الشجرة العاملة (تصويب المراجع: الدليل مرتبط بحالة الشجرة
     لا بـHEAD وحده) — sha256 لخرج git status --porcelain."""
-    r = _subprocess.run(
-        ["git", "status", "--porcelain"],
-        capture_output=True, text=True, cwd=str(repo_root),
-    )
+    out = _git_out(["git", "status", "--porcelain"], repo_root)  # R-789a
+    if out is None:
+        return "unavailable:no-git"
     import hashlib as _hl
-    return _hl.sha256(r.stdout.encode("utf-8")).hexdigest()[:16]
+    return _hl.sha256(out.encode("utf-8")).hexdigest()[:16]
 
 
 def _v2_invariants_evidence(repo_root: _Path, junit_path=None,
@@ -1064,10 +1082,7 @@ def _v2_invariants_evidence(repo_root: _Path, junit_path=None,
 
     يُقبل فقط إذا: تطابق SHA المضمّن مع HEAD، والنطاق يشمل الاختبارات
     المطلوبة ناجحة، وصفر فشل/خطأ/تخطٍّ. لا نجاح بثابت بلا دليل."""
-    head = _subprocess.run(
-        ["git", "rev-parse", "HEAD"],
-        capture_output=True, text=True, cwd=str(repo_root),
-    ).stdout.strip()
+    head = _git_head(repo_root)  # R-789a
     junit = (_Path(junit_path) if junit_path
              else repo_root / "forensics" / "pytest_results.xml")
     evidence = _parse_junit_evidence(junit, head, required=required,
@@ -1188,10 +1203,7 @@ def compute_sovereignty_score_v2(repo_root=None, invariants_evidence=None) -> di
     final_score = round(sum(measurable) / len(measurable), 4)
 
     try:
-        sha = _subprocess.run(
-            ["git", "rev-parse", "HEAD"],
-            capture_output=True, text=True, cwd=str(repo_root),
-        ).stdout.strip()
+        sha = _git_head(repo_root) or "unknown"  # R-789a
     except Exception:
         sha = "unknown"
 

@@ -140,8 +140,10 @@ def test_build_reply_falls_back_when_ollama_down(ollama_enabled):
     assert reply.startswith("أهلاً بك"), "rule-engine template must be the fallback"
 
 
-def test_chat_endpoint_uses_llm(ollama_enabled):
-    """نقطة /chat الفعلية: نص النموذج يظهر في استجابة HTTP — دمج كامل."""
+def test_chat_endpoint_uses_llm(ollama_enabled, monkeypatch):
+    """نقطة /chat الفعلية: نص النموذج يظهر في استجابة HTTP — دمج كامل.
+    R-789: المسار المباشر القديم (CHAT_AGENT_MODE=0)؛ مسار الوكيل في test_chat_agent.py."""
+    monkeypatch.setenv("CHAT_AGENT_MODE", "0")
     from app import app as fastapi_app, chat_rate_limiter
     from fastapi.testclient import TestClient
 
