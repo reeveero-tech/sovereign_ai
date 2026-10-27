@@ -36,7 +36,8 @@ def last_outcome():
 
 
 def chat(system_prompt: str, user_message: str, timeout=None,
-         json_mode: bool = False, max_tokens=None, json_schema=None):
+         json_mode: bool = False, max_tokens=None, json_schema=None,
+         history=None):
     """توليد رد عبر العقل (Ollama أو متوافق OpenAI) — يعيد نص النموذج أو None.
 
     لا يُستدعى فعليًا إلا إذا كان العقل مفعّلًا (OLLAMA_ENABLED + نموذج)
@@ -66,10 +67,17 @@ def chat(system_prompt: str, user_message: str, timeout=None,
 
         payload = {
             "model": config.OLLAMA_MODEL,
-            "messages": [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_message},
-            ],
+            # R-786: history = أدوار سابقة [{role: user|assistant, content}] بين
+            # تعليمات النظام والرسالة الحالية — أي دور آخر (system مثلًا) يُسقط.
+            "messages": (
+                [{"role": "system", "content": system_prompt}]
+                + [
+                    {"role": t["role"], "content": str(t["content"])}
+                    for t in (history or [])
+                    if isinstance(t, dict) and t.get("role") in ("user", "assistant") and t.get("content")
+                ]
+                + [{"role": "user", "content": user_message}]
+            ),
             "stream": False,
         }
         if protocol == "openai":

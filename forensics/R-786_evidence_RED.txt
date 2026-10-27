@@ -1,0 +1,16 @@
+# R-786 RED — tests/test_chat_ui_and_history.py على كود 0dd70ec (قبل الإصلاح، frontend/chat غائب)
+
+tests/test_chat_ui_and_history.py::test_root_serves_new_chat_ui
+  /home/user/venv311/lib/python3.11/site-packages/starlette/testclient.py:40: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.
+    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_chat_ui_and_history.py::test_root_serves_new_chat_ui - File...
+FAILED tests/test_chat_ui_and_history.py::test_console_serves_legacy_ui_unchanged
+FAILED tests/test_chat_ui_and_history.py::test_chat_ui_is_self_contained_and_sends_history
+FAILED tests/test_chat_ui_and_history.py::test_history_reaches_brain_in_order
+FAILED tests/test_chat_ui_and_history.py::test_unsafe_history_user_turn_is_dropped
+FAILED tests/test_chat_ui_and_history.py::test_history_rejects_system_role - ...
+FAILED tests/test_chat_ui_and_history.py::test_system_prompt_allows_general_knowledge_and_bans_cjk
+7 failed, 1 passed, 3 warnings in 3.64s

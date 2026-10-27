@@ -172,7 +172,7 @@ def _risk_label(level) -> str:
     return str(level)
 
 
-def _llm_reply(intent_name: str, text: str, ev: Dict[str, Any]) -> Optional[str]:
+def _llm_reply(intent_name: str, text: str, ev: Dict[str, Any], history=None) -> Optional[str]:
     """R-704: الرد عبر عقل Ollama المحلي إن كان مفعّلًا — سقوط آمن للقوالب.
 
     النموذج يولّد النص فقط: يُرسل له سياق مسموح (النية المكتشفة + لقطة
@@ -184,15 +184,23 @@ def _llm_reply(intent_name: str, text: str, ev: Dict[str, Any]) -> Optional[str]
         if not (_config.OLLAMA_ENABLED and _config.OLLAMA_MODEL):
             return None
         import ollama_client
+        # R-786: كان النص «استند فقط إلى حالة النظام» فيرفض النموذج الأسئلة العامة
+        # أو يحشوها بأرقام النظام، وكان يخلط حروفًا صينية (مشاهد حيًا: «ي模仿»).
+        # الآن: معرفة عامة مسموحة، الحالة الحية مرجع أسئلة النظام وحدها، ولغة واحدة.
         system_prompt = (
             "أنت 'الذكاء السيادي' — مساعد شخصي ذاتي الاستضافة لمالكك. "
-            "ردّ بلغة رسالة السيد (العربية غالبًا) بإيجاز ووضوح. "
-            "استند فقط إلى حالة النظام الحية أدناه ولا تدّعي بيانات أو قدرات ليست فيها. "
+            "أجب عن أي سؤال بمعرفتك العامة بوضوح وإيجاز وبتنظيم (نقاط عند الحاجة). "
+            "اكتب بالعربية الفصحى فقط إلا إن كتب السيد بلغة أخرى فأجب بلغته، "
+            "ولا تستخدم أبدًا حروفًا صينية أو يابانية أو كورية. "
+            "عند السؤال عن النظام نفسه أو قدراته استند فقط إلى حالة النظام الحية أدناه "
+            "ولا تدّعِ بيانات أو قدرات ليست فيها؛ ولا تذكر أرقام النظام في غير ذلك. "
             f"النية المكتشفة للرسالة: {intent_name or 'غير محددة'}."
         )
         system_prompt += "\nحالة النظام الحية (JSON):\n" + json.dumps(
             ev, ensure_ascii=False, default=str
         )
+        if history:
+            return ollama_client.chat(system_prompt, text, history=history)
         return ollama_client.chat(system_prompt, text)
     except Exception:
         # العقل مكمّل لا أساس — أي خلل يعيد القوالب القائمة
@@ -202,6 +210,7 @@ def _llm_reply(intent_name: str, text: str, ev: Dict[str, Any]) -> Optional[str]
 def build_reply(
     intent_name: str, text: str, orchestrator_result: Any = None,
     orchestrator: Any = None,
+    history: Any = None,
 ) -> str:
     """
     بناء رد حقيقي مبني على حالة النظام الحية.
@@ -228,7 +237,7 @@ def build_reply(
 
     # R-704: عقل Ollama المحلي إن فُعّل — نص النموذج هو الرد؛
     # عند التعطل أو التعطيل تسقط المسارات القالبية القائمة أدناه كما هي
-    llm = _llm_reply(intent_name, text, ev)
+    llm = _llm_reply(intent_name, text, ev, history=history) if history else _llm_reply(intent_name, text, ev)
     if llm:
         return llm
 

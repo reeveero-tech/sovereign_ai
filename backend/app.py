@@ -134,11 +134,19 @@ def enforce_chat_rate_limit(request: Request) -> None:
 # نماذج البيانات (Data Models)
 # ============================================================
 
+class ChatTurn(BaseModel):
+    """R-786: دور سابق في المحادثة — سياق للعقل فقط (لا صلاحية تنفيذ)."""
+    role: str = Field(..., pattern="^(user|assistant)$", description="user أو assistant")
+    content: str = Field(..., min_length=1, max_length=4000, description="نص الدور")
+
+
 class ChatMessage(BaseModel):
     """رسالة محادثة"""
     text: str = Field(..., min_length=1, max_length=10000, description="نص الرسالة")
     user_id: str = Field(default="anonymous", max_length=100, description="معرف المستخدم")
     session_id: Optional[str] = Field(default=None, description="معرف الجلسة")
+    # R-786: آخر أدوار المحادثة (اختياري) — بدونها كان كل سؤال يصل العقل يتيمًا بلا سياق
+    history: Optional[List[ChatTurn]] = Field(default=None, max_length=20, description="أدوار سابقة (حتى 20)")
     
     model_config = ConfigDict(
         json_schema_extra={
@@ -682,7 +690,19 @@ def _ledger_verify_compute():
 
 @app.get("/", response_class=HTMLResponse)
 async def root():
-    """الصفحة الرئيسية - تقديم واجهة SOVRA الأمامية"""
+    """الصفحة الرئيسية — R-786: واجهة المحادثة النظيفة (frontend/chat/).
+
+    الواجهة القديمة (لوحة SOVRA) باقية بلا تعديل على /console.
+    """
+    chat_index = FRONTEND_DIR / "chat" / "index.html"
+    if chat_index.exists():
+        return HTMLResponse(content=chat_index.read_text(encoding="utf-8"))
+    return await console()
+
+
+@app.get("/console", response_class=HTMLResponse)
+async def console():
+    """R-786: لوحة SOVRA التقنية القديمة — كما كانت على الجذر قبل R-786."""
     frontend_index = FRONTEND_DIR / "index.html"
     if frontend_index.exists():
         return HTMLResponse(content=frontend_index.read_text(encoding="utf-8"))
@@ -1838,7 +1858,7 @@ async def system_status():
     )
 
 
-async def _compose_chat_reply(text: str, result, orchestrator, default: str) -> str:
+async def _compose_chat_reply(text: str, result, orchestrator, default: str, history=None) -> str:
     """
     R-715: تركيب الرد المشترك بين POST /chat و WebSocket.
     منقول حرفيًا من /chat (R-614/S-9، R-704) — لا تغيير سلوكي لـ /chat.
@@ -1858,8 +1878,10 @@ async def _compose_chat_reply(text: str, result, orchestrator, default: str) -> 
         # R-704: الاستدعاء في خيط عام — توليد عقل Ollama (HTTP) لا يحجب حلقة الأحداث
         try:
             from sovereign_response import build_reply
+            # R-786: السياق يُمرَّر فقط عند وجوده — النداء بلا سياق كما كان حرفيًا
+            _extra = {"history": history} if history else {}
             reply = await asyncio.to_thread(
-                build_reply, intent_name, text, result, orchestrator=orchestrator
+                build_reply, intent_name, text, result, orchestrator=orchestrator, **_extra
             )
         except Exception as e:
             logger.warning(f"sovereign_response failed, falling back: {e}")
@@ -1950,9 +1972,16 @@ async def chat(message: ChatMessage, background_tasks: BackgroundTasks):
     
     # استخراج الرد من النتيجة — R-614/S-9: رد حقيقي مبني على حالة النظام الحية
     # R-715: منطق التركيب نُقل كما هو إلى _compose_chat_reply ليشترك فيه /chat و WebSocket
+    # R-786: سياق المحادثة — أدوار المستخدم السابقة تمر بطبقة الأمان نفسها؛ ما يُرفض يسقط
+    history = []
+    for turn in (message.history or []):
+        if turn.role == "user" and enforce_input_safety(turn.content, is_sovereign=False) is not None:
+            continue
+        history.append({"role": turn.role, "content": turn.content})
     reply = await _compose_chat_reply(
         message.text, result, orchestrator,
         default="تم استلام رسالتك. أنا الذكاء السيادي، جاهز لخدمتك.",
+        history=history or None,
     )
     
     return ChatResponse(
