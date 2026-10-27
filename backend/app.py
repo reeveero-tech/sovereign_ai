@@ -729,20 +729,68 @@ async def agent_ledger_report():
 # + single-flight + نتيجة مخزنة SOVEREIGNTY_SCORE_TTL ثانية (افتراضي 300) — طلب عام
 # واحد لم يعد يوقف الخادم، وطلبات متزامنة لا تطلق حسابًا O(n) لكل منها.
 _SCORE_LOCK = threading.Lock()
-_SCORE_STATE: Dict[str, Any] = {"ts": 0.0, "result": None}
+_SCORE_STATE: Dict[str, Any] = {"ts": 0.0, "result": None, "computing": False,
+                                "started": 0.0, "error": None}
+_SCORE_DONE = threading.Event()
 
 
-def _sovereignty_score_cached() -> Dict[str, Any]:
-    ttl = float(os.getenv("SOVEREIGNTY_SCORE_TTL", "300") or 300)
+def _score_worker() -> None:
+    """R-788a: الحساب في خيط خلفي واحد — لا طلب HTTP ينتظره أكثر من مهلة قصيرة."""
     st = _SCORE_STATE
-    if st["result"] is not None and (time.time() - st["ts"]) < ttl:
-        return st["result"]
-    with _SCORE_LOCK:
-        if st["result"] is not None and (time.time() - st["ts"]) < ttl:
-            return st["result"]  # أنجزه طلب سبقنا
+    try:
         result = _sovereignty_score_payload()
-        st["result"], st["ts"] = result, time.time()
-        return result
+        with _SCORE_LOCK:
+            st["result"], st["ts"], st["error"] = result, time.time(), None
+    except Exception as e:  # TOLERATED: يُعرض نصًا في الرد التالي، لا يُبتلع
+        with _SCORE_LOCK:
+            st["error"] = f"{type(e).__name__}: {e}"
+    finally:
+        with _SCORE_LOCK:
+            st["computing"] = False
+        _SCORE_DONE.set()
+
+
+def _sovereignty_score_cached(wait_s: Optional[float] = None) -> Dict[str, Any]:
+    """R-788/R-788a: single-flight + تخزين + انتظار محدود.
+
+    الدليل الحي بعد R-788: الحساب على آلة shared-cpu-1x مستنفدة رصيد الدفع (سرقة معالج 95%،
+    `forensics/R-788a_live_evidence.txt`) استغرق >20 دقيقة — دالة متزامنة وحدها تحمي حلقة
+    الأحداث لكنها تُبقي الطلب معلقًا وتحتجز خيطًا. الآن: الحساب في خيط خلفي واحد؛ الطلب
+    ينتظر حتى SOVEREIGNTY_SCORE_WAIT ثانية (20)؛ إن لم ينته ⇒ آخر نتيجة مخزنة معلّمة بعمرها
+    (`cache.stale`) أو `status=computing` صريحًا — لا رقم مختلق أبدًا.
+    """
+    ttl = float(os.getenv("SOVEREIGNTY_SCORE_TTL", "300") or 300)
+    if wait_s is None:
+        wait_s = float(os.getenv("SOVEREIGNTY_SCORE_WAIT", "20") or 20)
+    st = _SCORE_STATE
+    with _SCORE_LOCK:
+        fresh = st["result"] is not None and (time.time() - st["ts"]) < ttl
+        if not fresh and not st["computing"]:
+            st["computing"], st["started"] = True, time.time()
+            _SCORE_DONE.clear()
+            threading.Thread(target=_score_worker, name="sovereignty-score",
+                             daemon=True).start()
+    if not fresh:
+        _SCORE_DONE.wait(timeout=max(0.0, wait_s))
+    with _SCORE_LOCK:
+        result, ts, computing = st["result"], st["ts"], st["computing"]
+        error, started = st["error"], st["started"]
+    if result is None:
+        out: Dict[str, Any] = {
+            "status": "computing" if computing else "error",
+            "detail": ("الحساب يجري في الخلفية — أعد الطلب بعد قليل" if computing
+                       else f"فشل الحساب: {error}"),
+            "computing_for_s": round(time.time() - started, 1) if computing else None,
+        }
+        return out
+    out = dict(result)
+    age = round(time.time() - ts, 1)
+    out["cache"] = {"computed_at_unix": round(ts, 3), "age_s": age,
+                    "stale": age >= ttl, "refreshing": computing,
+                    "last_error": error}
+    if "composite" in out:  # R-680: المُركّب يبقى آخر مفتاح (عقد «قابل للجدل»)
+        out["composite"] = out.pop("composite")
+    return out
 
 
 @app.get("/sovereignty/score")
@@ -754,8 +802,15 @@ def sovereignty_score():
     R-680: يُعيد جدول المؤشرات الأولية (primitives) + المقياس
     المُركّب (composite) في آخر سطر مع علامة "قابل للجدل".
     R-788: متزامنة عمدًا (مجمّع الخيوط) + single-flight + تخزين مؤقت.
+    R-788a: الحساب في خيط خلفي؛ الطلب لا ينتظر أكثر من SOVEREIGNTY_SCORE_WAIT —
+    إن لم تتوفر نتيجة بعد ⇒ 202 مع `status=computing` (لا رقم مختلق).
     """
-    return _sovereignty_score_cached()
+    out = _sovereignty_score_cached()
+    if out.get("status") == "computing":
+        return JSONResponse(status_code=202, content=out)
+    if out.get("status") == "error":
+        return JSONResponse(status_code=503, content=out)
+    return out
 
 
 def _sovereignty_score_payload() -> Dict[str, Any]:
@@ -1881,7 +1936,8 @@ def _register_real_tools() -> None:
         description="تقرير درجة السيادة الكامل (نفس منطق /sovereignty/score)",
         inputs={},
         outputs="roadmap_v2/total_score/axes/primitives/composite",
-        handler=_sovereignty_score_payload,
+        # R-788a: عبر المخزن نفسه — الأداة لم تعد تطلق حسابًا O(n) لكل نداء
+        handler=lambda: _sovereignty_score_cached(),
     ))
 
 

@@ -41,7 +41,7 @@ import logging
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger("sovereign.score")
 
@@ -120,6 +120,69 @@ def _grade_for(score: float) -> str:
         return "BROKEN (مكسور)"
 
 
+# ============================================================
+# R-788a: ذاكرة تصنيف تزايدية لمحور نزاهة السجل
+# ============================================================
+
+import hashlib as _hashlib
+import threading as _threading
+
+_CLASSIFY_LOCK = _threading.Lock()
+_CLASSIFY_CACHE: Dict[str, Any] = {}
+
+
+def _keyring_fingerprint(keyring) -> str:
+    h = _hashlib.sha256()
+    try:
+        recs = keyring.list_keys()
+    except Exception:  # TOLERATED: بصمة فارغة ⇒ لا تطابق ⇒ إعادة تصنيف كاملة (الأحوط)
+        return "unavailable"
+    for r in recs:
+        status = getattr(getattr(r, "status", None), "value", getattr(r, "status", ""))
+        h.update(f"{r.key_id}|{status}|{r.public_key}|{getattr(r, 'key_type', 'hmac')}\n".encode())
+    return h.hexdigest()
+
+
+def _feed(h, lines: List[str], a: int, b: int):
+    for line in lines[a:b]:
+        h.update(line.encode("utf-8", "surrogatepass"))
+        h.update(b"\n")
+    return h
+
+
+def _classify_one(line: str, verifier) -> bool:
+    """True ⇒ غير مصنف (نفس شرط الحلقة الأصلية حرفيًا)."""
+    import json
+    try:
+        event = json.loads(line)
+        result = verifier.verify_event(event)
+        return result.status.value not in ("verified", "unverifiable_missing_key")
+    except Exception:
+        return True
+
+
+def _classify_ledger_incremental(path: str, lines: List[str], keyring, verifier) -> int:
+    kfp = _keyring_fingerprint(keyring)
+    with _CLASSIFY_LOCK:
+        c = _CLASSIFY_CACHE.get(path)
+        start, unclassified = 0, 0
+        h = _hashlib.sha256()
+        if c and c["keyring"] == kfp and c["n"] <= len(lines):
+            _feed(h, lines, 0, c["n"])
+            if h.hexdigest() == c["digest"]:
+                start, unclassified = c["n"], c["unclassified"]
+            else:
+                h = _hashlib.sha256()
+        _feed(h, lines, start, len(lines))
+        for line in lines[start:]:
+            if _classify_one(line, verifier):
+                unclassified += 1
+        _CLASSIFY_CACHE[path] = {"n": len(lines), "digest": h.hexdigest(),
+                                 "unclassified": unclassified, "keyring": kfp,
+                                 "reused_prefix": start}
+        return unclassified
+
+
 class SovereigntyScorer:
     """محرك حساب درجة السيادة."""
 
@@ -167,16 +230,12 @@ class SovereigntyScorer:
             keyring.load_from_disk()
             verifier = SignatureVerifier(keyring)
 
-            unclassified = 0
-            import json
-            for i, line in enumerate(lines):
-                try:
-                    event = json.loads(line)
-                    result = verifier.verify_event(event)
-                    if result.status.value not in ("verified", "unverifiable_missing_key"):
-                        unclassified += 1
-                except Exception:
-                    unclassified += 1
+            # R-788a: تصنيف تزايدي — السجل إلحاقي، فالبادئة المصنفة سابقًا لا يُعاد التحقق من
+            # تواقيعها ما دامت بصمة sha256 للبادئة كاملةً (لا آخر سطر فقط) وبصمة حلقة المفاتيح
+            # مطابقتين. أي تغيير في أي سطر سابق أو في أي مفتاح ⇒ إعادة تصنيف كاملة (الدلالة نفسها).
+            # الدليل: 138k حدثًا × ~6.6ms على آلة مستنفدة الرصيد = >15 دقيقة لكل طلب.
+            unclassified = _classify_ledger_incremental(
+                str(getattr(anchor, "ledger_path", "")), lines, keyring, verifier)
 
             classified_ratio = 1 - (unclassified / total)
 
@@ -193,7 +252,10 @@ class SovereigntyScorer:
                 "anchored_events": len(anchored_events),
                 "coverage_pct": round(coverage * 100, 2),
                 "anchors_total": len(anchors_list),
-                "anchors_verified": verification["verified"],
+                # R-788a: كان verification["verified"] — مفتاح غير موجود في عقد
+                # verify_all_anchors (المفتاح root_verified_count منذ R-642) ⇒ KeyError بعد المرور
+                # الكامل على السجل، فالمحور كان صفرًا دائمًا بسبب «ledger integrity check failed».
+                "anchors_verified": verification.get("root_verified_count", 0),
                 "anchors_failed": verification["failed"],
                 "unclassified_events": unclassified,
                 "classified_ratio": round(classified_ratio, 4),

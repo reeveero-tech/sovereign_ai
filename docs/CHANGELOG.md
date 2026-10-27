@@ -1,9 +1,16 @@
 # CHANGELOG.md — سجل التغييرات
 
 > كل تغيير يُسجل هنا (قاعدة الدفعة الذرية).
-> آخر تحديث: 2026-10-27 (R-788 — نقطة درجة السيادة لم تعد تحجب الخادم — ٦.٨.٣)
+> آخر تحديث: 2026-10-27 (R-788a — درجة السيادة في خيط خلفي + تصنيف تزايدي + تصويب KeyError — ٦.٨.٣)
 
 ---
+
+## [R-788a] — 2026-10-27 — تصويب R-788 بدليل حي
+
+- **الدليل الحي بعد نشر R-788 ([40538901031](https://github.com/reeveero-tech/sovereign_ai/actions/runs/40538901031) على `e2b35b5`):** `/health` بقي 200 في 0.11–0.22ث طوال الحساب (الهدف تحقق)؛ لكن الطلب نفسه: 500 بعد 32ث ثم لا رد خلال 300ث، والحساب >20 دقيقة. `/proc/stat`: سرقة معالج ~95% وidle صفر — الآلة shared-cpu-1x مستنفدة رصيد الدفع؛ التحقق السريع نفسه 6.6ms على الآلة (0.12ms محليًا). وخلل كامن: `verification["verified"]` مفتاح غير موجود في عقد `verify_all_anchors` ⇒ KeyError بعد المرور الكامل ⇒ محور نزاهة السجل صفر دائمًا. التفصيل: `forensics/R-788a_live_evidence.txt`.
+- **الإصلاح:** `_sovereignty_score_cached` يطلق الحساب في خيط خلفي واحد وينتظر حتى `SOVEREIGNTY_SCORE_WAIT` (20ث)؛ بلا نتيجة ⇒ 202 `status=computing`، وبنتيجة قديمة ⇒ تُعاد مع `cache{age_s,stale,refreshing,last_error}`، وفشل الحساب ⇒ 503 بنصه. `score._classify_ledger_incremental`: لا يعيد التحقق من بادئة مصنفة ما دامت بصمة sha256 للبادئة كاملة وبصمة حلقة المفاتيح مطابقتين. `anchors_verified` من `root_verified_count`. الأداة `sovereignty.score` عبر المخزن نفسه.
+- **اختبارات:** +6 (13 في `tests/test_score_nonblocking.py`). RED: `forensics/R-788a_evidence_RED.txt` (6/6 على `e2b35b5`، منها `ledger integrity check failed: 'verified'`). الحزمة 1313→1319.
+- **يبقى مفتوحًا:** نقص المعالج على آلة التطبيق (حلقات الخلفية تستهلك خط الأساس) — قرار تكلفة/تصميم.
 
 ## [R-788] — 2026-10-27 — ٦.٨.٣: حجب خدمة بنقطة `/sovereignty/score`
 

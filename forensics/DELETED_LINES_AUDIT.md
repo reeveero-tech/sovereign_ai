@@ -2696,3 +2696,10 @@ Bus إطلاقًا. الواجهة سليمة بعد الإزالة (101 وسم 
   - `backend/app.py`: `async def sovereignty_score` ⇒ `def` (إصلاح حجب الخدمة)، و`return _sovereignty_score_payload()` ⇒ `return _sovereignty_score_cached()` (الحساب نفسه خلف single-flight + تخزين)؛ أُلحق سطر R-788 بالوثيقة.
   - `backend/sovereign/keys/ed25519_verifier.py`: لا حذف — أُدرج المسار السريع قبل كتلة `try` القائمة.
   - وثائق: سطرا «آخر تحديث» في PROJECT_STATE وCHANGELOG؛ صف الاختبارات (1306→1313، وأُكمل تسلسل R-787*).
+
+## 2026-10-27 — R-788a: أسطر مستبدلة
+- **# DELETION-JUSTIFIED** — استبدال، لا حذف منطق أو بيانات:
+  - `backend/app.py`: جسم `_sovereignty_score_cached` (قفل متزامن ⇒ خيط خلفي + انتظار محدود + بيانات المخزن)، و`return` في `/sovereignty/score` (+202/503)، و`handler` أداة `sovereignty.score` (عبر المخزن)، وسطر `_SCORE_STATE` (+computing/started/error).
+  - `backend/sovereign/score.py`: حلقة التصنيف الكاملة انتقلت حرفيًا إلى `_classify_one` + `_classify_ledger_incremental`؛ `verification["verified"]` ⇒ `.get("root_verified_count", 0)` (KeyError)؛ سطر استيراد typing (+Any).
+  - `tests/test_score_nonblocking.py`: ثلاثة أسطر تهيئة الحالة في الأداة المساعدة صارت `_reset_state`.
+  - وثائق: سطرا «آخر تحديث»؛ صف الاختبارات (1313→1319)؛ خلية ٦.٨.٣ (ملاحظة R-788a — تبقى «منجز محليًا»).

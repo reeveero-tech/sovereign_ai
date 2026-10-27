@@ -1,0 +1,11 @@
+R-788a RED — الاختبارات الجديدة على كود R-788 (e2b35b5)
+                        "failed": 0, "details": []}
+>       assert not any("ledger integrity check failed" in i for i in axis.issues), axis.issues
+E       AssertionError: ["ledger integrity check failed: 'verified'"]
+FAILED tests/test_score_nonblocking.py::test_request_returns_202_computing_instead_of_hanging
+FAILED tests/test_score_nonblocking.py::test_stale_result_served_with_age_while_refreshing
+FAILED tests/test_score_nonblocking.py::test_compute_error_is_reported_not_hidden
+FAILED tests/test_score_nonblocking.py::test_score_tool_uses_cache_not_direct_compute
+FAILED tests/test_score_nonblocking.py::test_incremental_classification_reuses_only_identical_prefix
+FAILED tests/test_score_nonblocking.py::test_ledger_axis_no_longer_crashes_on_missing_verified_key
+6 failed, 7 passed, 3 warnings in 22.47s
