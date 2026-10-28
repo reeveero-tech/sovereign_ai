@@ -69,6 +69,21 @@ def _recommend(defect: Dict[str, Any]) -> Tuple[str, str]:
     if did == "supervisor_alerts":
         return ("investigation",
                 "مراجعة التنبيهات النشطة في /supervisor/status وتصنيفها قبل أي تغيير.")
+    if did.startswith("selfmon:"):  # R-794: عيوب المراقبة الذاتية — اقتراح فقط
+        if did.startswith("selfmon:regression:"):
+            return ("investigation",
+                    "اقتراح عُلّم منفّذًا والعيب ما زال مفتوحًا: تحقيق في سبب عدم جدوى "
+                    "التنفيذ (الالتزام المذكور في الدليل) قبل اقتراح تعديل جديد.")
+        if did.startswith("selfmon:tool_failing:"):
+            return ("code_fix",
+                    "إعادة إنتاج فشل الأداة من last_error في الدليل باختبار أحمر ثم "
+                    "الإصلاح في دورة ذرية.")
+        if did.startswith("selfmon:disk_"):
+            return ("owner_action",
+                    "القرص المحلي (بايتات/عُقد) يقترب من الحد: مراجعة المالك لما يتراكم "
+                    "تحت data/ — لا حذف ذاتي (المادة ٧).")
+        return ("investigation",
+                "عيب مراقبة ذاتية: مراجعة الدليل الحرفي وتصنيفه قبل أي تغيير.")
     return ("investigation", "عيب غير مصنف: تحقيق يدوي من الدليل قبل أي تغيير.")
 
 
@@ -122,6 +137,48 @@ class ProposalBook:
             for item in self._items.values():
                 if item["defect_id"] not in open_ids:
                     item["defect_open"] = False
+        return created
+
+    def ingest_scoped(self, report: Dict[str, Any], now: float, prefix: str) -> List[Dict[str, Any]]:
+        """R-794: يستقبل تقرير مصدر آخر (المراقبة الذاتية) دون المساس بحالة
+        defect_open لاقتراحات المصادر الأخرى: يُعلَّم المغلق فقط ضمن البادئة."""
+        created = self.ingest_without_close(report, now)
+        open_ids = {d.get("id", "") for d in (report or {}).get("defects", [])
+                    if d.get("status") == "open"}
+        with self._lock:
+            for item in self._items.values():
+                if item["defect_id"].startswith(prefix):
+                    item["defect_open"] = item["defect_id"] in open_ids
+        return created
+
+    def ingest_without_close(self, report: Dict[str, Any], now: float) -> List[Dict[str, Any]]:
+        """نفس إنشاء/تحديث ingest لكن بلا إغلاق ما لم يرد في التقرير."""
+        created: List[Dict[str, Any]] = []
+        with self._lock:
+            for d in (report or {}).get("defects", []):
+                if d.get("status") != "open":
+                    continue
+                did = d.get("id", "")
+                pid = _proposal_id(did)
+                item = self._items.get(pid)
+                if item is not None:
+                    item["last_seen"] = now
+                    item["evidence"] = str(d.get("evidence", ""))
+                    item["defect_open"] = True
+                    continue
+                kind, rec = _recommend(d)
+                item = {
+                    "id": pid, "defect_id": did, "kind": kind,
+                    "severity": d.get("severity"), "title": d.get("title"),
+                    "evidence": str(d.get("evidence", "")),
+                    "recommendation": rec, "status": "proposed",
+                    "suppressed_reason": None,
+                    "created_at": now, "last_seen": now, "defect_open": True,
+                    "decided_at": None, "note": None, "commit": None,
+                    "history": [{"to": "proposed", "at": now, "by": "system"}],
+                }
+                self._items[pid] = item
+                created.append(dict(item))
         return created
 
     def decide(self, proposal_id: str, decision: str, note: Optional[str] = None,
