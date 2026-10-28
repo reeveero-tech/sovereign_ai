@@ -123,7 +123,31 @@ class Locator:
             for score, rel, line, words in scored:
                 add({"file": rel, "line": line, "why": f"ورود {words}",
                      "editable": sd.is_allowed(rel)})
+        # R-803: مصدر الإنذار ليس هدف إصلاح — دليل حي: إشارة selfmon:goal_stuck وُجّهت كود_إصلاح
+        # إلى backend/self_monitor.py نفسه (خطة العقل: تعديل شرط الكشف)، أي إسكات الإنذار بدل سببه.
+        for loc in locs:
+            if loc.get("editable") and self.is_detector(loc["file"], signal):
+                loc["editable"] = False
+                loc["detector"] = True
+                loc["why"] += " — مصدر الإنذار نفسه: تعديله يُسكت الإنذار ولا يصلح السبب"
         return locs
+
+    @staticmethod
+    def alarm_literal(key: str) -> str:
+        """الجزء الثابت من مفتاح الإشارة كما يُكتب في الكاشف: «selfmon:goal_stuck:G-1» ⇒ «selfmon:goal_stuck:»."""
+        key = str(key or "")
+        return key.rsplit(":", 1)[0] + ":" if ":" in key else key
+
+    def is_detector(self, rel: str, signal: Dict[str, Any]) -> bool:
+        """الملف يُصدر مفتاح هذه الإشارة حرفيًا — إلا إن كان الدليل عطلًا في الملف نفسه (Traceback فيه)."""
+        lit = self.alarm_literal(signal.get("key", ""))
+        if len(lit) < 6:
+            return False
+        text = self._read(rel) or ""
+        if not any(q + lit in text for q in ('"', "'")):
+            return False
+        ev = str(signal.get("evidence") or "")
+        return not ("Traceback" in ev and Path(rel).name in ev)
 
     def snippet(self, loc: Dict[str, Any], radius: int = SNIPPET_RADIUS) -> str:
         text = self._read(loc["file"]) or ""

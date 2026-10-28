@@ -1,0 +1,7 @@
+# R-803 RED — tests/test_r803_detector_guard.py على origin/main (fdca0a1)
+# الدليل الحي: /selfdev/nucleus — selfmon:goal_stuck:G-6eeb1d19 ⇒ route code_fix ⇒ target_file backend/self_monitor.py (خطة: استبدل all() بـ any() في شرط الكشف)
+FAILED tests/test_r803_detector_guard.py::test_alarm_literal - AttributeError...
+FAILED tests/test_r803_detector_guard.py::test_detector_not_editable_cause_still_editable
+FAILED tests/test_r803_detector_guard.py::test_brain_cannot_target_detector
+FAILED tests/test_r803_detector_guard.py::test_real_repo_live_signals_do_not_target_their_detectors
+4 failed, 2 passed, 1 warning in 0.07s
