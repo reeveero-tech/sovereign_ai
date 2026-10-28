@@ -69,7 +69,8 @@ def test_scheduled_task_runs_and_is_ledgered(monkeypatch):
         while time.time() < deadline:
             s = client.get("/scheduler/status").json()
             task = next(t for t in s["tasks"] if t["tool"] == "health.snapshot")
-            if task["runs"] >= 1:
+            # R-801a: runs يزيد عند بدء التشغيل (R-796) — ننتظر اكتمال التشغيل (running=False) قبل قراءة النتيجة
+            if task["runs"] >= 1 and not task.get("running"):
                 break
             time.sleep(0.2)
         assert s["enabled"] is True and s["running"] is True

@@ -1,0 +1,7 @@
+# R-801a RED — CI run 40732620573 (فرع work/r801-media، 9e39466): سباق في الاختبار — runs يزيد قبل تنفيذ الأداة (R-796) فيقرأ الاختبار last_ok=None أثناء التشغيل
+tests/test_scheduler.py::test_scheduled_task_runs_and_is_ledgered FAILED [ 59%]
+___________________ test_scheduled_task_runs_and_is_ledgered ___________________
+    def test_scheduled_task_runs_and_is_ledgered(monkeypatch):
+E           AssertionError: None
+tests/test_scheduler.py:77: AssertionError
+FAILED tests/test_scheduler.py::test_scheduled_task_runs_and_is_ledgered - AssertionError: None
