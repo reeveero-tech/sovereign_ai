@@ -427,6 +427,33 @@ def _defect_scan_payload() -> Dict[str, Any]:
     return report
 
 
+def _self_monitor_payload() -> Dict[str, Any]:
+    """R-794 (٤.٦): مراقبة ذاتية موسّعة — قرص/أدوات/سجل التطور/الاستقلال/الأهداف/
+    الاقتراحات → عيوب بنفس شكل defect_scan → اقتراحات تنتظر المالك (لا تنفيذ ذاتي)."""
+    import experience
+    import evolution_ledger
+    import goals as _goals
+    import improvement_proposals
+    import self_monitor
+
+    def _autonomy():
+        loop = getattr(app.state, "autonomy", None)
+        return loop.status() if loop is not None else None
+
+    sources = {
+        "disk": _local_volume_status,
+        "tool_stats": lambda: experience.get_store().tool_stats(),
+        "ledger_verify": lambda: evolution_ledger.get_ledger().verify(),
+        "autonomy": _autonomy,
+        "goals": lambda: _goals.GoalStore().state(),
+        "proposals": lambda: improvement_proposals.get_book().list(),
+    }
+    now = time.time()
+    report = self_monitor.get_monitor().run(sources, now=now)
+    improvement_proposals.get_book().ingest_scoped(report, now=now, prefix="selfmon:")
+    return report
+
+
 def _benchmark_payload() -> Dict[str, Any]:
     """R-746 (البند ٤.٤): دورة المقارنة بالمراجع العامة — زمن/جودة/تغطية.
 
@@ -506,6 +533,19 @@ async def proposal_file(proposal_id: str):
     except KeyError:
         raise HTTPException(status_code=404, detail=f"اقتراح غير موجود: {proposal_id}")
     return Response(content=md, media_type="text/markdown; charset=utf-8")
+
+
+@app.get("/self/monitor")
+async def self_monitor_report():
+    """R-794 (٤.٦): آخر تقرير مراقبة ذاتية — قراءة فقط (التشغيل عبر السجل/المجدول)."""
+    import self_monitor
+    report = self_monitor.get_monitor().last_report()
+    if report is None:
+        return {"report": None,
+                "reason": "لم تُشغَّل دورة مراقبة ذاتية بعد — المهمة self_monitor تعمل عند "
+                          "تفعيل المجدول (SOVEREIGN_SCHEDULER=1 — قرار المالك) أو باستدعاء "
+                          "self.monitor عبر /tools/invoke"}
+    return {"report": report}
 
 
 @app.get("/evolution/ledger")
@@ -2071,6 +2111,14 @@ def _register_real_tools() -> None:
         inputs={},
         outputs="open_count/resolved_count/defects[]/health_history",
         handler=_defect_scan_payload,
+    ))
+    registry.register(ToolSpec(
+        name="self.monitor",
+        description="R-794 (٤.٦): مراقبة ذاتية موسّعة — القرص واتجاهه/أدوات فاشلة/سلسلة سجل التطور/"
+                    "الاستقلال/أهداف عالقة/تراجع التطوير → اقتراحات للمالك (بلا تنفيذ ذاتي)",
+        inputs={},
+        outputs="open_count/defects[]/vitals/history",
+        handler=_self_monitor_payload,
     ))
     registry.register(ToolSpec(
         name="media.image",
