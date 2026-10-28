@@ -4,323 +4,766 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="dark">
-<title>الذكاء السيادي — المحادثة</title>
-<!-- R-786: واجهة المحادثة الأساسية — ملف واحد مستقل، لا اعتماد على ملفات js/ القديمة.
-     الواجهة القديمة باقية كما هي على /console. -->
+<title>الذكاء السيادي</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22%3E%3Cpath d=%22M12 2l8 4v6c0 5-3.4 8.6-8 10-4.6-1.4-8-5-8-10V6z%22 fill=%22%233fb8a5%22/%3E%3C/svg%3E">
+<!-- R-800: تطبيق كامل — شريط جانبي (محادثات/مهام/مشاريع/ملفات/أدوات ووكلاء/اتصال/إعدادات)،
+     ومرفقات حقيقية في المحادثة. ملف واحد مستقل، لا اعتماد على js/ القديمة.
+     الواجهة السابقة باقية على /classic واللوحة القديمة على /console. -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
   :root {
-    --bg: #0f1114;
-    --surface: #171a1f;
-    --surface-2: #1e2228;
-    --border: #2a2f37;
-    --text: #e9e7e3;
-    --muted: #9a9ea6;
-    --accent: #3fb8a5;
-    --accent-ink: #06231f;
-    --user: #233a37;
-    --danger: #e0716b;
-    --radius: 14px;
+    --bg: #0f1114; --surface: #171a1f; --surface-2: #1e2228; --surface-3: #252a31;
+    --border: #2a2f37; --text: #e9e7e3; --muted: #9a9ea6; --accent: #3fb8a5;
+    --accent-ink: #06231f; --user: #233a37; --danger: #e0716b; --warn: #d9a441;
+    --radius: 14px; --side: 280px;
     --font: "IBM Plex Sans Arabic", "Segoe UI", Tahoma, system-ui, sans-serif;
   }
   * { box-sizing: border-box; }
   html, body { height: 100%; margin: 0; }
-  body {
-    background: var(--bg); color: var(--text); font-family: var(--font);
-    font-size: 16px; line-height: 1.7; display: flex; flex-direction: column;
-    -webkit-font-smoothing: antialiased;
-  }
-  button { font: inherit; cursor: pointer; }
+  body { background: var(--bg); color: var(--text); font-family: var(--font); font-size: 15px;
+         line-height: 1.7; -webkit-font-smoothing: antialiased; }
+  button, input, select, textarea { font: inherit; color: inherit; }
+  button { cursor: pointer; }
   a { color: var(--accent); }
-
-  header {
-    flex: 0 0 auto; display: flex; align-items: center; gap: 12px;
-    padding: 12px 20px; border-bottom: 1px solid var(--border); background: var(--surface);
-  }
-  .brand { font-weight: 600; font-size: 17px; white-space: nowrap; }
-  .status {
-    display: inline-flex; align-items: center; gap: 8px; padding: 4px 12px;
-    border: 1px solid var(--border); border-radius: 999px; font-size: 13px; color: var(--muted);
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 46vw;
-  }
+  a.btn { color: var(--text); text-decoration: none; display: inline-block; }
+  .app { display: flex; height: 100%; }
+  aside { width: var(--side); flex: 0 0 var(--side); background: var(--surface);
+          border-inline-start: 1px solid var(--border); display: flex; flex-direction: column;
+          min-height: 0; }
+  .side-head { display: flex; align-items: center; gap: 8px; padding: 14px 14px 8px; }
+  .brand { font-weight: 600; font-size: 16px; flex: 1; white-space: nowrap; overflow: hidden;
+           text-overflow: ellipsis; }
+  .newchat { width: calc(100% - 28px); margin: 4px 14px 10px; padding: 9px 12px; border-radius: 10px;
+             border: 1px solid var(--border); background: var(--surface-2); text-align: start; }
+  .newchat:hover, .nav button:hover, .item:hover { border-color: var(--accent); }
+  .nav { display: flex; flex-direction: column; gap: 2px; padding: 0 8px 8px;
+         border-bottom: 1px solid var(--border); }
+  .nav button { display: flex; align-items: center; gap: 10px; background: none; border: 1px solid transparent;
+                border-radius: 9px; padding: 7px 10px; text-align: start; color: var(--muted); }
+  .nav button.on { background: var(--surface-3); color: var(--text); }
+  .nav .ico { width: 18px; text-align: center; opacity: .9; }
+  .side-sec { padding: 10px 14px 4px; font-size: 12px; color: var(--muted); display: flex;
+              justify-content: space-between; align-items: center; }
+  .side-list { flex: 1; overflow-y: auto; padding: 0 8px 10px; min-height: 0; }
+  .item { display: block; width: 100%; text-align: start; background: none; border: 1px solid transparent;
+          border-radius: 9px; padding: 6px 10px; color: var(--text); white-space: nowrap; overflow: hidden;
+          text-overflow: ellipsis; font-size: 14px; }
+  .item.on { background: var(--surface-3); }
+  .item small { color: var(--muted); }
+  .side-foot { border-top: 1px solid var(--border); padding: 10px 14px; display: flex; gap: 8px;
+               align-items: center; font-size: 13px; color: var(--muted); }
   .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); flex: 0 0 auto; }
-  .dot.ok { background: var(--accent); }
-  .dot.bad { background: var(--danger); }
-  .spacer { flex: 1; }
-  .btn {
-    border: 1px solid var(--border); background: var(--surface-2); color: var(--text);
-    border-radius: 10px; padding: 7px 14px; font-size: 14px; white-space: nowrap;
-  }
+  .dot.ok { background: var(--accent); } .dot.bad { background: var(--danger); }
+  .main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+  .topbar { display: flex; align-items: center; gap: 10px; padding: 10px 18px;
+            border-bottom: 1px solid var(--border); background: var(--surface); min-height: 52px; }
+  .topbar h1 { font-size: 16px; margin: 0; font-weight: 600; flex: 1; white-space: nowrap;
+               overflow: hidden; text-overflow: ellipsis; }
+  .menu { display: none; }
+  .btn { border: 1px solid var(--border); background: var(--surface-2); border-radius: 10px;
+         padding: 6px 13px; font-size: 14px; white-space: nowrap; }
   .btn:hover { border-color: var(--accent); }
-  .link { font-size: 13px; color: var(--muted); text-decoration: none; white-space: nowrap; }
-  .link:hover { color: var(--text); }
-
-  main { flex: 1 1 auto; overflow-y: auto; }
-  .thread { max-width: 820px; margin: 0 auto; padding: 28px 20px 12px; display: flex; flex-direction: column; gap: 18px; }
-
-  .msg { display: flex; flex-direction: column; max-width: 85%; }
-  .msg.user { align-self: flex-start; align-items: flex-start; }
-  .msg.bot { align-self: flex-end; align-items: flex-end; }
-  .bubble {
-    padding: 12px 16px; border-radius: var(--radius); white-space: pre-wrap; overflow-wrap: anywhere;
-    background: var(--surface); border: 1px solid var(--border);
-  }
-  .msg.user .bubble { background: var(--user); border-color: #2f4b47; }
-  .msg.error .bubble { border-color: var(--danger); color: #f3c9c6; }
-  .meta { font-size: 12px; color: var(--muted); margin-top: 4px; padding: 0 4px; display: flex; gap: 10px; align-items: center; }
-  .meta .tools { color: var(--accent); }
-  .meta { flex-wrap: wrap; }
-  .meta button { background: none; border: none; color: var(--accent); padding: 0; font-size: 12px; }
-
-  .typing { display: inline-flex; gap: 5px; align-items: center; }
-  .typing span { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); animation: blink 1.2s infinite ease-in-out; }
-  .typing span:nth-child(2) { animation-delay: .2s; } .typing span:nth-child(3) { animation-delay: .4s; }
-  @keyframes blink { 0%, 80%, 100% { opacity: .25; } 40% { opacity: 1; } }
-
-  .empty { text-align: center; padding: 10vh 10px 0; }
-  .empty h1 { font-size: 26px; font-weight: 600; margin: 0 0 6px; }
-  .empty p { color: var(--muted); margin: 0 0 24px; }
-  .chips { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
-  .chip { border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 999px; padding: 8px 16px; font-size: 14px; }
-  .chip:hover { border-color: var(--accent); }
-
-  footer { flex: 0 0 auto; border-top: 1px solid var(--border); background: var(--surface); padding: 12px 20px calc(12px + env(safe-area-inset-bottom)); }
-  .composer { max-width: 820px; margin: 0 auto; display: flex; gap: 10px; align-items: flex-end; }
-  textarea {
-    flex: 1; resize: none; min-height: 48px; max-height: 200px; padding: 12px 14px;
-    background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 12px;
-    font: inherit; line-height: 1.6; outline: none;
-  }
-  textarea:focus { border-color: var(--accent); }
-  .send {
-    flex: 0 0 auto; height: 48px; padding: 0 22px; border: none; border-radius: 12px;
-    background: var(--accent); color: var(--accent-ink); font-weight: 600;
-  }
-  .send:disabled { opacity: .45; cursor: not-allowed; }
-  .hint { max-width: 820px; margin: 6px auto 0; font-size: 12px; color: var(--muted); }
-
-  @media (max-width: 600px) {
-    header { padding: 10px 12px; gap: 8px; }
-    .brand { font-size: 15px; }
-    .status { max-width: 38vw; font-size: 12px; padding: 3px 10px; }
-    .btn { padding: 6px 10px; font-size: 13px; }
-    .link { display: none; }
-    .thread { padding: 18px 12px 8px; }
-    .msg { max-width: 92%; }
-    footer { padding: 10px 12px calc(10px + env(safe-area-inset-bottom)); }
-    .send { padding: 0 16px; }
-    .hint { display: none; }
+  .btn.pri { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
+  .btn.sm { padding: 3px 9px; font-size: 13px; border-radius: 8px; }
+  .btn:disabled { opacity: .5; cursor: default; }
+  .chip { display: inline-flex; align-items: center; gap: 6px; padding: 2px 10px; border-radius: 999px;
+          border: 1px solid var(--border); font-size: 12px; color: var(--muted); white-space: nowrap; }
+  .chip.ok { color: var(--accent); border-color: #2c5d55; } .chip.bad { color: var(--danger); border-color: #5d2f2c; }
+  .chip.warn { color: var(--warn); border-color: #5d4a2c; }
+  .view { flex: 1; overflow-y: auto; display: none; min-height: 0; }
+  .view.on { display: block; }
+  #view-chat.on { display: flex; flex-direction: column; }
+  .pad { max-width: 1040px; margin: 0 auto; padding: 22px 20px 40px; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+          padding: 16px; margin-bottom: 14px; }
+  .card h2 { font-size: 15px; margin: 0 0 10px; }
+  .muted { color: var(--muted); } .small { font-size: 13px; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; }
+  input[type=text], input[type=password], input[type=url], select, textarea {
+    background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; padding: 8px 11px;
+    outline: none; min-width: 0; }
+  input:focus, select:focus, textarea:focus { border-color: var(--accent); }
+  textarea { resize: vertical; width: 100%; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { text-align: start; padding: 7px 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { color: var(--muted); font-weight: 500; font-size: 13px; }
+  pre { background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 12px;
+        white-space: pre-wrap; word-break: break-word; max-height: 460px; overflow: auto; font-size: 13px;
+        direction: auto; unicode-bidi: plaintext; margin: 8px 0 0; }
+  .empty-note { padding: 30px; text-align: center; color: var(--muted); }
+  .drop { border: 1.5px dashed var(--border); border-radius: var(--radius); padding: 22px; text-align: center;
+          color: var(--muted); }
+  .drop.over { border-color: var(--accent); color: var(--text); }
+  .toast { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); background: var(--surface-3);
+           border: 1px solid var(--border); border-radius: 12px; padding: 9px 16px; z-index: 50; max-width: 90vw;
+           display: none; }
+  .toast.on { display: block; } .toast.bad { border-color: var(--danger); }
+  /* المحادثة */
+  #thread { flex: 1; overflow-y: auto; padding: 22px 0 10px; min-height: 0; }
+  .msg { max-width: 820px; margin: 0 auto 16px; padding: 0 20px; }
+  .msg .who { font-size: 12px; color: var(--muted); margin-bottom: 3px; }
+  .msg .body { white-space: pre-wrap; word-break: break-word; unicode-bidi: plaintext; }
+  .msg.user .body { background: var(--user); border-radius: var(--radius); padding: 10px 14px; display: inline-block;
+                    max-width: 100%; }
+  .msg.bot .body { padding: 2px 0; }
+  .msg.err .body { color: var(--danger); }
+  .msg .meta { font-size: 12px; color: var(--muted); margin-top: 6px; }
+  .msg details { margin-top: 6px; font-size: 13px; color: var(--muted); }
+  .msg .att { margin-top: 6px; display: flex; gap: 6px; flex-wrap: wrap; }
+  .thinking { color: var(--muted); }
+  .thinking::after { content: "…"; animation: blink 1.2s infinite; }
+  @keyframes blink { 50% { opacity: .2; } }
+  .welcome { max-width: 760px; margin: 8vh auto 0; padding: 0 20px; text-align: center; }
+  .welcome h2 { font-size: 22px; font-weight: 600; margin: 0 0 6px; }
+  .sugg { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; margin-top: 22px;
+          text-align: start; }
+  .sugg button { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px;
+                 text-align: start; font-size: 14px; }
+  .sugg button:hover { border-color: var(--accent); }
+  .composer { padding: 10px 20px 16px; }
+  .composer-in { max-width: 820px; margin: 0 auto; background: var(--surface); border: 1px solid var(--border);
+                 border-radius: 18px; padding: 8px 10px; }
+  .composer-in:focus-within { border-color: var(--accent); }
+  .composer textarea { background: none; border: none; resize: none; max-height: 220px; min-height: 26px; padding: 6px 4px; }
+  .composer .bar { display: flex; gap: 6px; align-items: center; }
+  .composer .bar .sp { flex: 1; }
+  #attached { display: flex; gap: 6px; flex-wrap: wrap; padding: 2px 2px 6px; }
+  #attached:empty { display: none; }
+  .x { background: none; border: none; color: var(--muted); padding: 0 2px; }
+  @media (max-width: 860px) {
+    aside { position: fixed; inset-block: 0; inset-inline-start: 0; z-index: 40; transform: translateX(100%);
+            transition: transform .2s; box-shadow: 0 0 40px #0008; }
+    body.side-open aside { transform: none; }
+    .menu { display: inline-block; }
   }
 </style>
 </head>
 <body>
-<header>
-  <div class="brand">الذكاء السيادي</div>
-  <div class="status" id="status" title="حالة الخادم والعقل"><span class="dot" id="dot"></span><span id="statusText">جارٍ الفحص…</span></div>
-  <div class="spacer"></div>
-  <a class="link" href="/console" title="لوحة المراقبة القديمة: السجل والذاكرة والأدوات والمهام بالتفصيل. فيها زر للعودة إلى المحادثة">اللوحة التقنية</a>
-  <button class="btn" id="ownerKey" type="button" title="مفتاح المالك (SOVEREIGN_KEY): بدونه تستطيع المحادثة قراءة حالة النظام والويب فقط؛ معه تستطيع تنفيذ الأفعال (المهام، البحث، الأسطول…). يُحفظ في هذا المتصفح فقط">مفتاح المالك</button>
-  <button class="btn" id="newChat" type="button" title="يمسح المحادثة الحالية من الشاشة ويبدأ جلسة جديدة بلا سياق سابق">محادثة جديدة</button>
-</header>
-
-<main id="scroller">
-  <div class="thread" id="thread" aria-live="polite"></div>
-</main>
-
-<footer>
-  <form class="composer" id="form">
-    <textarea id="input" rows="1" placeholder="اكتب رسالتك…" aria-label="الرسالة" maxlength="10000"></textarea>
-    <button class="send" id="send" type="submit">إرسال</button>
-  </form>
-  <div class="hint">Enter للإرسال · Shift+Enter لسطر جديد · العقل يفهم رسالتك ويستدعي أدوات النظام الحقيقية عند الحاجة — على معالج بلا GPU قد يستغرق الرد حتى دقيقتين ونصف</div>
-</footer>
-
+<div class="app">
+  <aside id="side">
+    <div class="side-head">
+      <svg width="24" height="24" viewBox="0 0 24 24" aria-label="الشعار"><path d="M12 2l8 4v6c0 5-3.4 8.6-8 10-4.6-1.4-8-5-8-10V6z" fill="none" stroke="#3fb8a5" stroke-width="1.6"/><path d="M8 12l3 3 5-6" fill="none" stroke="#3fb8a5" stroke-width="1.6"/></svg>
+      <div class="brand">الذكاء السيادي</div>
+    </div>
+    <button class="newchat" id="newBtn" title="يمسح المحادثة الحالية من الشاشة ويبدأ جلسة جديدة بلا سياق سابق">+ محادثة جديدة</button>
+    <nav class="nav" id="nav">
+      <button data-view="chat" class="on"><span class="ico">◐</span>المحادثة</button>
+      <button data-view="tasks"><span class="ico">☑</span>المهام والأهداف</button>
+      <button data-view="projects"><span class="ico">▣</span>المشاريع</button>
+      <button data-view="files"><span class="ico">▤</span>الملفات والوسائط</button>
+      <button data-view="agents"><span class="ico">✦</span>الأدوات والوكلاء</button>
+      <button data-view="connect"><span class="ico">⇄</span>البحث والاتصال</button>
+      <button data-view="settings"><span class="ico">⚙</span>الإعدادات</button>
+    </nav>
+    <div class="side-sec"><span>المحادثات</span><span id="projBadge"></span></div>
+    <div class="side-list" id="convList"></div>
+    <div class="side-foot"><span class="dot" id="hDot"></span><span id="hText">جارٍ الفحص</span></div>
+  </aside>
+  <div class="main">
+    <div class="topbar">
+      <button class="btn sm menu" id="menuBtn" aria-label="القائمة">☰</button>
+      <h1 id="title">المحادثة</h1>
+      <span class="chip" id="keyChip">بلا مفتاح</span>
+      <a class="btn sm" href="/console" title="لوحة المراقبة القديمة (التبويبات والأدوات المتقدمة)">اللوحة</a>
+    </div>
+    <section class="view on" id="view-chat">
+      <div id="thread"></div>
+      <div class="composer">
+        <div class="composer-in">
+          <div id="attached"></div>
+          <textarea id="input" rows="1" placeholder="اكتب رسالتك… (يمكن إرفاق ملفات وصور وأرشيفات)"></textarea>
+          <div class="bar">
+            <button class="btn sm" id="attachBtn" title="إرفاق ملفات (تُرفع إلى مساحة العمل ويقرؤها النظام فعليًا)">+ إرفاق</button>
+            <input type="file" id="fileInput" multiple hidden>
+            <span class="muted small" id="status"></span>
+            <span class="sp"></span>
+            <button class="btn sm" id="stopBtn" hidden>إيقاف</button>
+            <button class="btn pri sm" id="sendBtn">إرسال</button>
+          </div>
+        </div>
+      </div>
+    </section>
+    <section class="view" id="view-tasks"><div class="pad">
+      <div class="card"><h2>هدف أو مهمة جديدة</h2>
+        <div class="row"><input type="text" id="goalTitle" placeholder="اكتب الهدف…" style="flex:1">
+          <select id="goalKind"><option value="goal">هدف دائم (goals.add)</option><option value="task">مهمة تُنفَّذ الآن (tasks.start)</option><option value="selfdev">طلب تطوير ذاتي (selfdev.request)</option></select>
+          <button class="btn pri" id="goalAdd">إضافة</button></div>
+        <pre id="goalOut" hidden></pre></div>
+      <div class="card"><h2>الأهداف</h2><div id="goalsBox" class="muted small">—</div></div>
+      <div class="card"><h2>محرك التطوير الذاتي</h2><div id="sdBox" class="muted small">—</div></div>
+      <div class="card"><h2>الأهداف التي يعجز عنها النظام</h2><div id="unmetBox" class="muted small">—</div></div>
+      <div class="card"><h2>المجدول</h2><div id="schedBox" class="muted small">—</div></div>
+    </div></section>
+    <section class="view" id="view-projects"><div class="pad">
+      <div class="card"><h2>مشروع جديد</h2>
+        <div class="row"><input type="text" id="projName" placeholder="اسم المشروع" style="flex:1">
+          <input type="text" id="projDesc" placeholder="وصف أو تعليمات للمشروع" style="flex:2">
+          <button class="btn pri" id="projAdd">إنشاء</button></div></div>
+      <div class="card"><h2>المشاريع</h2><div class="row small muted" style="margin-bottom:8px">المشروع النشط تُنسب إليه المحادثات والملفات الجديدة.</div><div id="projBox">—</div></div>
+      <div class="card" id="projDetail" hidden></div>
+    </div></section>
+    <section class="view" id="view-files"><div class="pad">
+      <div class="card"><div class="drop" id="drop">اسحب الملفات هنا أو <button class="btn sm" id="pickBtn">اختر ملفات</button>
+        <div class="small" style="margin-top:6px">نصوص، شيفرة، CSV، JSON، PDF، Word، Excel، PowerPoint، صور، ZIP/TAR/7z/GZ — حتى 50 م.ب للملف</div>
+        <input type="file" id="fileInput2" multiple hidden></div>
+        <div id="upProg" class="small muted" style="margin-top:8px"></div></div>
+      <div class="card"><h2>إنشاء ملف أو تصدير</h2>
+        <div class="row" style="margin-bottom:8px"><select id="cFmt"><option>md</option><option>txt</option><option>html</option><option>pdf</option><option>docx</option><option>xlsx</option><option>pptx</option><option>csv</option><option>json</option><option>png</option></select>
+          <input type="text" id="cTitle" placeholder="العنوان" style="flex:1"><button class="btn pri" id="cBtn">إنشاء</button></div>
+        <textarea id="cContent" rows="5" placeholder="المحتوى. للجداول (xlsx/csv): أسطر مفصولة بفواصل، السطر الأول للعناوين. للعروض (pptx): كل سطر يبدأ بـ # يبدأ شريحة جديدة"></textarea></div>
+      <div class="card"><div class="row" style="margin-bottom:10px"><h2 style="margin:0;flex:1">الملفات</h2>
+          <input type="text" id="fQ" placeholder="بحث في الأسماء والمحتوى">
+          <select id="fKind"><option value="">كل الأنواع</option><option>text</option><option>code</option><option>csv</option><option>json</option><option>pdf</option><option>docx</option><option>xlsx</option><option>pptx</option><option>image</option><option>archive</option><option>audio</option><option>video</option><option>binary</option></select>
+          <button class="btn sm" id="fZip" disabled>ضغط المحدد ZIP</button><button class="btn sm" id="fRefresh">تحديث</button></div>
+        <div id="filesBox">—</div></div>
+      <div class="card" id="fileDetail" hidden></div>
+    </div></section>
+    <section class="view" id="view-agents"><div class="pad">
+      <div class="card"><h2>وكلاء المهام</h2>
+        <div class="grid" id="agentCards"></div>
+        <textarea id="agentGoal" rows="3" placeholder="صف المهمة للوكيل…" style="margin-top:10px"></textarea>
+        <div class="row" style="margin-top:8px"><button class="btn pri" id="agentRun">تشغيل الوكيل المحدد</button><span class="muted small" id="agentSel"></span></div>
+        <pre id="agentOut" hidden></pre></div>
+      <div class="card"><h2>كل أدوات النظام</h2><div class="row" style="margin-bottom:8px"><input type="text" id="toolQ" placeholder="تصفية الأدوات" style="flex:1"></div><div id="toolsBox">—</div></div>
+    </div></section>
+    <section class="view" id="view-connect"><div class="pad">
+      <div class="card"><h2>بحث في الويب</h2>
+        <div class="row"><input type="text" id="sQ" placeholder="سؤال البحث" style="flex:1"><button class="btn pri" id="sBtn">بحث</button><button class="btn" id="rBtn" title="بحث عميق متعدد المصادر عبر research.run">بحث عميق</button></div>
+        <pre id="sOut" hidden></pre></div>
+      <div class="card"><h2>الاتصال بأي موقع أو مستودع</h2>
+        <div class="row"><input type="url" id="uQ" placeholder="https://… أو owner/repo" style="flex:1" dir="ltr">
+          <button class="btn pri" id="uBtn">جلب وقراءة</button><button class="btn" id="uSave" title="يحفظ المحتوى ملفًا في مساحة العمل">حفظ كملف</button></div>
+        <div class="small muted" style="margin-top:6px">روابط GitHub تُقرأ عبر github.repo (البنية والملفات)، وباقي الروابط عبر web.fetch.</div>
+        <pre id="uOut" hidden></pre></div>
+      <div class="card"><h2>الموصلات</h2><div id="connBox" class="small">—</div></div>
+    </div></section>
+    <section class="view" id="view-settings"><div class="pad">
+      <div class="card"><h2>مفتاح المالك</h2>
+        <div class="row"><input type="password" id="keyIn" placeholder="SOVEREIGN_KEY" style="flex:1" dir="ltr" autocomplete="off">
+          <button class="btn pri" id="keySave">حفظ</button><button class="btn" id="keyClear">مسح</button></div>
+        <div class="small muted" style="margin-top:6px">يُحفظ في هذا المتصفح فقط ويُرسل في ترويسة X-Sovereign-Key. بدونه تعمل المحادثة في وضع الضيف ولا تعمل الملفات.</div></div>
+      <div id="setBox"><div class="card muted">أدخل مفتاح المالك لعرض الإعدادات الكاملة.</div></div>
+    </div></section>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
 <script>
 (function () {
   "use strict";
-  var STORE = "sovereign.chat.v1";
-  var HISTORY_TURNS = 10;          // آخر 10 رسائل تُرسل سياقًا للعقل
-  var TIMEOUT_MS = 170000;         // أكبر من مهلة العقل على الخادم (150ث)
-
-  var thread = document.getElementById("thread");
-  var scroller = document.getElementById("scroller");
-  var form = document.getElementById("form");
-  var input = document.getElementById("input");
-  var sendBtn = document.getElementById("send");
-  var dot = document.getElementById("dot");
-  var statusText = document.getElementById("statusText");
-
-  var state = load();
-  var busy = false;
-
-  function newSession() { return { id: (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random()), messages: [] }; }
-  function load() {
-    try { var s = JSON.parse(localStorage.getItem(STORE)); if (s && s.id && Array.isArray(s.messages)) return s; } catch (e) {}
-    return newSession();
-  }
-  function save() { try { localStorage.setItem(STORE, JSON.stringify(state)); } catch (e) {} }
-
+  var TIMEOUT_MS = 300000, HISTORY_TURNS = 12, KEY_STORE = "sovereign.ownerKey",
+      STORE = "sovereign.app.v1";
+  var $ = function (id) { return document.getElementById(id); };
   function el(tag, cls, text) { var n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; }
-  function scrollDown() { scroller.scrollTop = scroller.scrollHeight; }
-  function fmtTime(ts) { try { return new Date(ts).toLocaleTimeString("ar-SA", { hour: "2-digit", minute: "2-digit" }); } catch (e) { return ""; } }
+  function ownerKey() { try { return localStorage.getItem(KEY_STORE) || ""; } catch (e) { return ""; } }
+  function toast(msg, bad) { var t = $("toast"); t.textContent = msg; t.className = "toast on" + (bad ? " bad" : ""); clearTimeout(toast._t); toast._t = setTimeout(function () { t.className = "toast"; }, 4200); }
+  function fmtSize(n) { n = Number(n || 0); if (n < 1024) return n + " ب"; if (n < 1048576) return (n / 1024).toFixed(1) + " ك.ب"; return (n / 1048576).toFixed(1) + " م.ب"; }
+  function fmtTime(ts) { try { var d = new Date(ts > 1e12 ? ts : ts * 1000); return d.toLocaleString("ar-SA", { dateStyle: "short", timeStyle: "short" }); } catch (e) { return ""; } }
+  function iso(s) { return "\u2068" + s + "\u2069"; }
 
-  function renderEmpty() {
-    var box = el("div", "empty");
-    box.appendChild(el("h1", null, "كيف أساعدك؟"));
-    box.appendChild(el("p", null, "اكتب سؤالك بالأسفل، أو ابدأ بأحد هذه:"));
-    var chips = el("div", "chips");
-    ["أخبرني عن قدراتك الحقيقية", "حلل المشروع https://github.com/reeveero-tech/sovereign_ai", "ما حالة النظام الآن؟"].forEach(function (q) {
-      var c = el("button", "chip", q); c.type = "button";
-      c.addEventListener("click", function () { input.value = q; send(); });
-      chips.appendChild(c);
-    });
-    box.appendChild(chips);
-    thread.appendChild(box);
+  // طلب JSON موحد: مفتاح المالك في ترويسة X-Sovereign-Key لمسارات /ws
+  function api(path, opts) {
+    opts = opts || {};
+    var h = opts.headers || {};
+    var k = ownerKey(); if (k) h["X-Sovereign-Key"] = k;
+    if (opts.json !== undefined) { h["Content-Type"] = "application/json"; opts.body = JSON.stringify(opts.json); }
+    return fetch(path, { method: opts.method || (opts.body ? "POST" : "GET"), headers: h, body: opts.body, signal: opts.signal })
+      .then(function (r) {
+        if (opts.blob) { if (!r.ok) throw new Error("خطأ " + r.status); return r.blob(); }
+        return r.text().then(function (t) {
+          var d = null; try { d = JSON.parse(t); } catch (e) {}
+          if (r.status === 401) throw new Error("يتطلب مفتاح المالك — أدخله من الإعدادات.");
+          if (!r.ok) throw new Error("خطأ " + r.status + (d && d.detail ? ": " + (typeof d.detail === "string" ? d.detail : JSON.stringify(d.detail)) : ""));
+          return d;
+        });
+      });
+  }
+  // استدعاء أداة حقيقية من السجل (أثر موقّع في السجل السيادي)
+  function tool(name, inputs) {
+    var ins = {}; Object.keys(inputs || {}).forEach(function (k) { if (inputs[k] != null && inputs[k] !== "") ins[k] = String(inputs[k]); });
+    return api("/tools/invoke", { json: { tool: name, api_key: ownerKey() || null, inputs: ins } });
+  }
+  function show(pre, data) { pre.hidden = false; pre.textContent = typeof data === "string" ? data : JSON.stringify(data, null, 2); }
+  function resultText(res) {
+    if (res == null) return "";
+    if (res.ok === false) return "فشل: " + (res.error || "خطأ غير معروف");
+    var o = res.result !== undefined ? res.result : res;
+    if (typeof o === "string") return o;
+    return JSON.stringify(o, null, 2);
   }
 
-  function bubble(role, text, extra) {
-    var wrap = el("div", "msg " + (role === "user" ? "user" : "bot") + (extra && extra.error ? " error" : ""));
-    var b = el("div", "bubble"); b.textContent = text; wrap.appendChild(b);
-    var meta = el("div", "meta");
-    if (extra && extra.ts) meta.appendChild(el("span", null, fmtTime(extra.ts)));
-    if (extra && extra.secs != null) meta.appendChild(el("span", null, extra.secs + " ث"));
-    if (extra && extra.tools && extra.tools.length) {
-      var tl = el("span", "tools", "أدوات النظام المستخدمة: " + extra.tools.map(function (t) { return "\u2068" + t + "\u2069"; }).join(" · "));
-      tl.title = "استدعاءات حقيقية لأدوات المشروع، كل منها مسجل بأثر موقّع في السجل السيادي";
-      meta.appendChild(tl);
+  // ---------------- الحالة المحلية ----------------
+  function loadState() { try { var s = JSON.parse(localStorage.getItem(STORE)); if (s && Array.isArray(s.messages)) return s; } catch (e) {} return null; }
+  var state = loadState() || { convId: null, sessionId: rid(), messages: [], project: null };
+  function rid() { return crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random(); }
+  function save() { try { localStorage.setItem(STORE, JSON.stringify(state)); } catch (e) {} }
+  var attached = []; // [{id,name,kind,size}]
+  var busy = false, ctrl = null, convs = [], projects = [];
+
+  // ---------------- التنقل ----------------
+  var TITLES = { chat: "المحادثة", tasks: "المهام والأهداف", projects: "المشاريع", files: "الملفات والوسائط",
+                 agents: "الأدوات والوكلاء", connect: "البحث والاتصال", settings: "الإعدادات" };
+  var loaders = {};
+  function go(view) {
+    Array.prototype.forEach.call(document.querySelectorAll("#nav button"), function (b) { b.classList.toggle("on", b.dataset.view === view); });
+    Array.prototype.forEach.call(document.querySelectorAll(".view"), function (v) { v.classList.toggle("on", v.id === "view-" + view); });
+    $("title").textContent = TITLES[view] || "";
+    document.body.classList.remove("side-open");
+    if (loaders[view]) loaders[view]();
+  }
+  $("nav").addEventListener("click", function (e) { var b = e.target.closest("button"); if (b) go(b.dataset.view); });
+  $("menuBtn").addEventListener("click", function () { document.body.classList.toggle("side-open"); });
+  function paintKey() { var k = ownerKey(); $("keyChip").textContent = k ? "مالك" : "ضيف"; $("keyChip").className = "chip " + (k ? "ok" : "warn"); }
+
+  // ---------------- المحادثة ----------------
+  var thread = $("thread"), input = $("input"), sendBtn = $("sendBtn");
+  function scrollDown() { thread.scrollTop = thread.scrollHeight; }
+  function renderWelcome() {
+    var w = el("div", "welcome");
+    w.appendChild(el("h2", null, "كيف أساعدك؟"));
+    w.appendChild(el("div", "muted", "محادثة حقيقية مع العقل الذاتي الاستضافة وأدوات النظام. أرفق ملفات أو صورًا أو أرشيفات ليقرأها ويحللها."));
+    var g = el("div", "sugg");
+    ["ما حالة النظام الآن؟", "أخبرني عن قدراتك الحقيقية وحدودها", "حلل المستودع https://github.com/reeveero-tech/sovereign_ai",
+     "أنشئ ملف PDF بعنوان تقرير الحالة يلخص صحة النظام"].forEach(function (q) {
+      var b = el("button", null, q); b.type = "button"; b.addEventListener("click", function () { input.value = q; send(); }); g.appendChild(b);
+    });
+    w.appendChild(g); thread.appendChild(w);
+  }
+  function fileChip(f, removable) {
+    var c = el("span", "chip", (f.name || f.id) + " · " + (f.kind || "") + (f.size ? " · " + fmtSize(f.size) : ""));
+    c.title = f.id;
+    if (removable) { var x = el("button", "x", "×"); x.type = "button"; x.addEventListener("click", function () { attached = attached.filter(function (a) { return a.id !== f.id; }); paintAttached(); }); c.appendChild(x); }
+    else { c.style.cursor = "pointer"; c.addEventListener("click", function () { go("files"); openFile(f.id); }); }
+    return c;
+  }
+  function bubble(m, extra) {
+    var wrap = el("div", "msg " + (m.role === "user" ? "user" : "bot") + (extra && extra.error ? " err" : ""));
+    wrap.appendChild(el("div", "who", m.role === "user" ? "أنت" : "النظام"));
+    var b = el("div", "body"); b.textContent = m.content; wrap.appendChild(b);
+    if (m.files && m.files.length) { var a = el("div", "att"); m.files.forEach(function (f) { a.appendChild(fileChip(f, false)); }); wrap.appendChild(a); }
+    var meta = el("div", "meta"); var parts = [];
+    if (m.ts) parts.push(fmtTime(m.ts));
+    if (m.secs != null) parts.push(m.secs + " ث");
+    if (parts.length) meta.appendChild(el("span", null, parts.join(" · ")));
+    if (m.tools && m.tools.length) {
+      var tl = el("span", null, "  ·  أدوات النظام المستخدمة: " + m.tools.map(iso).join(" · "));
+      tl.title = "استدعاءات حقيقية لأدوات المشروع، كل منها مسجل بأثر موقّع في السجل السيادي"; meta.appendChild(tl);
     }
-    if (extra && extra.retry) {
-      var r = el("button", null, "إعادة المحاولة"); r.type = "button";
-      r.addEventListener("click", extra.retry); meta.appendChild(r);
+    if (extra && extra.retry) { var r = el("button", "btn sm", "إعادة المحاولة"); r.type = "button"; r.style.marginInlineStart = "8px"; r.addEventListener("click", extra.retry); meta.appendChild(r); }
+    if (m.role !== "user" && !(extra && extra.error)) {
+      var cp = el("button", "btn sm", "نسخ"); cp.type = "button"; cp.style.marginInlineStart = "8px";
+      cp.addEventListener("click", function () { navigator.clipboard && navigator.clipboard.writeText(m.content).then(function () { toast("نُسخ"); }); });
+      var ex = el("button", "btn sm", "تصدير"); ex.type = "button"; ex.style.marginInlineStart = "4px";
+      ex.title = "يحفظ الرد ملفًا في مساحة العمل (md/pdf/docx)";
+      ex.addEventListener("click", function () { exportText(m.content); });
+      meta.appendChild(cp); meta.appendChild(ex);
     }
     if (meta.childNodes.length) wrap.appendChild(meta);
-    thread.appendChild(wrap);
-    return wrap;
+    thread.appendChild(wrap); return wrap;
   }
+  function renderChat() { thread.textContent = ""; if (!state.messages.length) { renderWelcome(); return; } state.messages.forEach(function (m) { bubble(m); }); scrollDown(); }
+  function paintAttached() { var box = $("attached"); box.textContent = ""; attached.forEach(function (f) { box.appendChild(fileChip(f, true)); }); }
+  function historyFor(ms) { return ms.slice(-HISTORY_TURNS).map(function (m) { return { role: m.role, content: String(m.content).slice(0, 4000) }; }); }
+  function setBusy(v) { busy = v; sendBtn.disabled = v; $("stopBtn").hidden = !v; sendBtn.textContent = v ? "انتظر…" : "إرسال"; }
 
-  function renderAll() {
-    thread.textContent = "";
-    if (!state.messages.length) { renderEmpty(); return; }
-    state.messages.forEach(function (m) { bubble(m.role, m.content, { ts: m.ts, secs: m.secs, tools: m.tools }); });
-    scrollDown();
-  }
-
-  function pendingBubble() {
-    var wrap = el("div", "msg bot");
-    var b = el("div", "bubble");
-    var t = el("span", "typing"); t.appendChild(el("span")); t.appendChild(el("span")); t.appendChild(el("span"));
-    b.appendChild(t);
-    var label = el("span", null, "  يفكر… 0 ث"); label.style.color = "var(--muted)"; label.style.fontSize = "14px";
-    b.appendChild(label); wrap.appendChild(b); thread.appendChild(wrap); scrollDown();
-    var start = Date.now();
-    var timer = setInterval(function () { label.textContent = "  يفكر… " + Math.round((Date.now() - start) / 1000) + " ث"; }, 1000);
-    return { node: wrap, stop: function () { clearInterval(timer); wrap.remove(); }, start: start };
-  }
-
-  function setBusy(v) { busy = v; sendBtn.disabled = v; sendBtn.textContent = v ? "انتظر…" : "إرسال"; }
-
-  function historyFor(messages) {
-    return messages.slice(-HISTORY_TURNS).map(function (m) { return { role: m.role, content: String(m.content).slice(0, 4000) }; });
-  }
-
-  // R-789: مفتاح المالك اختياري — يُرسل حقل api_key فقط إن ضُبط، ولا يغادر هذا المتصفح غير ذلك
-  var KEY_STORE = "sovereign.ownerKey";
-  function ownerKey() { try { return localStorage.getItem(KEY_STORE) || ""; } catch (e) { return ""; } }
-  function withKey(body) { var k = ownerKey(); if (k) body.api_key = k; return body; }
-  function paintKey() {
-    var b = document.getElementById("ownerKey");
-    b.textContent = ownerKey() ? "مفتاح المالك: مضبوط" : "مفتاح المالك";
-  }
-  document.getElementById("ownerKey").addEventListener("click", function () {
-    var cur = ownerKey();
-    var v = window.prompt(cur ? "المفتاح مضبوط. أدخل مفتاحًا جديدًا، أو اترك الحقل فارغًا لإزالته:" : "أدخل مفتاح المالك (SOVEREIGN_KEY):", "");
-    if (v === null) return;
-    try { if (v.trim()) localStorage.setItem(KEY_STORE, v.trim()); else localStorage.removeItem(KEY_STORE); } catch (e) {}
-    paintKey();
-  });
-  paintKey();
-
-  function request(text, history) {
-    var ctrl = new AbortController();
+  function request(text, history, fileIds) {
+    ctrl = new AbortController();
     var to = setTimeout(function () { ctrl.abort(); }, TIMEOUT_MS);
-    return fetch("/chat", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(withKey({ text: text, session_id: state.id, user_id: "owner", history: history })),
-      signal: ctrl.signal
-    }).then(function (r) {
-      clearTimeout(to);
-      return r.text().then(function (body) {
-        var data = null; try { data = JSON.parse(body); } catch (e) {}
-        if (r.status === 429) throw new Error("تجاوزت حد الرسائل في الدقيقة. انتظر قليلًا ثم أعد المحاولة.");
-        if (!r.ok) throw new Error("الخادم رد بخطأ " + r.status + (data && data.detail ? ": " + (typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail)) : ""));
-        if (!data || typeof data.reply !== "string" || !data.reply.trim()) throw new Error("وصل رد فارغ من الخادم.");
-        return data;
+    var body = { text: text, session_id: state.sessionId, user_id: "owner", history: history };
+    var k = ownerKey(); if (k) body.api_key = k;
+    if (fileIds && fileIds.length) body.file_ids = fileIds;
+    if (state.project) body.project_id = state.project.id;
+    return fetch("/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), signal: ctrl.signal })
+      .then(function (r) {
+        clearTimeout(to);
+        return r.text().then(function (t) {
+          var data = null; try { data = JSON.parse(t); } catch (e) {}
+          if (r.status === 429) throw new Error("تجاوزت حد الرسائل في الدقيقة. انتظر قليلًا ثم أعد المحاولة.");
+          if (!r.ok) throw new Error("الخادم رد بخطأ " + r.status + (data && data.detail ? ": " + (typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail)) : ""));
+          if (!data || typeof data.reply !== "string" || !data.reply.trim()) throw new Error("وصل رد فارغ من الخادم.");
+          return data;
+        });
+      }, function (err) {
+        clearTimeout(to);
+        throw new Error(err && err.name === "AbortError" ? "أُوقف الطلب أو انتهت المهلة دون رد." : "تعذر الاتصال بالخادم. تحقق من الإنترنت ثم أعد المحاولة.");
       });
-    }, function (err) {
-      clearTimeout(to);
-      throw new Error(err && err.name === "AbortError" ? "انتهت المهلة دون رد. العقل مشغول أو متوقف، أعد المحاولة." : "تعذر الاتصال بالخادم. تحقق من الإنترنت ثم أعد المحاولة.");
-    });
   }
-
   function send(retryText) {
     if (busy) return;
     var text = retryText != null ? retryText : input.value.trim();
+    if (!text && attached.length) text = "حلل الملفات المرفقة";
     if (!text) return;
     if (!state.messages.length) thread.textContent = "";
     var history = historyFor(state.messages);
+    var files = attached.slice(), fileIds = files.map(function (f) { return f.id; });
     if (retryText == null) {
-      var um = { role: "user", content: text, ts: Date.now() };
-      state.messages.push(um); save();
-      bubble("user", text, { ts: um.ts });
-      input.value = ""; autosize();
-    }
+      var um = { role: "user", content: text, ts: Date.now(), files: files };
+      state.messages.push(um); save(); bubble(um);
+      input.value = ""; autosize(); attached = []; paintAttached();
+    } else { fileIds = (state.messages[state.messages.length - 1] || {}).files ? state.messages[state.messages.length - 1].files.map(function (f) { return f.id; }) : []; }
     setBusy(true);
-    var p = pendingBubble();
-    request(text, history).then(function (data) {
-      p.stop();
-      var secs = Math.round((Date.now() - p.start) / 1000);
-      var bm = { role: "assistant", content: data.reply.trim(), ts: Date.now(), secs: secs, tools: data.tools_used || [] };
-      state.messages.push(bm); save();
-      bubble("assistant", bm.content, { ts: bm.ts, secs: secs, tools: bm.tools });
+    var pend = el("div", "msg bot"); pend.appendChild(el("div", "who", "النظام")); var pb = el("div", "body thinking", "يفكر 0 ث"); pend.appendChild(pb); thread.appendChild(pend); scrollDown();
+    var start = Date.now(); var tick = setInterval(function () { pb.textContent = "يفكر " + Math.round((Date.now() - start) / 1000) + " ث"; }, 1000);
+    request(text, history, fileIds).then(function (data) {
+      clearInterval(tick); pend.remove();
+      var bm = { role: "assistant", content: data.reply.trim(), ts: Date.now(), secs: Math.round((Date.now() - start) / 1000), tools: data.tools_used || [] };
+      state.messages.push(bm); save(); bubble(bm); persistConv();
     }).catch(function (err) {
-      p.stop();
-      var node = bubble("assistant", err.message, { error: true, retry: function () { node.remove(); send(text); } });
+      clearInterval(tick); pend.remove();
+      var node = bubble({ role: "assistant", content: err.message }, { error: true, retry: function () { node.remove(); send(text); } });
     }).then(function () { setBusy(false); scrollDown(); input.focus(); });
   }
-
-  function autosize() { input.style.height = "auto"; input.style.height = Math.min(input.scrollHeight, 200) + "px"; }
-
-  form.addEventListener("submit", function (e) { e.preventDefault(); send(); });
+  function autosize() { input.style.height = "auto"; input.style.height = Math.min(input.scrollHeight, 220) + "px"; }
   input.addEventListener("input", autosize);
-  input.addEventListener("keydown", function (e) {
-    if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); send(); }
-  });
-  document.getElementById("newChat").addEventListener("click", function () {
+  input.addEventListener("keydown", function (e) { if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); send(); } });
+  sendBtn.addEventListener("click", function () { send(); });
+  $("stopBtn").addEventListener("click", function () { if (ctrl) ctrl.abort(); });
+  $("newBtn").addEventListener("click", function () {
     if (busy) return;
-    state = newSession(); save(); renderAll(); input.focus();
+    state.convId = null; state.sessionId = rid(); state.messages = []; attached = []; paintAttached(); save(); renderChat(); paintConvs(); go("chat"); input.focus();
   });
 
-  function checkStatus() {
-    Promise.all([
-      fetch("/health").then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; }),
-      fetch("/brain/status").then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; })
-    ]).then(function (res) {
-      var h = res[0], b = res[1];
-      if (!h || h.status !== "healthy") { dot.className = "dot bad"; statusText.textContent = "الخادم لا يستجيب"; return; }
-      if (!b || !b.enabled) { dot.className = "dot bad"; statusText.textContent = "متصل — العقل غير مفعّل"; return; }
-      var last = b.last_call && b.last_call.result;
-      dot.className = "dot " + (last === "error" ? "bad" : "ok");
-      statusText.textContent = (last === "error" ? "متصل — آخر اتصال بالعقل فشل · " : "متصل · ") + (b.model || "");
+  // حفظ المحادثة في مساحة العمل (Supabase) — حين يكون مفتاح المالك مضبوطًا
+  function persistConv() {
+    if (!ownerKey() || !state.messages.length) return;
+    var body = { title: "", messages: state.messages.map(function (m) { return { role: m.role, content: m.content, ts: m.ts, tools: m.tools, files: m.files }; }),
+                 project_id: state.project ? state.project.id : null };
+    var p = state.convId ? api("/ws/conversations/" + state.convId, { method: "PUT", json: body }) : api("/ws/conversations", { json: body });
+    p.then(function (rec) { if (rec && rec.id) { state.convId = rec.id; save(); loadConvs(); } }).catch(function () {});
+  }
+  function loadConvs() {
+    if (!ownerKey()) { convs = []; paintConvs(); return; }
+    api("/ws/conversations" + (state.project ? "?project_id=" + encodeURIComponent(state.project.id) : ""))
+      .then(function (d) { convs = (d.conversations || []).sort(function (a, b) { return (b.updated_at || b.created_at || 0) - (a.updated_at || a.created_at || 0); }); paintConvs(); })
+      .catch(function () { convs = []; paintConvs(); });
+  }
+  function paintConvs() {
+    var box = $("convList"); box.textContent = "";
+    $("projBadge").textContent = state.project ? state.project.name : "";
+    if (!ownerKey()) { box.appendChild(el("div", "muted small", "المحادثات تُحفظ في هذا المتصفح. أدخل مفتاح المالك لحفظها في السحابة ومزامنتها.")); return; }
+    if (!convs.length) { box.appendChild(el("div", "muted small", "لا محادثات محفوظة بعد.")); return; }
+    convs.forEach(function (c) {
+      var b = el("button", "item" + (c.id === state.convId ? " on" : ""), c.title || "محادثة");
+      b.title = (c.messages || 0) + " رسالة · " + fmtTime(c.updated_at || c.created_at);
+      b.addEventListener("click", function () { openConv(c.id); });
+      b.addEventListener("contextmenu", function (e) { e.preventDefault(); if (confirm("أرشفة هذه المحادثة؟ (لا تُحذف نهائيًا)")) api("/ws/conversations/" + c.id + "/archive", { method: "POST" }).then(loadConvs); });
+      box.appendChild(b);
     });
   }
+  function openConv(id) {
+    api("/ws/conversations/" + id).then(function (c) {
+      state.convId = c.id; state.sessionId = c.id; state.messages = c.messages || []; save(); renderChat(); paintConvs(); go("chat");
+    }).catch(function (e) { toast(e.message, true); });
+  }
 
-  renderAll();
-  checkStatus();
-  setInterval(checkStatus, 30000);
-  input.focus();
+  // ---------------- رفع الملفات ----------------
+  function upload(fileList, toChat) {
+    if (!ownerKey()) { toast("رفع الملفات يتطلب مفتاح المالك — أدخله من الإعدادات.", true); go("settings"); return Promise.resolve([]); }
+    var arr = Array.prototype.slice.call(fileList || []); var done = [];
+    var prog = toChat ? $("status") : $("upProg");
+    return arr.reduce(function (p, f, i) {
+      return p.then(function () {
+        prog.textContent = "رفع " + (i + 1) + "/" + arr.length + ": " + f.name;
+        var fd = new FormData(); fd.append("file", f, f.name); if (state.project) fd.append("project_id", state.project.id);
+        return api("/ws/files", { method: "POST", body: fd }).then(function (rec) {
+          done.push(rec); if (toChat) { attached.push({ id: rec.id, name: rec.name, kind: rec.kind, size: rec.size }); paintAttached(); }
+        }).catch(function (e) { toast(f.name + ": " + e.message, true); });
+      });
+    }, Promise.resolve()).then(function () { prog.textContent = done.length ? "رُفع " + done.length + " ملف" : ""; setTimeout(function () { prog.textContent = ""; }, 4000); return done; });
+  }
+  $("attachBtn").addEventListener("click", function () { $("fileInput").click(); });
+  $("fileInput").addEventListener("change", function () { upload(this.files, true); this.value = ""; });
+  thread.addEventListener("dragover", function (e) { e.preventDefault(); });
+  thread.addEventListener("drop", function (e) { e.preventDefault(); upload(e.dataTransfer.files, true); });
+  input.addEventListener("paste", function (e) { if (e.clipboardData && e.clipboardData.files && e.clipboardData.files.length) { e.preventDefault(); upload(e.clipboardData.files, true); } });
+  function exportText(text) {
+    var fmt = prompt("صيغة التصدير: md أو pdf أو docx أو txt أو html", "pdf"); if (!fmt) return;
+    api("/ws/create", { json: { format: fmt.trim(), title: "رد النظام", content: text, project_id: state.project ? state.project.id : null } })
+      .then(function (rec) { toast("أُنشئ " + rec.name); download(rec.id, rec.name); }).catch(function (e) { toast(e.message, true); });
+  }
+  function download(id, name) {
+    api("/ws/files/" + id + "/raw", { blob: true }).then(function (b) {
+      var u = URL.createObjectURL(b); var a = el("a"); a.href = u; a.download = name || id; document.body.appendChild(a); a.click(); a.remove(); setTimeout(function () { URL.revokeObjectURL(u); }, 5000);
+    }).catch(function (e) { toast(e.message, true); });
+  }
+
+  // ---------------- الملفات ----------------
+  var selected = {};
+  var CONVERT = ["md", "txt", "html", "pdf", "docx", "xlsx", "csv", "json", "pptx", "png"];
+  function loadFiles() {
+    if (!ownerKey()) { $("filesBox").textContent = "يتطلب مفتاح المالك."; return; }
+    var q = $("fQ").value.trim(), kind = $("fKind").value;
+    var pj = state.project ? "project_id=" + encodeURIComponent(state.project.id) : "";
+    var p = q ? api("/ws/files/search?q=" + encodeURIComponent(q) + (pj ? "&" + pj : "")).then(function (d) { return d.hits.map(function (h) { h.file._snip = h.snippet; return h.file; }); })
+              : api("/ws/files?" + [pj, kind ? "kind=" + kind : ""].filter(Boolean).join("&")).then(function (d) { return d.files; });
+    p.then(function (files) {
+      files.sort(function (a, b) { return (b.created_at || 0) - (a.created_at || 0); });
+      var box = $("filesBox"); box.textContent = "";
+      if (!files.length) { box.appendChild(el("div", "empty-note", q ? "لا نتائج." : "لا ملفات بعد — ارفع أو أنشئ ملفًا.")); return; }
+      var t = el("table"); var hr = el("tr"); ["", "الاسم", "النوع", "الحجم", "المصدر", "التاريخ", ""].forEach(function (h) { hr.appendChild(el("th", null, h)); }); t.appendChild(hr);
+      files.forEach(function (f) {
+        var tr = el("tr"); var c0 = el("td"); var cb = el("input"); cb.type = "checkbox"; cb.checked = !!selected[f.id];
+        cb.addEventListener("change", function () { if (cb.checked) selected[f.id] = 1; else delete selected[f.id]; $("fZip").disabled = !Object.keys(selected).length; });
+        c0.appendChild(cb); tr.appendChild(c0);
+        var nm = el("td"); var a = el("a", null, f.path && f.path !== f.name ? f.path : f.name); a.href = "#"; a.addEventListener("click", function (e) { e.preventDefault(); openFile(f.id); }); nm.appendChild(a);
+        if (f._snip) nm.appendChild(el("div", "small muted", "…" + f._snip.slice(0, 160) + "…"));
+        tr.appendChild(nm); tr.appendChild(el("td", null, f.kind)); tr.appendChild(el("td", null, fmtSize(f.size)));
+        tr.appendChild(el("td", "muted small", f.source || "")); tr.appendChild(el("td", "muted small", fmtTime(f.created_at)));
+        var act = el("td"); var ch = el("button", "btn sm", "للمحادثة"); ch.title = "إرفاق بالرسالة التالية";
+        ch.addEventListener("click", function () { if (!attached.some(function (x) { return x.id === f.id; })) attached.push({ id: f.id, name: f.name, kind: f.kind, size: f.size }); paintAttached(); go("chat"); });
+        act.appendChild(ch); tr.appendChild(act); t.appendChild(tr);
+      });
+      box.appendChild(t);
+    }).catch(function (e) { $("filesBox").textContent = e.message; });
+  }
+  function openFile(id) {
+    var box = $("fileDetail"); box.hidden = false; box.textContent = "جارٍ القراءة…";
+    api("/ws/files/" + id + "?limit=20000").then(function (d) {
+      var f = d.file; box.textContent = "";
+      var h = el("div", "row"); h.appendChild(el("h2", null, f.name)); h.lastChild.style.flex = "1"; h.lastChild.style.margin = "0";
+      h.appendChild(el("span", "chip", f.kind)); h.appendChild(el("span", "chip", fmtSize(f.size)));
+      h.appendChild(el("span", "chip " + (d.supported ? "ok" : "warn"), d.supported ? "مقروء" : "غير مدعوم للقراءة"));
+      box.appendChild(h);
+      box.appendChild(el("div", "small muted", f.id + " · sha256 " + String(f.sha256 || "").slice(0, 16) + "… · " + (d.total_chars || 0) + " حرف مستخرج"));
+      var bar = el("div", "row"); bar.style.margin = "10px 0";
+      var dl = el("button", "btn sm", "تنزيل"); dl.addEventListener("click", function () { download(f.id, f.name); }); bar.appendChild(dl);
+      var q = el("input"); q.type = "text"; q.placeholder = "سؤال للتحليل العميق (اختياري)"; q.style.flex = "1";
+      var an = el("button", "btn pri sm", "تحليل عميق"); bar.appendChild(q); bar.appendChild(an);
+      var sel = el("select"); CONVERT.forEach(function (x) { var o = el("option", null, x); sel.appendChild(o); });
+      var cv = el("button", "btn sm", "تحويل"); bar.appendChild(sel); bar.appendChild(cv);
+      if (f.kind === "archive") { var up = el("button", "btn sm", "تفكيك الأرشيف"); bar.appendChild(up);
+        up.addEventListener("click", function () { up.disabled = true; out.hidden = false; out.textContent = "جارٍ التفكيك…";
+          api("/ws/files/" + f.id + "/unpack", { method: "POST" }).then(function (r) { show(out, { "استُخرج": r.extracted, "تُخطي": r.skipped, "الملفات": r.files.map(function (x) { return x.path + " (" + x.kind + ", " + fmtSize(x.size) + ")"; }) }); loadFiles(); })
+            .catch(function (e) { show(out, e.message); }).then(function () { up.disabled = false; }); }); }
+      var ar = el("button", "btn sm", "أرشفة"); ar.title = "إخفاء من القائمة (لا حذف نهائي)"; bar.appendChild(ar);
+      box.appendChild(bar);
+      var out = el("pre"); out.hidden = true; box.appendChild(out);
+      an.addEventListener("click", function () { an.disabled = true; show(out, "جارٍ التحليل (قد يستغرق دقيقة إن استُدعي العقل)…");
+        api("/ws/files/" + f.id + "/analyze", { json: { question: q.value.trim() || null } }).then(function (r) { show(out, analysisText(r)); })
+          .catch(function (e) { show(out, e.message); }).then(function () { an.disabled = false; }); });
+      cv.addEventListener("click", function () { cv.disabled = true;
+        api("/ws/files/" + f.id + "/convert", { json: { format: sel.value } }).then(function (r) { toast("أُنشئ " + r.name); loadFiles(); openFile(r.id); })
+          .catch(function (e) { toast(e.message, true); }).then(function () { cv.disabled = false; }); });
+      ar.addEventListener("click", function () { api("/ws/files/" + f.id, { method: "PATCH", json: { archived: true } }).then(function () { toast("أُرشف"); box.hidden = true; loadFiles(); }); });
+      if (f.kind === "image") {
+        api("/ws/files/" + f.id + "/raw", { blob: true }).then(function (b) { var img = el("img"); img.src = URL.createObjectURL(b); img.style.maxWidth = "100%"; img.style.maxHeight = "420px"; img.style.borderRadius = "10px"; img.style.display = "block"; box.insertBefore(img, out); });
+      }
+      if (d.meta && Object.keys(d.meta).length) { var m = el("details"); m.appendChild(el("summary", null, "البيانات الوصفية والبنية")); var mp = el("pre"); mp.textContent = JSON.stringify({ meta: d.meta, structure: d.structure }, null, 2); m.appendChild(mp); box.appendChild(m); }
+      if (d.text) { var tp = el("pre"); tp.textContent = d.text + (d.more ? "\n\n… (بقية النص متاحة — " + d.total_chars + " حرفًا)" : ""); box.appendChild(tp); }
+      else if (d.error) box.appendChild(el("div", "small muted", d.error));
+      box.scrollIntoView({ behavior: "smooth", block: "start" });
+    }).catch(function (e) { box.textContent = e.message; });
+  }
+  function analysisText(r) {
+    var o = [];
+    if (r.summary) o.push("الخلاصة (العقل):\n" + (r.summary.text || ("غير متاح: " + (r.summary.reason || r.brain_error || ""))));
+    if (r.findings) o.push("النتائج الحتمية:\n" + JSON.stringify(r.findings, null, 2));
+    if (r.vision) o.push("الرؤية:\n" + JSON.stringify(r.vision, null, 2));
+    if (r.transcript) o.push("التفريغ الصوتي:\n" + JSON.stringify(r.transcript, null, 2));
+    if (r.media) o.push("الوسائط (ffprobe):\n" + JSON.stringify(r.media, null, 2));
+    return o.length ? o.join("\n\n") : JSON.stringify(r, null, 2);
+  }
+  $("pickBtn").addEventListener("click", function () { $("fileInput2").click(); });
+  $("fileInput2").addEventListener("change", function () { upload(this.files, false).then(loadFiles); this.value = ""; });
+  var drop = $("drop");
+  drop.addEventListener("dragover", function (e) { e.preventDefault(); drop.classList.add("over"); });
+  drop.addEventListener("dragleave", function () { drop.classList.remove("over"); });
+  drop.addEventListener("drop", function (e) { e.preventDefault(); drop.classList.remove("over"); upload(e.dataTransfer.files, false).then(loadFiles); });
+  $("fRefresh").addEventListener("click", loadFiles);
+  $("fKind").addEventListener("change", loadFiles);
+  $("fQ").addEventListener("keydown", function (e) { if (e.key === "Enter") loadFiles(); });
+  $("fZip").addEventListener("click", function () {
+    var ids = Object.keys(selected); if (!ids.length) return; var name = prompt("اسم الأرشيف", "bundle.zip"); if (!name) return;
+    api("/ws/zip", { json: { ids: ids, name: name, project_id: state.project ? state.project.id : null } }).then(function (r) { selected = {}; $("fZip").disabled = true; toast("أُنشئ " + r.name); loadFiles(); download(r.id, r.name); }).catch(function (e) { toast(e.message, true); });
+  });
+  $("cBtn").addEventListener("click", function () {
+    var fmt = $("cFmt").value, content = $("cContent").value, table = null;
+    if ((fmt === "xlsx" || fmt === "csv") && content.indexOf(",") >= 0) table = content.split(/\r?\n/).filter(Boolean).map(function (l) { return l.split(",").map(function (c) { return c.trim(); }); });
+    api("/ws/create", { json: { format: fmt, title: $("cTitle").value.trim(), content: table ? "" : content, table: table, project_id: state.project ? state.project.id : null } })
+      .then(function (r) { toast("أُنشئ " + r.name); loadFiles(); openFile(r.id); }).catch(function (e) { toast(e.message, true); });
+  });
+  loaders.files = loadFiles;
+
+  // ---------------- المشاريع ----------------
+  function loadProjects() {
+    if (!ownerKey()) { $("projBox").textContent = "يتطلب مفتاح المالك."; return; }
+    api("/ws/projects").then(function (d) {
+      projects = d.projects || []; var box = $("projBox"); box.textContent = "";
+      var none = el("button", "item" + (!state.project ? " on" : ""), "بلا مشروع (كل الملفات والمحادثات)");
+      none.addEventListener("click", function () { setProject(null); }); box.appendChild(none);
+      projects.forEach(function (p) {
+        var b = el("button", "item" + (state.project && state.project.id === p.id ? " on" : ""), p.name);
+        if (p.description) { var s = el("small", null, " — " + p.description.slice(0, 80)); b.appendChild(s); }
+        b.addEventListener("click", function () { setProject(p); }); box.appendChild(b);
+      });
+    }).catch(function (e) { $("projBox").textContent = e.message; });
+  }
+  function setProject(p) {
+    state.project = p ? { id: p.id, name: p.name } : null; save(); loadProjects(); loadConvs(); paintConvs();
+    var det = $("projDetail");
+    if (!p) { det.hidden = true; return; }
+    det.hidden = false; det.textContent = "";
+    det.appendChild(el("h2", null, "المشروع النشط: " + p.name));
+    var d = el("input"); d.type = "text"; d.value = p.description || ""; d.placeholder = "الوصف"; d.style.width = "100%";
+    var ins = el("textarea"); ins.rows = 4; ins.value = p.instructions || ""; ins.placeholder = "تعليمات تُمرَّر للنظام في محادثات هذا المشروع"; ins.style.marginTop = "8px";
+    var ln = el("textarea"); ln.rows = 2; ln.value = (p.links || []).join("\n"); ln.placeholder = "روابط المشروع (مستودعات، مواقع) — رابط في كل سطر"; ln.style.marginTop = "8px"; ln.dir = "ltr";
+    var sv = el("button", "btn pri sm", "حفظ"); sv.style.marginTop = "8px";
+    sv.addEventListener("click", function () { api("/ws/projects/" + p.id, { method: "PUT", json: { name: p.name, description: d.value, instructions: ins.value, links: ln.value.split(/\n/).map(function (x) { return x.trim(); }).filter(Boolean) } }).then(function (r) { toast("حُفظ"); p = r; loadProjects(); }).catch(function (e) { toast(e.message, true); }); });
+    [d, ins, ln, sv].forEach(function (n) { det.appendChild(n); });
+    var fl = el("div", "small muted"); fl.style.marginTop = "10px"; fl.textContent = "جارٍ عدّ الملفات…"; det.appendChild(fl);
+    api("/ws/files?project_id=" + encodeURIComponent(p.id)).then(function (r) { fl.textContent = r.files.length + " ملف في هذا المشروع — افتح «الملفات» لعرضها."; });
+  }
+  $("projAdd").addEventListener("click", function () {
+    var n = $("projName").value.trim(); if (!n) return;
+    api("/ws/projects", { json: { name: n, description: $("projDesc").value.trim() } }).then(function (p) { $("projName").value = ""; $("projDesc").value = ""; setProject(p); toast("أُنشئ المشروع"); }).catch(function (e) { toast(e.message, true); });
+  });
+  loaders.projects = function () { loadProjects(); if (state.project) api("/ws/projects/" + state.project.id).then(setProject).catch(function () {}); };
+
+  // ---------------- المهام والأهداف ----------------
+  function kv(box, obj, keys) {
+    box.textContent = ""; if (!obj) { box.textContent = "غير متاح"; return; }
+    var t = el("table");
+    (keys || Object.keys(obj)).forEach(function (k) { if (obj[k] === undefined) return; var tr = el("tr"); tr.appendChild(el("th", null, k)); var v = obj[k];
+      tr.appendChild(el("td", null, typeof v === "object" ? JSON.stringify(v).slice(0, 400) : String(v))); t.appendChild(tr); });
+    box.appendChild(t);
+  }
+  function getJ(u) { return fetch(u).then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; }); }
+  function loadTasks() {
+    getJ("/selfdev/status").then(function (d) { kv($("sdBox"), d); });
+    getJ("/selfdev/unmet").then(function (d) { kv($("unmetBox"), d); });
+    getJ("/scheduler/status").then(function (d) { kv($("schedBox"), d); });
+    if (ownerKey()) tool("goals.list", {}).then(function (r) { var b = $("goalsBox"); b.textContent = ""; var p = el("pre"); p.textContent = resultText(r); b.appendChild(p); }).catch(function (e) { $("goalsBox").textContent = e.message; });
+    else $("goalsBox").textContent = "يتطلب مفتاح المالك.";
+  }
+  $("goalAdd").addEventListener("click", function () {
+    var t = $("goalTitle").value.trim(); if (!t) return; var k = $("goalKind").value, out = $("goalOut"); show(out, "جارٍ التنفيذ…");
+    var call = k === "goal" ? tool("goals.add", { title: t, priority: "3", why: "من الواجهة" }) : k === "task" ? tool("tasks.start", { goal: t }) : tool("selfdev.request", { title: t });
+    call.then(function (r) { show(out, resultText(r)); loadTasks(); }).catch(function (e) { show(out, e.message); });
+  });
+  loaders.tasks = loadTasks;
+
+  // ---------------- الأدوات والوكلاء ----------------
+  var AGENTS = [
+    { tool: "research.run", key: "goal", name: "وكيل البحث", d: "بحث متعدد المصادر مع حفظ الحقائق" },
+    { tool: "agent.manage", key: "goal", name: "مدير الوكلاء", d: "يفكك الهدف ويوزعه على وكلاء فرعيين" },
+    { tool: "agent.run", key: "goal", name: "وكيل منفذ", d: "حلقة تخطيط وتنفيذ بالأدوات" },
+    { tool: "fleet.spawn", key: "goals", name: "أسطول متوازٍ", d: "أهداف متعددة (سطر لكل هدف) بالتوازي" },
+    { tool: "reasoning.reason", key: "question", name: "وكيل الاستدلال", d: "تحليل منطقي خطوة بخطوة" },
+    { tool: "reasoning.verify", key: "claim", name: "وكيل التدقيق", d: "يتحقق من ادعاء مقابل دليل (اكتب: الادعاء ||| الدليل)" },
+    { tool: "web.summarize", key: "text", name: "وكيل التلخيص والتنقيح", d: "يلخص وينقح نصًا طويلًا" },
+    { tool: "defects.scan", key: null, name: "فاحص العيوب", d: "يفحص النظام ويعيد العيوب الحقيقية" }
+  ];
+  var agentSel = AGENTS[0];
+  function paintAgents() {
+    var g = $("agentCards"); g.textContent = "";
+    AGENTS.forEach(function (a) { var b = el("button", "item" + (a === agentSel ? " on" : "")); b.style.whiteSpace = "normal"; b.style.border = "1px solid var(--border)";
+      b.appendChild(el("div", null, a.name)); b.appendChild(el("small", null, a.tool + " — " + a.d));
+      b.addEventListener("click", function () { agentSel = a; paintAgents(); }); g.appendChild(b); });
+    $("agentSel").textContent = agentSel.name + " (" + agentSel.tool + ")";
+  }
+  $("agentRun").addEventListener("click", function () {
+    var txt = $("agentGoal").value.trim(); if (agentSel.key && !txt) { toast("اكتب المهمة أولًا", true); return; }
+    var ins = {}; if (agentSel.key) ins[agentSel.key] = txt;
+    if (agentSel.tool === "reasoning.verify") { var p = txt.split("|||"); ins = { claim: (p[0] || "").trim(), evidence: (p[1] || "").trim() }; }
+    var out = $("agentOut"), btn = $("agentRun"); btn.disabled = true; show(out, "الوكيل يعمل… (قد يستغرق دقائق)");
+    tool(agentSel.tool, ins).then(function (r) { show(out, resultText(r)); }).catch(function (e) { show(out, e.message); }).then(function () { btn.disabled = false; });
+  });
+  var allTools = [];
+  function paintTools() {
+    var q = $("toolQ").value.trim().toLowerCase(), box = $("toolsBox"); box.textContent = "";
+    var list = allTools.filter(function (t) { return !q || (t.name + " " + t.description).toLowerCase().indexOf(q) >= 0; });
+    box.appendChild(el("div", "small muted", list.length + " أداة مسجلة فعليًا في السجل"));
+    list.forEach(function (t) {
+      var d = el("details"); d.style.borderBottom = "1px solid var(--border)"; d.style.padding = "6px 0";
+      var s = el("summary"); s.appendChild(el("b", null, t.name)); s.appendChild(el("span", "muted small", "  " + (t.description || "").slice(0, 140))); d.appendChild(s);
+      var form = el("div"); form.style.padding = "8px 0"; var fields = {};
+      Object.keys(t.inputs || {}).forEach(function (k) { var i = el("input"); i.type = "text"; i.placeholder = k + ": " + t.inputs[k]; i.style.width = "100%"; i.style.marginBottom = "6px"; fields[k] = i; form.appendChild(i); });
+      var run = el("button", "btn pri sm", "تشغيل"); var out = el("pre"); out.hidden = true;
+      run.addEventListener("click", function () { var ins = {}; Object.keys(fields).forEach(function (k) { ins[k] = fields[k].value.trim(); }); run.disabled = true; show(out, "جارٍ…");
+        tool(t.name, ins).then(function (r) { show(out, resultText(r)); }).catch(function (e) { show(out, e.message); }).then(function () { run.disabled = false; }); });
+      form.appendChild(run); form.appendChild(out); d.appendChild(form); box.appendChild(d);
+    });
+  }
+  $("toolQ").addEventListener("input", paintTools);
+  loaders.agents = function () { paintAgents(); getJ("/tools/list").then(function (d) { allTools = (d && d.tools) || []; paintTools(); }); };
+
+  // ---------------- البحث والاتصال ----------------
+  $("sBtn").addEventListener("click", function () { var q = $("sQ").value.trim(); if (!q) return; show($("sOut"), "جارٍ البحث…"); tool("web.search", { query: q }).then(function (r) { show($("sOut"), resultText(r)); }).catch(function (e) { show($("sOut"), e.message); }); });
+  $("rBtn").addEventListener("click", function () { var q = $("sQ").value.trim(); if (!q) return; show($("sOut"), "بحث عميق جارٍ… (قد يستغرق دقائق)"); tool("research.run", { goal: q }).then(function (r) { show($("sOut"), resultText(r)); }).catch(function (e) { show($("sOut"), e.message); }); });
+  var lastFetched = "";
+  function isRepo(u) { return /github\.com\//i.test(u) || /^[\w.-]+\/[\w.-]+$/.test(u); }
+  $("uBtn").addEventListener("click", function () {
+    var u = $("uQ").value.trim(); if (!u) return; show($("uOut"), "جارٍ الاتصال…");
+    (isRepo(u) ? tool("github.repo", { url: u }) : tool("web.fetch", { url: /^https?:/i.test(u) ? u : "https://" + u }))
+      .then(function (r) { lastFetched = resultText(r); show($("uOut"), lastFetched); }).catch(function (e) { show($("uOut"), e.message); });
+  });
+  $("uSave").addEventListener("click", function () {
+    if (!lastFetched) { toast("اجلب المحتوى أولًا", true); return; }
+    api("/ws/create", { json: { format: "md", title: $("uQ").value.trim().replace(/^https?:\/\//, "").slice(0, 60), content: lastFetched, project_id: state.project ? state.project.id : null } })
+      .then(function (r) { toast("حُفظ " + r.name + " في الملفات"); }).catch(function (e) { toast(e.message, true); });
+  });
+  function paintConnectors(box, c) {
+    box.textContent = ""; if (!c) { box.textContent = "غير متاح"; return; }
+    var list = c.connectors || c.items || c;
+    if (!Array.isArray(list)) { list = Object.keys(list).map(function (k) { var v = list[k]; return typeof v === "object" ? Object.assign({ name: k }, v) : { name: k, status: v }; }); }
+    var t = el("table"); var hr = el("tr"); ["الموصل", "الحالة", "التفاصيل"].forEach(function (h) { hr.appendChild(el("th", null, h)); }); t.appendChild(hr);
+    list.forEach(function (x) { var tr = el("tr"); tr.appendChild(el("td", null, x.name || x.id || "")); var ok = x.connected || x.ok || x.status === "connected" || x.status === "ok" || x.enabled;
+      var st = el("td"); st.appendChild(el("span", "chip " + (ok ? "ok" : "warn"), ok ? "متصل" : String(x.status || "غير متصل"))); tr.appendChild(st);
+      var rest = {}; Object.keys(x).forEach(function (k) { if (["name", "id", "connected", "ok", "status"].indexOf(k) < 0) rest[k] = x[k]; });
+      tr.appendChild(el("td", "small muted", JSON.stringify(rest).slice(0, 300))); t.appendChild(tr); });
+    box.appendChild(t);
+  }
+  loaders.connect = function () { getJ("/connectors/status").then(function (d) { paintConnectors($("connBox"), d); }); };
+
+  // ---------------- الإعدادات ----------------
+  function section(title) { var c = el("div", "card"); c.appendChild(el("h2", null, title)); return c; }
+  function loadSettings() {
+    paintKey(); $("keyIn").value = "";
+    var box = $("setBox");
+    if (!ownerKey()) { box.textContent = ""; var c = el("div", "card muted", "أدخل مفتاح المالك لعرض الإعدادات الكاملة."); box.appendChild(c); return; }
+    box.textContent = "جارٍ التحميل…";
+    Promise.all([api("/ws/settings"), getJ("/health"), getJ("/brain/status")]).then(function (res) {
+      var s = res[0], h = res[1], b = res[2]; box.textContent = "";
+      var p = section("المشروع"); kv(p.appendChild(el("div")), Object.assign({}, s.project, { "الصحة": h ? h.status : "غير متاح" }));
+      var lk = el("div", "row"); lk.style.marginTop = "10px";
+      [["المستودع", s.project.repo], ["الواجهة السابقة", "/classic"], ["اللوحة القديمة", "/console"], ["توثيق الواجهة البرمجية", "/docs"], ["الصحة", "/health"]].forEach(function (x) { var a = el("a", "btn sm", x[0]); a.href = x[1]; a.target = "_blank"; a.rel = "noopener"; lk.appendChild(a); });
+      p.appendChild(lk); box.appendChild(p);
+      var ig = section("الموصلات والتكاملات"); var t = el("table"); var hr = el("tr"); ["التكامل", "الحالة", "الأداة", "التفاصيل"].forEach(function (x) { hr.appendChild(el("th", null, x)); }); t.appendChild(hr);
+      (s.integrations || []).forEach(function (x) { var tr = el("tr"); tr.appendChild(el("td", null, x.name)); var st = el("td"); st.appendChild(el("span", "chip " + (x.ready ? "ok" : "warn"), x.ready ? "جاهز" : "غير مُهيأ")); tr.appendChild(st);
+        tr.appendChild(el("td", "small", x.tool || "—")); tr.appendChild(el("td", "small muted", x.detail || "")); t.appendChild(tr); });
+      ig.appendChild(t);
+      var vc = el("div", "small muted"); vc.style.marginTop = "10px"; vc.textContent = "موصلات الخزينة (أسرار بنطاق + منح): " + (s.connectors && s.connectors.connectors && Object.keys(s.connectors.connectors).length ? Object.keys(s.connectors.connectors).join("، ") : "لا موصلات مسجلة بعد") + " — " + ((s.connectors && s.connectors.contract) || "");
+      ig.appendChild(vc); box.appendChild(ig);
+      var br = section("العقل"); kv(br.appendChild(el("div")), b || s.brain); box.appendChild(br);
+      var wsC = section("مساحة العمل والتخزين"); kv(wsC.appendChild(el("div")), s.workspace); box.appendChild(wsC);
+      var cp = section("القدرات (" + Object.keys(s.summary || {}).map(function (k) { return k + ": " + s.summary[k]; }).join("، ") + ")");
+      var ct = el("table"); var ch = el("tr"); ["القدرة", "المستوى", "ملاحظة"].forEach(function (x) { ch.appendChild(el("th", null, x)); }); ct.appendChild(ch);
+      (s.capabilities || []).forEach(function (c) { var tr = el("tr"); tr.appendChild(el("td", null, c.name)); var lv = el("td"); lv.appendChild(el("span", "chip " + (c.level === "enabled" ? "ok" : c.level === "blocked" ? "bad" : "warn"), c.level)); tr.appendChild(lv); tr.appendChild(el("td", "small muted", c.note || "")); ct.appendChild(tr); });
+      cp.appendChild(ct); box.appendChild(cp);
+      var ev = section("متغيرات البيئة (الأسماء فقط — القيم السرية لا تُعرض أبدًا)"); var et = el("table");
+      (s.env || []).forEach(function (e) { var tr = el("tr"); tr.appendChild(el("td", null, e.name)); var st = el("td"); st.appendChild(el("span", "chip " + (e.set ? "ok" : ""), e.set ? "مضبوط" : "غير مضبوط")); tr.appendChild(st); tr.appendChild(el("td", "small muted", e.value || (e.set ? "••••" : ""))); et.appendChild(tr); });
+      ev.appendChild(et); box.appendChild(ev);
+      var tl = section("الأدوات المسجلة (" + (s.tools || []).length + ")"); tl.appendChild(el("div", "small muted", (s.tools || []).join(" · "))); box.appendChild(tl);
+    }).catch(function (e) { box.textContent = ""; box.appendChild(el("div", "card", e.message)); });
+  }
+  $("keySave").addEventListener("click", function () { var v = $("keyIn").value.trim(); if (!v) return; try { localStorage.setItem(KEY_STORE, v); } catch (e) {}
+    api("/ws/status").then(function () { toast("مفتاح المالك صحيح"); loadSettings(); loadConvs(); }).catch(function (e) { toast(e.message, true); try { localStorage.removeItem(KEY_STORE); } catch (x) {} paintKey(); }); });
+  $("keyClear").addEventListener("click", function () { try { localStorage.removeItem(KEY_STORE); } catch (e) {} paintKey(); loadSettings(); loadConvs(); });
+  loaders.settings = loadSettings;
+
+  // ---------------- الصحة ----------------
+  function checkStatus() {
+    Promise.all([getJ("/health"), getJ("/brain/status")]).then(function (res) {
+      var h = res[0], b = res[1], dot = $("hDot"), tx = $("hText");
+      if (!h || h.status !== "healthy") { dot.className = "dot bad"; tx.textContent = "الخادم لا يستجيب"; return; }
+      if (!b || !b.enabled) { dot.className = "dot bad"; tx.textContent = "متصل — العقل غير مفعّل"; return; }
+      var last = b.last_call && b.last_call.result;
+      dot.className = "dot " + (last === "error" ? "bad" : "ok"); tx.textContent = (last === "error" ? "آخر اتصال بالعقل فشل · " : "متصل · ") + (b.model || "");
+    });
+  }
+  paintKey(); renderChat(); paintConvs(); loadConvs(); checkStatus(); setInterval(checkStatus, 30000); input.focus();
 })();
 </script>
 </body>

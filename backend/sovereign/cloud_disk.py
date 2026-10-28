@@ -168,6 +168,22 @@ class SupabaseDisk:
             logger.warning("R-719 [DISK]: فشل قراءة %s/%s: %s", namespace, key, exc)
             return None
 
+    def list_blobs(self, namespace: str, limit: int = 1000, offset: int = 0) -> Optional[List[Dict[str, Any]]]:
+        """R-800: كل مفاتيح فضاء أسماء (key + payload) — None عند الفشل (لا استثناء)."""
+        try:
+            resp = self._client.get(
+                "/rest/v1/disk",
+                params={"select": "key,payload", "namespace": f"eq.{namespace}",
+                        "order": "key.asc", "limit": str(limit), "offset": str(offset)},
+            )
+            if resp.status_code != 200:
+                logger.warning("R-800 [DISK]: فشل سرد %s — HTTP %s", namespace, resp.status_code)
+                return None
+            return resp.json()
+        except (httpx.HTTPError, ValueError) as exc:
+            logger.warning("R-800 [DISK]: فشل سرد %s: %s", namespace, exc)
+            return None
+
     # -------------------------
     # الذاكرة الجارية: سجل إلحاقي صرف
     # -------------------------

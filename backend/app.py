@@ -30,6 +30,7 @@ from typing import Dict, Any, List, Optional, Union
 from enum import Enum
 
 import os
+import shutil
 import pathlib
 
 from fastapi import (
@@ -149,6 +150,10 @@ class ChatMessage(BaseModel):
     history: Optional[List[ChatTurn]] = Field(default=None, max_length=20, description="أدوار سابقة (حتى 20)")
     # R-789: مفتاح المالك (اختياري) — يوسّع أدوات المحادثة من القراءة إلى كل السجل؛ لا يُسجل
     api_key: Optional[str] = Field(default=None, max_length=512, description="مفتاح المالك (اختياري)", repr=False)
+    # R-800: ملفات مساحة العمل المرفقة بالرسالة (للمالك) — الوكيل يقرؤها بأدوات files.*
+    file_ids: Optional[List[str]] = Field(default=None, max_length=10, description="معرفات ملفات مرفقة")
+    # R-800: المشروع النشط — تعليماته وروابطه تُمرَّر للوكيل (للمالك فقط)
+    project_id: Optional[str] = Field(default=None, max_length=40, description="معرف المشروع النشط")
     
     model_config = ConfigDict(
         json_schema_extra={
@@ -573,6 +578,121 @@ def _selfdev_tick_payload() -> Dict[str, Any]:
     return wiring.full_cycle(now=time.time())
 
 
+def _attachments_note(file_ids: List[str]) -> str:
+    """R-800: وصف حقيقي للمرفقات + مقتطف قصير؛ الوكيل يكمل بـ files.read/files.analyze."""
+    from workspace.service import get_workspace, WorkspaceError
+    ws = get_workspace()
+    lines = []
+    for fid in file_ids[:5]:
+        try:
+            r = ws.read(fid, 0, 1200)
+        except WorkspaceError as exc:
+            lines.append(f"- {fid}: {exc}")
+            continue
+        f = r["file"]
+        lines.append(f"- {f['id']} «{f['name']}» نوع {f['kind']} ({f['size']} بايت، {r['total_chars']} حرف مستخرج)"
+                     f"\n  مقتطف: {r['text'][:1200]!r}")
+    return ("\n\n[ملفات مرفقة في مساحة العمل — استعمل files.read (offset للمتابعة) أو files.analyze "
+            "أو files.unpack للأرشيف أو files.convert/files.create للتصدير]\n" + "\n".join(lines))
+
+
+def _project_note(project_id: str) -> str:
+    """R-800: سياق المشروع النشط (اسم/وصف/تعليمات/روابط) — من مساحة العمل الحقيقية لا نص مزروع."""
+    from workspace.service import get_workspace, WorkspaceError
+    try:
+        p = get_workspace().get_project(project_id)
+    except WorkspaceError:
+        return ""
+    parts = [f"\n\n[المشروع النشط {p['id']} «{p['name']}»]"]
+    if p.get("description"):
+        parts.append(f"الوصف: {p['description'][:800]}")
+    if p.get("instructions"):
+        parts.append(f"تعليمات المالك للمشروع: {p['instructions'][:2000]}")
+    if p.get("links"):
+        parts.append("روابط المشروع: " + ", ".join(p["links"][:10]))
+    parts.append(f"ملفات المشروع: استعمل files.list مع project_id={p['id']}")
+    return "\n".join(parts)
+
+
+@app.get("/ws/settings")
+async def ws_settings(x_sovereign_key: Optional[str] = Header(None)):
+    """R-800: كل ما يخص المشروع للوحة الإعدادات — بلا أي قيمة سرية (أسماء المتغيرات المضبوطة فقط)."""
+    if not x_sovereign_key or not verify_api_key(x_sovereign_key):
+        raise HTTPException(status_code=401, detail="مفتاح المالك مطلوب (X-Sovereign-Key)")
+
+    def build():
+        import config
+        from workspace.service import get_workspace
+        caps = _capabilities_payload()
+        import tool_registry
+        names = sorted(t["name"] for t in tool_registry.get_registry().list_tools())
+        secret_like = ("KEY", "SECRET", "TOKEN", "PASSWORD")
+        env_names = ["SUPABASE_URL", "SUPABASE_SECRET_KEY", "OLLAMA_BASE_URL",
+                     "OLLAMA_MODEL", "OLLAMA_PROTOCOL", "OLLAMA_TIMEOUT_SECONDS", "OLLAMA_NUM_CTX",
+                     "CORS_ORIGINS", "WEB_TOOLS_ENABLED", "SOVEREIGN_SCHEDULER", "SOVEREIGN_AUTONOMY",
+                     "SOVEREIGN_AUTONOMY_INTERVAL", "SOVEREIGN_SELFDEV_INTERVAL", "VISION_ENABLED",
+                     "VISION_MODEL", "STT_ENABLED", "TTS_ENABLED", "MEDIA_ENABLED", "MEDIA_BASE_URL",
+                     "SEARCH_PROVIDER", "SEARCH_BASE_URL", "SEARCH_API_KEY", "STT_BASE_URL",
+                     "TTS_BASE_URL", "GITHUB_TOKEN", "AI_ENVIRONMENT"]
+        # مفتاح المالك: يُعلن ضبطه فقط عبر المحمّل القائم (لا قراءة مباشرة للجذر — حارس الاشتقاق)
+        env = [{"name": "OWNER_KEY (مفتاح المالك)", "set": bool(SOVEREIGN_API_KEY), "value": None}]
+        for n in env_names:
+            v = os.getenv(n)
+            env.append({"name": n, "set": bool(v),
+                        "value": (None if any(t in n for t in secret_like) else (v[:120] if v else None))})
+        try:
+            connectors = _connectors_status_payload()
+        except Exception as exc:  # TOLERATED: حالة الموصلات تُعلن خطأها
+            connectors = {"error": type(exc).__name__}
+        def _cfg(n, d=None):
+            return getattr(config, n, d)
+
+        def _local(url):
+            return not url or "127.0.0.1" in str(url) or "localhost" in str(url)
+        ws_status = get_workspace().status()
+        # R-800: الموصلات والتكاملات الفعلية — الحالة مشتقة من الإعداد الحي لا من قائمة مزروعة
+        integrations = [
+            {"id": "github", "name": "GitHub (مستودعات عامة)", "tool": "github.repo",
+             "ready": True, "detail": "قراءة أي مستودع عام عبر واجهة GitHub العامة"
+             + ("" if not os.getenv("GITHUB_TOKEN") else " — برمز GITHUB_TOKEN")},
+            {"id": "web_fetch", "name": "الاتصال بأي موقع", "tool": "web.fetch",
+             "ready": bool(_cfg("WEB_TOOLS_ENABLED")), "detail": "جلب وقراءة أي رابط HTTP(S) عام"},
+            {"id": "web_search", "name": "البحث في الويب", "tool": "web.search",
+             "ready": bool(_cfg("WEB_TOOLS_ENABLED")) and not _local(_cfg("SEARCH_BASE_URL"))
+             or (str(_cfg("SEARCH_PROVIDER")) == "tavily" and bool(_cfg("SEARCH_API_KEY"))),
+             "detail": f"المزود {_cfg('SEARCH_PROVIDER')}" + (" — لا خادم بحث مضبوط" if _local(_cfg("SEARCH_BASE_URL")) else "")},
+            {"id": "supabase", "name": "Supabase (القرص والتخزين)", "tool": "disk.status",
+             "ready": bool(ws_status.get("durable")), "detail": f"تخزين الملفات: {ws_status.get('storage')}"},
+            {"id": "brain", "name": "العقل (Ollama ذاتي الاستضافة)", "tool": "brain.status",
+             "ready": bool(_cfg("OLLAMA_ENABLED")), "detail": str(_cfg("OLLAMA_MODEL") or "")},
+            {"id": "vision", "name": "تحليل الصور (نموذج رؤية)", "tool": "files.analyze",
+             "ready": bool(_cfg("VISION_ENABLED") and _cfg("VISION_MODEL")), "detail": str(_cfg("VISION_MODEL") or "VISION_MODEL غير مضبوط")},
+            {"id": "media", "name": "توليد الصور", "tool": "media.image",
+             "ready": bool(_cfg("MEDIA_ENABLED")) and not _local(_cfg("MEDIA_BASE_URL")), "detail": "خادم توليد ذاتي الاستضافة (MEDIA_BASE_URL)"},
+            {"id": "stt", "name": "تفريغ الصوت", "tool": "files.analyze",
+             "ready": bool(_cfg("STT_ENABLED")), "detail": "STT_BASE_URL"},
+            {"id": "tts", "name": "تحويل النص إلى صوت", "tool": None,
+             "ready": bool(_cfg("TTS_ENABLED")), "detail": "TTS_BASE_URL"},
+            {"id": "ffmpeg", "name": "معالجة الفيديو والصوت (ffmpeg)", "tool": "files.analyze",
+             "ready": bool(shutil.which("ffprobe")), "detail": "ffprobe/ffmpeg في الحاوية"},
+        ]
+        return {
+            "integrations": integrations,
+            "project": {"name": "Sovereign AI", "version": getattr(config, "VERSION", None) or "4.0.0",
+                        "repo": "https://github.com/reeveero-tech/sovereign_ai",
+                        "app": os.getenv("FLY_APP_NAME"), "region": os.getenv("FLY_REGION"),
+                        "image": os.getenv("FLY_IMAGE_REF"), "machine": os.getenv("FLY_MACHINE_ID"),
+                        "environment": os.getenv("AI_ENVIRONMENT")},
+            "capabilities": caps.get("capabilities"), "summary": caps.get("summary"),
+            "tools": names, "env": env, "connectors": connectors,
+            "brain": {"model": getattr(config, "OLLAMA_MODEL", None),
+                      "protocol": getattr(config, "OLLAMA_PROTOCOL", None),
+                      "enabled": bool(getattr(config, "OLLAMA_ENABLED", False))},
+            "workspace": ws_status,
+        }
+    return await asyncio.to_thread(build)
+
+
 @app.get("/selfdev/nucleus")
 async def selfdev_nucleus_view():
     """R-798: النواة — الإشارات النشطة وتكرارها، آخر التحليلات ومساراتها (بلا شيفرة ولا سر)."""
@@ -792,6 +912,15 @@ async def root():
     chat_index = FRONTEND_DIR / "chat" / "index.html"
     if chat_index.exists():
         return HTMLResponse(content=chat_index.read_text(encoding="utf-8"))
+    return await console()
+
+
+@app.get("/classic", response_class=HTMLResponse)
+async def classic_chat():
+    """R-800: واجهة المحادثة السابقة (R-786..R-799) محفوظة كما هي — الجذر صار التطبيق الكامل."""
+    classic = FRONTEND_DIR / "chat" / "classic.html"
+    if classic.exists():
+        return HTMLResponse(content=classic.read_text(encoding="utf-8"))
     return await console()
 
 
@@ -2180,6 +2309,9 @@ def _register_real_tools() -> None:
         inputs={}, outputs="counts/tasks/last_tick/brain/durable",
         handler=lambda: __import__("self_develop").get_engine().status(),
     ))
+    # R-800: أدوات مساحة العمل (ملفات/أرشيفات/تحليل/إنشاء/تحويل/مشاريع)
+    from workspace import tools as _ws_tools
+    _ws_tools.register(registry, ToolSpec)
     registry.register(ToolSpec(
         name="selfdev.nucleus",
         description="R-798: نواة التطوير الذاتي — الإشارات من كل أجزاء النظام وتحليلها وتوجيهها",
@@ -2407,7 +2539,12 @@ async def chat(message: ChatMessage, background_tasks: BackgroundTasks):
         # بنفسه ويجيب من نتائجها؛ الجسر الحتمي والقوالب لا يُستعملان في هذا المسار.
         import chat_agent
         owner = bool(message.api_key) and verify_api_key(message.api_key)
-        agent_out = await asyncio.to_thread(chat_agent.respond, message.text,
+        agent_text = message.text
+        if owner and message.file_ids:
+            agent_text = message.text + await asyncio.to_thread(_attachments_note, message.file_ids)
+        if owner and message.project_id:
+            agent_text = agent_text + await asyncio.to_thread(_project_note, message.project_id)
+        agent_out = await asyncio.to_thread(chat_agent.respond, agent_text,
                                             history or None, owner=owner)
         reply = agent_out["reply"]
         tools_used = list(agent_out.get("tools_used") or [])
@@ -3117,6 +3254,10 @@ async def run_orchestrator_cycle(input_data: Dict[str, Any] = None):
         "timestamp": time.time()
     }
 
+
+# R-800: مساحة العمل (ملفات/أرشيفات/تحليل/إنشاء/تصدير/محادثات/مشاريع) — بمفتاح المالك
+from workspace.api import make_router as _ws_make_router  # noqa: E402
+app.include_router(_ws_make_router(verify_api_key))
 
 # ============================================================
 # تقديم الملفات الثابتة للواجهة الأمامية

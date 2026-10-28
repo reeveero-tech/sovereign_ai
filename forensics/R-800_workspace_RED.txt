@@ -1,0 +1,17 @@
+# R-800 RED — tests/test_r800_workspace.py على main d25df61 (قبل R-800)
+# التاريخ: 2026-10-28 — الأمر: pytest tests/test_r800_workspace.py -q
+# النتيجة: خطأ جمع — لا وحدة backend/workspace ولا مسارات /ws ولا واجهة ملفات (كل البنود الثمانية غائبة)
+
+  /tmp/wt_main/backend/config.py:453: UserWarning: ⚠️ CORS مفتوح للجميع — مقبول في التطوير فقط (D-034)
+    warnings.warn("⚠️ CORS مفتوح للجميع — مقبول في التطوير فقط (D-034)")
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+ERROR tests/test_r800_workspace.py
+!!!!!!!!!!!!!!!!!!!! Interrupted: 1 error during collection !!!!!!!!!!!!!!!!!!!!
+1 warning, 1 error in 0.13s
+
+# دليل RED إضافي (pypdf وحده): قراءة PDF مولّد يحوي 'نص-مميز-800 للتجربة' أعادت 'نص-مميز' فقط
+# → الإصلاح: pdftotext (poppler) أولًا مع احتياط pypdf؛ poppler-utils في الحاوية.
+
+# GREEN بعد R-800: 30 passed

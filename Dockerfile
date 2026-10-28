@@ -11,6 +11,11 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
+# R-800: ffmpeg (ffprobe للصوت/الفيديو) + libfribidi0 (تشكيل العربية في Pillow/raqm) + poppler-utils (pdftotext)
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ffmpeg libfribidi0 poppler-utils \
+    && rm -rf /var/lib/apt/lists/*
+
 # نسخ الاعتماديات الموحدة
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
