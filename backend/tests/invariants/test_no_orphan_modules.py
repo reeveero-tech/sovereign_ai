@@ -56,6 +56,14 @@ SCRIPT_ENTRY_POINTS = {
     # R-758 (V5 ٥.٣): تقرير قياس الأسطول — CLI يكتب forensics/R-758_SCALE_REPORT.json
     # ويشغّله اختباره السلوكي كعملية مستقلة (tests/test_fleet.py)
     "tools/fleet_scale_report.py",
+    # R-801: خادم توليد الصور الذاتي — نقطة دخول حاوية infra/imagegen/Dockerfile
+    # (CMD python server.py)، ويحمّله tests/test_r801_media.py بـ spec_from_file_location
+    "infra/imagegen/server.py",
+    # R-801: سكربتات إثبات تُنسخ إلى آلة التطبيق وتُشغَّل عبر ssh في
+    # .github/workflows/infra-services.yml (appenv يُستورد منها على /tmp)
+    "infra/proof/appenv.py",
+    "infra/proof/brain_pull.py",
+    "infra/proof/workspace_proof.py",
 }
 
 # الجولة <2> (اعتراض المراجع بصير): ملفات تُحمّل ديناميكيًا عبر

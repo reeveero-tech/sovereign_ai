@@ -10,7 +10,7 @@ import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from . import analysis, archives, readers, writers
+from . import analysis, archives, readers, video, writers
 from .storage import MAX_UPLOAD_BYTES, Index, default_backends, new_id, sha256
 
 MAX_MESSAGES = 400
@@ -169,6 +169,59 @@ class Workspace:
             raise WorkspaceError(str(exc))
         return self.add_file(fname, blob, mime, project_id=project_id, source="create")
 
+    def make_video(self, slides: List[Dict[str, Any]], seconds: float = 3.0, audio_id: Optional[str] = None,
+              title: str = "video", project_id: Optional[str] = None) -> Dict[str, Any]:
+        """R-801: فيديو MP4 حقيقي بـ ffmpeg من شرائح (file_id لصورة، أو text/title) وصوت اختياري."""
+        _video = video
+        built: List[Dict[str, Any]] = []
+        parents: List[str] = []
+        for i, s in enumerate(slides or []):
+            if s.get("file_id"):
+                rec = self.get_file(s["file_id"])
+                if rec["kind"] != "image":
+                    raise WorkspaceError(f"الشريحة {i + 1}: الملف {rec['name']} ليس صورة ({rec['kind']})")
+                built.append({"image": self.raw(rec["id"])})
+                parents.append(rec["id"])
+            else:
+                built.append({"text": str(s.get("text") or ""), "title": str(s.get("title") or "")})
+        audio = audio_name = None
+        if audio_id:
+            arec = self.get_file(audio_id)
+            if arec["kind"] not in ("audio", "video"):
+                raise WorkspaceError(f"الملف {arec['name']} ليس صوتًا")
+            audio, audio_name = self.raw(arec["id"]), arec["name"]
+        try:
+            blob = _video.make_video(built, seconds, audio, audio_name or "audio")
+        except _video.VideoError as exc:
+            raise WorkspaceError(str(exc))
+        name = writers.safe_filename(title or "video", "mp4")
+        rec = self.add_file(name, blob, "video/mp4", project_id=project_id, source="video",
+                            parent=parents[0] if parents else None)
+        rec["slides"] = len(built)
+        rec["seconds"] = len(built) * max(0.5, min(float(seconds or 3.0), _video.MAX_SECONDS))
+        return rec
+
+    def generate_image(self, prompt: str, size: str = "512x512", title: str = "",
+                       project_id: Optional[str] = None) -> Dict[str, Any]:
+        """R-801: صورة مولدة بالذكاء الاصطناعي من خادم التوليد الذاتي (media_client — SD-Turbo على
+        آلة خاصة). غير مُهيأ أو فاشل = خطأ معلن بسببه، لا صورة مختلقة."""
+        import media_client
+        prompt = str(prompt or "").strip()
+        if not prompt:
+            raise WorkspaceError("الوصف فارغ")
+        got = media_client.generate_image(prompt, size or None)
+        if not got:
+            reason = media_client.last_outcome().get("result")
+            hint = {"disabled": "توليد الصور غير مفعّل (MEDIA_ENABLED)",
+                    "host_not_self_hosted": "مضيف التوليد ليس ذاتي الاستضافة — رُفض"}.get(reason, reason)
+            raise WorkspaceError(f"لم تُولَّد صورة: {hint}")
+        data, mime = got
+        ext = {"image/png": "png", "image/jpeg": "jpg", "image/webp": "webp", "image/gif": "gif"}.get(mime, "png")
+        rec = self.add_file(writers.safe_filename(title or prompt[:40], ext), data, mime,
+                            project_id=project_id, source="imagegen")
+        rec["prompt"] = prompt[:500]
+        return rec
+
     def convert(self, fid: str, fmt: str) -> Dict[str, Any]:
         rec = self.get_file(fid)
         ex = self.extracts.get(fid) or {}
@@ -266,6 +319,14 @@ class Workspace:
         return p | {"files": self.list_files(project_id=pid),
                     "conversations": self.list_conversations(project_id=pid)}
 
+    @staticmethod
+    def _imagegen_status() -> Dict[str, Any]:
+        import config
+        import media_client
+        ready = bool(config.MEDIA_ENABLED) and media_client.is_self_hosted(str(config.MEDIA_BASE_URL))
+        return {"available": ready, "last": media_client.last_outcome().get("result"),
+                "reason": None if ready else "MEDIA_ENABLED/MEDIA_BASE_URL غير مضبوطين على خادم ذاتي"}
+
     def status(self) -> Dict[str, Any]:
         files = self.files.all()
         kinds: Dict[str, int] = {}
@@ -277,6 +338,8 @@ class Workspace:
                 "conversations": len(self.conversations.all()), "projects": len(self.projects.all()),
                 "max_upload_mb": MAX_UPLOAD_BYTES // (1024 * 1024),
                 "create_formats": sorted(writers.FORMATS),
+                "video": video.available(),
+                "imagegen": self._imagegen_status(),
                 "archive_formats": ["zip", "tar", "tar.gz", "tgz", "tar.bz2", "tar.xz", "gz", "bz2", "xz", "7z"],
                 "persist_errors": self.files.persist_errors + self.extracts.persist_errors}
 

@@ -1,0 +1,17 @@
+# R-801: إعداد SearXNG الذاتي الاستضافة (آلة خاصة داخل تطبيق Fly — لا منفذ عام).
+# يُحمَّل إلى /etc/searxng/settings.yml عبر flyctl machine run --file-local.
+# المفتاح السري يُمرَّر بمتغير SEARXNG_SECRET عند الإنشاء (لا يُحفظ في git).
+use_default_settings: true
+general:
+  instance_name: "sovereign-search"
+server:
+  limiter: false          # خلف الشبكة الخاصة فقط — الطالب الوحيد هو التطبيق
+  image_proxy: false
+  public_instance: false
+search:
+  safe_search: 0
+  formats:
+    - html
+    - json                # web_tools.web_search يطلب format=json
+ui:
+  default_locale: ""

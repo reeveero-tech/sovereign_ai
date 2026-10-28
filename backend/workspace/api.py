@@ -18,6 +18,21 @@ from .service import WorkspaceError, get_workspace
 from .storage import MAX_UPLOAD_BYTES
 
 
+class VideoBody(BaseModel):
+    slides: List[Dict[str, Any]] = Field(..., max_length=60)
+    seconds: float = 3.0
+    audio_id: Optional[str] = None
+    title: str = "video"
+    project_id: Optional[str] = None
+
+
+class ImageBody(BaseModel):
+    prompt: str = Field(..., max_length=1000)
+    size: str = "512x512"
+    title: str = ""
+    project_id: Optional[str] = None
+
+
 class CreateBody(BaseModel):
     format: str
     title: str = ""
@@ -148,6 +163,18 @@ def make_router(verify: Callable[[str], bool]) -> APIRouter:
         owner(x_sovereign_key)
         return await run(lambda: get_workspace().create(body.format, body.title, body.content,
                                                         body.table, body.data, body.project_id))
+
+    @r.post("/image")
+    async def image(body: ImageBody, x_sovereign_key: Optional[str] = Header(None)):
+        owner(x_sovereign_key)
+        return await run(lambda: get_workspace().generate_image(body.prompt, body.size, body.title,
+                                                                body.project_id))
+
+    @r.post("/video")
+    async def video(body: VideoBody, x_sovereign_key: Optional[str] = Header(None)):
+        owner(x_sovereign_key)
+        return await run(lambda: get_workspace().make_video(body.slides, body.seconds, body.audio_id,
+                                                            body.title, body.project_id))
 
     @r.get("/conversations")
     async def convs(project_id: Optional[str] = None, x_sovereign_key: Optional[str] = Header(None)):

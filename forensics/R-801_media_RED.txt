@@ -1,0 +1,8 @@
+# R-801 RED — tests/test_r801_media.py على origin/main (133e25a, R-800) قبل الإضافة
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+ERROR tests/test_r801_media.py
+!!!!!!!!!!!!!!!!!!!! Interrupted: 1 error during collection !!!!!!!!!!!!!!!!!!!!
+1 warning, 1 error in 0.13s
+E   ImportError: cannot import name 'video' from 'workspace' (/tmp/redwt/backend/workspace/__init__.py)

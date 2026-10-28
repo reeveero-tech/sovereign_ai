@@ -1,0 +1,195 @@
+# R-801 — الخدمات الذاتية الاستضافة (يدوي فقط — بأمر المالك 2026-10-28)
+#
+# ينشئ/يتحقق من آلات خاصة داخل تطبيق Fly نفسه (لا منفذ عام، لا مزود خارجي — D-045):
+#   - searxng: محرك بحث ذاتي (web.search) على <id>.vm.<app>.internal:8080
+#   - نموذج رؤية يُسحب إلى آلة العقل (Ollama) لتحليل الصور (files.analyze)
+#   - imagegen: خادم توليد صور ذاتي (infra/imagegen — stable-diffusion.cpp + SD-Turbo) لـ media.image/files.image
+# ثم يضبط أسرار التطبيق (SEARCH_PROVIDER/SEARCH_BASE_URL/VISION_ENABLED/VISION_MODEL)
+# بعد إثبات أن كل خدمة تجيب فعلًا من داخل آلة التطبيق — لا ضبط على خدمة لم تُثبت.
+
+name: Infra — self-hosted services (manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_app:
+        description: 'اكتب اسم التطبيق للتأكيد (sovereign-ai-k20elq)'
+        required: true
+        type: string
+      searxng:
+        description: 'إنشاء/التحقق من محرك البحث الذاتي SearXNG'
+        type: boolean
+        default: true
+      vision_model:
+        description: 'نموذج الرؤية في Ollama (فارغ = تخطٍّ)'
+        type: string
+        default: 'moondream'
+      imagegen:
+        description: 'بناء/تحديث خادم توليد الصور الذاتي (SD-Turbo على المعالج)'
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fly-deploy
+  cancel-in-progress: false
+
+jobs:
+  infra:
+    name: Self-hosted services
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      FLY_APP: sovereign-ai-k20elq
+      FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Confirm target app
+        env:
+          CONFIRM: ${{ inputs.confirm_app }}
+        run: |
+          if [ "$CONFIRM" != "$FLY_APP" ]; then echo "❌ التأكيد لا يطابق ($FLY_APP)"; exit 1; fi
+          if [ -z "$FLY_API_TOKEN" ]; then echo "❌ FLY_API_TOKEN غير مضبوط"; exit 1; fi
+
+      - uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1  # 1.6
+
+      - name: Locate app machine
+        run: |
+          flyctl machines list -a "$FLY_APP" --json > machines.json
+          jq -r '.[] | [.id, .name, .state, (.config.metadata.fly_process_group // "-"), (.config.image // "-")] | @tsv' machines.json
+          APPM=$(jq -r '[.[] | select(.config.metadata.fly_process_group == "app" and .state == "started")][0].id // empty' machines.json)
+          [ -n "$APPM" ] || { echo "❌ لا آلة تطبيق قيد التشغيل"; exit 1; }
+          echo "APPM=$APPM" >> "$GITHUB_ENV"
+
+      - name: SearXNG machine (create if missing)
+        if: ${{ inputs.searxng }}
+        continue-on-error: true  # خدمة فاشلة لا تمنع ضبط الخدمات المثبتة؛ لا تُضبط أسرارها
+        run: |
+          SX=$(jq -r '[.[] | select(.name == "searxng")][0].id // empty' machines.json)
+          if [ -z "$SX" ]; then
+            flyctl machine run docker.io/searxng/searxng:latest -a "$FLY_APP" --name searxng --region ams \
+              --vm-cpu-kind shared --vm-cpus 1 --vm-memory 512 --restart always \
+              --file-local /etc/searxng/settings.yml=infra/searxng/settings.yml \
+              --env GRANIAN_HOST=:: --env GRANIAN_PORT=8080 \
+              --env SEARXNG_SECRET="$(openssl rand -hex 32)" --detach
+            for i in $(seq 1 30); do
+              SX=$(flyctl machines list -a "$FLY_APP" --json | jq -r '[.[] | select(.name == "searxng")][0].id // empty')
+              [ -n "$SX" ] && break; sleep 4
+            done
+          fi
+          [ -n "$SX" ] || { echo "❌ لم تُنشأ آلة searxng"; exit 1; }
+          echo "SX=$SX" >> "$GITHUB_ENV"
+          echo "searxng machine: $SX"
+
+      - name: Prove SearXNG answers from inside the app machine
+        if: ${{ inputs.searxng }}
+        continue-on-error: true  # خدمة فاشلة لا تمنع ضبط الخدمات المثبتة؛ لا تُضبط أسرارها
+        run: |
+          URL="http://${SX}.vm.${FLY_APP}.internal:8080"
+          echo "SX_URL=$URL" >> "$GITHUB_ENV"
+          OK=""
+          for i in $(seq 1 20); do
+            OUT=$(flyctl ssh console -a "$FLY_APP" --machine "$APPM" -C "python3 -c \"import json,urllib.request;d=json.load(urllib.request.urlopen('$URL/search?q=fly.io&format=json',timeout=30));print('RESULTS',len(d.get('results',[])))\"" 2>&1 || true)
+            echo "$OUT" | tail -2
+            if echo "$OUT" | grep -qE 'RESULTS [1-9]'; then OK=1; break; fi
+            sleep 10
+          done
+          [ -n "$OK" ] || { echo "❌ SearXNG لا يعيد نتائج — لن تُضبط الأسرار"; flyctl logs -a "$FLY_APP" --machine "$SX" --no-tail | tail -40 || true; exit 1; }
+          echo "SEARCH_READY=1" >> "$GITHUB_ENV"
+
+      - name: Pull vision model into the brain (Ollama)
+        if: ${{ inputs.vision_model != '' }}
+        continue-on-error: true  # خدمة فاشلة لا تمنع ضبط الخدمات المثبتة؛ لا تُضبط أسرارها
+        env:
+          VM: ${{ inputs.vision_model }}
+        run: |
+          bash infra/proof/put.sh infra/proof/appenv.py /tmp/appenv.py
+          bash infra/proof/put.sh infra/proof/brain_pull.py /tmp/brain_pull.py
+          OUT=$(flyctl ssh console -a "$FLY_APP" --machine "$APPM" -C "python3 /tmp/brain_pull.py $VM" 2>&1 || true)
+          echo "$OUT" | tail -4
+          if echo "$OUT" | grep -q "TAGS.*${VM%%:*}"; then echo "VISION_READY=1" >> "$GITHUB_ENV"; else echo "❌ النموذج لم يظهر في العقل"; exit 1; fi
+
+      - name: Build and push imagegen image (app registry)
+        if: ${{ inputs.imagegen }}
+        continue-on-error: true  # خدمة فاشلة لا تمنع ضبط الخدمات المثبتة؛ لا تُضبط أسرارها
+        run: |
+          IMG="registry.fly.io/${FLY_APP}:imagegen-${GITHUB_SHA::12}"
+          flyctl auth docker
+          docker build -t "$IMG" infra/imagegen
+          docker push "$IMG"
+          echo "IG_IMAGE=$IMG" >> "$GITHUB_ENV"
+
+      - name: Imagegen machine (create or update)
+        if: ${{ inputs.imagegen }}
+        continue-on-error: true  # خدمة فاشلة لا تمنع ضبط الخدمات المثبتة؛ لا تُضبط أسرارها
+        run: |
+          IG=$(jq -r '[.[] | select(.name == "imagegen")][0].id // empty' machines.json)
+          if [ -n "$IG" ]; then
+            flyctl machine update "$IG" -a "$FLY_APP" --image "$IG_IMAGE" --yes --detach
+          else
+            flyctl machine run "$IG_IMAGE" -a "$FLY_APP" --name imagegen --region ams \
+              --vm-cpu-kind shared --vm-cpus 4 --vm-memory 4096 --restart always \
+              --env IMAGEGEN_THREADS=4 --detach
+            for i in $(seq 1 30); do
+              IG=$(flyctl machines list -a "$FLY_APP" --json | jq -r '[.[] | select(.name == "imagegen")][0].id // empty')
+              [ -n "$IG" ] && break; sleep 4
+            done
+          fi
+          [ -n "$IG" ] || { echo "❌ لم تُنشأ آلة imagegen"; exit 1; }
+          echo "IG=$IG" >> "$GITHUB_ENV"
+          echo "IG_URL=http://${IG}.vm.${FLY_APP}.internal:8080/v1" >> "$GITHUB_ENV"
+
+      - name: Prove imagegen generates a real image from inside the app machine
+        if: ${{ inputs.imagegen }}
+        continue-on-error: true  # خدمة فاشلة لا تمنع ضبط الخدمات المثبتة؛ لا تُضبط أسرارها
+        run: |
+          OK=""
+          for i in $(seq 1 40); do
+            OUT=$(flyctl ssh console -a "$FLY_APP" --machine "$APPM" -C "python3 -c \"import json,urllib.request;print('HEALTH',json.dumps(json.load(urllib.request.urlopen('${IG_URL%/v1}/health',timeout=20))))\"" 2>&1 || true)
+            echo "$OUT" | grep HEALTH || echo "$OUT" | tail -1
+            if echo "$OUT" | grep -q '"status": "ok"'; then OK=1; break; fi
+            if echo "$OUT" | grep -q '"status": "error"'; then break; fi
+            sleep 15
+          done
+          [ -n "$OK" ] || { echo "❌ خادم الصور غير جاهز"; flyctl logs -a "$FLY_APP" --machine "$IG" --no-tail | tail -40 || true; exit 1; }
+          PY="import json,urllib.request,base64,time; t=time.time(); r=urllib.request.Request('$IG_URL/images/generations',data=json.dumps({'prompt':'a lighthouse at sunset, oil painting','size':'256x256','n':1,'response_format':'b64_json'}).encode(),headers={'Content-Type':'application/json'}); d=json.load(urllib.request.urlopen(r,timeout=600)); b=base64.b64decode(d['data'][0]['b64_json']); print('IMAGE',len(b),b[:8]==bytes([137,80,78,71,13,10,26,10]),round(time.time()-t,1))"
+          OUT=$(flyctl ssh console -a "$FLY_APP" --machine "$APPM" -C "python3 -c \"$PY\"" 2>&1 || true)
+          echo "$OUT" | tail -2
+          echo "$OUT" | grep -q "IMAGE [0-9]* True" || { echo "❌ لم تُولَّد صورة حقيقية"; exit 1; }
+          echo "IMAGEGEN_READY=1" >> "$GITHUB_ENV"
+
+      - name: Set app secrets (only for proven services)
+        env:
+          VM: ${{ inputs.vision_model }}
+        run: |
+          ARGS=()
+          [ "${SEARCH_READY:-}" = "1" ] && ARGS+=(SEARCH_PROVIDER=searxng "SEARCH_BASE_URL=$SX_URL")
+          [ "${VISION_READY:-}" = "1" ] && ARGS+=(VISION_ENABLED=true "VISION_MODEL=$VM")
+          [ "${IMAGEGEN_READY:-}" = "1" ] && ARGS+=(MEDIA_ENABLED=true "MEDIA_BASE_URL=$IG_URL" MEDIA_TIMEOUT_SECONDS=300)
+          if [ ${#ARGS[@]} -eq 0 ]; then echo "لا خدمة مثبتة — لا تغيير"; exit 0; fi
+          printf 'setting: %s\n' "${ARGS[@]%%=*}"
+          flyctl secrets set -a "$FLY_APP" "${ARGS[@]}"
+
+      - name: Health after restart
+        run: |
+          for i in $(seq 1 30); do
+            S=$(curl -s -o /dev/null -w '%{http_code}' https://${FLY_APP}.fly.dev/health || true)
+            [ "$S" = "200" ] && { echo "✅ /health 200"; break; }; sleep 5
+          done
+          [ "$S" = "200" ] || { echo "❌ /health لم يعد 200"; exit 1; }
+
+      # إثبات مساحة العمل على الإنتاج نفسه: رفع zip ← تفكيك ← تحويل ← إنشاء PDF ← قراءة —
+      # من داخل آلة التطبيق بمفتاح المالك من بيئتها (لا يُطبع المفتاح).
+      - name: Prove workspace on production (owner key from machine env)
+        run: |
+          flyctl machines list -a "$FLY_APP" --json > machines2.json
+          APPM=$(jq -r '[.[] | select(.config.metadata.fly_process_group == "app" and .state == "started")][0].id // empty' machines2.json)
+          export APPM
+          bash infra/proof/put.sh infra/proof/appenv.py /tmp/appenv.py
+          bash infra/proof/put.sh infra/proof/workspace_proof.py /tmp/wsproof.py
+          OUT=$(flyctl ssh console -a "$FLY_APP" --machine "$APPM" -C "python3 /tmp/wsproof.py" 2>&1 || true)
+          echo "$OUT" | grep -E "UPLOAD|UNPACK|CONVERT|PDF|STATUS|Error|Traceback" | head -20
+          echo "$OUT" | grep -q "PDF .* True" || { echo "❌ إثبات مساحة العمل فشل"; exit 1; }

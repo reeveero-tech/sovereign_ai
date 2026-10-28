@@ -246,7 +246,7 @@ def _png(title: str, content: str) -> bytes:
             (t, fb, (203, 213, 225)) for _, t in blocks(content)[:10]]:
         if not text:
             continue
-        if re.search(r"[A-Za-z]", text):  # خط Noto العربي بلا لاتيني — DejaVu يغطي الاثنين
+        if not re.fullmatch(r"[\u0600-\u06FF\s0-9.,:;!?()\-]*", text):  # R-801: Noto العربي بلا لاتيني ولا «—» — DejaVu يغطي الاثنين
             font = mixed[font.size]
         kw = {"direction": "rtl"} if layout == ImageFont.Layout.RAQM and _AR.search(text) else {}
         w = dr.textlength(text, font=font, **kw)

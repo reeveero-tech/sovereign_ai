@@ -52,6 +52,17 @@ def register(registry, ToolSpec) -> None:
         ("files.convert", "R-800: تحويل ملف إلى صيغة أخرى (مثل PDF⇒DOCX نصًا، CSV⇒XLSX، DOCX⇒PDF)",
          {"file_id": "معرف الملف", "format": "الصيغة الهدف"}, "file",
          lambda file_id, format: _slim(ws().convert(file_id, format))),
+        ("files.image", "R-801: توليد صورة بالذكاء الاصطناعي من وصف (SD-Turbo ذاتي الاستضافة) وحفظها في مساحة العمل",
+         {"prompt": "وصف الصورة (الإنجليزية أدق)", "size": "256x256 أو 512x512 أو 768x768"}, "file",
+         lambda prompt, size="512x512": _slim(ws().generate_image(prompt, size or "512x512"))),
+        ("files.video", "R-801: إنشاء فيديو MP4 حقيقي بـ ffmpeg من شرائح نصية و/أو صور من مساحة العمل + صوت اختياري "
+         "(عرض شرائح/فيديو توضيحي — ليس توليد فيديو بالذكاء الاصطناعي)",
+         {"texts": "نصوص الشرائح مفصولة بـ ||| (اختياري)", "image_ids": "معرفات صور مفصولة بفواصل (اختياري)",
+          "seconds": "ثوانٍ لكل شريحة", "audio_id": "معرف ملف صوت (اختياري)", "title": "اسم الفيديو"}, "file",
+         lambda texts="", image_ids="", seconds="3", audio_id="", title="video": _slim(ws().make_video(
+             [{"text": t.strip()} for t in str(texts or "").split("|||") if t.strip()]
+             + [{"file_id": i} for i in _ids(image_ids)],
+             float(seconds or 3), audio_id or None, title or "video"))),
         ("projects.list", "R-800: مشاريع المالك مع عدد ملفاتها ومحادثاتها",
          {}, "projects[]", lambda: {"projects": ws().list_projects()}),
     ]

@@ -214,6 +214,19 @@
         <div class="row" style="margin-bottom:8px"><select id="cFmt"><option>md</option><option>txt</option><option>html</option><option>pdf</option><option>docx</option><option>xlsx</option><option>pptx</option><option>csv</option><option>json</option><option>png</option></select>
           <input type="text" id="cTitle" placeholder="العنوان" style="flex:1"><button class="btn pri" id="cBtn">إنشاء</button></div>
         <textarea id="cContent" rows="5" placeholder="المحتوى. للجداول (xlsx/csv): أسطر مفصولة بفواصل، السطر الأول للعناوين. للعروض (pptx): كل سطر يبدأ بـ # يبدأ شريحة جديدة"></textarea></div>
+      <div class="card"><h2>توليد صورة بالذكاء الاصطناعي</h2>
+        <div class="small muted" style="margin-bottom:8px">نموذج SD-Turbo على آلة خاصة ذاتية الاستضافة (معالج فقط — قد يستغرق التوليد دقيقة). الوصف بالإنجليزية أدق.</div>
+        <div class="row"><input type="text" id="gPrompt" placeholder="مثال: a lighthouse at sunset, oil painting" style="flex:1" dir="auto">
+          <select id="gSize"><option>512x512</option><option>256x256</option><option>768x768</option></select>
+          <button class="btn pri" id="gBtn">توليد</button></div>
+        <div class="small muted" id="gOut" style="margin-top:6px"></div></div>
+      <div class="card"><h2>إنشاء فيديو</h2>
+        <div class="small muted" style="margin-bottom:8px">فيديو MP4 حقيقي بـ ffmpeg: الصور المحددة في القائمة تصير شرائح، ومعها شرائح نصية اختيارية، وصوت محدد إن وُجد. (تركيب فيديو — ليس توليدًا بالذكاء الاصطناعي من وصف.)</div>
+        <textarea id="vTexts" rows="3" placeholder="شرائح نصية — افصل بين الشرائح بسطر ---"></textarea>
+        <div class="row" style="margin-top:8px"><input type="text" id="vTitle" placeholder="اسم الفيديو" style="flex:1">
+          <label class="small muted">ثوانٍ لكل شريحة <input type="text" id="vSecs" value="3" style="width:60px"></label>
+          <button class="btn pri" id="vBtn">إنشاء الفيديو</button></div>
+        <div class="small muted" id="vOut" style="margin-top:6px"></div></div>
       <div class="card"><div class="row" style="margin-bottom:10px"><h2 style="margin:0;flex:1">الملفات</h2>
           <input type="text" id="fQ" placeholder="بحث في الأسماء والمحتوى">
           <select id="fKind"><option value="">كل الأنواع</option><option>text</option><option>code</option><option>csv</option><option>json</option><option>pdf</option><option>docx</option><option>xlsx</option><option>pptx</option><option>image</option><option>archive</option><option>audio</option><option>video</option><option>binary</option></select>
@@ -504,6 +517,7 @@
       if (!files.length) { box.appendChild(el("div", "empty-note", q ? "لا نتائج." : "لا ملفات بعد — ارفع أو أنشئ ملفًا.")); return; }
       var t = el("table"); var hr = el("tr"); ["", "الاسم", "النوع", "الحجم", "المصدر", "التاريخ", ""].forEach(function (h) { hr.appendChild(el("th", null, h)); }); t.appendChild(hr);
       files.forEach(function (f) {
+        fileKinds[f.id] = f.kind;
         var tr = el("tr"); var c0 = el("td"); var cb = el("input"); cb.type = "checkbox"; cb.checked = !!selected[f.id];
         cb.addEventListener("change", function () { if (cb.checked) selected[f.id] = 1; else delete selected[f.id]; $("fZip").disabled = !Object.keys(selected).length; });
         c0.appendChild(cb); tr.appendChild(c0);
@@ -547,6 +561,9 @@
         api("/ws/files/" + f.id + "/convert", { json: { format: sel.value } }).then(function (r) { toast("أُنشئ " + r.name); loadFiles(); openFile(r.id); })
           .catch(function (e) { toast(e.message, true); }).then(function () { cv.disabled = false; }); });
       ar.addEventListener("click", function () { api("/ws/files/" + f.id, { method: "PATCH", json: { archived: true } }).then(function () { toast("أُرشف"); box.hidden = true; loadFiles(); }); });
+      if (f.kind === "video" || f.kind === "audio") {
+        api("/ws/files/" + f.id + "/raw", { blob: true }).then(function (b) { var v = el(f.kind === "video" ? "video" : "audio"); v.controls = true; v.src = URL.createObjectURL(b); v.style.maxWidth = "100%"; v.style.maxHeight = "420px"; v.style.display = "block"; v.style.borderRadius = "10px"; box.insertBefore(v, out); });
+      }
       if (f.kind === "image") {
         api("/ws/files/" + f.id + "/raw", { blob: true }).then(function (b) { var img = el("img"); img.src = URL.createObjectURL(b); img.style.maxWidth = "100%"; img.style.maxHeight = "420px"; img.style.borderRadius = "10px"; img.style.display = "block"; box.insertBefore(img, out); });
       }
@@ -583,6 +600,25 @@
     if ((fmt === "xlsx" || fmt === "csv") && content.indexOf(",") >= 0) table = content.split(/\r?\n/).filter(Boolean).map(function (l) { return l.split(",").map(function (c) { return c.trim(); }); });
     api("/ws/create", { json: { format: fmt, title: $("cTitle").value.trim(), content: table ? "" : content, table: table, project_id: state.project ? state.project.id : null } })
       .then(function (r) { toast("أُنشئ " + r.name); loadFiles(); openFile(r.id); }).catch(function (e) { toast(e.message, true); });
+  });
+  var fileKinds = {};
+  $("gBtn").addEventListener("click", function () {
+    var pr = $("gPrompt").value.trim(); if (!pr) return; var b = $("gBtn"); b.disabled = true; var t0 = Date.now();
+    $("gOut").textContent = "جارٍ التوليد على خادم الصور الذاتي…";
+    var tk = setInterval(function () { $("gOut").textContent = "جارٍ التوليد… " + Math.round((Date.now() - t0) / 1000) + " ث"; }, 1000);
+    api("/ws/image", { json: { prompt: pr, size: $("gSize").value, project_id: state.project ? state.project.id : null } })
+      .then(function (r) { $("gOut").textContent = "وُلّدت " + r.name + " في " + Math.round((Date.now() - t0) / 1000) + " ث"; loadFiles(); openFile(r.id); })
+      .catch(function (e) { $("gOut").textContent = e.message; }).then(function () { clearInterval(tk); b.disabled = false; });
+  });
+  $("vBtn").addEventListener("click", function () {
+    var ids = Object.keys(selected), slides = [], audio = null;
+    $("vTexts").value.split(/\n-{3,}\n?/).map(function (t) { return t.trim(); }).filter(Boolean).forEach(function (t) { slides.push({ text: t }); });
+    ids.forEach(function (id) { var k = fileKinds[id]; if (k === "image") slides.push({ file_id: id }); else if ((k === "audio" || k === "video") && !audio) audio = id; });
+    if (!slides.length) { toast("حدد صورًا من القائمة أو اكتب شرائح نصية", true); return; }
+    var b = $("vBtn"); b.disabled = true; $("vOut").textContent = "جارٍ التركيب بـ ffmpeg…";
+    api("/ws/video", { json: { slides: slides, seconds: parseFloat($("vSecs").value) || 3, audio_id: audio, title: $("vTitle").value.trim() || "video", project_id: state.project ? state.project.id : null } })
+      .then(function (r) { $("vOut").textContent = "أُنشئ " + r.name + " — " + r.slides + " شريحة، " + r.seconds + " ث، " + fmtSize(r.size); loadFiles(); openFile(r.id); })
+      .catch(function (e) { $("vOut").textContent = e.message; }).then(function () { b.disabled = false; });
   });
   loaders.files = loadFiles;
 
