@@ -452,11 +452,22 @@ class SelfDevEngine:
                  "search": d.get("search"), "replace": d.get("replace"),
                  "test_name": str(d.get("test_name") or ""), "test_code": d.get("test_code"),
                  "base_sha256": hashlib.sha256(original.encode("utf-8")).hexdigest()}
+        # R-802: مرساة حتمية — العقل ينسخ النافذة بإزاحة/فراغات/حرف مختلف (دليل حي: كل
+        # المسودات search_occurs_0_times). تُصحَّح إلى نص الملف الحقيقي أو تُرفض كما كانت.
+        from selfdev import anchor  # كسول: selfdev/__init__ يستورد هذه الوحدة
+        fix = anchor.anchor(original, draft["search"] or "", draft["replace"]
+                            if isinstance(draft["replace"], str) else "", window=(lo, hi))
+        if fix and isinstance(draft["replace"], str):
+            draft["search"], draft["replace"] = fix["search"], fix["replace"]
+            draft["anchor"] = fix["method"]
         errors = validate_draft(draft, original)
+        near = None
+        if any(e.startswith("search_occurs_") for e in errors):
+            near = anchor.nearest(original, draft.get("search") or "")
         if not errors:
             draft["removed_lines"] = len(removed_lines(draft["search"], draft["replace"]))
         return {"ok": not errors, "draft": draft if not errors else None, "errors": errors,
-                "file": rel}
+                "file": rel, "nearest": near}
 
     # ---------- الدورة ----------
     def _set(self, t: Dict[str, Any], status: str, now: float, by: str, note: str = "") -> None:
@@ -473,6 +484,29 @@ class SelfDevEngine:
             act.sort(key=lambda t: (prio.get(t.get("source"), 3), t.get("created_at", 0)))
             return act[0] if act else None
 
+    def revive_anchor_failures(self, now: float) -> int:
+        """R-802: مهمة استُنفدت **فقط** بعدم مطابقة search (قبل المرساة) تُمنح جولة جديدة مرة واحدة.
+
+        السبب المرفوض أُصلح في المحرك نفسه، فبقاؤها «exhausted» حكم على عيب أُزيل. لا تُحيا
+        مهمة فشلت لسبب آخر، ولا تُحيا مرتين (العلَم revived_r802 يدوم مع المهمة)، ولا تُحيا مهمة
+        استُنفدت بعد المرساة (anchored_era) — قاعدة R-796 «المستنفدة لا تُعاد» باقية لها.
+        """
+        snaps = []
+        with self._lock:
+            for t in self._tasks.values():
+                errs = t.get("errors") or []
+                if (t.get("status") == "exhausted" and errs and not t.get("revived_r802")
+                        and not t.get("anchored_era")
+                        and all(str(e).startswith("search_occurs_") for e in errs)):
+                    t["revived_r802"] = True
+                    t["attempts"] = 0
+                    self._set(t, "pending", now, by="R-802",
+                              note="إحياء: الرفض كان search_occurs قبل المرساة الحتمية")
+                    snaps.append(json.loads(json.dumps(t)))
+        for snap in snaps:
+            self._persist(snap)
+        return len(snaps)
+
     def tick(self, proposals: Optional[List[Dict[str, Any]]] = None,
              now: Optional[float] = None) -> Dict[str, Any]:
         now = time.time() if now is None else now
@@ -483,10 +517,11 @@ class SelfDevEngine:
         except Exception as exc:  # TOLERATED: تعذر القراءة يُعلن في نتيجة الدورة
             logger.warning("R-796: تعذر سحب نتائج CI: %s", exc)
         ingested = self.ingest_proposals(proposals or [], now=now)
+        revived = self.revive_anchor_failures(now)
         self.ticks += 1
         t = self.next_task()
         out: Dict[str, Any] = {"tick": self.ticks, "ci_applied": ci_applied,
-                               "ingested": ingested, "task": None}
+                               "ingested": ingested, "revived": revived, "task": None}
         if t is None:
             out["status"] = "idle"
         elif self._brain is None:
@@ -497,6 +532,7 @@ class SelfDevEngine:
             secs = round(time.time() - t0, 1)
             with self._lock:
                 t["attempts"] = t.get("attempts", 0) + 1
+                t["anchored_era"] = True  # R-802: صيغت بالمرساة الحتمية
                 t["brain_seconds"] = secs
                 t["errors"] = res["errors"]
                 if res["ok"]:
@@ -504,6 +540,10 @@ class SelfDevEngine:
                     self._set(t, "drafted", now, by="brain", note=res["draft"]["summary"])
                 else:
                     t["feedback"] = "مسودة مرفوضة بالتحقق: " + ", ".join(res["errors"])
+                    if res.get("nearest"):
+                        # R-802: النص الحقيقي الأقرب حرفيًا — المحاولة التالية تنسخه بدل التخمين
+                        t["feedback"] += ("\nالنص الحقيقي الأقرب في " + str(res.get("file")) +
+                                          " (انسخه حرفيًا في search):\n<<<\n" + res["nearest"][:1200] + "\n>>>")
                     new = "exhausted" if t["attempts"] >= MAX_ATTEMPTS else "invalid"
                     self._set(t, new, now, by="validator", note=", ".join(res["errors"])[:200])
                 snap = json.loads(json.dumps(t))
@@ -529,6 +569,7 @@ class SelfDevEngine:
                 "attempts": t.get("attempts", 0), "created_at": t.get("created_at"),
                 "updated_at": t.get("updated_at"), "file": d.get("file"),
                 "summary": d.get("summary"), "removed_lines": d.get("removed_lines"),
+                "anchor": d.get("anchor"),  # R-802: طريقة المرساة معلنة (exact/rstrip/indent/context/fuzzy)
                 "errors": t.get("errors") or [], "ci": t.get("ci"),
                 "brain_seconds": t.get("brain_seconds"),
                 "files_hint": t.get("files_hint") or [],

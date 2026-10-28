@@ -1,0 +1,13 @@
+# R-802 RED — tests/test_r802_anchor.py على origin/main (95b1328) قبل المرساة
+# الدليل الحي قبل الإصلاح: /selfdev/status على الإنتاج — ticks=5، exhausted=3، invalid=1، tested_red=0؛ آخر خطأ search_occurs_0_times (backend/repair.py)
+ImportError while importing test module '/tmp/redwt/tests/test_r802_anchor.py'.
+E   ImportError: cannot import name 'anchor' from 'selfdev' (/tmp/redwt/backend/selfdev/__init__.py)
+!!!!!!!!!!!!!!!!!!!! Interrupted: 1 error during collection !!!!!!!!!!!!!!!!!!!!
+1 warning, 1 error in 0.12s
+
+## RED سلوكي: anchor.py موجود لكن المحرك القديم (self_develop.py على main) لا يستعمله
+FAILED tests/test_r802_anchor.py::test_engine_anchors_misindented_draft_and_ci_applies_it
+FAILED tests/test_r802_anchor.py::test_engine_feedback_carries_nearest_real_text
+FAILED tests/test_r802_anchor.py::test_status_declares_anchor_method - KeyErr...
+FAILED tests/test_r802_anchor.py::test_exhausted_search_failures_revived_once_only
+4 failed, 7 passed, 1 warning in 0.08s
