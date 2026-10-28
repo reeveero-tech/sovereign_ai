@@ -417,7 +417,14 @@ class SelfDevEngine:
                          "properties": {"file": {"type": "string", "enum": cands},
                                         "keywords": {"type": "array", "items": {"type": "string"}}},
                          "required": ["file", "keywords"]}
-        loc = self._ask(LOCATE_SYSTEM, brief + "\nالملفات:\n" + "\n".join(cands), locate_schema)
+        hints = [f for f in (task.get("files_hint") or []) if f in cands]
+        if hints:
+            # R-799: النواة اختارت الملف وتحقق منه عقل الاقتراح — لا نداء ثانٍ للعقل لإعادة
+            # اختياره (دليل حي: فشلت هذه الخطوة بالذات)؛ المرساة من معرّفات المهمة الحقيقية.
+            loc = {"file": hints[0], "keywords": [t for t in _tokens(brief) if "_" in t or "." in t]
+                   + _tokens(brief)}
+        else:
+            loc = self._ask(LOCATE_SYSTEM, brief + "\nالملفات:\n" + "\n".join(cands), locate_schema)
         if not loc:
             return {"ok": False, "draft": None, "errors": ["brain_unavailable_or_invalid_json:locate"]}
         rel = str(loc.get("file") or "")

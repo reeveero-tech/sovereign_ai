@@ -2770,3 +2770,10 @@ Bus إطلاقًا. الواجهة سليمة بعد الإزالة (101 وسم 
   - `backend/app.py` `_selfdev_tick_payload`: سطر الوثيقة الأخير والاستيرادان واستدعاء `get_engine().tick(proposals=...)` ⇒ `wiring.full_cycle()` الذي يستدعي `engine.tick(proposals=get_book().list())` نفسه ضمن الدورة الكاملة (السلوك محفوظ + النواة + الأهداف المتعذرة؛ حقول R-796 العليا تُنسخ).
   - `backend/self_develop.py`: توقيع `request` (+`files_hint`/`exclude_files`)، سطر `history` (+الحقلان)، `return` في `candidates` (+المرجح والمستبعد)، قاموس الأولوية (+`nucleus`/`unmet`).
   - وثائق: سطرا «آخر تحديث» (القيمة القديمة باقية بعدها)؛ صف الاختبارات.
+
+## 2026-10-28 — R-799: أسطر مستبدلة
+- **# DELETION-JUSTIFIED** — استبدال بتوسيع (دليل حي من أول دورة R-798):
+  - `backend/ollama_client.py`: سطر `_LAST_OUTCOME = {... type(e).__name__}` ⇒ نفس الحقل مع رمز HTTP إن وُجد.
+  - `backend/self_develop.py`: سطر نداء `locate` ⇒ نفسه داخل `else` (يُتجاوز فقط حين يوجد ملف مرجح صالح).
+  - `docs/ROADMAP_V6.md`: بند ٦.١١.٦ ⏳ ⇒ ✅ بدليل حي.
+  - وثائق: سطرا «آخر تحديث»؛ صف الاختبارات.

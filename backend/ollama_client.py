@@ -134,5 +134,8 @@ def chat(system_prompt: str, user_message: str, timeout=None,
             "R-704 [OLLAMA]: فشل خادم العقل (%s) — سقوط للمحرك القالبي",
             type(e).__name__,
         )
-        _LAST_OUTCOME = {"result": "error", "error": type(e).__name__}
+        # R-799: رمز HTTP الحرفي (500/400/404...) — دليل حي: «HTTPStatusError» وحده لا يشخّص
+        code = getattr(getattr(e, "response", None), "status_code", None)
+        kind = type(e).__name__ + (f":{code}" if code else "")
+        _LAST_OUTCOME = {"result": "error", "error": kind}
         return None

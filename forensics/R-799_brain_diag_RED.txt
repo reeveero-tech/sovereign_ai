@@ -1,0 +1,12 @@
+# R-799 RED — against main 73083e8 before fix; 2026-10-28T14:46:27Z
+E       AssertionError: assert ('error' == 'error'
+E         
+E           error and 'HTTPStatusError' == 'HTTPStatusError:500'
+E         
+E         - HTTPStatusError:500
+E         ?                ----
+E         + HTTPStatusError)
+E       assert (False is True)
+FAILED tests/test_r799_brain_diag.py::test_http_status_code_recorded_in_last_outcome
+FAILED tests/test_r799_brain_diag.py::test_hinted_task_skips_brain_locate - a...
+2 failed, 1 passed, 1 warning in 0.50s
