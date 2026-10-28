@@ -1,0 +1,16 @@
+# R-801c GREEN — infra-services run 40741840719 على main 6f379d9 (من داخل آلة التطبيق، عبر التطبيق نفسه)
+RESULTS 42
+TAGS moondream:latest qwen2.5:3b
+setting: SEARCH_PROVIDER
+setting: SEARCH_BASE_URL
+setting: VISION_ENABLED
+setting: VISION_MODEL
+UPLOAD archive 375
+UNPACK extracted 2 skipped 1
+CONVERT t.xlsx xlsx
+PDF إثبات.pdf True
+STATUS storage supabase durable True files 10 video True imagegen True
+IMAGEGEN_APP image 138110 True 18.5
+VISION_APP True The image features a close-up view of a single, shiny red apple sitting on a wooden surface. The apple is positioned in the center of the frame, drawing attention to its vibrant color and texture. The
+VIDEO_APP video 22706 4.0
+SEARCH_APP True 5 https://fly.io/machines/
