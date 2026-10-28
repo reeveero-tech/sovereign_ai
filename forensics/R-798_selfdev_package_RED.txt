@@ -1,0 +1,17 @@
+# R-798 RED — tests run against HEAD b1f537d (before backend/selfdev/ package)
+# date: 2026-10-28T13:45:46Z
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_r798_selfdev_package.py:23: in <module>
+    from selfdev import signals as S  # noqa: E402
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   ModuleNotFoundError: No module named 'selfdev'
+=============================== warnings summary ===============================
+backend/config.py:453
+  /tmp/r798red/backend/config.py:453: UserWarning: ⚠️ CORS مفتوح للجميع — مقبول في التطوير فقط (D-034)
+    warnings.warn("⚠️ CORS مفتوح للجميع — مقبول في التطوير فقط (D-034)")
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+ERROR tests/test_r798_selfdev_package.py
+!!!!!!!!!!!!!!!!!!!! Interrupted: 1 error during collection !!!!!!!!!!!!!!!!!!!!
+1 warning, 1 error in 0.14s

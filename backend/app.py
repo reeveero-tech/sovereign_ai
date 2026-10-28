@@ -253,6 +253,11 @@ async def lifespan(app: FastAPI):
     from scheduler import build_from_env as _build_scheduler
     app.state.scheduler = _build_scheduler()
     app.state.scheduler.start()
+    try:  # R-798: النواة تقرأ حالة المجدول الحية
+        from selfdev import wiring as _sd_wiring
+        _sd_wiring.bind_scheduler(app.state.scheduler.status)
+    except Exception as exc:  # TOLERATED: بلا ربط يُعلن مصدر المجدول فارغًا فقط
+        logger.warning("R-798: تعذر ربط المجدول بالنواة: %s", exc)
     logger.info(f"⏱️ المجدول: {app.state.scheduler.reason}")
     # R-791 (V6 ٦.٩.٤): حلقة الاستقلال — أهداف دائمة يعمل عليها العقل بلا طلب
     try:
@@ -560,11 +565,26 @@ async def selfdev_status():
 
 def _selfdev_tick_payload() -> Dict[str, Any]:
     """R-796: دورة تطوير ذاتي — تسحب نتائج CI، تستوعب اقتراحات ٤.٥ القابلة للإصلاح،
-    وتصوغ مسودة واحدة بالعقل (لا كتابة ملفات في الإنتاج)."""
-    import improvement_proposals
-    import self_develop
-    return self_develop.get_engine().tick(
-        proposals=improvement_proposals.get_book().list(), now=time.time())
+    وتصوغ مسودة واحدة بالعقل (لا كتابة ملفات في الإنتاج).
+
+    R-798: صارت دورة كاملة موحدة: النواة (جمع كل الإشارات ⇒ أولوية ⇒ عقل الاقتراح ⇒
+    توجيه) ثم المحرك ثم محرك الأهداف المتعذرة. حقول R-796 العليا محفوظة."""
+    from selfdev import wiring
+    return wiring.full_cycle(now=time.time())
+
+
+@app.get("/selfdev/nucleus")
+async def selfdev_nucleus_view():
+    """R-798: النواة — الإشارات النشطة وتكرارها، آخر التحليلات ومساراتها (بلا شيفرة ولا سر)."""
+    from selfdev import wiring
+    return await asyncio.to_thread(lambda: wiring.get_nucleus().status())
+
+
+@app.get("/selfdev/unmet")
+async def selfdev_unmet_view():
+    """R-798: محرك الأهداف المتعذرة — كل هدف عجز عنه النظام وسلّم تصعيده (بلا شيفرة ولا سر)."""
+    from selfdev import wiring
+    return await asyncio.to_thread(lambda: wiring.get_unmet().status())
 
 
 @app.get("/evolution/ledger")
@@ -2159,6 +2179,18 @@ def _register_real_tools() -> None:
         description="R-796: حالة محرك التطوير الذاتي — المهام وحالاتها ونتائج CI (بلا شيفرة)",
         inputs={}, outputs="counts/tasks/last_tick/brain/durable",
         handler=lambda: __import__("self_develop").get_engine().status(),
+    ))
+    registry.register(ToolSpec(
+        name="selfdev.nucleus",
+        description="R-798: نواة التطوير الذاتي — الإشارات من كل أجزاء النظام وتحليلها وتوجيهها",
+        inputs={}, outputs="active_signals/journal/last_cycle/brain",
+        handler=lambda: __import__("selfdev.wiring", fromlist=["wiring"]).get_nucleus().status(),
+    ))
+    registry.register(ToolSpec(
+        name="selfdev.unmet",
+        description="R-798: الأهداف التي عجز عنها النظام (إصلاح/طلب مالك/هدف/خلل مكوّن) وسلّم تصعيدها",
+        inputs={}, outputs="counts/goals/ladder",
+        handler=lambda: __import__("selfdev.wiring", fromlist=["wiring"]).get_unmet().status(),
     ))
     registry.register(ToolSpec(
         name="media.image",

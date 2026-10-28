@@ -55,6 +55,7 @@ PROTECTED = (
     "backend/safety.py",
     "backend/secrets_vault.py",
     "backend/self_develop.py",
+    "backend/selfdev/",  # R-798: حزمة التطوير الذاتي لا تعدّل نفسها
     "backend/sovereign/keys/",
     "backend/sovereign/signing",
     "backend/tests/",
@@ -298,7 +299,9 @@ class SelfDevEngine:
 
     # ---------- إدخال المهام ----------
     def request(self, title: str, detail: str = "", source: str = "owner",
-                ref: Optional[str] = None, now: Optional[float] = None) -> Dict[str, Any]:
+                ref: Optional[str] = None, now: Optional[float] = None,
+                files_hint: Optional[List[str]] = None,
+                exclude_files: Optional[List[str]] = None) -> Dict[str, Any]:
         title = str(title or "").strip()[:300]
         if not title:
             raise ValueError("عنوان المهمة مطلوب")
@@ -312,7 +315,10 @@ class SelfDevEngine:
                  "detail": str(detail or "")[:3000], "status": "pending", "attempts": 0,
                  "created_at": now, "updated_at": now, "draft": None, "errors": [],
                  "feedback": None, "ci": None, "brain_seconds": None,
-                 "history": [{"to": "pending", "at": now, "by": source}]}
+                 "history": [{"to": "pending", "at": now, "by": source}],
+                 # R-798: توجيه من النواة/محرك الأهداف المتعذرة — ملفات مرجحة ومستبعدة
+                 "files_hint": [f for f in (files_hint or []) if is_allowed(f)][:5],
+                 "exclude_files": [str(f) for f in (exclude_files or [])][:20]}
             self._tasks[tid] = t
             snap = json.loads(json.dumps(t))
         self._persist(snap)
@@ -379,7 +385,13 @@ class SelfDevEngine:
             if score:
                 scored.append((score, rel))
         scored.sort(key=lambda x: (-x[0], x[1]))
-        return [r for _, r in scored[:MAX_CANDIDATES]]
+        ranked = [r for _, r in scored]
+        # R-798: ملفات النواة المرجحة أولًا، والمجرَّبة سابقًا (محرك الأهداف المتعذرة) تُستبعد
+        exclude = set(task.get("exclude_files") or [])
+        hints = [f for f in (task.get("files_hint") or [])
+                 if f not in exclude and self.read(f) is not None]
+        ranked = hints + [r for r in ranked if r not in hints and r not in exclude]
+        return ranked[:MAX_CANDIDATES]
 
     def _ask(self, system: str, user: str, schema: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         if self._brain is None:
@@ -450,7 +462,7 @@ class SelfDevEngine:
         with self._lock:
             act = [t for t in self._tasks.values()
                    if t["status"] in ACTIVE and t.get("attempts", 0) < MAX_ATTEMPTS]
-            prio = {"owner": 0, "proposal": 1, "goal": 2}
+            prio = {"owner": 0, "proposal": 1, "nucleus": 1, "unmet": 1, "goal": 2}
             act.sort(key=lambda t: (prio.get(t.get("source"), 3), t.get("created_at", 0)))
             return act[0] if act else None
 
@@ -495,6 +507,12 @@ class SelfDevEngine:
         self.last_tick["at"] = now
         return out
 
+    def get(self, tid: str) -> Optional[Dict[str, Any]]:
+        """R-798: مهمة واحدة (بيانات وصفية) — لمحرك الأهداف المتعذرة."""
+        with self._lock:
+            t = self._tasks.get(tid)
+            return self.public(t) if t else None
+
     # ---------- العرض (بلا شيفرة) ----------
     @staticmethod
     def public(t: Dict[str, Any]) -> Dict[str, Any]:
@@ -506,6 +524,8 @@ class SelfDevEngine:
                 "summary": d.get("summary"), "removed_lines": d.get("removed_lines"),
                 "errors": t.get("errors") or [], "ci": t.get("ci"),
                 "brain_seconds": t.get("brain_seconds"),
+                "files_hint": t.get("files_hint") or [],
+                "exclude_files": t.get("exclude_files") or [],
                 "history": [{k: h.get(k) for k in ("to", "at", "by")} for h in t.get("history", [])]}
 
     def status(self) -> Dict[str, Any]:

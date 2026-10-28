@@ -2765,3 +2765,8 @@ Bus إطلاقًا. الواجهة سليمة بعد الإزالة (101 وسم 
   - `backend/self_develop.py`: سطرا حقول `ci` (+`deploy`) وبداية سلسلة الحالات (+`promote_skipped`).
   - وثائق: سطرا «آخر تحديث»؛ صف الاختبارات.
 
+## 2026-10-28 — R-798: أسطر مستبدلة
+- **# DELETION-JUSTIFIED** — استبدال بتوسيع، لا حذف منطق (أمر المالك «اجعل التطوير الذاتي مشروعًا قويًا»):
+  - `backend/app.py` `_selfdev_tick_payload`: سطر الوثيقة الأخير والاستيرادان واستدعاء `get_engine().tick(proposals=...)` ⇒ `wiring.full_cycle()` الذي يستدعي `engine.tick(proposals=get_book().list())` نفسه ضمن الدورة الكاملة (السلوك محفوظ + النواة + الأهداف المتعذرة؛ حقول R-796 العليا تُنسخ).
+  - `backend/self_develop.py`: توقيع `request` (+`files_hint`/`exclude_files`)، سطر `history` (+الحقلان)، `return` في `candidates` (+المرجح والمستبعد)، قاموس الأولوية (+`nucleus`/`unmet`).
+  - وثائق: سطرا «آخر تحديث» (القيمة القديمة باقية بعدها)؛ صف الاختبارات.
