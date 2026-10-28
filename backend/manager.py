@@ -215,6 +215,8 @@ class AgentManager:
                    measured_peak_concurrency=frep.get("measured_peak_concurrency"),
                    agents=[{k: r.get(k) for k in ("role", "goal", "status", "answer", "error",
                                                   "attempts", "tools")} for r in results])
+        # R-793 (٦.٩.٧): النتائج الخام للأدوات تصل المدقق مع الجواب المُصاغ
+        rep["raw_results"] = [x for r in results for x in (r.get("raw_results") or [])][:12]
         done = [r for r in results if r.get("status") == "completed"]
         if not done:
             rep.update(status="failed", error="لم يُكمل أي وكيل مهمته",
