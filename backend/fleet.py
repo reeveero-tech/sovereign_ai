@@ -35,6 +35,18 @@ def _trace(op: str, payload: Dict[str, Any]) -> None:
                             user=payload.get("role"))
 
 
+RAW_RESULT_CHARS = 700
+
+
+def digest_result(result: Any, limit: int = RAW_RESULT_CHARS) -> str:
+    """R-793: ضغط نتيجة أداة إلى نص JSON قصير بلا تغيير قيمها (قص الطرف فقط)."""
+    try:
+        text = json.dumps(result, ensure_ascii=False, default=str, sort_keys=True)
+    except (TypeError, ValueError):
+        text = str(result)
+    return text if len(text) <= limit else text[:limit] + "…"
+
+
 class _Gauge:
     """عداد تزامن حي — الذروة تُقاس من التنفيذ الفعلي."""
 
@@ -108,6 +120,11 @@ class Worker:
                        "step_log": [{"tool": s.get("tool"), "ok": s.get("ok"),
                                      "inputs": s.get("inputs") or {}, "error": s.get("error")}
                                     for s in res.get("steps") or []]}
+        # R-793 (٦.٩.٧): النتيجة الخام المضغوطة لكل خطوة ناجحة — يراها المدقق لا الجواب وحده
+        self.result["raw_results"] = [
+            {"tool": s.get("tool"), "result": digest_result(s.get("result"))}
+            for s in res.get("steps") or []
+            if s.get("tool") and s.get("ok") and s.get("result") is not None]
         try:
             _trace("worker.result", {"role": self.role, "status": res["status"],
                                      "attempt": self.attempt})
