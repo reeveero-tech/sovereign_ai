@@ -93,6 +93,11 @@ _CHECK_SYSTEM = (
     "النتائج حرفيًا (الأرقام كما وردت). missing: ما الذي ما زال ناقصًا إن لم يتحقق."
     '\nأجب JSON فقط: {"achieved":true,"summary":"","missing":""}'
 )
+# R-793 (٦.٩.٧): المدقق يرى نتائج الأدوات الخام لا الجواب المُصاغ وحده — قياس حي: قال الوكيل
+# «22» والحقيقة total_events=152413. التناقض بين الجواب والنتيجة الخام ⇒ achieved=false.
+_CHECK_SYSTEM = _CHECK_SYSTEM + (
+    " إن وُجد tool_results (نتائج الأدوات الخام) فهي المرجع: إن ناقض الجواب رقمًا فيها فـ"
+    "achieved=false واذكر التناقض في missing، وفي summary انقل الأرقام من tool_results.")
 CHECK_SCHEMA = {"type": "object",
                 "properties": {"achieved": {"type": "boolean"}, "summary": {"type": "string"},
                                "missing": {"type": "string"}},
@@ -158,6 +163,9 @@ class GoalStore:
                                                             "agents", "manager_run", "ts",
                                                             "tools")})
                     g["last_worked"] = e.get("ts")
+                elif op == "evidence":  # R-793: نتائج خام لآخر تشغيل (إلحاقي لا يمس حدث run)
+                    if g["runs"]:
+                        g["runs"][-1]["raw_results"] = list(e.get("raw_results") or [])
                 elif op == "status":
                     g["status"] = e.get("status")
                     g["summary"] = e.get("summary") or g["summary"]
@@ -307,6 +315,8 @@ class GoalEngine:
                            answer=(rep.get("answer") or "")[:800], error=rep.get("error"),
                            agents=rep.get("agents_created"), manager_run=rep.get("run_id"),
                            tools=rep.get("tools_used"))
+            if rep.get("raw_results"):  # R-793 (٦.٩.٧)
+                self.goals.log(gid, "evidence", raw_results=list(rep["raw_results"])[:12])
             out = {"status": "worked", "goal_id": gid, "task": task,
                    "run_status": rep.get("status"), "answer": rep.get("answer"),
                    "agents_created": rep.get("agents_created"), "error": rep.get("error")}
@@ -347,6 +357,12 @@ class GoalEngine:
                                                             "answer": (r["answer"] or "")[:600]}
                                                            for r in done[-4:]]},
                           ensure_ascii=False, default=str)[:7000]
+        raw = [x for r in done[-4:] for x in (r.get("raw_results") or [])][:8]
+        if raw:  # R-793 (٦.٩.٧): المدقق يرى الخام مع الجواب
+            user = json.dumps({"goal": g["title"], "tool_results": raw,
+                               "results": [{"task": r["task"], "answer": (r["answer"] or "")[:600]}
+                                           for r in done[-4:]]},
+                              ensure_ascii=False, default=str)[:7000]
         try:
             c = self._json(_CHECK_SYSTEM, user, CHECK_SCHEMA, 350)
         except Exception as exc:  # TOLERATED: الفحص يُعاد في الخطوة التالية
