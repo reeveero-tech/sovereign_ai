@@ -1,0 +1,3 @@
+# R-801c RED — على origin/main (e8e9124): الإثبات الحي لا يمر بالوسائط عبر التطبيق
+E           assert '"/ws/image"' in '"""R-801: إثبات مساحة العمل على الإنتاج — يُشغَّل داخل آلة التطبيق (infra-services.yml).\n\nرفع zip (فيه مسار خبيث) ←...,\n      "video", (st.get("video") or {}).get("available"), "imagegen", (st.get("imagegen") or {}).get("available"))\n'
+1 failed, 14 deselected, 1 warning in 0.13s

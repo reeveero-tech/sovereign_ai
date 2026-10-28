@@ -260,3 +260,12 @@ def test_proof_scripts_compile():
     for p in (REPO_ROOT / "infra" / "proof").glob("*.py"):
         compile(p.read_text(encoding="utf-8"), str(p), "exec")
     assert "print(KEY" not in (REPO_ROOT / "infra" / "proof" / "workspace_proof.py").read_text(encoding="utf-8")
+
+
+def test_production_proof_covers_media_through_app():
+    """R-801c: الإثبات الحي يمر بالتطبيق نفسه (/ws/image ← تحليل رؤية ← /ws/video ← web.search) لا بالخدمات مباشرة."""
+    src = (REPO_ROOT / "infra" / "proof" / "workspace_proof.py").read_text(encoding="utf-8")
+    for marker in ('"/ws/image"', '"/analyze"', '"/ws/video"', '"web.search"', "IMAGEGEN_APP", "VISION_APP", "SEARCH_APP"):
+        assert marker in src
+    wf = WF.read_text(encoding="utf-8")
+    assert "IMAGEGEN_APP image" in wf and "VIDEO_APP video" in wf

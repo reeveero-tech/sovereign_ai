@@ -1,1 +1,7 @@
 # R-801b RED — CI run 40733833769 (5df5db9): بوابة «صفر تخطٍ» (R-682) فشلت — بيئة CI بلا ffmpeg فتخطّى اختباران من tests/test_r801_media.py
+
+## الدليل الحرفي من سجل CI
+^[[36;1m    print(f"❌ DoD violated: {skipped} skipped tests found — must be 0")^[[0m
+❌ DoD violated: 2 skipped tests found — must be 0
+   SKIPPED: R-682-ci-sha-5df5db9569119d99dc0a2ec1d6b444f290f2918e.tests.test_r801_media.test_make_video_real_mp4: ffmpeg غير مثبت — الفيديو يعلن عدم التوفر
+   SKIPPED: R-682-ci-sha-5df5db9569119d99dc0a2ec1d6b444f290f2918e.tests.test_r801_media.test_service_video_stored: ffmpeg غير مثبت

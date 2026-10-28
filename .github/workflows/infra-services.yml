@@ -191,5 +191,10 @@ jobs:
           bash infra/proof/put.sh infra/proof/appenv.py /tmp/appenv.py
           bash infra/proof/put.sh infra/proof/workspace_proof.py /tmp/wsproof.py
           OUT=$(flyctl ssh console -a "$FLY_APP" --machine "$APPM" -C "python3 /tmp/wsproof.py" 2>&1 || true)
-          echo "$OUT" | grep -E "UPLOAD|UNPACK|CONVERT|PDF|STATUS|Error|Traceback" | head -20
+          echo "$OUT" | grep -E "UPLOAD|UNPACK|CONVERT|PDF|STATUS|_APP|Error|Traceback" | head -30
           echo "$OUT" | grep -q "PDF .* True" || { echo "❌ إثبات مساحة العمل فشل"; exit 1; }
+          # R-801: الوسائط عبر التطبيق — تُحكم فقط حين ثبتت خدمتها في هذا التشغيل أو سابقًا (status)
+          if echo "$OUT" | grep -q "imagegen True"; then
+            echo "$OUT" | grep -q "IMAGEGEN_APP image [0-9]* True" || { echo "❌ توليد الصور عبر التطبيق فشل"; exit 1; }
+            echo "$OUT" | grep -q "VIDEO_APP video" || { echo "❌ الفيديو عبر التطبيق فشل"; exit 1; }
+          fi

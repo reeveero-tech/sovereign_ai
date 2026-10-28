@@ -48,3 +48,32 @@ print("PDF", p["name"], raw[:5] == b"%PDF-")
 st = call("GET", "/ws/status")
 print("STATUS storage", st["storage"], "durable", st["durable"], "files", st["files"],
       "video", (st.get("video") or {}).get("available"), "imagegen", (st.get("imagegen") or {}).get("available"))
+
+# R-801: الوسائط عبر التطبيق نفسه (لا مباشرة إلى الخدمات) — كل سطر نتيجة فعلية
+import time  # noqa: E402
+
+t = time.time()
+try:
+    img = call("POST", "/ws/image", json.dumps({"prompt": "a red apple on a wooden table", "size": "256x256",
+                                                  "title": "proof-apple"}).encode())
+    rawimg = call("GET", "/ws/files/" + img["id"] + "/raw")
+    print("IMAGEGEN_APP", img["kind"], img["size"], rawimg[:8] == bytes([137, 80, 78, 71, 13, 10, 26, 10]),
+          round(time.time() - t, 1))
+    an = call("POST", "/ws/files/" + img["id"] + "/analyze", json.dumps({"question": "What is in this image?"}).encode())
+    vis = an.get("vision") or {}
+    print("VISION_APP", vis.get("available"), (vis.get("description") or vis.get("reason") or "")[:200].replace("\n", " "))
+    vid = call("POST", "/ws/video", json.dumps({"slides": [{"file_id": img["id"]}, {"text": "إثبات الفيديو", "title": "R-801"}],
+                                                "seconds": 2, "title": "proof-video"}).encode())
+    print("VIDEO_APP", vid["kind"], vid["size"], vid.get("seconds"))
+except Exception as exc:  # TOLERATED: سطر إثبات يُطبع بسببه ولا يخفي ما سبق — الحكم في سير العمل
+    print("MEDIA_APP_ERROR", type(exc).__name__, str(exc)[:300])
+try:
+    body = json.dumps({"tool": "web.search", "api_key": KEY, "inputs": {"query": "fly.io machines"}}).encode()
+    r = urllib.request.urlopen(urllib.request.Request(BASE + "/tools/invoke", data=body,
+                               headers={"Content-Type": "application/json"}), timeout=120)
+    res = json.loads(r.read())
+    out = res.get("result") or res.get("output") or {}
+    items = out.get("results") if isinstance(out, dict) else None
+    print("SEARCH_APP", res.get("ok"), len(items or []), ((items or [{}])[0].get("url") if items else res.get("error")))
+except Exception as exc:  # TOLERATED: كما سبق
+    print("SEARCH_APP_ERROR", type(exc).__name__, str(exc)[:300])
