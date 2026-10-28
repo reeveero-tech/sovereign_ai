@@ -548,6 +548,25 @@ async def self_monitor_report():
     return {"report": report}
 
 
+@app.get("/selfdev/status")
+async def selfdev_status():
+    """R-796: محرك التطوير الذاتي — مهام/حالات/نتائج CI (بيانات وصفية فقط، لا شيفرة ولا سر).
+
+    الصياغة عبر الأداة selfdev.tick (المجدول أو /tools/invoke)؛ التطبيق والاختبار RED→GREEN
+    في CI على فرع work/selfdev-*؛ الترقية إلى main قرار المالك."""
+    import self_develop
+    return await asyncio.to_thread(self_develop.get_engine().status)
+
+
+def _selfdev_tick_payload() -> Dict[str, Any]:
+    """R-796: دورة تطوير ذاتي — تسحب نتائج CI، تستوعب اقتراحات ٤.٥ القابلة للإصلاح،
+    وتصوغ مسودة واحدة بالعقل (لا كتابة ملفات في الإنتاج)."""
+    import improvement_proposals
+    import self_develop
+    return self_develop.get_engine().tick(
+        proposals=improvement_proposals.get_book().list(), now=time.time())
+
+
 @app.get("/evolution/ledger")
 async def evolution_ledger_view(limit: int = 50):
     """R-744 (البند ٤.٢): سجل التطور — قراءة فقط، بلا سر (أعداد ومعرّفات وبصمات).
@@ -2119,6 +2138,27 @@ def _register_real_tools() -> None:
         inputs={},
         outputs="open_count/defects[]/vitals/history",
         handler=_self_monitor_payload,
+    ))
+    registry.register(ToolSpec(
+        name="selfdev.tick",
+        description="R-796: دورة تطوير ذاتي — نتائج CI ← اقتراحات قابلة للإصلاح ← مسودة كود+اختبار "
+                    "بالعقل (تحقق بنيوي؛ التطبيق RED→GREEN في CI؛ الترقية قرار المالك)",
+        inputs={}, outputs="tick/status/task/errors/brain_seconds",
+        handler=_selfdev_tick_payload,
+    ))
+    registry.register(ToolSpec(
+        name="selfdev.request",
+        description="R-796: طلب تطوير ذاتي من المالك — عنوان وتفصيل لما يجب إصلاحه أو إضافته في الكود",
+        inputs={"title": "عنوان المهمة", "detail": "التفصيل (اختياري)"},
+        outputs="id/status/title",
+        handler=lambda title, detail="": __import__("self_develop").get_engine().request(
+            title, detail, source="owner"),
+    ))
+    registry.register(ToolSpec(
+        name="selfdev.status",
+        description="R-796: حالة محرك التطوير الذاتي — المهام وحالاتها ونتائج CI (بلا شيفرة)",
+        inputs={}, outputs="counts/tasks/last_tick/brain/durable",
+        handler=lambda: __import__("self_develop").get_engine().status(),
     ))
     registry.register(ToolSpec(
         name="media.image",

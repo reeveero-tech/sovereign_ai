@@ -1,0 +1,15 @@
+E         Left contains one more item: {'name': 'slow', 'tool': 'slow.tool', 'interval_seconds': 0.0, 'runs': 2, ...}
+E         Use -v to get more diff
+
+tests/test_r796_scheduler_nonblocking.py:97: AssertionError
+=============================== warnings summary ===============================
+backend/config.py:453
+  /home/user/workspace/sovereign_ai/backend/config.py:453: UserWarning: ⚠️ CORS مفتوح للجميع — مقبول في التطوير فقط (D-034)
+    warnings.warn("⚠️ CORS مفتوح للجميع — مقبول في التطوير فقط (D-034)")
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_r796_scheduler_nonblocking.py::test_event_loop_stays_responsive_during_slow_task
+FAILED tests/test_r796_scheduler_nonblocking.py::test_status_not_blocked_while_task_runs
+FAILED tests/test_r796_scheduler_nonblocking.py::test_overlapping_run_due_is_skipped_not_doubled
+3 failed, 1 warning in 7.96s

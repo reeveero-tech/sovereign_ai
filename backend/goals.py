@@ -292,6 +292,14 @@ class GoalEngine:
         if decision == "blocked":
             reason = str(d.get("reason") or "")[:500]
             self.goals.log(gid, "status", status="blocked", summary=reason)
+            # R-796: هدف تعذر بالأدوات المتاحة ⇒ مهمة تطوير ذاتي (النظام يبني ما ينقصه)
+            try:
+                import self_develop
+                self_develop.get_engine().request(
+                    f"هدف متعذر: {g.get('title') or gid}"[:300],
+                    detail=f"السبب الذي أعلنه العقل: {reason}", source="goal", ref=gid)
+            except Exception as exc:  # TOLERATED: تعذر الربط لا يغيّر قرار الهدف — يُسجل
+                logger.warning("R-796: تعذر تحويل الهدف المتعذر %s إلى مهمة تطوير: %s", gid, exc)
             return {"status": "blocked", "goal_id": gid, "reason": reason}
         if decision == "replan":
             plan = [str(x)[:200] for x in (d.get("plan") or []) if str(x).strip()][:6]

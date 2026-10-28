@@ -40,9 +40,11 @@ class ScheduledTask:
     last_error: Optional[str] = None
     last_fingerprint: Optional[str] = None
     next_due: Optional[float] = None
+    running: bool = False  # R-796: تعمل الآن (في خيط المجدول)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
+            "running": self.running,
             "name": self.name,
             "tool": self.tool,
             "interval_seconds": self.interval_seconds,
@@ -63,6 +65,9 @@ class Scheduler:
         self.running = False
         self._task: Optional[asyncio.Task] = None
         self._lock = threading.Lock()
+        # R-796: قفل التشغيل منفصل عن قفل الحالة — status() لا ينتظر خلف أداة بطيئة،
+        # وتشغيلان متداخلان لا ينفذان المهمة نفسها مرتين (الثاني يُتجاوز).
+        self._run_lock = threading.Lock()
         start = time.time()
         for t in self.tasks:
             if t.next_due is None:
@@ -74,24 +79,35 @@ class Scheduler:
 
         now = time.time() if now is None else now
         results = []
-        with self._lock:
-            for t in self.tasks:
-                if t.next_due is not None and now < t.next_due:
-                    continue
-                t.runs += 1
-                t.last_run = now
-                t.next_due = now + t.interval_seconds
+        if not self._run_lock.acquire(blocking=False):
+            return results  # R-796: دورة سابقة ما زالت تعمل — لا تداخل ولا تكرار
+        try:
+            with self._lock:
+                due = [t for t in self.tasks
+                       if not (t.next_due is not None and now < t.next_due)]
+                for t in due:
+                    t.runs += 1
+                    t.last_run = now
+                    t.next_due = now + t.interval_seconds
+            for t in due:
+                # R-796: الأداة تُنفذ خارج قفل الحالة (قد تستغرق دقائق مع العقل)
+                with self._lock:
+                    t.running = True
+                ok, err, fp = False, None, None
                 try:
                     out = tool_registry.get_registry().invoke(t.tool, caller="scheduler")
-                    t.last_ok = bool(out.get("ok"))
-                    t.last_error = out.get("error")
-                    t.last_fingerprint = out.get("trace", {}).get("result_fingerprint")
+                    ok = bool(out.get("ok"))
+                    err = out.get("error")
+                    fp = out.get("trace", {}).get("result_fingerprint")
                 except Exception as exc:  # أداة غير مسجلة / تعذر التوقيع — يُسجل ولا يكسر
-                    t.last_ok = False
-                    t.last_error = f"{type(exc).__name__}: {exc}"[:200]
-                    t.last_fingerprint = None
-                    logger.warning("R-732: فشل مهمة مجدولة %s — %s", t.name, t.last_error)
-                results.append(t.to_dict())
+                    err = f"{type(exc).__name__}: {exc}"[:200]
+                    logger.warning("R-732: فشل مهمة مجدولة %s — %s", t.name, err)
+                with self._lock:
+                    t.last_ok, t.last_error, t.last_fingerprint = ok, err, fp
+                    t.running = False
+                    results.append(t.to_dict())
+        finally:
+            self._run_lock.release()
         return results
 
     # ---- الحلقة الخلفية ----
@@ -99,7 +115,9 @@ class Scheduler:
         tick = max(0.2, min(1.0, min((t.interval_seconds for t in self.tasks), default=1.0)))
         try:
             while True:
-                self.run_due()
+                # R-796: التشغيل في خيط — حلقة الحدث (/health و/chat) لا تُحجب أبدًا
+                # (عيب حي مقيس: رد /health 82ث أثناء benchmark.run المتزامن).
+                await asyncio.to_thread(self.run_due)
                 await asyncio.sleep(tick)
         except asyncio.CancelledError:  # R-732: الإلغاء إشارة الإيقاف الطبيعية من stop() — ليس خطأ
             pass
@@ -131,6 +149,14 @@ class Scheduler:
             }
 
 
+def _selfdev_interval() -> float:
+    try:
+        import self_develop
+        return self_develop.interval_from_env()
+    except Exception:  # TOLERATED: تعذر استيراد المحرك لا يكسر المجدول — الافتراضي المعلن
+        return 1800.0
+
+
 def build_from_env() -> Scheduler:
     """المهام المعلنة + التفعيل من البيئة (يُقرأ عند الإقلاع)."""
     raw_interval = os.environ.get(ENV_INTERVAL, "")
@@ -149,6 +175,9 @@ def build_from_env() -> Scheduler:
         ScheduledTask(name="external_benchmark", tool="benchmark.run", interval_seconds=interval),
         # R-794 (٤.٦): مراقبة ذاتية موسّعة — /self/monitor (اقتراح فقط)
         ScheduledTask(name="self_monitor", tool="self.monitor", interval_seconds=interval),
+        # R-796: محرك التطوير الذاتي — مسودة كود+اختبار كل SOVEREIGN_SELFDEV_INTERVAL (1800ث)
+        ScheduledTask(name="self_develop", tool="selfdev.tick",
+                      interval_seconds=_selfdev_interval()),
     ]
     enabled = os.environ.get(ENV_ENABLE, "").strip() == "1"
     reason = (

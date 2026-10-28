@@ -2749,3 +2749,11 @@ Bus إطلاقًا. الواجهة سليمة بعد الإزالة (101 وسم 
 - **# DELETION-JUSTIFIED** — استبدال، لا حذف منطق:
   - `fly.toml`: لا حذف (إضافة `SOVEREIGN_SCHEDULER='1'` فقط).
   - وثائق: سطرا «آخر تحديث» (CHANGELOG، PROJECT_STATE — القيمة القديمة باقية في سلسلة «سابقًا»)؛ سطر حالة R-794 في ROADMAP_V6 (استُبدل بحالة أحدث: منشور + مفعّل).
+
+## 2026-10-28 — R-796: أسطر مستبدلة
+- **# DELETION-JUSTIFIED** — استبدال بتوسيع، لا حذف منطق:
+  - `backend/scheduler.py`: جسم `run_due` (حلقة واحدة تحت القفل) ⇒ اختيار المستحق تحت القفل ثم التنفيذ خارجه بقفل تشغيل منفصل — نفس الاستدعاء `invoke(t.tool, caller="scheduler")` ونفس الحقول؛ سطر `self.run_due()` في `_loop` ⇒ `await asyncio.to_thread(self.run_due)`؛ قائمة المهام (+`self_develop`)؛ `to_dict` (+`running`).
+  - `backend/capability_inventory.py`: سطر `LIVE_PROOF_NOTE = (` أعيد بعد إضافة قدرة `self_development` (السطر نفسه باقٍ).
+  - `backend/goals.py`: لا حذف (إضافة الربط قبل `return` القائم كما هو).
+  - وثائق: سطرا «آخر تحديث» (CHANGELOG، PROJECT_STATE — القيمة القديمة باقية في «سابقًا»)؛ صف الاختبارات (1378→1409 مع إكمال السلسلة).
+

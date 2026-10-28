@@ -1,0 +1,66 @@
+name: Self-Develop (R-796)
+
+# R-796 (بأمر المالك 2026-10-28): نصف «التطبيق والإثبات» من محرك التطوير الذاتي.
+# الإنتاج يصوغ المسودات فقط (backend/self_develop.py — لا كتابة ملفات، D-041 قائم)؛
+# هنا في بيئة CI مؤقتة معزولة: فرع work/selfdev-* من main، الاختبار يفشل على الكود
+# الأصلي (RED) ثم ينجح بعد التعديل (GREEN)، بوابة الحذف + بوابة الوثائق + المجموعة
+# الكاملة، ثم دفع الفرع وتشغيل ci.yml عليه. الترقية إلى main قرار المالك (المادة ٦) —
+# لا دفع إلى main من هنا.
+
+on:
+  schedule:
+    - cron: '*/30 * * * *'
+  workflow_dispatch:
+    inputs:
+      max_tasks:
+        description: 'عدد المهام في الدورة (1-5)'
+        required: false
+        default: '1'
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: self-develop
+  cancel-in-progress: false
+
+jobs:
+  selfdev:
+    name: Self-Develop cycle (RED→GREEN on work/selfdev-*)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: 'Ephemeral data/key.secret for the test suite (same as ci.yml R-681)'
+        run: |
+          set -euo pipefail
+          mkdir -p data
+          python -c "import secrets; print(secrets.token_urlsafe(32))" > data/key.secret
+          chmod 600 data/key.secret
+
+      - name: Git identity (selfdev bot)
+        run: |
+          git config user.name "sovereign-selfdev[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Run self-develop cycle
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+          GH_TOKEN: ${{ github.token }}
+          SELFDEV_PUSH: '1'
+          SELFDEV_MAX_TASKS: ${{ github.event.inputs.max_tasks || '1' }}
+        run: python tools/selfdev_ci.py
