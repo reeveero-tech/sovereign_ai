@@ -1,0 +1,1 @@
+# R-801b RED — CI run 40733833769 (5df5db9): بوابة «صفر تخطٍ» (R-682) فشلت — بيئة CI بلا ffmpeg فتخطّى اختباران من tests/test_r801_media.py

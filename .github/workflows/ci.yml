@@ -91,6 +91,10 @@ jobs:
         with:
           python-version: "3.11"
 
+      # R-801: نفس أدوات النظام في صورة الإنتاج (Dockerfile) — اختبارات الفيديو تعمل فعليًا بلا تخطٍ
+      - name: Install system tools (ffmpeg, poppler)
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends ffmpeg poppler-utils
+
       - name: Install dependencies
         run: |
           pip install --upgrade pip

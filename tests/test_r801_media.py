@@ -61,8 +61,11 @@ def ws(tmp_path):
 
 
 # ---------------- 1. الفيديو ----------------
-@pytest.mark.skipif(not HAS_FFMPEG, reason="ffmpeg غير مثبت — الفيديو يعلن عدم التوفر")
 def test_make_video_real_mp4(tmp_path):
+    if not HAS_FFMPEG:  # بلا تخطٍ (R-682): البيئة بلا ffmpeg يجب أن تعلن الخطأ صراحة
+        with pytest.raises(video.VideoError, match="ffmpeg"):
+            video.make_video([{"text": "x"}], 1)
+        return
     blob = video.make_video([{"text": "مرحبا بالعالم", "title": "عنوان"}, {"image": _png()}], 1.5)
     info = _probe(blob, tmp_path)
     assert abs(float(info["format"]["duration"]) - 3.0) < 0.4
@@ -101,8 +104,11 @@ def test_service_video_rejects_non_image(ws):
         ws.make_video([{"file_id": img["id"]}], 2, audio_id=f["id"])
 
 
-@pytest.mark.skipif(not HAS_FFMPEG, reason="ffmpeg غير مثبت")
 def test_service_video_stored(ws, tmp_path):
+    if not HAS_FFMPEG:
+        with pytest.raises(WorkspaceError, match="ffmpeg"):
+            ws.make_video([{"text": "x"}], 1)
+        return
     img = ws.add_file("p.png", _png(), "image/png")
     rec = ws.make_video([{"file_id": img["id"]}, {"text": "خاتمة"}], 1, title="عرضي")
     assert rec["kind"] == "video" and rec["name"].endswith(".mp4") and rec["slides"] == 2
