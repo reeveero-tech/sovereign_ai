@@ -276,8 +276,12 @@ class SelfDevEngine:
             res = r.get("result")
             now = float(r.get("at") or time.time())
             t["ci"] = {k: r.get(k) for k in ("result", "attempt", "branch", "sha", "reason",
-                                             "red_rc", "green_rc", "ci_dispatched", "at")}
-            if res == "promoted":
+                                             "red_rc", "green_rc", "ci_dispatched", "at",
+                                             "deploy")}
+            if res == "promote_skipped":
+                # R-797: الترقية الآلية تخطت (قاطع دائرة/رفض الدفع) — الفرع الأخضر ينتظر كما هو
+                new = "awaiting_promotion"
+            elif res == "promoted":
                 new = "promoted"
             elif res == "green":
                 new = "awaiting_promotion"

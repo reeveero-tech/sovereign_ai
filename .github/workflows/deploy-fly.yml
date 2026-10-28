@@ -45,13 +45,16 @@ jobs:
             echo "❌ التأكيد لا يطابق اسم التطبيق ($FLY_APP)"; exit 1
           fi
 
-      - name: 'Gate: green CI push run on the same SHA'
+      # R-797: يقبل تشغيل CI بحدث push أو workflow_dispatch على نفس SHA — دفع
+      # GITHUB_TOKEN (الترقية الآلية) لا يطلق push CI؛ فرع التطوير الذاتي يُختبر بتشغيل
+      # ci.yml يدوي على البصمة نفسها، والبصمة نفسها تُدفع إلى main (تقدم سريع فقط).
+      - name: 'Gate: green CI run (push or dispatch) on the same SHA'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           RESULT=$(gh run list --repo "${{ github.repository }}" --commit "${{ github.sha }}" \
-            --event push --limit 20 --json workflowName,status,conclusion \
-            --jq '[.[] | select(.workflowName | startswith("CI"))] | first | (.status + "/" + .conclusion)')
+            --limit 20 --json workflowName,event,status,conclusion \
+            --jq '[.[] | select(.workflowName | startswith("CI")) | select(.event == "push" or .event == "workflow_dispatch") | select(.status == "completed" and .conclusion == "success")] | first | if . == null then "none" else (.status + "/" + .conclusion) end')
           echo "CI on ${{ github.sha }}: ${RESULT:-none}"
           if [ "$RESULT" != "completed/success" ]; then
             echo "❌ لا نشر: لا يوجد تشغيل CI ناجح مكتمل على هذا الالتزام"; exit 1

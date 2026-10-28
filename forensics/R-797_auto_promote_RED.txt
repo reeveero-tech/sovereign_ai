@@ -1,0 +1,9 @@
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_r797_auto_promote.py::test_green_branch_fast_forwards_main_and_deploys
+FAILED tests/test_r797_auto_promote.py::test_red_ci_on_branch_never_touches_main
+FAILED tests/test_r797_auto_promote.py::test_main_moved_means_stale_no_push
+FAILED tests/test_r797_auto_promote.py::test_circuit_breaker_after_failed_auto_deploy
+FAILED tests/test_r797_auto_promote.py::test_auto_promotion_off_by_default - ...
+FAILED tests/test_r797_auto_promote.py::test_workflows_wired_and_deploy_stays_manual
+6 failed, 1 warning in 2.55s

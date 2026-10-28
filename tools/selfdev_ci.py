@@ -17,8 +17,11 @@
   8. النتيجة الحرفية (rc وذيل السجل) تُلحق بـ namespace «selfdev_ci» — المحرك يقرأها
      فيعيد الصياغة مع سبب الفشل أو ينتظر ترقية المالك.
 
-الترقية إلى main ليست هنا: قرار المالك (المادة ٦). المنفّذ يرصد فقط إن صارت بصمة
-الفرع في main فيسجل «promoted».
+الترقية إلى main: R-797 (قرار المالك 2026-10-28 «فعّل الترقية الآلية») — حين يكون متغير
+المستودع SELFDEV_AUTO_PROMOTE='1': ينتظر CI أخضر على نفس بصمة الفرع ⇒ تقدم سريع فقط
+إلى main (لا دمج/لا إعادة كتابة) ⇒ deploy-fly.yml (بوابة CI + فحص /health) ⇒ النتيجة
+في السجل. قاطع دائرة: نشر آلي فاشل يوقف الترقيات حتى إعادة الضبط. بدون المتغير يرصد
+المنفّذ فقط إن صارت بصمة الفرع في main (ترقية يدوية) فيسجل «promoted».
 
 stdlib خالص (+ backend/self_develop.py للتحقق المشترك). اكتمال الدورة = خروج 0
 (النتائج في السجل)؛ خلل تنفيذ = استثناء يحمرّ به التشغيل (لا مسار إنهاء صريح — R-686).
@@ -261,8 +264,91 @@ def promotions(repo: Path, ci_rows: List[Dict[str, Any]], base: str = "origin/ma
     return out
 
 
+# ---------- R-797: الترقية الآلية (بأمر المالك 2026-10-28 «فعّل الترقية الآلية») ----------
+FLY_APP = "sovereign-ai-k20elq"
+
+
+def circuit_open(ci_rows: List[Dict[str, Any]]) -> Optional[str]:
+    """قاطع الدائرة: آخر نشر آلي لم ينجح ⇒ لا ترقية آلية جديدة حتى يُعاد الضبط
+    (تشغيل يدوي لـ self-develop.yml بالمدخل reset_circuit=true، أو نشر آلي ناجح)."""
+    last = None
+    for r in ci_rows:
+        p = r.get("payload") or {}
+        if "deploy" in p:
+            last = p
+    if last is None or last.get("deploy") in ("success", "reset"):
+        return None
+    return f"circuit_open: آخر نشر آلي ({last.get('task_id')}) = {last.get('deploy')}"
+
+
+def gh_wait_ci(sha: str, repo: Path, timeout: int = 2400, poll: int = 20) -> str:
+    """ينتظر تشغيل ci.yml على البصمة نفسها — يعيد success/failure/.../timeout."""
+    end = time.time() + timeout
+    while time.time() < end:
+        r = _run(["gh", "run", "list", "--workflow", "ci.yml", "--commit", sha, "--limit", "5",
+                  "--json", "status,conclusion"], repo, timeout=60)
+        try:
+            runs = json.loads(r.stdout or "[]")
+        except ValueError:  # TOLERATED: رد غير صالح مؤقت — يُعاد الاستطلاع
+            runs = []
+        done = [x for x in runs if x.get("status") == "completed"]
+        if any(x.get("conclusion") == "success" for x in done):
+            return "success"
+        if done and not [x for x in runs if x.get("status") != "completed"]:
+            return str(done[0].get("conclusion") or "failure")
+        time.sleep(poll)
+    return "timeout"
+
+
+def gh_deploy(sha: str, repo: Path, timeout: int = 2400, poll: int = 20) -> str:
+    """يشغّل deploy-fly.yml على main (بوابته تتحقق من CI أخضر على نفس SHA وفحص /health)."""
+    d = _run(["gh", "workflow", "run", "deploy-fly.yml", "--ref", "main",
+              "-f", f"confirm_app={FLY_APP}"], repo, timeout=60)
+    if d.returncode != 0:
+        return "dispatch_failed"
+    end = time.time() + timeout
+    while time.time() < end:
+        time.sleep(poll)
+        r = _run(["gh", "run", "list", "--workflow", "deploy-fly.yml", "--commit", sha,
+                  "--limit", "1", "--json", "status,conclusion"], repo, timeout=60)
+        try:
+            runs = json.loads(r.stdout or "[]")
+        except ValueError:  # TOLERATED: رد غير صالح مؤقت — يُعاد الاستطلاع
+            runs = []
+        if runs and runs[0].get("status") == "completed":
+            return str(runs[0].get("conclusion") or "failure")
+    return "timeout"
+
+
+def promote(res: Dict[str, Any], repo: Path, ci_rows: List[Dict[str, Any]],
+            base: str = "origin/main", wait_ci=gh_wait_ci, deploy=gh_deploy) -> Dict[str, Any]:
+    """ترقية آلية لفرع أخضر: CI أخضر على نفس البصمة ⇒ تقدم سريع فقط إلى main ⇒ نشر.
+    لا دمج ولا إعادة كتابة تاريخ؛ main تقدّم ⇒ stale (إعادة صياغة على الأحدث)."""
+    sha = res.get("sha")
+    out = {"task_id": res["task_id"], "attempt": res.get("attempt"), "sha": sha,
+           "branch": res.get("branch"), "at": time.time()}
+    reason = circuit_open(ci_rows)
+    if reason:
+        return dict(out, result="promote_skipped", reason=reason)
+    ci = wait_ci(sha, repo)
+    if ci != "success":
+        return dict(out, result="red", reason=f"ci_on_branch:{ci}")
+    _git(repo, "fetch", "-q", "origin", "main", check=False)
+    ff = _run(["git", "merge-base", "--is-ancestor", base, sha], repo, timeout=60)
+    if ff.returncode != 0:
+        return dict(out, result="stale", reason="main تقدّم منذ الفرع — لا تقدم سريع؛ إعادة صياغة")
+    p = _run(["git", "push", "-q", "origin", f"{sha}:refs/heads/main"], repo, timeout=120)
+    if p.returncode != 0:
+        return dict(out, result="promote_skipped", reason="push_main_rejected",
+                    log_tail=_tail(p, 600))
+    dep = deploy(sha, repo)
+    return dict(out, result="promoted", deploy=dep,
+                reason=f"ترقية آلية R-797: main ← {sha[:12]}؛ النشر: {dep}")
+
+
 def run_cycle(disk, repo: Path, max_tasks: int = 1, base: str = "origin/main",
-              run_suite: bool = True, push: bool = False) -> Dict[str, Any]:
+              run_suite: bool = True, push: bool = False, auto_promote: bool = False,
+              wait_ci=gh_wait_ci, deploy=gh_deploy) -> Dict[str, Any]:
     tasks = latest_tasks(pull_all(disk, sd.NAMESPACE))
     ci_rows = pull_all(disk, sd.CI_NAMESPACE)
     done = {((r.get("payload") or {}).get("task_id"), (r.get("payload") or {}).get("attempt"))
@@ -283,6 +369,18 @@ def run_cycle(disk, repo: Path, max_tasks: int = 1, base: str = "origin/main",
         disk.append_log(sd.CI_NAMESPACE, r)
         report["processed"].append({k: r.get(k) for k in ("task_id", "attempt", "result",
                                                            "reason", "branch", "sha")})
+        ci_rows.append({"payload": r})
+        if auto_promote and r.get("result") == "green" and r.get("sha"):
+            try:
+                pr = promote(r, repo, ci_rows, base=base, wait_ci=wait_ci, deploy=deploy)
+            except Exception as exc:  # TOLERATED: خلل الترقية يُسجل ويبقى الفرع ينتظر
+                pr = {"task_id": r["task_id"], "attempt": r.get("attempt"), "sha": r.get("sha"),
+                      "at": time.time(), "result": "promote_skipped",
+                      "reason": f"promote_error:{type(exc).__name__}: {exc}"[:300]}
+            disk.append_log(sd.CI_NAMESPACE, pr)
+            ci_rows.append({"payload": pr})
+            report.setdefault("auto_promotion", []).append(
+                {k: pr.get(k) for k in ("task_id", "result", "reason", "deploy", "sha")})
     return report
 
 
@@ -296,9 +394,16 @@ def main() -> int:
     except ValueError:  # TOLERATED: قيمة غير رقمية → الافتراضي المعلن
         max_tasks = 1
     _git(ROOT, "fetch", "-q", "origin", "main")
-    report = run_cycle(RestDisk(url, key), ROOT, max_tasks=max_tasks,
+    disk = RestDisk(url, key)
+    if os.environ.get("SELFDEV_RESET_CIRCUIT") == "true":
+        disk.append_log(sd.CI_NAMESPACE, {"task_id": None, "deploy": "reset", "at": time.time(),
+                                          "result": "circuit_reset", "reason": "إعادة ضبط يدوية"})
+    auto = os.environ.get("SELFDEV_AUTO_PROMOTE") == "1"
+    print(f"R-796/R-797: الترقية الآلية {'مفعلة' if auto else 'معطلة'} (SELFDEV_AUTO_PROMOTE)")
+    report = run_cycle(disk, ROOT, max_tasks=max_tasks,
                        push=os.environ.get("SELFDEV_PUSH") == "1",
-                       run_suite=os.environ.get("SELFDEV_SKIP_SUITE") != "1")
+                       run_suite=os.environ.get("SELFDEV_SKIP_SUITE") != "1",
+                       auto_promote=auto)
     print(json.dumps(report, ensure_ascii=False, indent=2))
     return 0
 

@@ -4,8 +4,11 @@ name: Self-Develop (R-796)
 # الإنتاج يصوغ المسودات فقط (backend/self_develop.py — لا كتابة ملفات، D-041 قائم)؛
 # هنا في بيئة CI مؤقتة معزولة: فرع work/selfdev-* من main، الاختبار يفشل على الكود
 # الأصلي (RED) ثم ينجح بعد التعديل (GREEN)، بوابة الحذف + بوابة الوثائق + المجموعة
-# الكاملة، ثم دفع الفرع وتشغيل ci.yml عليه. الترقية إلى main قرار المالك (المادة ٦) —
-# لا دفع إلى main من هنا.
+# الكاملة، ثم دفع الفرع وتشغيل ci.yml عليه.
+# R-797 (قرار المالك 2026-10-28 «فعّل الترقية الآلية»): حين يكون متغير المستودع
+# SELFDEV_AUTO_PROMOTE='1' — CI أخضر على نفس البصمة ⇒ تقدم سريع فقط إلى main ⇒
+# deploy-fly.yml (بوابة CI + فحص /health). قاطع دائرة: نشر آلي فاشل يوقف الترقيات
+# حتى تشغيل يدوي بـ reset_circuit=true. إيقاف فوري: احذف المتغير أو اجعله '0'.
 
 on:
   schedule:
@@ -16,6 +19,10 @@ on:
         description: 'عدد المهام في الدورة (1-5)'
         required: false
         default: '1'
+      reset_circuit:
+        description: 'إعادة ضبط قاطع الدائرة بعد نشر آلي فاشل (true/false)'
+        required: false
+        default: 'false'
 
 permissions:
   contents: write
@@ -27,9 +34,9 @@ concurrency:
 
 jobs:
   selfdev:
-    name: Self-Develop cycle (RED→GREEN on work/selfdev-*)
+    name: Self-Develop cycle (RED→GREEN on work/selfdev-* → auto-promotion)
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
         with:
@@ -63,4 +70,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           SELFDEV_PUSH: '1'
           SELFDEV_MAX_TASKS: ${{ github.event.inputs.max_tasks || '1' }}
+          SELFDEV_AUTO_PROMOTE: ${{ vars.SELFDEV_AUTO_PROMOTE }}
+          SELFDEV_RESET_CIRCUIT: ${{ github.event.inputs.reset_circuit || 'false' }}
         run: python tools/selfdev_ci.py

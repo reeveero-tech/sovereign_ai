@@ -2757,3 +2757,11 @@ Bus إطلاقًا. الواجهة سليمة بعد الإزالة (101 وسم 
   - `backend/goals.py`: لا حذف (إضافة الربط قبل `return` القائم كما هو).
   - وثائق: سطرا «آخر تحديث» (CHANGELOG، PROJECT_STATE — القيمة القديمة باقية في «سابقًا»)؛ صف الاختبارات (1378→1409 مع إكمال السلسلة).
 
+## 2026-10-28 — R-797: أسطر مستبدلة
+- **# DELETION-JUSTIFIED** — استبدال بتوسيع، لا حذف منطق (قرار المالك «فعّل الترقية الآلية»):
+  - `.github/workflows/deploy-fly.yml`: اسم خطوة البوابة وسطر `gh run list ... --event push` ⇒ نفس الاستعلام بلا تقييد الحدث مع تصفية `push` أو `workflow_dispatch` و`completed/success` (البوابة نفسها: CI ناجح على نفس SHA).
+  - `.github/workflows/self-develop.yml`: سطرا التعليق «الترقية قرار المالك — لا دفع إلى main» (حُسم بقرار المالك)، `timeout-minutes` 60⇒120، اسم الخطوة.
+  - `tools/selfdev_ci.py`: توقيع `run_cycle` (+`auto_promote`/`wait_ci`/`deploy`)، نهاية حلقة المعالجة (+الترقية)، استدعاء `run_cycle` في `main` (+القرص المشترك وإعادة ضبط القاطع)، فقرة الوثيقة عن الترقية.
+  - `backend/self_develop.py`: سطرا حقول `ci` (+`deploy`) وبداية سلسلة الحالات (+`promote_skipped`).
+  - وثائق: سطرا «آخر تحديث»؛ صف الاختبارات.
+
