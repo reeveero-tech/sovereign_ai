@@ -147,67 +147,219 @@ def test_ledger_verify_endpoint_keyring_stats(client):
     assert ks["total_keys"] >= 0
 
 
-def test_ledger_verify_cache_serves_sequential_calls(client, monkeypatch):
-    """R-805: الاستدعاء المتتابع بيدجر غير متغير يُخدم من الكاش — لا إعادة حساب O(n).
+def _r807_env(tmp_path, monkeypatch):
+    """بيئة معزولة كاملة (R-807): جذر بيانات مؤقت + KeyRing حقيقي +
+    SovereignCore يوقّع أحداثه فعلًا على ledger.jsonl — لا أحداث مصنوعة."""
+    data_root = tmp_path / "dr"
+    monkeypatch.setenv("SOVEREIGN_DATA_ROOT", str(data_root))
+    from backend.sovereign.keys.keyring import KeyRing
+    from backend.memory.core import SovereignCore
 
-    كان الشرط القديم `gen != gen_seen` لا يتحقق أبدًا للاستدعاءات المتتابعة
-    (كانت gen تُقرأ قبل القفل فتساوي قيمة الحالة عند الدخول) ⇒ كل استدعاء
-    متتابع أعاد الحساب الكامل على السجل كله. الآن: بصمة الملفات ثابتة ⇒
-    الاستدعاء الثاني لا يعيد الحساب ويعيد نفس النتيجة حرفيًا."""
-    import app as app_module
+    kr = KeyRing(keys_dir=data_root / "keys")
+    kr.generate_new_key(reason="r807-test")
+    kr.save_to_disk()
 
+    sc_dir = data_root / "sovereign_core"
+    sc_dir.mkdir(parents=True, exist_ok=True)
+    (sc_dir / "blobs").mkdir(exist_ok=True)
+    core = SovereignCore(
+        log_file=sc_dir / "ledger.jsonl",
+        blobs_dir=sc_dir / "blobs",
+        index_file=sc_dir / "index.json",
+        meta_file=sc_dir / "meta.json",
+        integrity_file=sc_dir / "integrity.json",
+        sovereign_key="r807_test_master_key_1234567890abcdef",
+        keyring=kr,
+    )
+    return core, data_root
+
+
+def _r807_counting_verifier(monkeypatch):
+    """عدّاد استدعاءات verify_event الحقيقية — يقيس العمل الفعلي لا التقديرات."""
+    from backend.sovereign.keys.verifier import SignatureVerifier
     calls = {"n": 0}
-    real_compute = app_module._ledger_verify_compute
+    real = SignatureVerifier.verify_event
 
-    def counting_compute():
+    def counting(self, event):
         calls["n"] += 1
-        return real_compute()
+        return real(self, event)
 
-    monkeypatch.setattr(app_module, "_ledger_verify_compute", counting_compute)
-    # حالة كاش نظيفة لاختبار معزول
-    monkeypatch.setattr(app_module, "_LEDGER_VERIFY_STATE",
-                        {"gen": 0, "result": None, "fp": None, "ts": 0.0})
+    monkeypatch.setattr(SignatureVerifier, "verify_event", counting)
+    return calls
+
+
+def _r807_reset_state(monkeypatch):
+    import app as app_module
+    fresh = {
+        "result": None, "prefix_size": 0, "prefix_hash": None,
+        "verified_count": 0, "stats": None, "anchors_fp": None,
+        "anchors": None, "keyring_fp": None, "ts": 0.0,
+    }
+    monkeypatch.setattr(app_module, "_LEDGER_VERIFY_STATE", fresh)
+    return fresh
+
+
+def test_ledger_verify_incremental_appends_only_tail_verified(client, tmp_path, monkeypatch):
+    """R-807: الإلحاق الجديد يُتحقق وحده O(delta) — البادئة تُهشم لا تُعاد
+    فحصها. الدليل الحي على الحاجة: بعد نشر R-805 ظل الاستدعاء المتتابع على
+    الإنتاج يعيد الحساب الكامل (اليدجر الحي يُلحق ~3.5 حدث/ث فبصمة الحجم
+    تتغير بين كل استدعاءين) — أول استدعاء 35ث ثم مهلات 60ث→300ث→500ث."""
+    from backend.memory.core import EventType
+
+    core, data_root = _r807_env(tmp_path, monkeypatch)
+    _r807_reset_state(monkeypatch)
+    calls = _r807_counting_verifier(monkeypatch)
+
+    for i in range(6):
+        core.append_event(EventType.INTERACTION, {"r807": "seed", "n": i})
 
     r1 = client.get("/ledger/verify")
     assert r1.status_code == 200
-    assert calls["n"] == 1, "الاستدعاء الأول يجب أن يحسب"
+    assert r1.json()["snapshot"]["incremental"] is False
+    n_after_first = calls["n"]
+    assert n_after_first == 6, "الفحص الكامل يجب أن يتحقق من كل حدث مرة"
+
+    # إلحاق حدثين جديدين (السيناريو الحي: اليدجر لا يتوقف عن النمو)
+    for i in range(2):
+        core.append_event(EventType.INTERACTION, {"r807": "more", "n": i})
 
     r2 = client.get("/ledger/verify")
     assert r2.status_code == 200
-    assert calls["n"] == 1, (
-        "R-805: الاستدعاء المتتابع بيدجر غير متغير يجب أن يُخدم من الكاش"
+    assert r2.json()["snapshot"]["incremental"] is True
+    assert calls["n"] == n_after_first + 2, (
+        "R-807: الذيل الجديد وحده يُفحص — البادئة تُهشم لا تُعاد فحصها"
     )
-    assert r1.json() == r2.json(), "الكاش يجب أن يعيد نفس النتيجة حرفيًا"
+    s = r2.json()["ledger_summary"]
+    assert s["total_events"] == 8
+    assert s["verified_with_key"] == 8
 
-    # تغيّر بصمة الملفات (محاكاة حدث جديد في اليدجر) ⇒ إعادة حساب
-    monkeypatch.setattr(app_module, "_ledger_verify_fingerprint", lambda: (("changed", 1, 1.0),))
+    # استدعاء ثالث بلا جديد: صفر تحقق توقيعي (البادئة تغطي كل شيء)
     r3 = client.get("/ledger/verify")
     assert r3.status_code == 200
-    assert calls["n"] == 2, "تغيّر البصمة يجب أن يعيد الحساب"
+    assert calls["n"] == n_after_first + 2
+    assert r3.json()["ledger_summary"]["total_events"] == 8
 
 
-def test_ledger_verify_cache_ttl_expiry(client, monkeypatch):
-    """R-805: انتهاء مهلة الكاش (TTL) يعيد الحساب حتى لو البصمة ثابتة —
-    يقيّد الثبات عند تدوير المفاتيح (البصمة لا تلتقطه)."""
-    import time as _time
-    import app as app_module
+def test_ledger_verify_prefix_modification_forces_full(client, tmp_path, monkeypatch):
+    """R-807: تعديل بايت داخل البادئة يُبطل الاستئناف — فحص كامل صادق
+    (لا وراثة عدادات من بادئة لم تعد موجودة)."""
+    from backend.memory.core import EventType
 
-    calls = {"n": 0}
-    real_compute = app_module._ledger_verify_compute
+    core, data_root = _r807_env(tmp_path, monkeypatch)
+    _r807_reset_state(monkeypatch)
+    calls = _r807_counting_verifier(monkeypatch)
 
-    def counting_compute():
-        calls["n"] += 1
-        return real_compute()
-
-    monkeypatch.setattr(app_module, "_ledger_verify_compute", counting_compute)
-    monkeypatch.setattr(app_module, "_LEDGER_VERIFY_STATE",
-                        {"gen": 0, "result": None, "fp": None, "ts": 0.0})
-
+    for i in range(5):
+        core.append_event(EventType.INTERACTION, {"r807": "seed", "n": i})
     r1 = client.get("/ledger/verify")
-    assert calls["n"] == 1
+    assert r1.status_code == 200
+    n_after_first = calls["n"]
+    assert n_after_first == 5
 
-    # نُقْدِم عمر النتيجة المخزنة إلى ما بعد TTL ⇒ إعادة حساب
-    state = app_module._LEDGER_VERIFY_STATE
-    state["ts"] = _time.time() - (app_module._LEDGER_VERIFY_CACHE_TTL + 1.0)
+    # تعديل حقيقي داخل البادئة: تزييف بصمة محتوى الحدث الثاني (إعادة كتابة
+    # السطر) — التوقيع فوق «hash» صار فوق بصمة لا ينتجها المحتوى ⇒ فشل
+    # التحقق التوقيعي نفسه يكشفه في طبقة /ledger/verify
+    ledger = data_root / "sovereign_core" / "ledger.jsonl"
+    lines = ledger.read_text(encoding="utf-8").splitlines(keepends=True)
+    import json as _json
+    ev = _json.loads(lines[1])
+    ev["hash"] = "tampered_hash_r807"
+    lines[1] = _json.dumps(ev, ensure_ascii=False) + "\n"
+    ledger.write_text("".join(lines), encoding="utf-8")
+
     r2 = client.get("/ledger/verify")
-    assert calls["n"] == 2, "انتهاء TTL يجب أن يعيد الحساب"
+    assert r2.status_code == 200
+    assert r2.json()["snapshot"]["incremental"] is False, "تعديل البادئة يجب أن يفرض فحصًا كاملًا"
+    assert calls["n"] == n_after_first + 5, "فحص كامل لكل الأحداث بعد تعديل البادئة"
+    # الحدث المعدل الآن غير موقّع صالحًا — يُصنَّف بصدق لا يُخفى
+    s = r2.json()["ledger_summary"]
+    assert s["total_events"] == 5
+    assert s["verified_with_key"] < 5
+
+
+def test_ledger_verify_truncation_forces_full(client, tmp_path, monkeypatch):
+    """R-807: تقلّص الملف يُبطل الاستئناف — العدادات الجديدة صادقة على
+    الملف الفعلي لا على ذاكرة بادئة قديمة."""
+    from backend.memory.core import EventType
+
+    core, data_root = _r807_env(tmp_path, monkeypatch)
+    _r807_reset_state(monkeypatch)
+
+    for i in range(5):
+        core.append_event(EventType.INTERACTION, {"r807": "seed", "n": i})
+    r1 = client.get("/ledger/verify")
+    assert r1.json()["ledger_summary"]["total_events"] == 5
+
+    ledger = data_root / "sovereign_core" / "ledger.jsonl"
+    lines = ledger.read_text(encoding="utf-8").splitlines(keepends=True)
+    ledger.write_text("".join(lines[:3]), encoding="utf-8")
+
+    r2 = client.get("/ledger/verify")
+    assert r2.status_code == 200
+    assert r2.json()["snapshot"]["incremental"] is False
+    assert r2.json()["ledger_summary"]["total_events"] == 3, "التقلّص يظهر بصدق"
+
+
+def test_ledger_verify_keyring_change_forces_full(client, tmp_path, monkeypatch):
+    """R-807: تغيّر المفاتيح (إضافة/تقاعد/ثقة) يغيّر معنى التصنيف نفسه —
+    يفرض فحصًا كاملًا حتى لو بايتات السجل لم تتغير (نمط R-768)."""
+    from backend.memory.core import EventType
+    from backend.sovereign.keys.keyring import KeyRing
+
+    core, data_root = _r807_env(tmp_path, monkeypatch)
+    _r807_reset_state(monkeypatch)
+    calls = _r807_counting_verifier(monkeypatch)
+
+    for i in range(4):
+        core.append_event(EventType.INTERACTION, {"r807": "seed", "n": i})
+    r1 = client.get("/ledger/verify")
+    n_after_first = calls["n"]
+    assert n_after_first == 4
+
+    # مفتاح جديد في الحلقة ⇒ بصمة المفاتيح تغيّرت ⇒ لا استئناف
+    kr = KeyRing(keys_dir=data_root / "keys")
+    kr.load_from_disk()
+    kr.generate_new_key(reason="r807-rotation")
+    kr.save_to_disk()
+
+    r2 = client.get("/ledger/verify")
+    assert r2.status_code == 200
+    assert r2.json()["snapshot"]["incremental"] is False
+    assert calls["n"] == n_after_first + 4, "تغيّر المفاتيح يفرض فحصًا كاملًا"
+
+
+def test_ledger_verify_concurrent_single_flight(client, tmp_path, monkeypatch):
+    """R-807: طلبات متزامنة كثيرة على اليدجر ذاته ⇒ فحص واحد لا فحص لكل
+    منتظر — حارس إشباع المعالج (نمط R-769 في SovereignCore)."""
+    import threading
+    from backend.memory.core import EventType
+
+    core, data_root = _r807_env(tmp_path, monkeypatch)
+    _r807_reset_state(monkeypatch)
+    calls = _r807_counting_verifier(monkeypatch)
+
+    for i in range(5):
+        core.append_event(EventType.INTERACTION, {"r807": "seed", "n": i})
+
+    results = []
+    errors = []
+
+    def hit():
+        try:
+            r = client.get("/ledger/verify")
+            results.append(r.status_code)
+        except Exception as e:  # pragma: no cover
+            errors.append(e)
+
+    threads = [threading.Thread(target=hit) for _ in range(6)]
+    for th in threads:
+        th.start()
+    for th in threads:
+        th.join()
+
+    assert not errors, errors
+    assert results == [200] * 6
+    # كل حدث فُحص مرة واحدة على الأكثر — التزامن لا يضاعف الفحص
+    assert calls["n"] == 5, (
+        "التزامن لا يضاعف الفحص: 6 طلبات متزامنة على 5 أحداث ⇒ 5 تحققات"
+    )

@@ -15,11 +15,12 @@
 
 ```
 $ python -m pytest tests/test_ledger_anchor.py tests/test_ledger_verify_endpoint.py tests/test_sovereign_keys.py tests/test_key_selection_rotation.py tests/test_return_none_security.py -q
-52 passed
+55 passed
 ```
 
 > تصويب R-805 (2026-10-29): 50 → **52** — أُضيف اختباران لـ`test_ledger_verify_endpoint.py`
 > (كاش `/ledger/verify` المتتابع + انتهاء TTL — تفصيل الدفعة في CHANGELOG R-805).
+> تصويب R-807 (2026-10-29): 52 → **55** — أُضيف 3 اختبارات لـ`test_ledger_verify_endpoint.py` (تحقق تزايدي/تعديل بادئة/تقلّص/تغيّر مفاتيح/تزامن — استُبدل اختبارا كاش R-805 بخمسة أدق).
 
 ## تصويح رقمي (2026-10-16 — مرحلة صفر لوكيل لاحق)
 
