@@ -31,7 +31,11 @@ def main() -> int:
         if agent not in ("completed", "answered_from_results"):
             print(f"::error::حالة الوكيل ليست مكتملة: {agent}")
             return 1
-        print("OK live chat (ok + completed)")
+        # R-814c: نجاح بلا جواب غير ذي معنى — الرد نفسه جزء من العقد
+        if not str(data.get("reply") or "").strip():
+            print("::error::نجاح بلا جواب (reply فارغ) — ليس نجاحًا ذا معنى")
+            return 1
+        print("OK live chat (ok + completed + nonempty reply)")
     else:
         # عقد الحالة الصادق (R-814): فشل فعلي ⇒ error لا ok
         if status != "error":

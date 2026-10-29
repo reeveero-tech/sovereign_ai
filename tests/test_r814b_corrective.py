@@ -107,20 +107,55 @@ def test_reviewer_exception_preserves_answer():
 
 
 def test_reviewer_receives_real_tool_evidence():
-    """المراجع يرى أدلة الأداة المنفذة فعلًا لا جوابًا معلقًا في الفراغ."""
-    brain = FakeBrain([
+    """المراجع يرى أدلة الأداة المنفذة فعلًا لا جوابًا معلقًا في الفراغ.
+
+    علامة الشاهد في نتيجة الأداة فقط (ليست في الجواب المزروع) — ووجودها في
+    حمولة المراجع يثبت أنها وصلته من التنفيذ لا من نص الجواب. وهوية النداء
+    تُفحص بنيتها: تعليمات مراجعة + حمولة JSON فيها executed_steps بنتائجها.
+    """
+    MARKER = "SHARED-RESULT-MARKER-R814C"
+
+    class ReviewerBrain(FakeBrain):
+        """نداء المراجع يُتعرف عليه بهوية تعليماته (لا بترتيب النداء) — الجواب
+        يُعاد مباشرة عندما تصل نداءات التخطيط/الجواب، وحكم المراجع لنداء المراجعة."""
+
+        def __call__(self, system, user, **kw):
+            if "مراجع مستقل" in system:
+                self.seen.append({"system": system, "user": user})
+                return json.dumps({"ok": True, "issues": [],
+                                   "summary": "مطابق"}, ensure_ascii=False)
+            return FakeBrain.__call__(self, system, user, **kw)
+
+    brain = ReviewerBrain([
         {"tool": "memory.stats", "inputs": {}},     # التوجيه: نفّذ الأداة
-        "في الذاكرة 140807 حدث",                    # الجواب من نتيجتها
-        {"ok": True, "issues": [], "summary": "مطابق"},  # حكم المراجع
+        {"tool": "none", "inputs": {}},             # اكتفاء بالنتيجة — لا خطوة أخرى
+        "في الذاكرة 140807 حدث",                    # الجواب من نتيجتها (بلا العلامة)
     ])
-    reg = _registry()
+    reg = FakeRegistry({
+        "system.capabilities": ({}, lambda: {"tools": ["memory.stats"], "deferred": []}),
+        # العلامة في نتيجة الأداة فقط — الجواب أعلاه لا يحويها
+        "memory.stats": ({}, lambda: {"total_events": 140807, "note": MARKER}),
+    })
     out = chat_agent.respond("كم حدث الذاكرة؟", chat_fn=brain, registry=reg)
     assert out["status"] in ("completed", "answered_from_results")  # عمل حقيقي مكتمل
     # الأداة نُفذت فعلًا (المنفّذ: التطبيق — البند ٤)
     assert ("memory.stats", {}) in reg.invoked
-    # المراجع رأى الدليل الحقيقي (total_events) في حمولته — استقلال بدليل
-    reviewer_call = brain.seen[2]
-    assert "140807" in reviewer_call["user"]
+    # الجواب نفسه لا يحوي العلامة (لم تُزرع في النص)
+    assert MARKER not in out["reply"]
+    # نداء المراجع: تعليمات مراجعة صريحة (هوية النداء — يُتعرف بها لا بترتيب)
+    reviewer_calls = [c for c in brain.seen if "مراجع مستقل" in c["system"]]
+    assert len(reviewer_calls) == 1
+    reviewer_call = reviewer_calls[0]
+    # حمولته JSON بنيوي: هدف + خطوات منفذة بنتائجها + الجواب
+    import json as _json
+    payload = _json.loads(reviewer_call["user"])
+    assert payload["goal"] == "كم حدث الذاكرة؟"
+    executed = [s for s in payload["executed_steps"] if s.get("tool") == "memory.stats"]
+    assert executed and MARKER in str(executed[0]["result"])  # الدليل وصل من التنفيذ
+    # والحكم المسجل هو حكم العقل المدخل نفسه (لا مختلق)
+    assert out["reviewer"]["reviewer"] == "brain"
+    assert out["reviewer"]["ok"] is True
+    assert out["reviewer"]["summary"] == "مطابق"
 
 
 def test_no_budget_skips_reviewer_without_model_call():
@@ -299,7 +334,108 @@ def test_workflow_uses_no_bare_grep_or_rg_and_has_owner_job():
     wf = WORKFLOW.read_text(encoding="utf-8")
     # لا أوامر rg خام (درس أول تشغيل) — الفحوص عبر السكربتات المستقلة
     assert "\n          rg " not in wf and "| rg " not in wf
-    # مهمة مصادقة المالك تستهلك السر بلا طباعته
-    assert "verify-owner" in wf and 'KEY: ${{ secrets.KEY_SECRET }}' in wf
+    # مهمة مصادقة المالك تستهلك سرًا منفصلًا (R-814c: KEY_SECRET يغذي CI ولا يُعاد
+    # تخصيصه) بلا طباعته أبدًا
+    assert "verify-owner" in wf and 'KEY: ${{ secrets.LIVE_OWNER_API_KEY }}' in wf
+    assert 'secrets.KEY_SECRET' not in wf  # السر القديم لا يُستهلك في التحقق الحي
     assert 'echo "$KEY"' not in wf  # لا طباعة للسر أبدًا
 
+
+
+# ---------------- R-814c: تشديدات المراجعة التاسعة ----------------
+
+def test_root_check_distinguishes_grep_failure_from_clean(tmp_path):
+    """فشل grep نفسه (رمز 2) ليس «صفحة نظيفة» — خلل فحص يُعلن لا نجاحًا."""
+    import os
+    import subprocess
+    unreadable = tmp_path / "locked.html"
+    unreadable.write_text("صفحة", encoding="utf-8")
+    os.chmod(unreadable, 0o000)  # grep يرد 2 (خطأ قراءة) — ليس تطابقًا ولا نظافة
+    try:
+        r = subprocess.run(["bash", str(TOOLS / "live_check_root.sh"), str(unreadable)],
+                           capture_output=True, text=True)
+        assert r.returncode == 2, f"فشل grep يجب أن يظهر خلل فحص (2) لا نجاحًا — رد {r.returncode}"
+    finally:
+        os.chmod(unreadable, 0o644)
+
+
+def test_chat_check_rejects_ok_with_empty_reply(tmp_path):
+    """نجاح بلا جواب غير ذي معنى — الرد جزء من عقد النجاح."""
+    f = tmp_path / "ok.json"
+    f.write_text(json.dumps({"status": "ok", "agent_status": "completed",
+                             "reply": ""}), encoding="utf-8")
+    r = _run("live_check_chat.py", f, "expect-ok")
+    assert r.returncode == 1, "نجاح بلا reply يجب أن يُرفض"
+
+
+def test_health_check_rejects_missing_components(tmp_path):
+    """/health بلا مكونات ليس نجاحًا ذا معنى — العقد الحي: مكونات بحالات صريحة."""
+    f = tmp_path / "h.json"
+    f.write_text(json.dumps({"status": "healthy"}), encoding="utf-8")
+    assert _run("live_check_health.py", f).returncode == 1
+    f2 = tmp_path / "h2.json"
+    f2.write_text(json.dumps({"status": "healthy",
+                             "components": {"a": {"other": 1}}}), encoding="utf-8")
+    assert _run("live_check_health.py", f2).returncode == 1  # مكون بلا status يُرفض
+
+
+def test_conversation_err_rev_survive_server_roundtrip():
+    """جولة حفظ/استعادة عبر التطبيق نفسه (لا ملف مصنوع): err/rev تعبران الخادم.
+
+    (البند من مراجعة المستشار التاسعة: اختبار JSON مصنوعًا لا يثبت الجولة الحقيقية.)
+    """
+    import app as app_mod
+    from fastapi.testclient import TestClient
+
+    import config as _config
+    headers = {"X-Sovereign-Key": _config.SOVEREIGN_KEY}
+    with TestClient(app_mod.app) as c:
+        body = {"title": "جولة فحص R-814c",
+                "messages": [
+                    {"role": "user", "content": "سؤال الجولة"},
+                    {"role": "assistant", "content": "جواب الجولة",
+                     "ts": 1, "tools": [], "files": [], "err": True, "rev": "تحفظ الجولة"},
+                ], "project_id": None, "model": None}
+        r = c.post("/ws/conversations", json=body, headers=headers)
+        assert r.status_code in (200, 201), r.text[:200]
+        cid = r.json()["id"]
+        r2 = c.get(f"/ws/conversations/{cid}", headers=headers)
+        assert r2.status_code == 200
+        msgs = r2.json()["messages"]
+        bot = next(m for m in msgs if m["role"] == "assistant")
+        assert bot["err"] is True, "علامة الفشل ضاعت عبر جولة الخادم الحقيقية"
+        assert bot["rev"] == "تحفظ الجولة", "تحفظ المراجع ضاع عبر جولة الخادم الحقيقية"
+
+
+def test_self_review_runs_without_model_via_real_entry():
+    """البند ٤ (تكملة الإثبات): التفتيش الذاتي عبر نقطة الدخول الحقيقية /tools/invoke
+    مع عقل رافض (أي نداء نموذج يفشل الاختبار) — التطبيق ينفذ بأدواته المسجلة."""
+    import app as app_mod
+    from fastapi.testclient import TestClient
+    import config as _config
+
+    brain = RaisingBrain()
+    monkey = pytest.MonkeyPatch()
+    monkey.setattr(_config, "OLLAMA_ENABLED", False)  # العقل معطل صراحة
+    monkey.setattr("ollama_client.chat", lambda *a, **k: brain(*a, **k))
+    try:
+        with TestClient(app_mod.app) as c:
+            r = c.post("/tools/invoke", json={
+                "tool": "system.self_review", "inputs": {},
+                "api_key": _config.SOVEREIGN_KEY})
+            assert r.status_code == 200, r.text[:200]
+            out = r.json()
+            assert out.get("ok") is True
+            # التنفيذ حتمي بأدوات حقيقية: فحوص المسجل نفذت ونتائجها في الأثر
+            checks = out.get("result") or {}
+            assert checks.get("workflow") == "self_review"
+            assert "checks" in json.dumps(checks) or "reviewer" in json.dumps(checks)
+    finally:
+        monkey.undo()
+    assert not brain.seen  # لم يُلمس النموذج إطلاقًا — التنفيذ حتمي
+
+
+def test_ui_reviewer_objection_has_fallback_text():
+    """رفض المراجع بلا تفصيل (summary/issues فارغتان) لا يختفي — نص افتراضي صريح."""
+    ui = CHAT_UI.read_text(encoding="utf-8")
+    assert '|| "اعترض المراجع المستقل على هذا الجواب (جاء الحكم بلا تفصيل)"' in ui

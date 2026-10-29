@@ -480,9 +480,10 @@
       // R-814: عقد الحالة الصادق — رد HTTP 200 بحالة فشل يُعرض بتنسيق الخطأ
       // لا كأنه جواب سليم (النص نفسه صادق يشرح الفشل)
       var failed = data.status && data.status !== "ok";
-      // R-814b: تحفظ المراجع المستقل يظهر للمستخدم (رفضه لا يُخفى) — مرجع لا منفذ:
-      // الجواب يبقى لكن اعتراض المراجع يُعرض في الفقاعة ويُحفظ معها
-      var rev = data.reviewer && data.reviewer.ok === false ? (data.reviewer.summary || (data.reviewer.issues || []).join("؛ ")) : null;
+      // R-814b/c: تحفظ المراجع المستقل يظهر للمستخدم (رفضه لا يُخفى) — مرجع لا منفذ:
+      // الجواب يبقى لكن اعتراض المراجع يُعرض في الفقاعة ويُحفظ معها؛ وحتى لو جاء
+      // الحكم بلا تفصيل (summary/issues فارغتان) يظهر نص افتراضي صريح لا يختفي الرفض
+      var rev = data.reviewer && data.reviewer.ok === false ? (data.reviewer.summary || (data.reviewer.issues || []).join("؛ ") || "اعترض المراجع المستقل على هذا الجواب (جاء الحكم بلا تفصيل)") : null;
       var bm = { role: "assistant", content: data.reply.trim(), ts: Date.now(), secs: Math.round((Date.now() - start) / 1000), tools: data.tools_used || [], err: !!failed, rev: rev };
       state.messages.push(bm); save(); bubble(bm, failed ? { error: true } : undefined); persistConv();
     }).catch(function (err) {

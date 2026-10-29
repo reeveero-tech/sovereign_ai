@@ -25,14 +25,23 @@ def main() -> int:
     if not isinstance(data, dict) or data.get("status") != "healthy":
         print(f"::error::/health ليس سليمًا — الحالة العلوية: {data.get('status') if isinstance(data, dict) else 'ليس كائنًا'}")
         return 1
+    # R-814c: غياب المكونات/حالاتها ليس نجاحًا — العقد الحي: components قاموس
+    # لكل مكون status صريح (العينة الحية: 23 مكونًا كلها بحالة)
     comps = data.get("components")
-    if isinstance(comps, dict):
-        bad = [k for k, v in comps.items()
-               if isinstance(v, dict) and v.get("status") not in ("healthy", None)]
-        if bad:
-            print(f"::error::مكونات غير سليمة: {bad}")
-            return 1
-    print("OK /health (top-level healthy, components checked)")
+    if not isinstance(comps, dict) or not comps:
+        print("::error::/health بلا مكونات — ليس نجاحًا ذا معنى")
+        return 1
+    bad = []
+    for k, v in comps.items():
+        st = v.get("status") if isinstance(v, dict) else None
+        if st is None:
+            bad.append(f"{k}(بلا حالة)")
+        elif st != "healthy":
+            bad.append(f"{k}({st})")
+    if bad:
+        print(f"::error::مكونات غير سليمة أو بلا حالة: {bad[:5]}")
+        return 1
+    print(f"OK /health (top-level healthy, {len(comps)} components all explicit)")
     return 0
 
 
