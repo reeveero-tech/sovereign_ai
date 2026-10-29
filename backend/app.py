@@ -1827,12 +1827,12 @@ def _brain_status_payload() -> Dict[str, Any]:
     import ollama_client as _brain_client
     import config as _config
     from urllib.parse import urlsplit
-    enabled = bool(_config.OLLAMA_ENABLED and _config.OLLAMA_MODEL)
+    enabled = bool(_config.brain_get("OLLAMA_ENABLED") and _config.brain_get("OLLAMA_MODEL"))
     outcome = _brain_client.last_outcome()
     if not enabled:
         return {"brain": "disabled", "enabled": False,
                 "reply_source": "templates", "last_call": outcome}
-    protocol = getattr(_config, "OLLAMA_PROTOCOL", "ollama")
+    protocol = str(_config.brain_get("OLLAMA_PROTOCOL", "ollama") or "ollama").strip().lower() or "ollama"
     if protocol not in ("ollama", "openai"):
         protocol = "invalid"  # لا صدى للقيمة الخام (قد تحمل سرًا)
     # المرصود: مصدر آخر رد فعلي — لا ادعاء نجاح قبل أول استدلال ناجح
@@ -1842,7 +1842,7 @@ def _brain_status_payload() -> Dict[str, Any]:
         reply_source = "unverified"
     else:
         reply_source = "templates-fallback"
-    raw = urlsplit(str(_config.OLLAMA_BASE_URL))
+    raw = urlsplit(str(_config.brain_get("OLLAMA_BASE_URL")))
     netloc = raw.hostname or ""
     try:
         if raw.port is not None:
@@ -1857,11 +1857,139 @@ def _brain_status_payload() -> Dict[str, Any]:
         "enabled": True,
         "reply_source": reply_source,
         "protocol": protocol,
-        "model": _config.OLLAMA_MODEL,
+        "model": _config.brain_get("OLLAMA_MODEL"),
         "base_url": safe_base,
-        "timeout_seconds": _config.OLLAMA_TIMEOUT_SECONDS,
+        "timeout_seconds": _config.brain_get("OLLAMA_TIMEOUT_SECONDS", 60),
         "last_call": outcome,
     }
+
+
+# ============================================================
+# R-810 (المالك — البندان ٢ و٣ من أمر التشغيل): النماذج والمزودون
+# ============================================================
+# «لا يوجد إمكانية تبديل النماذج…» و«لا مجال لإضافة مفاتيح API لنماذج أخرى
+# سحابيًا» — اكتشاف حي للنماذج من المزود المُعد (بلا قائمة مختلَقة)، وتبديل
+# حي يُحفظ في طبقة التشغيل (config.brain_set) بلا إعادة تشغيل وبلا مساس
+# بأسرار المستودع. مزود OpenAI المتوافق (Groq/OpenRouter/…) صار قابلًا
+# للضبط من الواجهة بمفتاحه — يُخزن على القرص بوضع 0600 ولا يُعاد أبدًا.
+
+
+@app.get("/brain/models")
+async def brain_models(x_sovereign_key: Optional[str] = Header(None)):
+    """R-810 (البند ٢): النماذج المتاحة من العقل المُعد فعليًا — اكتشاف حي (المالك فقط)."""
+    if not x_sovereign_key or not verify_api_key(x_sovereign_key):
+        raise HTTPException(status_code=401, detail="مفتاح المالك مطلوب (X-Sovereign-Key)")
+    import ollama_client as _brain_client
+
+    return _brain_client.list_models()
+
+
+@app.get("/brain/settings")
+async def brain_settings_get(x_sovereign_key: Optional[str] = Header(None)):
+    """R-810: الإعدادات الفعالة للعقل (المالك فقط) — بلا أي سر في المخرجات.
+
+    api_key لا يُعاد أبدًا — منطقية «مضبوط/غير مضبوط» فقط (نمط لا-سر، R-614).
+    المصدر يُعلن لكل حقل: runtime (طبقة التشغيل الحية) أو env (إعداد النشر).
+    """
+    if not x_sovereign_key or not verify_api_key(x_sovereign_key):
+        raise HTTPException(status_code=401, detail="مفتاح المالك مطلوب (X-Sovereign-Key)")
+    import config as _config
+
+    runtime = _config.brain_runtime_read()
+
+    def _src(name):
+        return "runtime" if name in runtime else "env"
+
+    return {
+        "enabled": bool(_config.brain_get("OLLAMA_ENABLED")),
+        "model": _config.brain_get("OLLAMA_MODEL"),
+        "model_source": _src("OLLAMA_MODEL"),
+        "protocol": _config.brain_get("OLLAMA_PROTOCOL", "ollama"),
+        "protocol_source": _src("OLLAMA_PROTOCOL"),
+        "base_url": _config.brain_get("OLLAMA_BASE_URL"),
+        "base_url_source": _src("OLLAMA_BASE_URL"),
+        "api_key_set": bool(_config.brain_get("OLLAMA_API_KEY")),
+        "api_key_source": _src("OLLAMA_API_KEY"),
+        "num_ctx": _config.brain_get("OLLAMA_NUM_CTX", 0),
+        "timeout_seconds": _config.brain_get("OLLAMA_TIMEOUT_SECONDS", 60),
+    }
+
+
+@app.put("/brain/settings")
+async def brain_settings_put(request: Request, x_sovereign_key: Optional[str] = Header(None)):
+    """R-810 (البندان ٢ و٣): تعديل حي لإعدادات العقل (المالك فقط).
+
+    القيم الفارغة تعيد الحقل إلى إعداد النشر (يُحذف من طبقة التشغيل).
+    التحقق الصارم قبل الكتابة: البروتوكول أحد اثنين، والعنوان http(s) صالح،
+    والنموذج نص غير فارغ — لا تمرير قيمة مشوهة تعطّل العقل الحي.
+    """
+    if not x_sovereign_key or not verify_api_key(x_sovereign_key):
+        raise HTTPException(status_code=401, detail="مفتاح المالك مطلوب (X-Sovereign-Key)")
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(status_code=422, detail="حمولة JSON مطلوبة")
+    if not isinstance(body, dict):
+        raise HTTPException(status_code=422, detail="الحمولة كائن JSON")
+    import config as _config
+
+    allowed = {"model", "protocol", "base_url", "api_key", "num_ctx"}
+    unknown = set(body) - allowed
+    if unknown:
+        raise HTTPException(status_code=422, detail=f"حقول غير معروفة: {sorted(unknown)}")
+    values = {}
+    if "model" in body:
+        m = body["model"]
+        if m is None or m == "":
+            values["OLLAMA_MODEL"] = None
+        elif isinstance(m, str) and m.strip():
+            values["OLLAMA_MODEL"] = m.strip()
+        else:
+            raise HTTPException(status_code=422, detail="model نص غير فارغ أو فارغ للإلغاء")
+    if "protocol" in body:
+        p = body["protocol"]
+        if p is None or (isinstance(p, str) and p.strip() == ""):
+            values["OLLAMA_PROTOCOL"] = None  # إلغاء حي — عودة لإعداد النشر
+        else:
+            p = str(p).strip().lower()
+            if p not in ("ollama", "openai"):
+                raise HTTPException(status_code=422, detail="protocol أحد: ollama أو openai")
+            values["OLLAMA_PROTOCOL"] = p
+    if "base_url" in body:
+        b = body["base_url"]
+        if b is None or str(b).strip() == "":
+            values["OLLAMA_BASE_URL"] = None
+        else:
+            from urllib.parse import urlsplit
+
+            raw = urlsplit(str(b).strip())
+            if raw.scheme not in ("http", "https") or not raw.netloc:
+                raise HTTPException(status_code=422, detail="base_url عنوان http(s) صالح مطلوب")
+            values["OLLAMA_BASE_URL"] = str(b).strip().rstrip("/")
+    if "api_key" in body:
+        k = body["api_key"]
+        if k is None or k == "":
+            values["OLLAMA_API_KEY"] = None
+        elif isinstance(k, str):
+            values["OLLAMA_API_KEY"] = k
+        else:
+            raise HTTPException(status_code=422, detail="api_key نص أو فارغ للإلغاء")
+    if "num_ctx" in body:
+        n = body["num_ctx"]
+        if n is None or n == "":
+            values["OLLAMA_NUM_CTX"] = None
+        else:
+            try:
+                values["OLLAMA_NUM_CTX"] = int(n)
+            except (TypeError, ValueError):
+                raise HTTPException(status_code=422, detail="num_ctx عدد صحيح")
+    layer = _config.brain_set(values)
+    # النتيجة للعرض فقط — أسماء الحقول المكتوبة، بلا أي قيمة سرية
+    return {"ok": True, "runtime_keys": sorted(layer), "effective": {
+        "model": _config.brain_get("OLLAMA_MODEL"),
+        "protocol": _config.brain_get("OLLAMA_PROTOCOL", "ollama"),
+        "api_key_set": bool(_config.brain_get("OLLAMA_API_KEY")),
+    }}
 
 
 # ============================================================
@@ -2465,6 +2593,11 @@ def _register_real_tools() -> None:
     except Exception as _conn_exc:  # TOLERATED: موصل معطوب لا يكسر الإقلاع — تحذير صادق
         logger.warning("R-756: تعذر تسجيل أفعال الموصلات (%s)", type(_conn_exc).__name__)
     # R-757 (V5 ٤.٢): اكتساب المهارات — الاقتراح والتقييم أداة؛ الاعتماد للمالك
+    def _run_self_review_tool():
+        """R-812: أداة سير التفتيش الذاتي — تنفيذ التطبيق + مراجعة الذكاء المرجعية."""
+        import review_workflow
+        return review_workflow.run_self_review(caller="agent")
+
     def _skills_install(manifest):
         import skills
         lib = skills.get_library()
@@ -2479,6 +2612,14 @@ def _register_real_tools() -> None:
         inputs={"manifest": "حزمة المهارة (name/version/source/description/inputs/"
                             "permissions/steps/output/eval)"},
         outputs="state/passed/total/results/content_hash", handler=_skills_install))
+    # R-812 (البندان ٤ و٥ و٦): سير عمل مدمج — المنفّذ هو التطبيق (حتمي)،
+    # والمراجع هو الذكاء (عقد JSON، أثر موقّع، لا تنفيذ بيده أبدًا)
+    registry.register(ToolSpec(
+        name="system.self_review",
+        description="تفتيش ذاتي مدمج: التطبيق ينفّذ الفحص حتميًا والذكاء الاصطناعي يراجعه كمرجع فقط — "
+                    "يعمل كاملًا حتى مع عقل معطل (المشروع يقوم بكل شيء بنفسه)",
+        inputs={},
+        outputs="status/executor_findings/reviewer_verdict/duration_ms", handler=_run_self_review_tool))
     registry.register(ToolSpec(
         name="skills.status",
         description="المهارات وإصداراتها وحالاتها + الأدوات المكتشفة «متاحة غير مُتعلمة» (٤.٣)",

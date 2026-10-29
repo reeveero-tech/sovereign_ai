@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="dark">
-<title>الذكاء السيادي</title>
+<title>مساحة العمل</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22%3E%3Cpath d=%22M12 2l8 4v6c0 5-3.4 8.6-8 10-4.6-1.4-8-5-8-10V6z%22 fill=%22%233fb8a5%22/%3E%3C/svg%3E">
 <!-- R-800: تطبيق كامل — شريط جانبي (محادثات/مهام/مشاريع/ملفات/أدوات ووكلاء/اتصال/إعدادات)،
      ومرفقات حقيقية في المحادثة. ملف واحد مستقل، لا اعتماد على js/ القديمة.
@@ -146,9 +146,9 @@
   <aside id="side">
     <div class="side-head">
       <svg width="24" height="24" viewBox="0 0 24 24" aria-label="الشعار"><path d="M12 2l8 4v6c0 5-3.4 8.6-8 10-4.6-1.4-8-5-8-10V6z" fill="none" stroke="#3fb8a5" stroke-width="1.6"/><path d="M8 12l3 3 5-6" fill="none" stroke="#3fb8a5" stroke-width="1.6"/></svg>
-      <div class="brand">الذكاء السيادي</div>
+      <div class="brand">مساحة العمل</div>
     </div>
-    <button class="newchat" id="newBtn" title="يمسح المحادثة الحالية من الشاشة ويبدأ جلسة جديدة بلا سياق سابق">+ محادثة جديدة</button>
+    <button class="newchat" id="newBtn" title="يحفظ المحادثة الحالية في القائمة الجانبية ثم يبدأ جلسة جديدة بلا سياق سابق">+ محادثة جديدة</button>
     <nav class="nav" id="nav">
       <button data-view="chat" class="on"><span class="ico">◐</span>المحادثة</button>
       <button data-view="tasks"><span class="ico">☑</span>المهام والأهداف</button>
@@ -293,7 +293,7 @@
         });
       });
   }
-  // استدعاء أداة حقيقية من السجل (أثر موقّع في السجل السيادي)
+  // استدعاء أداة حقيقية من السجل (أثر موقّع في سجل النظام)
   function tool(name, inputs) {
     var ins = {}; Object.keys(inputs || {}).forEach(function (k) { if (inputs[k] != null && inputs[k] !== "") ins[k] = String(inputs[k]); });
     return api("/tools/invoke", { json: { tool: name, api_key: ownerKey() || null, inputs: ins } });
@@ -314,6 +314,33 @@
   function save() { try { localStorage.setItem(STORE, JSON.stringify(state)); } catch (e) {} }
   var attached = []; // [{id,name,kind,size}]
   var busy = false, ctrl = null, convs = [], projects = [];
+
+  // R-809 (المالك): محادثات الضيف في هذا المتصفح — «محادثة جديدة» لا تمحو السابقة.
+  // قبل هذه الدفعة كان زر «محادثة جديدة» يفرّغ الحالة فيختفي الحوار بلا أثر.
+  // الآن: تُحفظ المحادثة الجارية (سحابيًا مع مفتاح المالك، أو في قائمة المتصفح للضيف)
+  // ثم تبدأ الجلسة الجديدة، والقائمة الجانبية تعرضها كلها ويمكن العودة إليها.
+  var CONV_LOCAL = "sovereign.localConvs";
+  var localConvs = loadLocalConvs();
+  function loadLocalConvs() { try { var a = JSON.parse(localStorage.getItem(CONV_LOCAL)); return Array.isArray(a) ? a : []; } catch (e) { return []; } }
+  function saveLocalConvs() { try { localStorage.setItem(CONV_LOCAL, JSON.stringify(localConvs)); } catch (e) {} }
+  function convTitle(msgs) {
+    var arr = msgs || [];
+    for (var i = 0; i < arr.length; i++) { if ((arr[i] || {}).role === "user") { var t = String(arr[i].content || "").replace(/\s+/g, " ").trim(); return t ? (t.length > 48 ? t.slice(0, 48) + "…" : t) : "محادثة"; } }
+    return "محادثة";
+  }
+  function upsertLocalConv(rec) {
+    localConvs = [rec].concat(localConvs.filter(function (c) { return c.id !== rec.id; })).slice(0, 50);
+    saveLocalConvs();
+  }
+  function keepCurrentConversationBeforeNew() {
+    if (!state.messages.length) return;
+    var title = convTitle(state.messages);
+    if (ownerKey()) {
+      persistConv(); // R-809: أثرِ أي رسائل غير محفوظة سحابيًا قبل التبديل (العنوان صار مشتقًا)
+    } else {
+      upsertLocalConv({ id: state.sessionId, title: title, messages: state.messages, updated_at: Date.now() / 1000 });
+    }
+  }
 
   // ---------------- التنقل ----------------
   var TITLES = { chat: "المحادثة", tasks: "المهام والأهداف", projects: "المشاريع", files: "الملفات والوسائط",
@@ -362,7 +389,7 @@
     if (parts.length) meta.appendChild(el("span", null, parts.join(" · ")));
     if (m.tools && m.tools.length) {
       var tl = el("span", null, "  ·  أدوات النظام المستخدمة: " + m.tools.map(iso).join(" · "));
-      tl.title = "استدعاءات حقيقية لأدوات المشروع، كل منها مسجل بأثر موقّع في السجل السيادي"; meta.appendChild(tl);
+      tl.title = "استدعاءات حقيقية لأدوات المشروع، كل منها مسجل بأثر موقّع في سجل النظام"; meta.appendChild(tl);
     }
     if (extra && extra.retry) { var r = el("button", "btn sm", "إعادة المحاولة"); r.type = "button"; r.style.marginInlineStart = "8px"; r.addEventListener("click", extra.retry); meta.appendChild(r); }
     if (m.role !== "user" && !(extra && extra.error)) {
@@ -435,13 +462,19 @@
   $("stopBtn").addEventListener("click", function () { if (ctrl) ctrl.abort(); });
   $("newBtn").addEventListener("click", function () {
     if (busy) return;
+    keepCurrentConversationBeforeNew(); // R-809: السابقة تُحفظ أولًا — لا تختفي
     state.convId = null; state.sessionId = rid(); state.messages = []; attached = []; paintAttached(); save(); renderChat(); paintConvs(); go("chat"); input.focus();
   });
+  function openLocalConv(id) {
+    var c = localConvs.filter(function (x) { return x.id === id; })[0];
+    if (!c) return;
+    state.convId = null; state.sessionId = c.id; state.messages = c.messages || []; save(); renderChat(); paintConvs(); go("chat");
+  }
 
   // حفظ المحادثة في مساحة العمل (Supabase) — حين يكون مفتاح المالك مضبوطًا
   function persistConv() {
     if (!ownerKey() || !state.messages.length) return;
-    var body = { title: "", messages: state.messages.map(function (m) { return { role: m.role, content: m.content, ts: m.ts, tools: m.tools, files: m.files }; }),
+    var body = { title: convTitle(state.messages), messages: state.messages.map(function (m) { return { role: m.role, content: m.content, ts: m.ts, tools: m.tools, files: m.files }; }),
                  project_id: state.project ? state.project.id : null };
     var p = state.convId ? api("/ws/conversations/" + state.convId, { method: "PUT", json: body }) : api("/ws/conversations", { json: body });
     p.then(function (rec) { if (rec && rec.id) { state.convId = rec.id; save(); loadConvs(); } }).catch(function () {});
@@ -455,7 +488,18 @@
   function paintConvs() {
     var box = $("convList"); box.textContent = "";
     $("projBadge").textContent = state.project ? state.project.name : "";
-    if (!ownerKey()) { box.appendChild(el("div", "muted small", "المحادثات تُحفظ في هذا المتصفح. أدخل مفتاح المالك لحفظها في السحابة ومزامنتها.")); return; }
+    if (!ownerKey()) {
+      // R-809: الضيف يرى محادثات متصفحه المحفوظة — نفس تجربة المالك بلا سحابة
+      if (!localConvs.length) { box.appendChild(el("div", "muted small", "المحادثات تُحفظ في هذا المتصفح. أدخل مفتاح المالك لحفظها في السحابة ومزامنتها.")); return; }
+      localConvs.forEach(function (c) {
+        var b = el("button", "item" + (c.id === state.sessionId ? " on" : ""), c.title || "محادثة");
+        b.title = (c.messages || []).length + " رسالة · " + fmtTime(c.updated_at);
+        b.addEventListener("click", function () { openLocalConv(c.id); });
+        b.addEventListener("contextmenu", function (e) { e.preventDefault(); if (confirm("حذف هذه المحادثة من هذا المتصفح؟")) { localConvs = localConvs.filter(function (x) { return x.id !== c.id; }); saveLocalConvs(); paintConvs(); } });
+        box.appendChild(b);
+      });
+      return;
+    }
     if (!convs.length) { box.appendChild(el("div", "muted small", "لا محادثات محفوظة بعد.")); return; }
     convs.forEach(function (c) {
       var b = el("button", "item" + (c.id === state.convId ? " on" : ""), c.title || "محادثة");
@@ -682,6 +726,7 @@
 
   // ---------------- الأدوات والوكلاء ----------------
   var AGENTS = [
+    { tool: "system.self_review", key: null, name: "الوكيل المدمج: منفّذ + مراجع", d: "سير عمل مدمج (R-812): التطبيق ينفّذ الفحص حتميًا، والذكاء الاصطناعي يراجعه كمرجع فقط — ويعمل كاملًا حتى مع عقل معطل" },
     { tool: "research.run", key: "goal", name: "وكيل البحث", d: "بحث متعدد المصادر مع حفظ الحقائق" },
     { tool: "agent.manage", key: "goal", name: "مدير الوكلاء", d: "يفكك الهدف ويوزعه على وكلاء فرعيين" },
     { tool: "agent.run", key: "goal", name: "وكيل منفذ", d: "حلقة تخطيط وتنفيذ بالأدوات" },
@@ -772,7 +817,67 @@
       ig.appendChild(t);
       var vc = el("div", "small muted"); vc.style.marginTop = "10px"; vc.textContent = "موصلات الخزينة (أسرار بنطاق + منح): " + (s.connectors && s.connectors.connectors && Object.keys(s.connectors.connectors).length ? Object.keys(s.connectors.connectors).join("، ") : "لا موصلات مسجلة بعد") + " — " + ((s.connectors && s.connectors.contract) || "");
       ig.appendChild(vc); box.appendChild(ig);
-      var br = section("العقل"); kv(br.appendChild(el("div")), b || s.brain); box.appendChild(br);
+      var br = section("العقل والنماذج (تبديل حي — R-810)");
+      kv(br.appendChild(el("div")), b || s.brain);
+      // R-810 (البندان ٢ و٣): اكتشاف النماذج + تبديلها + ضبط المزود ومفتاحه — حي بلا إعادة تشغيل
+      var brainCtl = el("div"); brainCtl.style.marginTop = "10px";
+      var modelRow = el("div", "row");
+      var modelSel = el("select"); modelSel.style.flex = "1"; modelSel.dir = "ltr";
+      var curModel = (b && b.model) || "";
+      if (curModel) { var o = el("option", null, curModel); o.value = curModel; o.selected = true; modelSel.appendChild(o); }
+      var refreshBtn = el("button", "btn", "اكتشاف النماذج");
+      modelRow.appendChild(modelSel); modelRow.appendChild(refreshBtn); brainCtl.appendChild(modelRow);
+      var hint = el("div", "small muted"); hint.style.marginTop = "6px";
+      hint.textContent = "الاكتشاف يستعلم المزود المُعد فعليًا — تُعرض نماذجه المتاحة فقط.";
+      brainCtl.appendChild(hint);
+      refreshBtn.addEventListener("click", function () {
+        refreshBtn.disabled = true; hint.textContent = "جارٍ الاستعلام…";
+        api("/brain/models").then(function (d) {
+          modelSel.textContent = "";
+          ((d && d.models) || []).forEach(function (m) { var o = el("option", null, m); o.value = m; if (m === curModel) o.selected = true; modelSel.appendChild(o); });
+          hint.textContent = (d && d.ok) ? ((d.models || []).length + " نموذج متاح من المزود المُعد.") : ("فشل الاكتشاف: " + ((d && d.error) || "غير معروف"));
+        }).catch(function (e) { hint.textContent = "فشل الاكتشاف: " + e.message; })
+          .then(function () { refreshBtn.disabled = false; });
+      });
+      var provGrid = el("div"); provGrid.style.marginTop = "10px";
+      function frow(label, input) { var r = el("div", "row"); r.style.marginBottom = "6px"; r.appendChild(el("span", "small muted", label)); input.style.flex = "1"; r.appendChild(input); return r; }
+      var protoSel = el("select"); protoSel.dir = "ltr";
+      ["ollama", "openai"].forEach(function (p) { var o = el("option", null, p); o.value = p; if (b && b.protocol === p) o.selected = true; protoSel.appendChild(o); });
+      var baseUrlIn = el("input"); baseUrlIn.type = "text"; baseUrlIn.dir = "ltr"; baseUrlIn.placeholder = "http://… أو https://…/v1";
+      var apiKeyIn2 = el("input"); apiKeyIn2.type = "password"; apiKeyIn2.dir = "ltr"; apiKeyIn2.autocomplete = "off"; apiKeyIn2.placeholder = "مفتاح API للمزود (اختياري)";
+      var ctxIn = el("input"); ctxIn.type = "text"; ctxIn.dir = "ltr"; ctxIn.placeholder = "نافذة السياق (اختياري)";
+      provGrid.appendChild(frow("البروتوكول", protoSel));
+      provGrid.appendChild(frow("عنوان المزود", baseUrlIn));
+      provGrid.appendChild(frow("مفتاح API", apiKeyIn2));
+      provGrid.appendChild(frow("num_ctx", ctxIn));
+      brainCtl.appendChild(provGrid);
+      var brainMsg = el("div", "small"); brainMsg.style.marginTop = "6px"; brainCtl.appendChild(brainMsg);
+      var saveBrain = el("button", "btn pri", "حفظ إعدادات العقل (يسري فورًا)");
+      saveBrain.style.marginTop = "8px";
+      saveBrain.addEventListener("click", function () {
+        var payload = {};
+        var m = modelSel.value.trim(); if (m) payload.model = m;
+        payload.protocol = protoSel.value;
+        if (baseUrlIn.value.trim()) payload.base_url = baseUrlIn.value.trim();
+        if (apiKeyIn2.value.trim()) payload.api_key = apiKeyIn2.value.trim();
+        if (ctxIn.value.trim()) payload.num_ctx = ctxIn.value.trim();
+        saveBrain.disabled = true; brainMsg.textContent = "جارٍ الحفظ…";
+        api("/brain/settings", { method: "PUT", json: payload }).then(function (d) {
+          brainMsg.textContent = "حُفظ — النموذج الفعّال: " + ((d && d.effective && d.effective.model) || "—");
+          loadSettings();
+        }).catch(function (e) { brainMsg.textContent = "فشل الحفظ: " + e.message; })
+          .then(function () { saveBrain.disabled = false; });
+      });
+      brainCtl.appendChild(saveBrain);
+      var resetBrain = el("button", "btn", "إلغاء التعديلات الحية (عودة لإعداد النشر)");
+      resetBrain.style.margin = "8px 0 0 8px";
+      resetBrain.addEventListener("click", function () {
+        api("/brain/settings", { method: "PUT", json: { model: "", protocol: "", base_url: "", api_key: "", num_ctx: "" } })
+          .then(function () { brainMsg.textContent = "أُلغيت التعديلات الحية."; loadSettings(); })
+          .catch(function (e) { brainMsg.textContent = "فشل الإلغاء: " + e.message; });
+      });
+      brainCtl.appendChild(resetBrain);
+      br.appendChild(brainCtl); box.appendChild(br);
       var wsC = section("مساحة العمل والتخزين"); kv(wsC.appendChild(el("div")), s.workspace); box.appendChild(wsC);
       var cp = section("القدرات (" + Object.keys(s.summary || {}).map(function (k) { return k + ": " + s.summary[k]; }).join("، ") + ")");
       var ct = el("table"); var ch = el("tr"); ["القدرة", "المستوى", "ملاحظة"].forEach(function (x) { ch.appendChild(el("th", null, x)); }); ct.appendChild(ch);

@@ -1,6 +1,6 @@
 /* ============================================================
    Sovereign AI — main.js
-   الإصدار: 3.0.0 - العقل التشغيلي للواجهة السيادية
+   الإصدار: 3.0.0 - العقل التشغيلي للواجهة
    ============================================================
    
    هذا الملف مسؤول عن:
@@ -8,9 +8,9 @@
    - إدارة مجموعات الرسائل (كل 15 رسالة)
    - إرسال أوامر السيد
    - إرسال رسائل الحوار
-   - استقبال ردود الذكاء السيادي
+   - استقبال ردود مساحة العمل
    - تحديث لوحة المراقبة
-   - تشغيل دورة سيادية
+   - تشغيل دورة تشغيل
    - عرض السجل
    - التحكم في الطي
    - التحكم في التحديث الحي
@@ -572,7 +572,7 @@ if (chatInput) {
 // ============================================================
 
 async function sendSovereignCommand(command, params = {}) {
-    addHistoryEvent('info', `إرسال أمر سيادي: ${command}`);
+    addHistoryEvent('info', `إرسال أمر تنفيذي: ${command}`);
     
     if (!CONFIG.API_KEY) {
         addHistoryEvent('warning', 'مفتاح API غير متوفر، تم تنفيذ الأمر محلياً');
@@ -686,7 +686,7 @@ async function sendChatMessage(text) {
         const data = await response.json();
         
         if (data.status === 'ok') {
-            addDialogueMessage(data.reply, 'الذكاء السيادي', false);
+            addDialogueMessage(data.reply, 'المساعد', false);
             addHistoryEvent('info', `رد الذكاء: ${data.reply.substring(0, 50)}...`);
             
             // تحديث المقاييس
@@ -765,12 +765,12 @@ async function updateHeaderFromHealth() {
 }
 
 // ============================================================
-// 12. تشغيل دورة سيادية
+// 12. تشغيل دورة تشغيل
 // ============================================================
 
 async function runSovereignCycle() {
-    addHistoryEvent('info', 'تشغيل دورة سيادية');
-    addDecisionMessage('تشغيل دورة سيادية جديدة', 'pending');
+    addHistoryEvent('info', 'تشغيل دورة تشغيل');
+    addDecisionMessage('تشغيل دورة تشغيل جديدة', 'pending');
 
     try {
         // الدورة أمر مالك: /orchestrator/cycle يتطلب مفتاح API (كان لا يُرسل → 401 دائمًا)
@@ -785,13 +785,13 @@ async function runSovereignCycle() {
         const data = await response.json();
 
         if (response.ok && data.success) {
-            addDecisionMessage(`اكتملت الدورة السيادية: ${data.cycle_id || 'غير معروف'}`, 'approved');
+            addDecisionMessage(`اكتملت دورة التشغيل: ${data.cycle_id || 'غير معروف'}`, 'approved');
             addHistoryEvent('info', `الدورة ${data.cycle_id} اكتملت في ${data.duration?.toFixed(2) || 0}ms`);
             updateMetrics();
         } else {
             const reason = data.detail || (data.errors && data.errors.join('، ')) || `HTTP ${response.status}`;
-            addDecisionMessage(`فشلت الدورة السيادية: ${reason}`, 'rejected');
-            addHistoryEvent('error', `فشل تشغيل الدورة السيادية: ${reason}`);
+            addDecisionMessage(`فشلت دورة التشغيل: ${reason}`, 'rejected');
+            addHistoryEvent('error', `فشل تشغيل دورة التشغيل: ${reason}`);
         }
     } catch (error) {
         // R-730: فشل الاتصال يُعلن كما هو — لا نجاح مُدّعى بلا خادم
@@ -848,7 +848,7 @@ function initWebSocket() {
             const data = JSON.parse(event.data);
             
             if (data.type === 'reply') {
-                addDialogueMessage(data.message, 'الذكاء السيادي', false);
+                addDialogueMessage(data.message, 'المساعد', false);
             } else if (data.type === 'notification') {
                 addHistoryEvent('info', data.message);
             } else if (data.type === 'proposal') {
@@ -859,7 +859,7 @@ function initWebSocket() {
                 });
             }
         } catch (e) {
-            addDialogueMessage(event.data, 'الذكاء السيادي', false);
+            addDialogueMessage(event.data, 'المساعد', false);
         }
     };
     
@@ -1031,7 +1031,7 @@ function initHolographicEffects() {
 // ============================================================
 
 function init() {
-    addHistoryEvent('info', 'تم تهيئة الواجهة السيادية');
+    addHistoryEvent('info', 'تم تهيئة الواجهة');
     
     startLiveRefresh();
     initHolographicEffects();
@@ -1042,7 +1042,7 @@ function init() {
     }, 500);
     
     // رسالة ترحيب
-    addDialogueMessage('مرحباً أيها السيد. أنا الذكاء السيادي، جاهز لأوامرك.', 'الواجهة', false, { local: true });
+    addDialogueMessage('مرحبًا. أنا مساعد مساحة العمل، جاهز للعمل.', 'الواجهة', false, { local: true });
 }
 
 // بدء التشغيل

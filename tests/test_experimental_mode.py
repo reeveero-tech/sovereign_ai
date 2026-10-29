@@ -103,7 +103,7 @@ def test_local_command_fallback_is_honest():
 
 # 4) الترحيب والأخطاء منسوبة بصدق
 def test_static_greeting_is_labeled_local():
-    calls = re.findall(r"addDialogueMessage\(\s*'مرحباً[^;]*;", MAIN)
+    calls = re.findall(r"addDialogueMessage\(\s*'مرحب[^;]*;", MAIN)
     assert calls, "رسالة الترحيب غير موجودة"
     for c in calls:
         assert re.search(r"\{\s*local:\s*true\s*\}", c), f"ترحيب ثابت بلا وسم محلي: {c[:80]}"

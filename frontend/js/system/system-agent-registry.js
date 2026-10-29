@@ -70,7 +70,7 @@
 
         domains: {
 
-            /* مجالات سيادية */
+            /* مجالات النظام */
             owner_domain: 'owner-sovereignty-domain',
             justice_domain: 'justice-execution-domain',
             protection_domain: 'owner-protection-domain',
@@ -99,7 +99,7 @@
         foundationalAgents: {
 
             /* ================================================
-               الوكلاء السياديون (للسيد فقط)
+               الوكلاء الرئيسيون (للمالك فقط)
             ================================================ */
 
             ownerDirective: {

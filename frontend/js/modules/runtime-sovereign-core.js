@@ -1,12 +1,12 @@
 /* ============================================================
    Sovereign AI — runtime-sovereign-core.js
    الإصدار: 14.0.0
-   النواة السيادية العليا للـ Runtime
+   النواة المركزية العليا للـ Runtime
    ============================================================
 
    ╔═══════════════════════════════════════════════════════════╗
    ║                                                           ║
-   ║   👑  الدستور السيادي الأعلى - SUPREME CONSTITUTION  👑  ║
+   ║   👑  دستور النظام - SUPREME CONSTITUTION  👑  ║
    ║                                                           ║
    ║   المادة الأولى:                                         ║
    ║   السيد هو السلطة المطلقة العليا.                        ║
@@ -32,7 +32,7 @@ class SovereignRuntimeSovereignCore {
     constructor() {
 
         /* ============================================================
-           SUPREME CONSTITUTION - الدستور السيادي الأعلى
+           SUPREME CONSTITUTION - دستور النظام
         ============================================================ */
 
         this.constitution = {
@@ -137,7 +137,7 @@ class SovereignRuntimeSovereignCore {
         };
 
         /* ============================================================
-           MASTER COMMAND PROCESSOR - معالج الأوامر السيادية العليا
+           MASTER COMMAND PROCESSOR - معالج الأوامر الرئيسية
         ============================================================ */
 
         this.masterCommandProcessor = {
@@ -368,7 +368,7 @@ class SovereignRuntimeSovereignCore {
                 status: "success"
             });
             
-            // تسجيل في التاريخ السيادي
+            // تسجيل في سجل النظام
             this.recordHistory({
                 type: 'master_command',
                 command: cmd.command,
@@ -805,7 +805,7 @@ const sovereignRuntimeCore =
     new SovereignRuntimeSovereignCore();
 
 /* ============================================================
-   MASTER INTERFACE - واجهة السيد السيادية
+   MASTER INTERFACE - الواجهة الرئيسية
    ============================================================ */
 
 window.Master = {

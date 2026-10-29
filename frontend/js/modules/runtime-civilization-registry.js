@@ -612,7 +612,7 @@ class SovereignRuntimeCivilizationRegistry {
             sovereign: true,
             version: '15.0.0',
             masterServiceComponent: true,
-            description: 'النواة السيادية العليا'
+            description: 'النواة المركزية العليا'
         });
 
         // Execution Topology Layer Systems
