@@ -31,12 +31,14 @@ const html = fs.readFileSync(process.argv[2], 'utf8');
 function extractFn(name) {
   const start = html.indexOf('function ' + name + '(');
   if (start < 0) throw new Error('function not found: ' + name);
-  let i = html.indexOf('{', start), depth = 0, end = -1;
+  let realStart = start;
+  if (html.slice(Math.max(0, start - 6), start) === 'async ') realStart = start - 6;  // لا تُفقد async
+  let i = html.indexOf('{', realStart), depth = 0, end = -1;
   for (; i < html.length; i++) {
     if (html[i] === '{') depth++;
     else if (html[i] === '}') { depth--; if (depth === 0) { end = i; break; } }
   }
-  return html.slice(start, end + 1);
+  return html.slice(realStart, end + 1);  // async محفوظة إن وُجدت
 }
 
 // ---- كوابيل البيئة ----
@@ -70,6 +72,7 @@ const apiCalls = [];
 const apiBodies = [];
 const pendingApi = [];
 let idSeq = 0;
+let failNextSave = false;
 function api(url, opts) {
   apiCalls.push({ url, method: opts && opts.method });
   return new Promise((resolve, reject) => {
@@ -78,7 +81,11 @@ function api(url, opts) {
       const body = JSON.parse(JSON.stringify(opts.json));
       if (!body.id) { body.id = 'srv-' + (++idSeq); }  // الخادم يعين المعرف عند الاستلام لا عند التشغيل
       apiBodies.push(body);
-      rec.run = () => { convStore.set(body.id, body); resolve({ id: body.id }); };
+      if (failNextSave) {   // الخادم يرفض الحفظ القادم (اختبار مسار المالك)
+        rec.run = () => { failNextSave = false; rec.reject(new Error('500')); };
+      } else {
+        rec.run = () => { convStore.set(body.id, body); resolve({ id: body.id }); };
+      }
     } else if (/^\/ws\/conversations\/(.+)$/.test(url)) {
       const id = url.split('/').pop();
       rec.run = () => {
@@ -132,7 +139,7 @@ check('أقدم محادثة (g0 — الإضافة في المقدمة) محف�
 // استعادة أقدمها كاملة بعد إعادة تحميل التخزين (لا من الذاكرة العابرة)
 localConvs = fns.loadLocalConvs();
 state.sessionId = 'current'; state.messages = [];  // لا جارية ⇒ لا حفظ وهمي يلوث القسم التالي
-fns.openLocalConv('g0');
+await fns.openLocalConv('g0');
 check('فتح أقدم محادثة بعد إعادة التحميل يستعيد رسائلها الخمس كاملة',
       state.messages.length === 5 && state.messages[0].content === 'رسالة 0-0' &&
       state.messages[4].content === 'رسالة 0-4');
@@ -202,9 +209,10 @@ state.sessionId = 'B'; state.convId = 'srv-2'; state.model = 'mB';
 state.messages = [{ role: 'user', content: 'سؤال B' },
                   { role: 'assistant', content: 'رد B جديد' }];
 apiCalls.length = 0; pendingApi.length = 0;
-const okSwitch = fns.keepCurrentConversationBeforeNew();
+const okSwitchP = fns.keepCurrentConversationBeforeNew();  // وعد — النتيجة الفعلية تُنتظر
 check('الحفظ قبل التبديل يبدأ نداء الجارية (B)', apiCalls.length === 1);
 pendingApi[0].run(); await tick();
+const okSwitch = await okSwitchP;
 check('الحفظ قبل التبديل يرسل محتوى الجارية (B) بنموذجها',
       convStore.get('srv-2').messages[1].content === 'رد B جديد' &&
       convStore.get('srv-2').model === 'mB');
@@ -216,11 +224,28 @@ ownerKeyValue = null;   // مسار الضيف — المفتاح الوحيد �
 state.sessionId = 'C'; state.convId = null; state.model = 'mC';
 state.messages = [{ role: 'user', content: 'رسالة C الحرجة' }];
 const before = state.messages.slice();
-const failedSwitch = fns.keepCurrentConversationBeforeNew();
+const failedSwitchP = fns.keepCurrentConversationBeforeNew();   // وعد — مسار الضيف
+const failedSwitch = await failedSwitchP;
 check('فشل الحفظ يُعاد للمنادي (لا نجاح صامت كاذب)', failedSwitch === false);
 check('المحادثة الجارية لم تُفرَّغ باعتبارها محفوظة',
       state.messages.length === 1 && state.messages[0].content === 'رسالة C الحرجة');
-// والزر يوقف التفريغ: `if (!keepCurrentConversationBeforeNew()) return;`
+// والزر يوقف التفريغ: `if (!(await keepCurrentConversationBeforeNew())) return;`
+
+// ================= ٦) فشل حفظ الخادم في مسار المالك يوقف التبديل ================
+// (تصحيح المراجعة الرابعة: نتيجة الحفظ الفعلية تُنتظر — لا نجاح صامت كاذب للمالك)
+quotaExceeded = false; ownerKeyValue = 'test-owner-key';   // مسار المالك من جديد
+state.sessionId = 'D'; state.convId = null; state.model = 'mD';
+state.messages = [{ role: 'user', content: 'رسالة D الحرجة' }];
+apiCalls.length = 0; pendingApi.length = 0;
+failNextSave = true;                    // الخادم سيرفض نداء الحفظ القادم
+const dSwitchP = fns.keepCurrentConversationBeforeNew();   // وعد ينتظر نتيجة الحفظ الفعلية
+check('حفظ المالك بدأ نداءً حقيقيًا', apiCalls.length === 1);
+pendingApi[pendingApi.length - 1].run();                    // الخادم يرفض → الرفض يصعد للمنادي
+await tick();
+const dSwitch = await dSwitchP;
+check('رفض الخادم يعاد للمنادي في مسار المالك (لا نجاح صامت كاذب)', dSwitch === false);
+check('المحادثة الجارية للمالك سليمة — لم تُفرَّغ',
+      state.messages.length === 1 && state.messages[0].content === 'رسالة D الحرجة');
 })().then(() => {
   console.log(results.join('\n'));
   if (results.some(r => r.startsWith('FAIL'))) process.exit(1);
@@ -264,5 +289,5 @@ def test_storage_cap_display_index_separate():
     assert ".slice(0, 2)" not in upsert
     assert "return saveLocalConvs();" in upsert
     # فشل الحفظ يوقف التفريغ في كل مسارات التبديل
-    assert src.count("if (!keepCurrentConversationBeforeNew()) return;") >= 2
-    assert "if (state.sessionId !== c.id && !keepCurrentConversationBeforeNew()) return;" in src
+    assert src.count("if (!(await keepCurrentConversationBeforeNew())) return;") >= 2  # المسارات الثلاثة تنتظر النتيجة
+    assert "if (state.sessionId !== c.id && !(await keepCurrentConversationBeforeNew())) return;" in src
