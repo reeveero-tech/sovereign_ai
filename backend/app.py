@@ -778,66 +778,329 @@ register_circuit_breaker(app)
 # من اليدجر (KeyRing + Merkle Anchors). للقراءة فقط.
 # ============================================================
 _LEDGER_VERIFY_LOCK = threading.Lock()
-_LEDGER_VERIFY_STATE: Dict[str, Any] = {"gen": 0, "result": None, "fp": None, "ts": 0.0}
-# R-805: حد عمر الكاش بالثواني (مثل SOVEREIGNY_SCORE_TTL) — يقيّد الثبات
-# عند تدوير المفاتيح (بصمة الملفات لا تلتقطه)؛ اليدجر نفسه إلحاقي فبصمته
-# تتغير مع كل حدث جديد فتُبطل الكاش طبيعيًا.
-_LEDGER_VERIFY_CACHE_TTL = 300.0
+# R-807: حالة التحقق التزايدي — نفس نمط R-768 في SovereignCore
+# (بصمة بادئة sha256 + بصمة مفاتيح + بصمة مراس): البادئة المغطاة بالتحقق
+# تبقى صالحة ما دامت بايتاتها لم تتغير والمفاتيح التي تعتمد عليها
+# التصنيفات كما هي؛ الإلحاقات الجديدة تُتحقق وحدها O(delta) والبادئة
+# تتمدد. أي تعديل في البادئة/تقلّص/تغيّر مفاتيح ⇒ فحص كامل صادق.
+# R-805 علّمنا أن بصمة (الحجم+mtime) لا تكفي: اليدجر الحي إلحاقي بكثافة
+# (~3.5 حدث/ث على الإنتاج) فالبصمة تتغير بين كل استدعاءين ⇒ الكاش لا
+# يصيب أبدًا وكل استدعاء أعاد حساب O(n) كاملًا (مثبت حيًا بعد نشر R-805:
+# أول استدعاء 35ث ثم مهلات 60ث و300ث و500ث متتابعة).
+_LEDGER_VERIFY_STATE: Dict[str, Any] = {
+    "result": None,
+    "prefix_size": 0,        # بايتات سجل الأحداث المغطاة بالتحقق (على حد سطر مكتمل)
+    "prefix_hash": None,     # sha256 لهذه البادئة
+    "verified_count": 0,      # عدد أحداث البادئة
+    "stats": None,           # عدادات البادئة التراكمية (القابلة للجمع)
+    "anchors_fp": None,     # بصمة ملف المراسي
+    "anchors": None,         # (anchored_count, trusted_count, nominal_count, anchors_verification)
+    "keyring_fp": None,
+    "ts": 0.0,
+}
 
 
-def _ledger_verify_fingerprint():
-    """R-805: بصمة ملفات اليدجر — (المسار، الحجم، mtime) للسجل والمراسي.
-
-    اليدجر إلحاقي (append-only) فثبات البصمة يعني ثبات محتوى التحقق.
-    فشل قراءة البصمة يُعيد None ⇒ لا كاش (احتياط آمن: حساب دائمًا)."""
+def _ledger_keyring_fingerprint(keyring) -> str:
+    """R-807: بصمة المفاتيح التي يعتمد عليها تصنيف كل حدث (نمط R-768) —
+    تغيّرها (إضافة/تقاعد/ثقة) يُبطل الاستئناف ويفرض فحصًا كاملًا."""
+    parts = []
     try:
-        from backend.sovereign.ledger import LedgerAnchor
-        anchor = LedgerAnchor()
-        fps = []
-        for p in (anchor.ledger_path, anchor.anchors_path):
-            if p is not None and pathlib.Path(p).exists():
-                st = pathlib.Path(p).stat()
-                fps.append((str(p), st.st_size, st.st_mtime))
-        return tuple(fps)
-    except Exception:  # TOLERATED: بصمة فاشلة = لا كاش، لا تعطل النقطة
+        for rec in keyring.list_keys():
+            parts.append(
+                f"{rec.key_id}|{getattr(rec, 'key_type', '')}|{rec.public_key}"
+                f"|{rec.status.value}|{rec.valid_from}|{rec.valid_until}"
+            )
+    except Exception:  # TOLERATED: بصمة فاشلة = لا استئناف (فحص كامل)
+        return ""
+    return hashlib.sha256("\n".join(sorted(parts)).encode("utf-8")).hexdigest()
+
+
+def _ledger_stream_read(ledger_path, prefix_size):
+    """R-807: قراءة السجل مرة واحدة بثلاث نواتج صادقة:
+
+    - (prefix_hash, tail_bytes, True) إذا كانت أول prefix_size بايت قابلة
+      للقراءة كاملة (البادئة المرشحة للاستئناف — صلاحيتها تُقارن بالمخزنة).
+    - (whole_hash, whole_bytes, False) إذا لا بادئة صالحة ⇒ فحص كامل.
+    - (None, b"", False) عند فشل القراءة (الملف غائب/خلل) ⇒ لا استئناف ولا
+      ادعاء؛ المتصل يعالج الملف الغائب كحالة صادقة (سجل فارغ).
+
+    السطر الأخير غير المكتمل (بلا \\n — كاتب أثناء القراءة) يُستثنى لاحقًا
+    من الفحص ومن حد البادئة الجديدة: يُرى في الاستدعاء القادم مكتملًا."""
+    try:
+        if ledger_path is None or not pathlib.Path(ledger_path).exists():
+            return None, b"", False
+        size = pathlib.Path(ledger_path).stat().st_size
+        with open(ledger_path, "rb") as f:
+            if 0 < prefix_size <= size:
+                h = hashlib.sha256()
+                remaining = prefix_size
+                while remaining > 0:
+                    chunk = f.read(min(1 << 16, remaining))
+                    if not chunk:
+                        break
+                    h.update(chunk)
+                    remaining -= len(chunk)
+                if remaining == 0:
+                    return h.hexdigest(), f.read(), True
+                f.seek(0)  # الملف أقصر من البادئة (تقلّص) ⇒ فحص كامل
+            data = f.read()
+        return hashlib.sha256(data).hexdigest(), data, False
+    except Exception:  # TOLERATED: قراءة فاشلة = لا استئناف ولا تعطل النقطة
+        return None, b"", False
+
+
+def _ledger_prefix_hash(ledger_path, prefix_size) -> Optional[str]:
+    """R-807: بصمة أول prefix_size بايت — تُخزن كحد البادئة الجديدة بعد
+    فحص ناجح (استدعاء واحد إضافي متسلسل رخيص: قراءة+هش بلا توقيعات)."""
+    try:
+        if ledger_path is None or prefix_size <= 0:
+            return None
+        if not pathlib.Path(ledger_path).exists():
+            return None
+        if pathlib.Path(ledger_path).stat().st_size < prefix_size:
+            return None
+        h = hashlib.sha256()
+        remaining = prefix_size
+        with open(ledger_path, "rb") as f:
+            while remaining > 0:
+                chunk = f.read(min(1 << 16, remaining))
+                if not chunk:
+                    return None
+                h.update(chunk)
+                remaining -= len(chunk)
+        return h.hexdigest()
+    except Exception:
         return None
+
+
+def _ledger_classify_lines(lines, verifier) -> Dict[str, int]:
+    """R-807: تصنيف أسطر أحداث (قابل للجمع) — قلب الفحص الكامل والتزايدي
+    معًا: كل حدث يُصنف مرة واحدة (verified/unverifiable/invalid/legacy)."""
+    stats = {
+        "total_events": len(lines),
+        "verified_with_key": 0,
+        "unverifiable": 0,
+        "invalid": 0,
+        "legacy_pre_keyring": 0,
+    }
+    for line in lines:
+        try:
+            event = json.loads(line)
+        except Exception:
+            stats["invalid"] += 1
+            continue
+        if "key_id" not in event:
+            stats["legacy_pre_keyring"] += 1
+        result = verifier.verify_event(event)
+        status_val = result.status.value
+        if status_val == "verified":
+            stats["verified_with_key"] += 1
+        elif status_val == "unverifiable_missing_key":
+            stats["unverifiable"] += 1
+        elif status_val == "invalid":
+            stats["invalid"] += 1
+    return stats
+
+
+def _ledger_merge_stats(base: Dict[str, int], delta: Dict[str, int]) -> Dict[str, int]:
+    """R-807: دمج عدادات قابلة للجمع (البادئة + الذيل الجديد)."""
+    return {k: (base.get(k, 0) + delta.get(k, 0)) for k in
+            ("total_events", "verified_with_key", "unverifiable", "invalid", "legacy_pre_keyring")}
+
+def _ledger_complete_lines_bytes(data: bytes):
+    """R-807: أسطر مكتملة فقط من كتلة بايتات — يُقصّ السطر الأخير غير
+    المكتمل (بلا فاصل سطر — كاتب أثناء القراءة) ويعيد (نص الأسطر
+    المكتملة، بايتاتها). التحقق الصادق لا يصنف كتابة ممزقة «تالفة»."""
+    text = data.decode("utf-8", errors="replace")
+    if text.endswith("\n"):
+        return text, len(data)
+    cut = text.rfind("\n")
+    if cut < 0:
+        return "", 0
+    return text[:cut + 1], cut + 1
+
+
+def _ledger_verify_store_state(state, ctx, kfp, anchors_fp, new_prefix_hash):
+    """R-807: تخزين نقطة الاستئناف بعد فحص ناجح — فشل البصمة = لا
+    استئناف (يبقى القديم؛ الفحص الكامل صادق في كل الأحوال)."""
+    if new_prefix_hash is not None:
+        state["prefix_size"] = ctx["complete_bytes"]
+        state["prefix_hash"] = new_prefix_hash
+        state["verified_count"] = ctx["total_events"]
+        state["stats"] = dict(ctx["stats"])
+        state["anchors_fp"] = anchors_fp
+        state["anchors"] = (ctx["anchored_count"], ctx["trusted_count"],
+                            ctx["nominal_count"], ctx["anchors_verification"])
+        state["keyring_fp"] = kfp
+        state["ts"] = time.time()
+
 
 
 @app.get("/ledger/verify")
 def ledger_verify():
     """R-762: دالة متزامنة ⇒ FastAPI ينفّذها في مجمّع الخيوط لا في حلقة الأحداث
     (كانت async تتحقق من كل توقيع داخل الحلقة فتحجب /health وكل الطلبات).
-    single-flight: الطلبات المتزامنة تنتظر الحساب الجاري وتأخذ نتيجته بدل
-    إطلاق حساب O(n) جديد لكل طلب.
+    single-flight: القفل يجعل الطلبات المتزامنة تنتظر الحساب الجاري وتأخذ
+    نتيجته بدل إطلاق حساب جديد لكل طلب.
 
-    R-805: إصلاح الكاش التتابعي — كانت البصمة gen تُقرأ قبل القفل فتساوي
-    قيمة الحالة عند الدخول دائمًا، فشرط `gen != gen_seen` لا يتحقق إلا أثناء
-    الحوسبة المتزامنة نفسها ⇒ كل استدعاء متتابع أعاد حساب O(n) كاملًا
-    (على سجل الإنتاج 138k حدث: دقائق لكل استدعاء — النقطة كانت معطولة
-    عمليًا، مثبت حيًا: استدعاءان متتابعان كلاهما تجاوز 60ث مهلة). الآن:
-    نتيجة مخزنة تُعاد فورًا ما دامت بصمة الملفات ثابتة وعمرها أقل من TTL؛
-    تغيّر اليدجر أو انتهاء المهلة ⇒ إعادة حساب واحدة يتشاركها المنتظرون."""
+    R-807: تحقق تزايدي صادق (نمط R-768 في SovereignCore) — البادئة
+    المتحقق منها تُهشم فقط (sha256) لا تُعاد فحصها ما دامت بايتاتها
+    ومفاتيح التصنيف ومراسيه لم تتغير؛ أحداث الذيل الجديدة وحدها تُفحص
+    O(delta). الدليل الحي على حاجة التزايدي: بعد نشر R-805 (كاش بصمة
+    الحجم+mtime) ظل الاستدعاء المتتابع على الإنتاج يعيد الحساب الكامل —
+    اليدجر الحي يُلحق ~3.5 حدث/ث فبصمة الحجم تتغير بين كل استدعاءين،
+    وأول استدعاء بعد النشر أخذ 35ث ثم مهلات 60ث→300ث→500ث متتابعة على
+    معالج مشترك مستقطَع. أي تقلّص/تعديل بادئة/تغيّر مفاتيح ⇒ فحص كامل.
+    النتيجة تصف لقطة صادقة: snapshot.prefix_bytes وsnapshot.incremental."""
     with _LEDGER_VERIFY_LOCK:
-        fp = _ledger_verify_fingerprint()
-        cached = _LEDGER_VERIFY_STATE["result"]
-        fresh = (time.time() - _LEDGER_VERIFY_STATE.get("ts", 0.0)) < _LEDGER_VERIFY_CACHE_TTL
-        if cached is not None and fp is not None and _LEDGER_VERIFY_STATE.get("fp") == fp and fresh:
-            return cached
-        result = _ledger_verify_compute()
-        _LEDGER_VERIFY_STATE["result"] = result
-        _LEDGER_VERIFY_STATE["fp"] = fp
-        _LEDGER_VERIFY_STATE["ts"] = time.time()
-        _LEDGER_VERIFY_STATE["gen"] += 1
+        from backend.sovereign.ledger import LedgerAnchor
+        from backend.sovereign.keys import KeyRing, SignatureVerifier
+
+        anchor = LedgerAnchor()
+        keyring = KeyRing()
+        keyring.load_from_disk()
+        verifier = SignatureVerifier(keyring)
+        kfp = _ledger_keyring_fingerprint(keyring)
+        state = _LEDGER_VERIFY_STATE
+
+        # بصمة المراس (تغيّرها يعيد فحص قسم المراس؛ البادئة تبقى صالحة)
+        try:
+            if anchor.anchors_path is not None and pathlib.Path(anchor.anchors_path).exists():
+                st = pathlib.Path(anchor.anchors_path).stat()
+                anchors_fp = (st.st_size, st.st_mtime)
+            else:
+                anchors_fp = None
+        except Exception:
+            anchors_fp = None
+
+        prefix_hash, tail, prefix_ok = _ledger_stream_read(
+            anchor.ledger_path, state.get("prefix_size", 0)
+        )
+        resume = (
+            prefix_ok
+            and prefix_hash is not None
+            and state.get("prefix_hash") == prefix_hash
+            and state.get("stats") is not None
+            and state.get("keyring_fp") == kfp
+        )
+
+        if resume:
+            # استئناف: البادئة صالحة ⇒ نفحص الذيل الجديد وحده (O(delta)).
+            # السطر الأخير غير المكتمل يُستثنى (بلا \n) — يُرى لاحقًا مكتملًا.
+            tail_text, complete_bytes = _ledger_complete_lines_bytes(tail)
+            tail_lines = [l for l in tail_text.split("\n") if l.strip()]
+            delta = _ledger_classify_lines(tail_lines, verifier)
+            stats = _ledger_merge_stats(state["stats"], delta)
+            total_events = stats["total_events"]
+            new_prefix_size = state["prefix_size"] + complete_bytes
+
+            if state.get("anchors_fp") == anchors_fp and state.get("anchors") is not None:
+                anchored_count, trusted_count, nominal_count, anchors_verification = state["anchors"]
+                # التغطيات نسب على الإجمالي الجديد (المراسي نفسها لكن الإجمالي نما)
+                anchors_verification = dict(anchors_verification)
+                anchors_verification["total_events"] = total_events
+                if total_events > 0:
+                    anchors_verification["trusted_coverage"] = trusted_count / total_events
+                    anchors_verification["nominal_coverage"] = nominal_count / total_events
+            else:
+                anchors_list = anchor.list_anchors()
+                anchored_count = sum(a["batch_end"] - a["batch_start"] + 1 for a in anchors_list)
+                anchors_verification = anchor.verify_all_anchors(keyring=keyring)
+                trusted_count = anchors_verification.get("trusted_events_count", 0)
+                nominal_count = int(anchors_verification.get("nominal_coverage", 0.0) * total_events) if total_events else 0
+            incremental = True
+        else:
+            # فحص كامل صادق: لا بادئة صالحة (أول مرة/تقلّص/تعديل/مفاتيح تغيّرت).
+            # R-807: المحرك الموحّد _ledger_verify_compute (أُحيي بهذا الاستدعاء —
+            # كان منطق الفحص الكامل مكررًا داخليًا) — نفس انضباط الأسطر المكتملة.
+            # الملف كاملًا لا «الذيل» — فشل الاستئناف لا يعني أن البادئة القديمة
+            # لا تزال تُقرأ من القرص؛ نقرأ الكل قراءة واحدة صادقة.
+            _, whole, _ = _ledger_stream_read(anchor.ledger_path, 0)
+            full_result, ctx = _ledger_verify_compute(data=whole, incremental=False)
+            state["result"] = full_result
+            _ledger_verify_store_state(state, ctx, kfp, anchors_fp,
+                                       _ledger_prefix_hash(anchor.ledger_path, ctx["complete_bytes"]))
+            return full_result
+
+        result = {
+            "ledger_summary": {
+                "total_events": total_events,
+                "verified_with_key": stats["verified_with_key"],
+                "anchored_events": anchored_count,
+                "unverifiable": stats["unverifiable"],
+                "invalid": stats["invalid"],
+                "legacy_pre_keyring": stats["legacy_pre_keyring"],
+            },
+            "anchors": {
+                "total": anchors_verification["total_anchors"],
+                "verified": anchors_verification["root_verified_count"],
+                "failed": anchors_verification["failed"],
+                "root_verified": anchors_verification["root_verified_count"],
+                "trusted": anchors_verification["trusted_count"],
+                "details": [
+                    {
+                        "anchor_id": d["anchor_id"],
+                        "batch": d["batch"],
+                        "sig_format": d["sig_format"],
+                        "root_verified": d["root_verified"],
+                        "signature_verified": d["signature_verified"],
+                        "key_trusted": d["key_trusted"],
+                        "trusted": d["trusted"],
+                    }
+                    for d in anchors_verification["details"]
+                ],
+            },
+            "keyring_stats": keyring.stats(),
+            "anchored_coverage_pct": round(
+                (anchored_count / total_events) * 100, 2
+            ) if total_events else 0.0,
+            "trusted_coverage_pct": round(
+                anchors_verification["trusted_coverage"] * 100, 2
+            ),
+            "nominal_coverage_pct": round(
+                anchors_verification["nominal_coverage"] * 100, 2
+            ),
+            "trusted_events_count": anchors_verification["trusted_events_count"],
+            "total_events": anchors_verification["total_events"],
+            "timestamp": time.time(),
+            # R-807: وصف اللقطة بصراحة — ما غطاه التحقق وكيف (لا ادعاء «الآن»)
+            "snapshot": {
+                "prefix_bytes": new_prefix_size,
+                "incremental": incremental,
+                "verified_prefix_events": total_events,
+            },
+        }
+
+        # تخزين نقطة الاستئناف الجديدة (فشل البصمة = لا استئناف، لا تعطيل)
+        ctx = {
+            "stats": stats,
+            "total_events": total_events,
+            "anchored_count": anchored_count,
+            "trusted_count": trusted_count,
+            "nominal_count": nominal_count,
+            "anchors_verification": anchors_verification,
+            "complete_bytes": new_prefix_size,
+        }
+        _ledger_verify_store_state(state, ctx, kfp, anchors_fp,
+                                   _ledger_prefix_hash(anchor.ledger_path, new_prefix_size))
+        state["result"] = result
         return result
 
 
-def _ledger_verify_compute():
+def _ledger_verify_compute(data: Optional[bytes] = None, incremental: bool = False):
     """
-    تقرير التحقق من اليدجر السيادي:
+    تقرير التحقق من اليدجر السيادي (R-807: محرك الفحص الكامل الموحّد —
+    يستدعيه ledger_verify حين لا بادئة صالحة للاستئناف؛ أُحيي بهذا الدور
+    بعد أن كان منطق الفحص الكامل سيتكرر داخليًا):
+
     - عدد الأحداث المُتحقَّق منها بالمفتاح (KeyRing)
     - عدد المراسي (Merkle Anchors)
     - عدد الأحداث المحمية بمرساة
     - عدد الأحداث المجهولة/الفاشلة
+
+    R-807: نفس انضباط الأسطر المكتملة — السطر الأخير الممزق (كاتب أثناء
+    القراءة) لا يُصنَّف «تالفًا»؛ يُرى في الاستدعاء القادم مكتملًا.
+    يعيد (النتيجة، سياق التخزين) — السياق يحمل عدادات البادئة للاستئناف.
     """
     from backend.sovereign.ledger import LedgerAnchor
     from backend.sovereign.keys import KeyRing, SignatureVerifier
@@ -848,10 +1111,17 @@ def _ledger_verify_compute():
 
     # تحميل اليدجر والمراسي
     anchor = LedgerAnchor()
-    lines = anchor.read_ledger_lines()
+    if data is None:
+        _, data, _ = _ledger_stream_read(anchor.ledger_path, 0)
+
+    # أسطر مكتملة فقط (انضباط R-807)
+    whole_text, complete_bytes = _ledger_complete_lines_bytes(data)
+    lines = [l for l in whole_text.split("\n") if l.strip()]
 
     # تحليل كل الأحداث (تحقق من التوقيع)
     verifier = SignatureVerifier(keyring)
+    stats = _ledger_classify_lines(lines, verifier)
+    total_events = stats["total_events"]
 
     # عدد الأحداث المُغطاة بالمراسي
     anchors_list = anchor.list_anchors()
@@ -860,47 +1130,27 @@ def _ledger_verify_compute():
         for i in range(a["batch_start"], a["batch_end"] + 1):
             anchored_events.add(i)
 
-    # تصنيف كل حدث
-    stats = {
-        "total_events": len(lines),
-        "verified_with_key": 0,      # موقّع بمفتاح معروف وصالح
-        "anchored_events": len(anchored_events),  # داخل مرساة
-        "unverifiable": 0,          # لا نعرف (مفتاح فُقد أو LEGACY)
-        "invalid": 0,               # مزوّر (التوقيع لا يطابق)
-        "legacy_pre_keyring": 0,     # أحداث قديمة بدون key_id
-    }
-
-    import json as _json
-    for i, line in enumerate(lines):
-        try:
-            event = _json.loads(line)
-        except Exception:
-            stats["invalid"] += 1
-            continue
-
-        if "key_id" not in event:
-            stats["legacy_pre_keyring"] += 1
-
-        result = verifier.verify_event(event)
-        status_val = result.status.value
-        if status_val == "verified":
-            stats["verified_with_key"] += 1
-        elif status_val == "unverifiable_missing_key":
-            stats["unverifiable"] += 1
-        elif status_val == "invalid":
-            stats["invalid"] += 1
-
     # التحقق من كل المراسي
     # R-642/R-643: يُميّز التغطية الموثوقة تشخريًًا (trusted) من الاسمية
     anchors_verification = anchor.verify_all_anchors(keyring=keyring)
+    trusted_count = anchors_verification.get("trusted_events_count", 0)
+    nominal_count = (int(anchors_verification.get("nominal_coverage", 0.0) * total_events)
+                     if total_events else 0)
 
-    return {
-        "ledger_summary": stats,
+    result = {
+        "ledger_summary": {
+            "total_events": total_events,
+            "verified_with_key": stats["verified_with_key"],
+            "anchored_events": len(anchored_events),
+            "unverifiable": stats["unverifiable"],
+            "invalid": stats["invalid"],
+            "legacy_pre_keyring": stats["legacy_pre_keyring"],
+        },
         # R-647: توافق قديم — anchors["verified"] بمعناه السابق (فحص الجذر)
         # + حقول الثقة الجديدة (root_verified, trusted, details)
         "anchors": {
             "total": anchors_verification["total_anchors"],
-            "verified": anchors_verification["root_verified_count"],  # توافق قديم (فحص الجذر)
+            "verified": anchors_verification["root_verified_count"],
             "failed": anchors_verification["failed"],
             "root_verified": anchors_verification["root_verified_count"],
             "trusted": anchors_verification["trusted_count"],
@@ -919,8 +1169,8 @@ def _ledger_verify_compute():
         },
         "keyring_stats": keyring.stats(),
         "anchored_coverage_pct": round(
-            (len(anchored_events) / len(lines)) * 100, 2
-        ) if lines else 0.0,
+            (len(anchored_events) / total_events) * 100, 2
+        ) if total_events else 0.0,
         "trusted_coverage_pct": round(
             anchors_verification["trusted_coverage"] * 100, 2
         ),
@@ -930,7 +1180,23 @@ def _ledger_verify_compute():
         "trusted_events_count": anchors_verification["trusted_events_count"],
         "total_events": anchors_verification["total_events"],
         "timestamp": time.time(),
+        # R-807: وصف اللقطة بصراحة — ما غطاه التحقق وكيف (لا ادعاء «الآن»)
+        "snapshot": {
+            "prefix_bytes": complete_bytes,
+            "incremental": incremental,
+            "verified_prefix_events": total_events,
+        },
     }
+    ctx = {
+        "stats": stats,
+        "total_events": total_events,
+        "anchored_count": len(anchored_events),
+        "trusted_count": trusted_count,
+        "nominal_count": nominal_count,
+        "anchors_verification": anchors_verification,
+        "complete_bytes": complete_bytes,
+    }
+    return result, ctx
 
 
 # ============================================================

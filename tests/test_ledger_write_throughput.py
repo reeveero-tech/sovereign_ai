@@ -99,18 +99,42 @@ def test_stale_index_rebuilt_on_startup(monkeypatch):
         shutil.rmtree(tmp, ignore_errors=True)
 
 
-def test_ledger_verify_is_sync_and_single_flight(monkeypatch):
+def test_ledger_verify_is_sync_and_single_flight(monkeypatch, tmp_path):
+    """/ledger/verify دالة متزامنة (مجمّع الخيوط) والطلبات المتزامنة تتشارك
+    فحصًا واحدًا — R-807: أول منتظر يحسب (المسار الكامل)، الباقي يستأنف
+    بادئته (O(delta) بلا أحداث جديدة) بدل تكرار الحساب الكامل."""
     import app as app_module
 
     assert not inspect.iscoroutinefunction(app_module.ledger_verify), (
         "/ledger/verify must be a sync def (threadpool), not async (blocks the event loop)"
     )
-    calls = []
+    # بيئة حقيقية معزولة (نمط R-807): أحداث موقّعة فعلًا على ledger.jsonl
+    monkeypatch.setenv("SOVEREIGN_DATA_ROOT", str(tmp_path / "dr"))
+    kr = KeyRing(keys_dir=tmp_path / "dr" / "keys")
+    kr.load_from_disk()
+    kr.generate_new_ed25519_key(reason="R-807 single-flight")
+    kr.save_to_disk()
+    sc_dir = tmp_path / "dr" / "sovereign_core"
+    sc_dir.mkdir(parents=True, exist_ok=True)
+    (sc_dir / "blobs").mkdir(exist_ok=True)
+    core = _fresh_core(tmp_path / "dr")
+    for i in range(3):
+        core.append_event("test::r807", {"i": i})
 
-    def slow_compute():
+    # حالة الاستئناف تبدأ فارغة
+    monkeypatch.setattr(app_module, "_LEDGER_VERIFY_STATE", {
+        "result": None, "prefix_size": 0, "prefix_hash": None,
+        "verified_count": 0, "stats": None, "anchors_fp": None,
+        "anchors": None, "keyring_fp": None, "ts": 0.0,
+    })
+
+    calls = []
+    real = app_module._ledger_verify_compute
+
+    def slow_compute(data=None, incremental=False):
         calls.append(1)
         time.sleep(0.3)
-        return {"ok": True, "n": len(calls)}
+        return real(data=data, incremental=incremental)
 
     monkeypatch.setattr(app_module, "_ledger_verify_compute", slow_compute)
     results = []
@@ -119,6 +143,6 @@ def test_ledger_verify_is_sync_and_single_flight(monkeypatch):
     for t in threads:
         t.start()
     for t in threads:
-        t.join(5)
-    assert len(results) == 5 and all(r["ok"] for r in results)
+        t.join(15)
+    assert len(results) == 5 and all(r["ledger_summary"] for r in results)
     assert len(calls) == 1, f"compute ran {len(calls)} times for 5 concurrent calls"
