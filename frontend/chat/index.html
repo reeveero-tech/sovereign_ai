@@ -323,7 +323,15 @@
   var CONV_LOCAL = "sovereign.localConvs";
   var localConvs = loadLocalConvs();
   function loadLocalConvs() { try { var a = JSON.parse(localStorage.getItem(CONV_LOCAL)); return Array.isArray(a) ? a : []; } catch (e) { return []; } }
-  function saveLocalConvs() { try { localStorage.setItem(CONV_LOCAL, JSON.stringify(localConvs)); } catch (e) {} }
+  // R-813 (تصحيح المراجعة الثالثة): فشل الحفظ (امتلاء المساحة) لا يُكتم — يعاد
+  // للمنادي لكي لا تُفرَّغ المحادثة الجارية باعتبارها محفوظة وهي ليست كذلك
+  function saveLocalConvs() {
+    try { localStorage.setItem(CONV_LOCAL, JSON.stringify(localConvs)); return true; }
+    catch (e) {
+      try { toast("امتلأت مساحة التخزين في هذا المتصفح — المحادثة الأخيرة لم تُحفظ بعد. احذف محادثات قديمة من القائمة (زر يمين) ثم أعد المحاولة.", true); } catch (t) {}
+      return false;
+    }
+  }
   function convTitle(msgs) {
     var arr = msgs || [];
     for (var i = 0; i < arr.length; i++) { if ((arr[i] || {}).role === "user") { var t = String(arr[i].content || "").replace(/\s+/g, " ").trim(); return t ? (t.length > 48 ? t.slice(0, 48) + "…" : t) : "محادثة"; } }
@@ -337,16 +345,18 @@
   var showAllLocalConvs = false; // R-813: فهرس العرض قابل للتوسيع — لا محادثة محجوبة عن الوصول
   function upsertLocalConv(rec) {
     localConvs = [rec].concat(localConvs.filter(function (c) { return c.id !== rec.id; }));
-    saveLocalConvs();
+    return saveLocalConvs(); // R-813: النتيجة تصعد — لا تبديل بعد فشل الحفظ
   }
   function keepCurrentConversationBeforeNew() {
-    if (!state.messages.length) return;
+    if (!state.messages.length) return true;
     var title = convTitle(state.messages);
     if (ownerKey()) {
       persistConv(); // R-809: أثرِ أي رسائل غير محفوظة سحابيًا قبل التبديل (العنوان صار مشتقًا)
-    } else {
-      upsertLocalConv({ id: state.sessionId, title: title, messages: state.messages, updated_at: Date.now() / 1000, model: state.model || null });
+      return true;
     }
+    // R-813 (تصحيح المراجعة الثالثة): فشل حفظ الضيف يمنع التبديل — لا تُفرَّغ
+    // الجارية باعتبارها محفوظة وهي ليست كذلك (فشل ظاهر لا نجاح صامت كاذب)
+    return upsertLocalConv({ id: state.sessionId, title: title, messages: state.messages, updated_at: Date.now() / 1000, model: state.model || null });
   }
 
   // ---------------- التنقل ----------------
@@ -472,14 +482,16 @@
   if (_ms) _ms.addEventListener("change", function () { state.model = _ms.value || null; save(); });
   $("newBtn").addEventListener("click", function () {
     if (busy) return;
-    keepCurrentConversationBeforeNew(); // R-809: السابقة تُحفظ أولًا — لا تختفي
+    // R-813: فشل حفظ السابقة (امتلاء مساحة الضيف) يوقف التبديل — لا تضيع
+    if (!keepCurrentConversationBeforeNew()) return; // R-809: السابقة تُحفظ أولًا — لا تختفي
     state.convId = null; state.sessionId = rid(); state.messages = []; attached = []; paintAttached(); save(); renderChat(); paintConvs(); go("chat"); input.focus();
   });
   function openLocalConv(id) {
     var c = localConvs.filter(function (x) { return x.id === id; })[0];
     if (!c) return;
     // R-813 (مراجعة المستشار): الجارية تُحفظ قبل أي تبديل — لا تضيع بفتح محادثة أخرى
-    if (state.sessionId !== c.id) keepCurrentConversationBeforeNew();
+    // R-813: فشل حفظ الجارية يوقف التبديل — لا تضيع بفتح محادثة أخرى
+    if (state.sessionId !== c.id && !keepCurrentConversationBeforeNew()) return;
     state.convId = null; state.sessionId = c.id; state.messages = c.messages || [];
     state.model = c.model || null; paintModelSel(); // R-810/813: نموذج المحادثة يُستعاد
     save(); renderChat(); paintConvs(); go("chat");
@@ -563,7 +575,7 @@
   function openConv(id) {
     api("/ws/conversations/" + id).then(function (c) {
       // R-813 (مراجعة المستشار): الجارية تُحفظ قبل أي تبديل — لا تضيع بفتح محادثة أخرى
-      keepCurrentConversationBeforeNew();
+      if (!keepCurrentConversationBeforeNew()) return;
       state.convId = c.id; state.sessionId = c.id; state.messages = c.messages || [];
       state.model = c.model || null; paintModelSel(); // R-810/813: نموذج المحادثة يُستعاد
       save(); renderChat(); paintConvs(); go("chat");
