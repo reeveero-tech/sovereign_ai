@@ -26,12 +26,79 @@ _REQUIRED_DOCS = ("docs/PROJECT_STATE.md", "docs/CHANGELOG.md")
 _ROADMAP_GLOB = "docs/ROADMAP*.md"
 
 
-def _head_commit_files():
+def _head_commit_files(repo_root: Path = REPO_ROOT):
     out = subprocess.run(
         ["git", "show", "--name-only", "--format=", "HEAD"],
-        capture_output=True, text=True, cwd=str(REPO_ROOT),
+        capture_output=True, text=True, cwd=str(repo_root),
     )
-    return [l.strip() for l in out.stdout.splitlines() if l.strip()]
+    files = [l.strip() for l in out.stdout.splitlines() if l.strip()]
+    if not files:
+        # R-806: في checkout من GitHub لحدث pull_request يكون HEAD التزامَ دمج
+        # بسيطًا (نتيجة الدمج تساوي رأس الـPR) فلا يُظهر git show أي فروق
+        # مركّبة — كان الحارس يفشل ظلمًا تحت مسار PR بينما يعمل تحت push
+        # (أول PR على المستودع كشفه حيًا: push نجح وpull_request فشل على
+        # الالتزام نفسه). في التزام الدمج يكون رأس الـPR هو الوالد الثاني
+        # (HEAD^2) — وهو الالتزام الذي يحمل الكود والوثائق معًا كما تقتضي
+        # D-040؛ تحديد الوالد بالتسلسل لا بالتاريخ (تساوي التواريخ يقلب
+        # الترتيب). وإن لم يكن دمجًا فآخر التزام غير دمج قابل للوصول.
+        parents = subprocess.run(
+            ["git", "rev-list", "--parents", "-n", "1", "HEAD"],
+            capture_output=True, text=True, cwd=str(repo_root),
+        )
+        target = ""
+        if len(parents.stdout.split()) > 2:  # التزام دمج: الوالد الثاني = رأس الـPR
+            target = "HEAD^2"
+        else:
+            non_merge = subprocess.run(
+                ["git", "rev-list", "--no-merges", "-n", "1", "HEAD"],
+                capture_output=True, text=True, cwd=str(repo_root),
+            )
+            target = non_merge.stdout.strip()
+        if target:
+            out = subprocess.run(
+                ["git", "show", "--name-only", "--format=", target],
+                capture_output=True, text=True, cwd=str(repo_root),
+            )
+            files = [l.strip() for l in out.stdout.splitlines() if l.strip()]
+    return files
+
+
+def test_head_commit_files_survive_trivial_merge_head(tmp_path):
+    """R-806 — حارس D-040 لا ينهار تحت التزام دمج بسيط (سيناريو checkout
+    من GitHub لحدث pull_request: نتيجة الدمج = رأس الـPR فلا فروق مركّبة).
+    الدليل الحي: أول PR على المستودع — تشغيل push على الالتزام نفسه نجح
+    وتشغيل pull_request فشل برسالة «لا يمكن قراءة ملفات HEAD»."""
+    import subprocess as sp
+
+    repo = tmp_path / "prsim"
+    repo.mkdir()
+    run = lambda *a: sp.run(
+        ["git", *a], capture_output=True, text=True, cwd=str(repo), check=True
+    )
+    run("init", "-q")
+    run("config", "user.name", "guardian-test")
+    run("config", "user.email", "guardian-test@example.com")
+    (repo / "base.txt").write_text("base", encoding="utf-8")
+    run("add", "-A")
+    run("commit", "-q", "-m", "base")
+    base_branch = sp.run(
+        ["git", "symbolic-ref", "--short", "HEAD"],
+        capture_output=True, text=True, cwd=str(repo), check=True,
+    ).stdout.strip()
+    run("checkout", "-q", "-b", "pr")
+    (repo / "code.py").write_text("x = 1\n", encoding="utf-8")
+    run("add", "-A")
+    run("commit", "-q", "-m", "pr head: code + docs")
+    run("checkout", "-q", base_branch)
+    run("merge", "--no-ff", "--no-edit", "pr")
+    # إثبات السيناريو: HEAD التزام دمج وgit show عليه فارغ (كما في CI)
+    plain = sp.run(
+        ["git", "show", "--name-only", "--format=", "HEAD"],
+        capture_output=True, text=True, cwd=str(repo),
+    )
+    assert not plain.stdout.strip(), "السيناريو مكسور: الدمج ليس بسيطًا"
+    # الحارس يحل الاحتياط: أول التزام غير دمج = رأس الـPR
+    assert _head_commit_files(repo) == ["code.py"]
 
 
 def test_ci_enforces_docs_sync_with_code_changes():
