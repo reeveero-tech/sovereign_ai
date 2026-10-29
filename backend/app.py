@@ -849,23 +849,51 @@ def _ledger_stream_read(ledger_path, prefix_size):
         return None, b"", False
 
 
-def _ledger_prefix_hash(ledger_path, prefix_size) -> Optional[str]:
-    """R-807: بصمة أول prefix_size بايت — تُخزن كحد البادئة الجديدة بعد
-    فحص ناجح (استدعاء واحد إضافي متسلسل رخيص: قراءة+هش بلا توقيعات)."""
+def _ledger_prefix_hash(ledger_path, prefix_size, old_prefix_size=0,
+                        old_prefix_hash=None, tail=None) -> Optional[str]:
+    """R-807/808: بصمة أول prefix_size بايت كنقطة استئناف — مع شهادة
+    اتساق (تصحيح TOCTOU من مراجعة المستشار): البادئة الجديدة تُقرأ من
+    القرص مرة أخرى ولا تُنشر بصمتها إلا إذا (١) ظل جزؤها القديم بنفس
+    البصمة المخزنة (لم يتغير أثناء التصنيف) و(٢) ذيلها بايت-لطابق الأسطر
+    المصنفة فعلاً — لا شهادة على بايتات لم تُفحص. أي اختلاف = None
+    (لا استئناف للنقطة الجديدة، والفحص الكامل صادق في كل الأحوال)."""
     try:
-        if ledger_path is None or prefix_size <= 0:
+        if ledger_path is None or prefix_size is None or prefix_size <= 0:
             return None
         if not pathlib.Path(ledger_path).exists():
             return None
         if pathlib.Path(ledger_path).stat().st_size < prefix_size:
-            return None
+            return None  # تقلّص بعد التصنيف — لا شهادة على ما لم يُقرأ
         h = hashlib.sha256()
-        remaining = prefix_size
+        old_part = 0
+        # (١) الجزء القديم: إن تغيّرت بصمته فقد تعدل الملف أثناء التصنيف
+        if old_prefix_hash and old_prefix_size and 0 < old_prefix_size < prefix_size:
+            ho = hashlib.sha256()
+            with open(ledger_path, "rb") as f:
+                remaining = old_prefix_size
+                while remaining > 0:
+                    chunk = f.read(min(1 << 16, remaining))
+                    if not chunk:
+                        return None
+                    ho.update(chunk)
+                    h.update(chunk)
+                    remaining -= len(chunk)
+            if ho.hexdigest() != old_prefix_hash:
+                return None
+            old_part = old_prefix_size
+        # (٢) باقي البادئة الجديدة: بايت-لطابقة للأسطر المصنفة من الذيل
         with open(ledger_path, "rb") as f:
+            f.seek(old_part)
+            remaining = prefix_size - old_part
+            offset = 0
             while remaining > 0:
                 chunk = f.read(min(1 << 16, remaining))
                 if not chunk:
                     return None
+                if tail is not None:
+                    if tail[offset:offset + len(chunk)] != chunk:
+                        return None  # ذيل القرص ≠ الذيل المصنف — لا شهادة
+                    offset += len(chunk)
                 h.update(chunk)
                 remaining -= len(chunk)
         return h.hexdigest()
@@ -908,16 +936,15 @@ def _ledger_merge_stats(base: Dict[str, int], delta: Dict[str, int]) -> Dict[str
             ("total_events", "verified_with_key", "unverifiable", "invalid", "legacy_pre_keyring")}
 
 def _ledger_complete_lines_bytes(data: bytes):
-    """R-807: أسطر مكتملة فقط من كتلة بايتات — يُقصّ السطر الأخير غير
+    """R-807/808: أسطر مكتملة فقط من كتلة بايتات — يُقصّ السطر الأخير غير
     المكتمل (بلا فاصل سطر — كاتب أثناء القراءة) ويعيد (نص الأسطر
-    المكتملة، بايتاتها). التحقق الصادق لا يصنف كتابة ممزقة «تالفة»."""
-    text = data.decode("utf-8", errors="replace")
-    if text.endswith("\n"):
-        return text, len(data)
-    cut = text.rfind("\n")
+    المكتملة، بايتاتها). R-808: الحد يُبحث في البايتات لا في النص — إزاحة
+    الحرف (حمولات عربية متعددة البايتات) لا تساوي إزاحة البايت، وإرجاع
+    حد نصي كعدد بايتات كان يضع نقطة الاستئناف داخل سطر محسوب."""
+    cut = data.rfind(b"\n")
     if cut < 0:
         return "", 0
-    return text[:cut + 1], cut + 1
+    return data[:cut + 1].decode("utf-8", errors="replace"), cut + 1
 
 
 def _ledger_verify_store_state(state, ctx, kfp, anchors_fp, new_prefix_hash):
@@ -976,9 +1003,12 @@ def ledger_verify():
         prefix_hash, tail, prefix_ok = _ledger_stream_read(
             anchor.ledger_path, state.get("prefix_size", 0)
         )
+        # R-808: بصمة مفاتيح فاشلة (سلسلة فارغة) لا تُفعّل الاستئناف —
+        # فشل قراءة المفاتيح يعني أن التصنيفات غير معلومة، لا أنها ثابتة
         resume = (
             prefix_ok
             and prefix_hash is not None
+            and bool(kfp)
             and state.get("prefix_hash") == prefix_hash
             and state.get("stats") is not None
             and state.get("keyring_fp") == kfp
@@ -1003,11 +1033,27 @@ def ledger_verify():
                     anchors_verification["trusted_coverage"] = trusted_count / total_events
                     anchors_verification["nominal_coverage"] = nominal_count / total_events
             else:
+                # R-808: اتحاد النطاقات (لا مجموع الأطوال — التداخل يُحسب
+                # مرة) + مقام لقطة التصنيف نفسها لا قراءة أخرى
                 anchors_list = anchor.list_anchors()
-                anchored_count = sum(a["batch_end"] - a["batch_start"] + 1 for a in anchors_list)
+                anchored_set = set()
+                nominal_set = set()
+                for a in anchors_list:
+                    for i in range(a["batch_start"], a["batch_end"] + 1):
+                        anchored_set.add(i)
+                        nominal_set.add(i)
+                anchored_count = len(anchored_set)
+                nominal_count = len(nominal_set)
                 anchors_verification = anchor.verify_all_anchors(keyring=keyring)
                 trusted_count = anchors_verification.get("trusted_events_count", 0)
-                nominal_count = int(anchors_verification.get("nominal_coverage", 0.0) * total_events) if total_events else 0
+                anchors_verification = dict(anchors_verification)
+                anchors_verification["total_events"] = total_events
+                if total_events > 0:
+                    anchors_verification["trusted_coverage"] = trusted_count / total_events
+                    anchors_verification["nominal_coverage"] = nominal_count / total_events
+                else:
+                    anchors_verification["trusted_coverage"] = 0.0
+                    anchors_verification["nominal_coverage"] = 0.0
             incremental = True
         else:
             # فحص كامل صادق: لا بادئة صالحة (أول مرة/تقلّص/تعديل/مفاتيح تغيّرت).
@@ -1018,8 +1064,8 @@ def ledger_verify():
             _, whole, _ = _ledger_stream_read(anchor.ledger_path, 0)
             full_result, ctx = _ledger_verify_compute(data=whole, incremental=False)
             state["result"] = full_result
-            _ledger_verify_store_state(state, ctx, kfp, anchors_fp,
-                                       _ledger_prefix_hash(anchor.ledger_path, ctx["complete_bytes"]))
+            # R-808: بصمة من بايتات التصنيف نفسها (ctx) — لا إعادة قراءة
+            _ledger_verify_store_state(state, ctx, kfp, anchors_fp, ctx.get("prefix_hash"))
             return full_result
 
         result = {
@@ -1081,8 +1127,12 @@ def ledger_verify():
             "anchors_verification": anchors_verification,
             "complete_bytes": new_prefix_size,
         }
+        # R-808: تجديد البصمة بشهادة اتساق — الجزء القديم بنفس بصمته والذيل
+        # بايت-لطابق الأسطر المصنفة؛ وإلا فلا نقطة استئناف جديدة (لا شهادة
+        # على بايتات لم تُفحص — تصحيح TOCTOU)
         _ledger_verify_store_state(state, ctx, kfp, anchors_fp,
-                                   _ledger_prefix_hash(anchor.ledger_path, new_prefix_size))
+                                   _ledger_prefix_hash(anchor.ledger_path, new_prefix_size,
+                                                       state["prefix_size"], state["prefix_hash"], tail))
         state["result"] = result
         return result
 
@@ -1123,19 +1173,30 @@ def _ledger_verify_compute(data: Optional[bytes] = None, incremental: bool = Fal
     stats = _ledger_classify_lines(lines, verifier)
     total_events = stats["total_events"]
 
-    # عدد الأحداث المُغطاة بالمراسي
+    # عدد الأحداث المُغطاة بالمراسي — اتحاد النطاقات (R-808: النطاقات
+    # المتداخلة لا تُحسب مرتين؛ مجموع الأطوال كان يبالغ في التغطية)
     anchors_list = anchor.list_anchors()
     anchored_events = set()
+    nominal_events = set()
     for a in anchors_list:
         for i in range(a["batch_start"], a["batch_end"] + 1):
             anchored_events.add(i)
+            nominal_events.add(i)
 
     # التحقق من كل المراسي
     # R-642/R-643: يُميّز التغطية الموثوقة تشخريًًا (trusted) من الاسمية
     anchors_verification = anchor.verify_all_anchors(keyring=keyring)
     trusted_count = anchors_verification.get("trusted_events_count", 0)
-    nominal_count = (int(anchors_verification.get("nominal_coverage", 0.0) * total_events)
-                     if total_events else 0)
+    nominal_count = len(nominal_events)
+    # R-808: مقام واحد متسق — تغطيات المراس على لقطة التصنيف نفسها لا
+    # على قراءة أخرى داخل verify_all_anchors (الملف ينمو بين القراءتين)
+    anchors_verification["total_events"] = total_events
+    if total_events > 0:
+        anchors_verification["trusted_coverage"] = trusted_count / total_events
+        anchors_verification["nominal_coverage"] = nominal_count / total_events
+    else:
+        anchors_verification["trusted_coverage"] = 0.0
+        anchors_verification["nominal_coverage"] = 0.0
 
     result = {
         "ledger_summary": {
@@ -1195,6 +1256,10 @@ def _ledger_verify_compute(data: Optional[bytes] = None, incremental: bool = Fal
         "nominal_count": nominal_count,
         "anchors_verification": anchors_verification,
         "complete_bytes": complete_bytes,
+        # R-808: الشهادة من بايتات التصنيف نفسها في الذاكرة — لا إعادة قراءة
+        # (تصحيح TOCTOU): البادئة المخزنة هي حرفيًا ما صُنف
+        "prefix_hash": (hashlib.sha256(data[:complete_bytes]).hexdigest()
+                        if complete_bytes > 0 else None),
     }
     return result, ctx
 

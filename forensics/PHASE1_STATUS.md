@@ -16,13 +16,14 @@
 
 ```
 $ python -m pytest tests/test_sovereign_keys.py tests/test_key_selection_rotation.py tests/test_return_none_security.py tests/test_ledger_anchor.py tests/test_ledger_verify_endpoint.py -q
-55 passed
+58 passed
 ```
 
 > تصويح R-805 (2026-10-29): 50 → **52** — أُضيف اختباران لـ`test_ledger_verify_endpoint.py`
 > (كاش `/ledger/verify` المتتابع + انتهاء TTL — تفصيل الدفعة في CHANGELOG R-805).
 > التوزيع: 11 + 5 + 17 + 12 + 7 = 52.
 > تصويح R-807 (2026-10-29): 52 → **55** — أُضيف 3 اختبارات لـ`test_ledger_verify_endpoint.py` (تحقق تزايدي/تعديل بادئة/تقلّص/تغيّر مفاتيح/تزامن — استُبدل اختبارا كاش R-805 بخمسة أدق). التوزيع: 11 + 5 + 17 + 12 + 10 = 55.
+> تصويب R-808 (2026-10-29): 55 → **58** — أُضيف 3 اختبارات لـ`test_ledger_verify_endpoint.py` (حد بايتي للسطر العربي الممزق، كشف TOCTOU أثناء التصنيف، اتحاد النطاقات المتداخلة). التوزيع: 11 + 5 + 17 + 12 + 13 = 58.
 
 ## تصويح رقمي (2026-10-16 — مرحلة صفر لوكيل لاحق)
 
