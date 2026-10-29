@@ -329,15 +329,14 @@
     for (var i = 0; i < arr.length; i++) { if ((arr[i] || {}).role === "user") { var t = String(arr[i].content || "").replace(/\s+/g, " ").trim(); return t ? (t.length > 48 ? t.slice(0, 48) + "…" : t) : "محادثة"; } }
     return "محادثة";
   }
+  // R-813 (تصحيح المراجعة الثانية): فصل مخزن العرض عن مخزن المحتوى — التخزين
+  // يحفظ كل المحادثات كاملة بلا اقتطاط ولا حذف (أمر المالك: الحذف ممنوع)،
+  // والقائمة الجانبية تعرض أحدث ١٠٠ فقط (فهرس عرض) لتبقى سريعة — فتح أي
+  // محفوظة من القائمة يصلها كاملة من المخزن الكامل
+  var CONV_DISPLAY_CAP = 100;
+  var showAllLocalConvs = false; // R-813: فهرس العرض قابل للتوسيع — لا محادثة محجوبة عن الوصول
   function upsertLocalConv(rec) {
     localConvs = [rec].concat(localConvs.filter(function (c) { return c.id !== rec.id; }));
-    // R-813 (مراجعة المستشار): سعة المتصفح محدودة — لا حذف صامت: الأقدم تُقتطع
-    // رسائله (يبقى مدخله وعنوانه وتاريخه) بدل محوه كليًا من الوجود
-    for (var i = 100; i < localConvs.length; i++) {
-      var old = localConvs[i];
-      localConvs[i] = { id: old.id, title: old.title, archived: true,
-        messages: (old.messages || []).slice(0, 2), updated_at: old.updated_at, model: old.model };
-    }
     saveLocalConvs();
   }
   function keepCurrentConversationBeforeNew() {
@@ -536,13 +535,20 @@
     if (!ownerKey()) {
       // R-809: الضيف يرى محادثات متصفحه المحفوظة — نفس تجربة المالك بلا سحابة
       if (!localConvs.length) { box.appendChild(el("div", "muted small", "المحادثات تُحفظ في هذا المتصفح. أدخل مفتاح المالك لحفظها في السحابة ومزامنتها.")); return; }
-      localConvs.forEach(function (c) {
+      // فهرس العرض: أحدث ١٠٠ افتراضيًا وقابل للتوسيع — والمخزن يحفظ الجميع كاملة
+      localConvs.slice(0, showAllLocalConvs ? localConvs.length : CONV_DISPLAY_CAP).forEach(function (c) {
         var b = el("button", "item" + (c.id === state.sessionId ? " on" : ""), c.title || "محادثة");
         b.title = (c.messages || []).length + " رسالة · " + fmtTime(c.updated_at);
         b.addEventListener("click", function () { openLocalConv(c.id); });
         b.addEventListener("contextmenu", function (e) { e.preventDefault(); if (confirm("حذف هذه المحادثة من هذا المتصفح؟")) { localConvs = localConvs.filter(function (x) { return x.id !== c.id; }); saveLocalConvs(); paintConvs(); } });
         box.appendChild(b);
       });
+      if (localConvs.length > CONV_DISPLAY_CAP) {
+        var more = el("button", "btn sm w-full", showAllLocalConvs ? "إظهار أحدث " + CONV_DISPLAY_CAP + " فقط" : "إظهار الكل (" + localConvs.length + " محادثة محفوظة كاملة)");
+        more.type = "button";
+        more.addEventListener("click", function () { showAllLocalConvs = !showAllLocalConvs; paintConvs(); });
+        box.appendChild(more);
+      }
       return;
     }
     if (!convs.length) { box.appendChild(el("div", "muted small", "لا محادثات محفوظة بعد.")); return; }

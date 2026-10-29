@@ -142,18 +142,19 @@ def _review_with_brain(report: Dict[str, Any]) -> Dict[str, Any]:
         verdict = json.loads(match.group(0))
     except ValueError:
         return {"reviewer": "invalid_review_reply", "ok": None, "issues": [], "summary": None}
-    # R-813 (مراجعة المستشار): تحقق مستقل صارم — ok منطقي حرفي وإلا لا حكم أبدًا
-    if not isinstance(verdict.get("ok"), bool):
+    # R-813 (تصحيح المراجعة الثانية): العقد الصارم الكامل — الرد كائن JSON،
+    # وok منطقي حرفي، وissues قائمة (نصوصًا بعد التقليم)، وsummary نص.
+    # أي حقل ناقص أو من نوع خاطئ ⇒ لا حكم أبدًا — لا حكم مختلق ولا قيم مبتلعة
+    if not isinstance(verdict, dict) or not isinstance(verdict.get("ok"), bool) \
+            or not isinstance(verdict.get("issues"), list) \
+            or not isinstance(verdict.get("summary"), str):
         return {"reviewer": "invalid_review_reply", "ok": None, "issues": [], "summary": None}
-    issues = verdict.get("issues")
-    if not isinstance(issues, list):
-        issues = []
-    issues = [str(i)[:200] for i in issues[:20]]
+    issues = [str(i)[:200] for i in verdict["issues"][:20]]
     return {
         "reviewer": "brain",
         "ok": verdict["ok"],
         "issues": issues,
-        "summary": str(verdict.get("summary") or "")[:300] or None,
+        "summary": verdict["summary"][:300] or None,
     }
 
 

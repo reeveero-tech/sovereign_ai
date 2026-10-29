@@ -355,11 +355,14 @@ def test_frontend_conversation_fixes_present():
     assert "model: state.model || null" in _fn_block(src, "persistConv")
     assert "state.model = c.model || null;" in _fn_block(src, "openLocalConv")
     assert "state.model = c.model || null;" in _fn_block(src, "openConv")
-    # السقف غير الكارثي: أرشفة واقتصاص — لا حذفًا
+    # السقف غير الكارثي (تصحيح المراجعة الثانية): المخزن يحفظ الجميع كاملة —
+    # لا اقتطاط ولا حذف أبدًا؛ وفهرس العرض يعرض أحدث ١٠٠ وقابل للتوسيع
     cap = _fn_block(src, "upsertLocalConv")
-    assert "for (var i = 100; i < localConvs.length; i++)" in cap
-    assert "archived: true" in cap
-    assert "messages: (old.messages || []).slice(0, 2)" in cap
+    assert ".slice(0, 2)" not in cap, "لا اقتطاط رسائل في التخزين"
+    assert "archived: true" not in cap or "ws/files" in cap, "لا وسماً بالأرشفة في مسار الضيف"
+    assert "CONV_DISPLAY_CAP = 100" in src
+    assert "localConvs.slice(0, showAllLocalConvs ? localConvs.length : CONV_DISPLAY_CAP)" in src
+    assert 'localConvs.length > CONV_DISPLAY_CAP' in src  # مؤشر صادق قابل للتوسيع
 
 
 def test_backend_routes_no_event_loop_blocking_and_model_flow():
@@ -383,3 +386,93 @@ def test_backend_routes_no_event_loop_blocking_and_model_flow():
     # النموذج من الرسالة يصل فعليًا إلى نداء العقل في /chat
     chat_src = inspect.getsource(app_module.chat)
     assert "model=message.model" in chat_src
+
+
+# ---------------- ٦) تصحيح المراجعة الثانية: عقد أصرم + ترحيل النسخ القديمة ----------------
+
+def test_reviewer_contract_rejects_wrong_field_types(fresh_core, monkeypatch):
+    """المراجع: أي حقل ناقص أو من نوع خاطئ (issues ليست قائمة، summary ليست
+    نصًا) ⇒ invalid_review_reply — لا حكم مختلق ولا قيم مبتلعة."""
+    _install_registry(monkeypatch, lambda **kw: {"ok": True, "tool": "stub"})
+    cases = [
+        {"ok": True, "issues": "ليست قائمة", "summary": "س"},      # issues نص
+        {"ok": True, "issues": [], "summary": 42},                  # summary رقم
+        {"ok": True, "issues": []},                                 # summary ناقص
+        {"ok": True, "summary": "س"},                               # issues ناقص
+        {"issues": [], "summary": "س"},                             # ok ناقص
+        {"ok": "yes", "issues": [], "summary": "س"},               # ok غير منطقي
+    ]
+    for verdict in cases:
+        srv = _fake_brain({"message": {"role": "assistant",
+                                       "content": json.dumps(verdict, ensure_ascii=False)},
+                           "done": True})
+        _brain_on(monkeypatch, srv)
+        out = review_workflow.run_self_review(caller="test")
+        assert out["reviewer_verdict"]["reviewer"] == "invalid_review_reply", verdict
+        assert out["reviewer_verdict"]["ok"] is None
+        assert out["reviewer_verdict"]["issues"] == []
+        srv.shutdown()
+
+
+def test_reviewer_contract_accepts_full_valid_object(fresh_core, monkeypatch):
+    """المراجع: الكائن الكامل الصحيح يُقبل كاملًا — issues وsummary كما وردا."""
+    _install_registry(monkeypatch, lambda **kw: {"ok": True, "tool": "stub"})
+    verdict = {"ok": True, "issues": ["ملاحظة صغيرة"], "summary": "سليم عمومًا"}
+    srv = _fake_brain({"message": {"role": "assistant",
+                                   "content": json.dumps(verdict, ensure_ascii=False)},
+                       "done": True})
+    _brain_on(monkeypatch, srv)
+    out = review_workflow.run_self_review(caller="test")
+    v = out["reviewer_verdict"]
+    assert v["reviewer"] == "brain" and v["ok"] is True
+    assert v["issues"] == ["ملاحظة صغيرة"]
+    assert v["summary"] == "سليم عمومًا"
+    srv.shutdown()
+
+
+def test_legacy_file_api_key_migrates_to_vault(tmp_path, monkeypatch):
+    """النسخة القديمة (R-810): مفتاح نص صريح في ملف التشغيل ⇒ يُرحّل إلى
+    الخزينة المشفرة وتُحذف نسخته الصريحة من الملف — والقراءة تخدمه فورًا."""
+    from sovereign.secrets_vault import SecretsVault
+
+    key_b64 = base64.b64encode(os.urandom(32)).decode()
+    vault = SecretsVault(path=tmp_path / "vault.json", master_key_b64=key_b64,
+                         audit=lambda ev, payload: None)
+    _patch_vault(monkeypatch, vault)
+
+    cfg = tmp_path / "brain.json"
+    cfg.write_text(json.dumps({"OLLAMA_MODEL": "m-old",
+                              "OLLAMA_API_KEY": "legacy-plain-key"}, ensure_ascii=False),
+                   encoding="utf-8")
+    monkeypatch.setattr(config, "BRAIN_RUNTIME_FILE", cfg)
+    config._BRAIN_API_KEY_CACHE.pop("value", None)
+
+    # القراءة نفسها تُرحّل: الخزينة تخدم القيمة، والملف يفقد النسخة الصريحة
+    assert config.brain_get("OLLAMA_API_KEY") == "legacy-plain-key"
+    assert vault.get(config.BRAIN_API_KEY_SECRET,
+                     capability=config.BRAIN_API_KEY_SCOPE,
+                     actor="migration") == "legacy-plain-key"
+    assert "legacy-plain-key" not in cfg.read_text(encoding="utf-8")
+    # بقية الحقول تبقى — الترحيل لا يمس شيئًا غير المفتاح
+    rt = config.brain_runtime_read()
+    assert rt.get("OLLAMA_MODEL") == "m-old"
+    assert "OLLAMA_API_KEY" not in rt
+    # الكتابات اللاحقة لا تعيد النسخة الصريحة أبدًا
+    config.brain_set({"OLLAMA_NUM_CTX": 4096})
+    assert "legacy-plain-key" not in cfg.read_text(encoding="utf-8")
+    assert config.brain_get("OLLAMA_API_KEY") == "legacy-plain-key"
+
+
+def test_legacy_file_api_key_survives_without_vault(tmp_path, monkeypatch):
+    """لا خزينة ⇒ لا فقد: النسخة الصريحة تبقى في الملف وتُقرأ منها حتى
+    تتاح الخزينة (الترحيل مؤجل لا مُلغى) — bلا حذف بلا بديل."""
+    cfg = tmp_path / "brain.json"
+    cfg.write_text(json.dumps({"OLLAMA_API_KEY": "legacy-plain-key"},
+                              ensure_ascii=False), encoding="utf-8")
+    monkeypatch.setattr(config, "BRAIN_RUNTIME_FILE", cfg)
+    monkeypatch.setattr(config, "OLLAMA_API_KEY", "")
+    config._BRAIN_API_KEY_CACHE.pop("value", None)
+    _patch_vault(monkeypatch, None)
+
+    assert config.brain_get("OLLAMA_API_KEY") == "legacy-plain-key"
+    assert "legacy-plain-key" in cfg.read_text(encoding="utf-8")  # لم يُفقد
