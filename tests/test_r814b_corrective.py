@@ -302,3 +302,4 @@ def test_workflow_uses_no_bare_grep_or_rg_and_has_owner_job():
     # مهمة مصادقة المالك تستهلك السر بلا طباعته
     assert "verify-owner" in wf and 'KEY: ${{ secrets.KEY_SECRET }}' in wf
     assert 'echo "$KEY"' not in wf  # لا طباعة للسر أبدًا
+

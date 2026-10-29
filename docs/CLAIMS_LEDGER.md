@@ -14,7 +14,7 @@
 | ٤ | محادثة حقيقية تعمل | `POST /chat` | سير `verify-live` — رد `ok` بحالة وكيل مكتملة | ✅ مثبت |
 | ٥ | الفشل يُعلن لا يُخفى | `POST /chat` بنموذج وهمي | `status: error` + `agent_status: planner_failed` | ✅ مثبت |
 | ٦ | نقاط المالك محمية | `/brain/models` بلا مفتاح | 401 | ✅ مثبت |
-| ٧ | نقاط المالك تعمل بمفتاحها | `/brain/models` و`/brain/settings` و`/ws/conversations` بمفتاح `KEY_SECRET` | سير `verify-live` (مهمة المصادقة) | ✅ مثبت |
+| ٧ | نقاط المالك تعمل بمفتاحها | `/brain/models` و`/brain/settings` و`/ws/conversations` بمفتاح `KEY_SECRET` | سير `verify-live` (مهمة المصادقة) | ⏸ معلق: أول تشغيل حي كشف أن سر المستودع ليس مفتاح API للتطبيق الحي (401؛ البوابة تعمل — 401 بلا مفتاح مثبت)؛ تشخيص البصمة على /status جاهز؛ يلزم تحديث المالك للسر (إجراء مالك) |
 | ٨ | علامات الصدق تعبر الحفظ | `POST /ws/conversations` | جولة حفظ/استعادة تُبقي `err` و`rev` | ✅ مثبت |
 | ٩ | المراجع المستقل يحكم على أدلة فعلية | `chat_agent._review_answer` | اختبار: المراجع يرى نتيجة `memory.stats` المنفذة | ✅ مثبت |
 | ١٠ | استثناء المراجع لا يسقط الجواب | `chat_agent.respond` | اختبار: جواب محفوظ + `reviewer_error` | ✅ مثبت |

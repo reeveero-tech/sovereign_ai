@@ -105,16 +105,23 @@ jobs:
     timeout-minutes: 10
     env:
       BASE_URL: https://sovereign-ai-k20elq.fly.dev
-      KEY: ${{ secrets.KEY_SECRET }}
     steps:
       - uses: actions/checkout@v4
 
       - name: Require owner secret
+        env:
+          KEY: ${{ secrets.KEY_SECRET }}
         run: |
           if [ -z "$KEY" ]; then
             echo "::error::سر KEY_SECRET غير مضبوط في المستودع — لا فحص مصادقة بلا مفتاح (لا يُخترع)"
             exit 1
           fi
+          # R-814b: تعقيم السر (CR/LF من التخزين) — القيمة لا تُطبع أبدًا
+          KEY_CLEAN=$(printf '%s' "$KEY" | tr -d '\r\n')
+          if [ "$KEY_CLEAN" != "$KEY" ]; then
+            echo "::warning::السر كان يحوي أسطرًا زائدة — عُقّم للاستخدام (لا يُغير المستودع)"
+          fi
+          printf '%s' "$KEY_CLEAN" > /tmp/key.clean
 
       - name: Confirm target app
         run: |
@@ -126,14 +133,17 @@ jobs:
       - name: Models discovery (owner)
         run: |
           CODE=$(curl -s -o /tmp/models.json -w "%{http_code}" --max-time 30 \
-            -H "X-Sovereign-Key: $KEY" "$BASE_URL/brain/models")
-          [ "$CODE" = "200" ] || { echo "::error::/brain/models بمفتاح المالك رد $CODE"; exit 1; }
+            -H "X-Sovereign-Key: $(cat /tmp/key.clean)" "$BASE_URL/brain/models")
+          # R-814b: 401 هنا = سر المستودع ليس مفتاح API للتطبيق الحي (السر يُستخدم في CI
+          # كمفتاح سلسلة المفاتيح) — الفحص المصادق معلق حتى يحدّث المالك السر بقيمة
+          # مفتاح المالك (نفس الذي يعمل في واجهة المتصفح)؛ لا يُخترع مفتاح
+          [ "$CODE" = "200" ] || { echo "::error::/brain/models بمفتاح المالك رد $CODE — إن كان 401 فالسر لا يطابق مفتاح التطبيق الحي (يُحدَّث بقيمة مفتاح المالك من واجهة المتصفح — إجراء مالك)"; exit 1; }
           python3 tools/live_check_models.py /tmp/models.json
 
       - name: Brain settings readable (owner)
         run: |
           CODE=$(curl -s -o /tmp/settings.json -w "%{http_code}" --max-time 30 \
-            -H "X-Sovereign-Key: $KEY" "$BASE_URL/brain/settings")
+            -H "X-Sovereign-Key: $(cat /tmp/key.clean)" "$BASE_URL/brain/settings")
           [ "$CODE" = "200" ] || { echo "::error::/brain/settings بمفتاح المالك رد $CODE"; exit 1; }
           python3 tools/live_check_settings.py /tmp/settings.json
 
@@ -145,13 +155,13 @@ jobs:
           {"title":"فحص حي $STAMP","messages":[{"role":"user","content":"سؤال الفحص $STAMP"},{"role":"assistant","content":"جواب الفحص","err":true,"rev":"تحفظ اختباري"}],"project_id":null,"model":null}
           EOF
           CODE=$(curl -s -o /tmp/conv_out.json -w "%{http_code}" --max-time 30 \
-            -H "X-Sovereign-Key: $KEY" -H "Content-Type: application/json" \
+            -H "X-Sovereign-Key: $(cat /tmp/key.clean)" -H "Content-Type: application/json" \
             -X POST --data @/tmp/conv.json "$BASE_URL/ws/conversations")
           [ "$CODE" = "200" ] || [ "$CODE" = "201" ] || { echo "::error::حفظ المحادثة رد $CODE"; cat /tmp/conv_out.json; exit 1; }
           CID=$(python3 -c "import json,sys; print(json.load(open('/tmp/conv_out.json'))['id'])")
           # استعادة والتحقق أن الرسالة عبرت كاملة بعلاماتها الصادقة
           CODE=$(curl -s -o /tmp/conv_back.json -w "%{http_code}" --max-time 30 \
-            -H "X-Sovereign-Key: $KEY" "$BASE_URL/ws/conversations/$CID")
+            -H "X-Sovereign-Key: $(cat /tmp/key.clean)" "$BASE_URL/ws/conversations/$CID")
           [ "$CODE" = "200" ] || { echo "::error::استعادة المحادثة رد $CODE"; exit 1; }
           python3 tools/live_check_conversation.py /tmp/conv_back.json
 
