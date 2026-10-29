@@ -426,7 +426,7 @@
     if (meta.childNodes.length) wrap.appendChild(meta);
     thread.appendChild(wrap); return wrap;
   }
-  function renderChat() { thread.textContent = ""; if (!state.messages.length) { renderWelcome(); return; } state.messages.forEach(function (m) { bubble(m); }); scrollDown(); }
+  function renderChat() { thread.textContent = ""; if (!state.messages.length) { renderWelcome(); return; } state.messages.forEach(function (m) { bubble(m, m.err ? { error: true } : undefined); }); scrollDown(); }
   function paintAttached() { var box = $("attached"); box.textContent = ""; attached.forEach(function (f) { box.appendChild(fileChip(f, true)); }); }
   function historyFor(ms) { return ms.slice(-HISTORY_TURNS).map(function (m) { return { role: m.role, content: String(m.content).slice(0, 4000) }; }); }
   function setBusy(v) { busy = v; sendBtn.disabled = v; $("stopBtn").hidden = !v; sendBtn.textContent = v ? "انتظر…" : "إرسال"; }
@@ -472,8 +472,11 @@
     var start = Date.now(); var tick = setInterval(function () { pb.textContent = "يفكر " + Math.round((Date.now() - start) / 1000) + " ث"; }, 1000);
     request(text, history, fileIds).then(function (data) {
       clearInterval(tick); pend.remove();
-      var bm = { role: "assistant", content: data.reply.trim(), ts: Date.now(), secs: Math.round((Date.now() - start) / 1000), tools: data.tools_used || [] };
-      state.messages.push(bm); save(); bubble(bm); persistConv();
+      // R-814: عقد الحالة الصادق — رد HTTP 200 بحالة فشل يُعرض بتنسيق الخطأ
+      // لا كأنه جواب سليم (النص نفسه صادق يشرح الفشل)
+      var failed = data.status && data.status !== "ok";
+      var bm = { role: "assistant", content: data.reply.trim(), ts: Date.now(), secs: Math.round((Date.now() - start) / 1000), tools: data.tools_used || [], err: !!failed };
+      state.messages.push(bm); save(); bubble(bm, failed ? { error: true } : undefined); persistConv();
     }).catch(function (err) {
       clearInterval(tick); pend.remove();
       var node = bubble({ role: "assistant", content: err.message }, { error: true, retry: function () { node.remove(); send(text); } });

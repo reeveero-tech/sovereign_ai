@@ -1,0 +1,99 @@
+# R-814 — التحقق الحي من المنشور (يدوي فقط — بأمر المالك 2026-10-29)
+#
+# يفحص التطبيق المنشور فعليًا على Fly مقابل المنشور نفسه لا ضد ادعاءات:
+#   1. /health يعمل ويصرح بنشر جديد، والصفحة الرئيسية بلا «سيادي».
+#   2. /brain/status يعقل العقل (مفعل/نموذج) وآخر استدعاء.
+#   3. محادثة حقيقية عبر /chat تعيد جوابًا بحالة ناجحة وحالة وكيل مكتملة.
+#   4. نموذج وهمي يفشل بصدق: عقد الحالة (R-814) — الحالة العلوية error
+#      مع agent_status=planner_failed، لا ok مع فشل فعلي.
+#   5. النقاط المحمية بمفتاح المالك ترفض بلا مفتاح (401) — الحماية تعمل.
+#
+# لا يمرر أي سر، ولا يطبع أي سر، ولا يعتمد على أسرار المستودع إطلاقًا —
+# فحص HTTP عام فقط. الفشل في أي فحص يفشل السير كله (لا نجاح صامت).
+# الاسم لا يحوي حرفي «C» و«I» متتاليين كبيرين حتى لا يلتقطه اختيار التشغيل
+# المرجعي في verify.sh.
+
+name: Verify — live deployment (manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_app:
+        description: 'اكتب اسم التطبيق للتأكيد (sovereign-ai-k20elq)'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: live-verify
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: Verify live app
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      BASE_URL: https://sovereign-ai-k20elq.fly.dev
+    steps:
+      - name: Confirm target app
+        run: |
+          if [ "${{ inputs.confirm_app }}" != "sovereign-ai-k20elq" ]; then
+            echo "::error::اسم التطبيق غير مطابق — ألغيت التحقق"
+            exit 1
+          fi
+
+      - name: Health endpoint
+        run: |
+          CODE=$(curl -s -o /tmp/health.json -w "%{http_code}" --max-time 30 "$BASE_URL/health")
+          [ "$CODE" = "200" ] || { echo "::error::/health رد $CODE"; cat /tmp/health.json; exit 1; }
+          rg -q '"status":\s*"healthy"' /tmp/health.json || { echo "::error::/health ليس سليمًا"; cat /tmp/health.json; exit 1; }
+          echo "OK /health"
+
+      - name: Root page has no forbidden word
+        run: |
+          curl -s --max-time 30 "$BASE_URL/" -o /tmp/root.html
+          if rg -q "سيادي" /tmp/root.html; then
+            echo "::error::الصفحة الرئيسية تحوي كلمة ممنوعة بأمر المالك"
+            exit 1
+          fi
+          echo "OK root page"
+
+      - name: Brain status
+        run: |
+          curl -s --max-time 30 "$BASE_URL/brain/status" -o /tmp/brain.json
+          rg -q '"enabled":\s*true' /tmp/brain.json || { echo "::error::العقل غير مفعل على المنشور"; cat /tmp/brain.json; exit 1; }
+          rg -q '"model":\s*"[^"]+"' /tmp/brain.json || { echo "::error::لا نموذج معلن للعقل"; exit 1; }
+          echo "OK brain status"
+
+      - name: Real chat succeeds with honest status
+        run: |
+          CODE=$(curl -s -o /tmp/chat.json -w "%{http_code}" --max-time 120 -X POST "$BASE_URL/chat" \
+            -H "Content-Type: application/json" \
+            -d '{"text":"رد بكلمة واحدة فقط: جاهز","user_id":"ci-verify"}')
+          [ "$CODE" = "200" ] || { echo "::error::/chat رد $CODE"; cat /tmp/chat.json; exit 1; }
+          rg -q '"status":\s*"ok"' /tmp/chat.json || { echo "::error::محادثة حقيقية بحالة فاشلة"; cat /tmp/chat.json; exit 1; }
+          rg -q '"agent_status":\s*"(completed|answered_from_results)"' /tmp/chat.json || { echo "::error::حالة الوكيل ليست مكتملة"; cat /tmp/chat.json; exit 1; }
+          rg -q 'جاهز' /tmp/chat.json || { echo "::error::الجواب لم يكن جاهزًا"; cat /tmp/chat.json; exit 1; }
+          echo "OK live chat"
+
+      - name: Bogus model fails honestly (status contract)
+        run: |
+          CODE=$(curl -s -o /tmp/bogus.json -w "%{http_code}" --max-time 120 -X POST "$BASE_URL/chat" \
+            -H "Content-Type: application/json" \
+            -d '{"text":"مرحبا","user_id":"ci-verify","model":"bogus-model-xyz"}')
+          [ "$CODE" = "200" ] || { echo "::error::بروتوكول المحادثة توقع 200 (النص يفسر الفشل)"; cat /tmp/bogus.json; exit 1; }
+          rg -q '"status":\s*"error"' /tmp/bogus.json || { echo "::error::فشل فعلي بحالة ok — عقد الحالة الصادق انكسر"; cat /tmp/bogus.json; exit 1; }
+          rg -q '"agent_status":\s*"planner_failed"' /tmp/bogus.json || { echo "::error::حالة الوكيل للنموذج الوهمي ليست planner_failed"; cat /tmp/bogus.json; exit 1; }
+          echo "OK honest failure contract"
+
+      - name: Owner-key gate rejects anonymous
+        run: |
+          CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 "$BASE_URL/brain/models")
+          [ "$CODE" = "401" ] || { echo "::error::/brain/models بلا مفتاح رد $CODE (المتوقع 401)"; exit 1; }
+          echo "OK owner-key gate"
+
+      - name: Summary
+        run: echo "التحقق الحي ناجح على $BASE_URL"

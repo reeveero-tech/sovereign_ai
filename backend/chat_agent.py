@@ -112,6 +112,16 @@ def search_available() -> bool:
         return False
 
 
+def web_fetch_available() -> bool:
+    """قراءة الويب متاحة فقط بعلم المالك (WEB_TOOLS_ENABLED) — لا أداة تعرض
+    على العقل وهي معطلة (نفس مبدأ web.search في التعليق أعلاه)."""
+    try:
+        import config
+        return bool(config.WEB_TOOLS_ENABLED)
+    except Exception:  # TOLERATED: بلا إعدادات ⇒ غير متاحة
+        return False
+
+
 def allowed_tools(registry, owner: bool) -> List[str]:
     from agent_loop import FORBIDDEN_TOOLS
     names = [t["name"] for t in registry.list_tools()]
@@ -119,10 +129,18 @@ def allowed_tools(registry, owner: bool) -> List[str]:
         allowed = [n for n in names if n not in FORBIDDEN_TOOLS]
         if not search_available():
             allowed = [n for n in allowed if n != SEARCH_TOOL]
+        # R-814: قراءة الويب معطلة بعلم المالك ⇒ لا تُعرض أدوات تعطل عند النداء
+        # (web.fetch وgithub.repo — كلاهما يقرأ الويب العام)
+        if not web_fetch_available():
+            allowed = [n for n in allowed if n not in ("web.fetch", "github.repo")]
         return allowed
     read = set(CHAT_READ_TOOLS)
     if search_available():
         read.add(SEARCH_TOOL)
+    # R-814: نفس صدق web.search — أداة معطلة لا تُعرض
+    if not web_fetch_available():
+        read.discard("web.fetch")
+        read.discard("github.repo")
     return [n for n in names if n in read]
 
 
@@ -250,6 +268,81 @@ class ChatPlanner:
         return self.answer(goal, steps)
 
 
+# R-814 (البند ٥ — أمر المالك): المراجع المستقل في مسار المحادثة الرئيسي.
+# المنفّذ = التطبيق (حلقة الوكيل تنفّذ الأدوات المسجلة حتميًا بأثر موقّع)،
+# والمخطط = العقل (مرجع يقترح)، والمراجع = العقل أيضًا لكن بدور معاكس مستقل:
+# يحكم على الجواب المبني على نتائج فعلية بعقد JSON صارم (نمط R-812/R-813)،
+# وحكمه يُسجَّل ويُعرض — ولا ينفّذ شيئًا ولا يقلب نتيجة التطبيق أبدًا.
+# عقل معطل ⇒ مراجع متخطى (skipped_brain_off) والسير يكتمل — البند ٤ حرفيًا.
+_REVIEWER_SYSTEM = (
+    "أنت مراجع مستقل لنظام sovereign_ai. أمامك: هدف المالك، خطوات الأدوات "
+    "المنفذة بنتائجها الحقيقية، والجواب الذي أُعطي. احكم بصدق: هل الجواب "
+    "يجيب الهدف فعلًا؟ هل يتناقض مع النتائج؟ هل يدّعي ما لم تنجزه أداة؟ "
+    "أعد JSON فقط (بلا سياج كود) بالمفاتيح: ok (منطقي إلزامي — هل الجواب "
+    "صادق الجواب عن الهدف)، issues (قائمة نصوص قصيرة للمشاكل المرصودة فقط "
+    "— لا اختراع)، summary (خلاصة سطر واحد). لا تنفّذ أي شيء."
+)
+
+#: مهلة المراجع القصوى (ثانية) — المراجعة لا تعلّق المحادثة
+REVIEWER_TIMEOUT = 45.0
+
+
+def _review_answer(goal: str, steps: List[Dict[str, Any]], answer: str,
+                    deadline: Optional[float], chat_fn=None,
+                    model: Optional[str] = None) -> Dict[str, Any]:
+    """حكم المراجع المستقل — عقد JSON صارم، لا حكم مختلق أبدًا.
+
+    يعيد {reviewer, ok, issues, summary}: reviewer أحد:
+    brain (حكم صالح) / no_reply / invalid_review_reply / skipped_brain_off /
+    skipped_no_budget. الحكم يُسجَّل ويُعرض ولا يغيّر حالة التطبيق.
+    """
+    try:
+        import config
+        enabled = bool(config.OLLAMA_ENABLED and config.OLLAMA_MODEL)
+    except Exception:  # TOLERATED: بلا إعدادات ⇒ معطل
+        enabled = False
+    if not enabled:
+        return {"reviewer": "skipped_brain_off", "ok": None, "issues": [], "summary": None}
+    if deadline is not None and time.monotonic() > deadline - 5:
+        # الميزانية أوشكت — المراجعة إضافة، لا تُسرق وقت الجواب المتبقي
+        return {"reviewer": "skipped_no_budget", "ok": None, "issues": [], "summary": None}
+    chat = chat_fn
+    if chat is None:
+        import ollama_client
+        chat = ollama_client.chat
+    timeout = REVIEWER_TIMEOUT
+    if deadline is not None:
+        timeout = max(5.0, min(REVIEWER_TIMEOUT, deadline - time.monotonic() - 2))
+    kw: Dict[str, Any] = {"timeout": timeout, "json_mode": True, "max_tokens": 200}
+    if model:
+        kw["model"] = model
+    payload = {"goal": goal,
+               "executed_steps": [{"tool": s.get("tool"), "ok": s.get("ok"),
+                                   "result": _compact(s.get("result"))}
+                                  for s in steps if s.get("tool")],
+               "answer": answer}
+    reply = chat(_REVIEWER_SYSTEM, json.dumps(payload, ensure_ascii=False, default=str),
+                 **kw)
+    if not reply:
+        return {"reviewer": "no_reply", "ok": None, "issues": [], "summary": None}
+    # عقد صارم (نمط R-813): كائن JSON كاملًا كما ورد — ok منطقي حرفي،
+    # issues قائمة نصوص، summary نص؛ أي خلل ⇒ لا حكم مختلق
+    try:
+        verdict = json.loads(reply)
+    except ValueError:
+        return {"reviewer": "invalid_review_reply", "ok": None, "issues": [], "summary": None}
+    if not isinstance(verdict, dict):
+        return {"reviewer": "invalid_review_reply", "ok": None, "issues": [], "summary": None}
+    if not isinstance(verdict.get("ok"), bool) \
+            or not isinstance(verdict.get("issues"), list) \
+            or not all(isinstance(i, str) for i in verdict["issues"]) \
+            or not isinstance(verdict.get("summary"), str):
+        return {"reviewer": "invalid_review_reply", "ok": None, "issues": [], "summary": None}
+    return {"reviewer": "brain", "ok": verdict["ok"],
+            "issues": [i[:200] for i in verdict["issues"][:10]],
+            "summary": verdict["summary"][:300] or None}
+
+
 def _brain_failure_reason() -> str:
     try:
         import ollama_client
@@ -305,7 +398,6 @@ def respond(text: str, history: Optional[List[Dict[str, str]]] = None, *,
     loop = AgentLoop(registry, planner, max_steps=MAX_STEPS, max_seconds=budget,
                      allowed_tools=names, caller="chat")
     res = loop.run(text)
-    _learn(text, res)
     steps = res.get("steps") or []
     used = [s.get("tool") for s in steps if s.get("tool")]
     out = {"status": res.get("status"), "tools_used": used, "run_id": res.get("run_id"),
@@ -314,15 +406,22 @@ def respond(text: str, history: Optional[List[Dict[str, str]]] = None, *,
     answer = (res.get("answer") or "").strip() if res.get("status") == "completed" else ""
     if answer:
         out["reply"] = answer
-        return out
-    if steps and time.monotonic() < deadline - 5:
+    elif steps and time.monotonic() < deadline - 5:
         try:
             final = planner.final_answer(text, steps)
         except Exception:  # TOLERATED: يُعلن أدناه بصدق
             final = None
         if final and final.strip():
             out["reply"], out["status"] = final.strip(), "answered_from_results"
-            return out
+    # R-814 (البند ٥): المراجع المستقل — يحكم على الجواب الحقيقي (المبني على
+    # نتائج أدوات فعلًا أو جواب العقل المباشر) بعقد JSON صارم؛ حكمه يُسجَّل
+    # ويُعرض ولا يقلب نتيجة التطبيق. بلا جواب حقيقي لا مراجعة.
+    if out.get("reply") and out.get("status") in ("completed", "answered_from_results"):
+        out["reviewer"] = _review_answer(text, steps, out["reply"], deadline,
+                                         chat_fn=chat_fn, model=model)
+    _learn(text, {**res, "reviewer": out.get("reviewer")})
+    if out.get("reply"):
+        return out
     reason = res.get("error") or res.get("status") or "سبب غير معروف"
     ran = ("، ونُفذت الأدوات: " + "، ".join(used)) if used else ""
     out["reply"] = f"لم أُكمل الجواب بصدق: {_clip(reason, 300)}{ran}."

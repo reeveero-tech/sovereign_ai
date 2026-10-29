@@ -180,6 +180,9 @@ class ChatResponse(BaseModel):
     tools_used: List[str] = []
     # R-789: حالة حلقة الوكيل (completed/answered_from_results/planner_failed/...) — None في المسار القديم
     agent_status: Optional[str] = None
+    # R-814 (البند ٥): حكم المراجع المستقل (brain/skipped_*/no_reply/invalid_review_reply)
+    # يُسجَّل ويُعرض — لا يقلب نتيجة التطبيق أبدًا
+    reviewer: Optional[Dict[str, Any]] = None
 
 
 class SovereignCommand(BaseModel):
@@ -3055,6 +3058,7 @@ async def chat(message: ChatMessage, background_tasks: BackgroundTasks):
         logger.warning("R-787: فشل جسر الأدوات (%s)", type(e).__name__)
     _bridge_kw = {"tool_context": tool_context} if tool_context else {}
     agent_status = None
+    agent_reviewer = None
     if _chat_agent_mode():
         # R-789 (أمر المالك: لا أجوبة مزروعة): العقل يفهم الرسالة ويختار الأدوات الحقيقية
         # بنفسه ويجيب من نتائجها؛ الجسر الحتمي والقوالب لا يُستعملان في هذا المسار.
@@ -3072,6 +3076,7 @@ async def chat(message: ChatMessage, background_tasks: BackgroundTasks):
         reply = agent_out["reply"]
         tools_used = list(agent_out.get("tools_used") or [])
         agent_status = agent_out.get("status")
+        agent_reviewer = agent_out.get("reviewer")
     elif direct_reply:
         reply = direct_reply  # R-787b: سؤال القدرات يُجاب من الجرد الحي حرفيًا بلا نموذج
     else:
@@ -3082,15 +3087,20 @@ async def chat(message: ChatMessage, background_tasks: BackgroundTasks):
             **_bridge_kw,
         )
     
+    # R-814: عقد الحالة الصادق — لا «ok» وحلقة الوكيل فشلت فعلًا؛ نجاح الجواب
+    # في وضع الوكيل هو completed/answered_from_results فقط (وأي حالة أخرى فشل
+    # يُعلن في الحالة العلوية مع بقاء النص الصادق). المسار القديم كما كان.
+    _agent_ok = agent_status in (None, "completed", "answered_from_results")
     return ChatResponse(
         reply=reply,
-        status="ok" if result.success else "error",
+        status="ok" if (result.success and _agent_ok) else "error",
         cycle_id=result.cycle_id,
         # R-789: الزمن بعد تكوين الرد (كان يُقاس قبله فلا يشمل العقل)
         processing_time_ms=round((time.time() - start_time) * 1000, 2),
         timestamp=start_time,
         tools_used=tools_used,
         agent_status=agent_status,
+        reviewer=agent_reviewer,
     )
 
 
