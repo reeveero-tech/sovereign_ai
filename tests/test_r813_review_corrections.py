@@ -346,7 +346,7 @@ def test_frontend_conversation_fixes_present():
     # حماية العرق: persistConv يلتقط هوية الجلسة المستهدفة ويحرسها في الرد
     block = _fn_block(src, "persistConv")
     assert "var targetSession = state.sessionId" in block
-    assert "if (state.sessionId !== targetSession) return true;" in block
+    assert "if (state.sessionId !== targetSession) return false;" in block  # قديم = إلغاء لا نجاح
     # نتيجة الحفظ الفعلية تعود للمنادي (تصحيح المراجعة الرابعة): persistConv وعد —
     # فشل الخادم يوقف التبديل ويعاد للمنادي برسالة، والجارية تبقى سليمة
     assert "return persistConv(); // R-809" in _fn_block(src, "keepCurrentConversationBeforeNew")
@@ -354,9 +354,11 @@ def test_frontend_conversation_fixes_present():
     # الحفظ قبل التبديل في المسارين (محادثة خادم ومحادثة زائر) — وفشل الحفظ
     # يوقف التبديل (تصحيح المراجعة الثالثة): لا تفريغ جارية غير محفوظة
     # (تصحيح المراجعة الرابعة: النتيجة تُنتظر في المسارات الثلاثة)
-    assert "if (state.sessionId !== c.id && !(await keepCurrentConversationBeforeNew())) return;" in \
-        _fn_block(src, "openLocalConv")
+    assert "var myNav = ++navSeq; // R-813 (خامسة): معرّف عملية التنقل" in _fn_block(src, "openLocalConv")
+    assert "if (myNav !== navSeq) return;" in _fn_block(src, "openLocalConv")  # الأقدم يُلغى بعد الانتظار
     assert "if (!(await keepCurrentConversationBeforeNew())) return;" in _fn_block(src, "openConv")
+    assert "var myNav = ++navSeq;" in _fn_block(src, "openConv")  # المعرّف قبل انتظار GET
+    assert _fn_block(src, "openConv").count("if (myNav !== navSeq) return;") == 2  # بعد GET وبعد الحفظ
     assert "if (!(await keepCurrentConversationBeforeNew())) return;" in \
         src[src.find('newBtn").addEventListener'):]  # زر محادثة جديدة أيضًا
     # النموذج لكل محادثة: يُرسل في الطلب ويُحفظ مع المحادثة ويُستعاد
