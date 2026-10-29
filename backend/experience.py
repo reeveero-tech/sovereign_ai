@@ -189,6 +189,9 @@ class ExperienceStore:
             out.append({"goal": r.get("goal"), "status": r.get("status"),
                         "tools": r.get("tools"), "error": r.get("error"),
                         "answer": _cap(r.get("answer"), 200),
+                        # R-814b: meta يُرجَع كما سُجل (حكم المراجع وغيره) — الدليل
+                        # المخزَّن لا يُحجب عن الاسترجاع، وإلا صار مفتاحًا صامتًا يُهمل
+                        "meta": r.get("meta") or {},
                         "score": round(sc, 3), "ts": r.get("ts")})
         return out
 

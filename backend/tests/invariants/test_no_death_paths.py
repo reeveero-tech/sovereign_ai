@@ -47,6 +47,14 @@ EXIT_ALLOWED_ENTRY_POINTS = {
     "main.py",
     "scripts/verify_operational_auth.py",
     "scripts/verify_new_key.py",
+    # R-814b: سكربتات فحص المنشور الحي — رمز الخروج 0/1/2 عقدها مع سير
+    # verify-live.yml (خلل الفحص ≠ نجاح)؛ تختبرها pytest كسلوك عمليات مستقلة
+    "tools/live_check_brain.py",
+    "tools/live_check_chat.py",
+    "tools/live_check_conversation.py",
+    "tools/live_check_health.py",
+    "tools/live_check_models.py",
+    "tools/live_check_settings.py",
     "tools/action_log.py",
     "tools/private_ip_guard.py",  # GS-3: CLI للـhook — رمز الخروج 0/1/2 هو عقده مع git
     # R-748 (V5 §١.١): حارس القاعدة الحاكمة — CLI تشغّله بوابة CI
