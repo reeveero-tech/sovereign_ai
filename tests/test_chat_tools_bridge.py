@@ -218,7 +218,7 @@ def test_console_has_back_to_chat_link():
 def test_chat_ui_renders_tools_used_and_explains_buttons():
     html = CHAT_UI.read_text(encoding="utf-8")
     assert "data.tools_used" in html and "أدوات النظام المستخدمة" in html
-    assert 'title="يمسح المحادثة الحالية' in html
+    assert 'title="يحفظ المحادثة الحالية' in html
     assert 'title="لوحة المراقبة القديمة' in html
 
 

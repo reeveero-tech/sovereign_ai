@@ -290,6 +290,68 @@ OLLAMA_TIMEOUT_SECONDS = float(_ollama_env("OLLAMA_TIMEOUT_SECONDS", "60"))
 OLLAMA_NUM_CTX = int(_ollama_env("OLLAMA_NUM_CTX", "0") or 0)
 
 # ============================================================
+# R-810 (المالك — ٢ و٣ من أمر التشغيل): طبقة إعدادات العقل عند التشغيل
+# ============================================================
+# دوافع المالك (2026-10-29): «لا يوجد إمكانية تبديل النماذج، اذ ان اولاما فيه
+# عدة نماذج…» و«النظام يعتمد كليا على اولاما ولا مجال لإضافة مفاتيح API».
+# البيئة تبقى الافتراض عند الإقلاع (النشر يضبطها)، والتعديل الحي من الواجهة
+# (المالك فقط) يُكتب في ملف تشغيل محلي يقرؤه العقل في كل استدعاء — بلا إعادة
+# تشغيل وبلا مساس بأسرار المستودع. ملاحظة نشر حاسمة: OLLAMA_MODEL كسر
+# مستودع يتزامن مع fly.toml أثناء النشر — التبديل الحي يُحفظ في هذه الطبقة
+# فقط ولا يُلمس، فيبقى إقلاع النشر سليمًا دائمًا.
+
+BRAIN_RUNTIME_FILE = Path(os.getenv("BRAIN_RUNTIME_FILE") or (BASE_DIR / "data" / "brain_runtime.json"))
+_BRAIN_RUNTIME_KEYS = ("OLLAMA_MODEL", "OLLAMA_PROTOCOL", "OLLAMA_BASE_URL", "OLLAMA_API_KEY", "OLLAMA_NUM_CTX")
+
+
+def brain_runtime_read() -> dict:
+    """قراءة طبقة إعدادات التشغيل (فارغة عند غيابها — البيئة تكفي).
+
+    تُقرأ عند كل استدعاء (ملف صغير) — التعديل من الواجهة يسري على الطلب التالي
+    مباشرة بلا إعادة تشغيل وبلا حالة عملية عابرة.
+    """
+    try:
+        raw = json.loads(BRAIN_RUNTIME_FILE.read_text(encoding="utf-8"))
+        if isinstance(raw, dict):
+            return {k: raw[k] for k in _BRAIN_RUNTIME_KEYS if raw.get(k) not in (None, "")}
+    # TOLERATED: ملف غير موجود/تالف — طبقة فارغة، البيئة هي الفعالة (نمط R-680)
+    except (OSError, ValueError):
+        pass
+    return {}
+
+
+def brain_get(name: str, default=None):
+    """القيمة الفعالة لإعداد العقل: طبقة التشغيل أولًا ثم قيمة البيئة المحمّلة.
+
+    هذا هو مسار القراءة الوحيد للعقل الحي (ollama_client) — مصدر واحد للحقيقة.
+    """
+    runtime = brain_runtime_read()
+    if name in runtime:
+        return runtime[name]
+    return getattr(sys.modules[__name__], name, default)
+
+
+def brain_set(values: dict) -> dict:
+    """كتابة تعديلات إعدادات العقل في ملف التشغيل (كتابة ذرّية R-781، وضع 0600).
+
+    القيمة الفارغة تحذف المفتاح من الطبقة فتعود قيمة البيئة. يعيد الطبقة المكتوبة.
+    """
+    layer = brain_runtime_read()
+    for k in _BRAIN_RUNTIME_KEYS:
+        v = values.get(k)
+        if v is None or (isinstance(v, str) and v == ""):
+            layer.pop(k, None)
+        else:
+            layer[k] = v
+    try:
+        BRAIN_RUNTIME_FILE.parent.mkdir(parents=True, exist_ok=True)
+        atomic_write_json(BRAIN_RUNTIME_FILE, layer, file_mode=0o600)  # سر المزود على القرص
+    # TOLERATED: قرص للقراءة فقط (نشر مبني كصورة) — التعديل يُرفض صادقًا عند الطلب
+    except OSError:
+        pass
+    return layer
+
+# ============================================================
 # R-737 (البند ٢.٣ — أذنان): إعدادات السمع (تحويل كلام لنص)
 # ============================================================
 # معطل افتراضيًا (نمط Ollama R-704/R-736 — لا اتصال ضمني).

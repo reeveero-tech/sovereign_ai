@@ -35,9 +35,62 @@ def last_outcome():
     return dict(_LAST_OUTCOME)
 
 
+def list_models(timeout=None):
+    """R-810 (المالك — البند ٢): اكتشاف النماذج المتاحة من العقل المُعد فعليًا.
+
+    لا وهم ولا قائمة ثابتة: تُستعلم نهاية المزود الحيّة (ollama: ‹/api/tags›،
+    openai المتوافق: ‹/models›) ويعاد ما أعلنه المزود نفسه، أو خطأ صادق منضبط.
+    الإعدادات من config.brain_get — نفس مصدر حقيقة العميل الحي، فالتبديل
+    الحي يسري على الاكتشاف والاستدعاء معًا.
+    """
+    import config
+
+    if not config.brain_get("OLLAMA_ENABLED"):
+        return {"ok": False, "error": "disabled", "models": []}
+    protocol = str(config.brain_get("OLLAMA_PROTOCOL", "ollama") or "ollama").strip().lower() or "ollama"
+    base = str(config.brain_get("OLLAMA_BASE_URL")).rstrip("/")
+    if protocol == "ollama":
+        url = f"{base}/api/tags"
+    elif protocol == "openai":
+        url = f"{base}/models"
+    else:
+        # R-736: بروتوكول مجهول يُغلق fail-closed — لا قائمة مختلَقة
+        return {"ok": False, "error": "unknown_protocol", "models": []}
+    try:
+        import httpx
+
+        headers = {}
+        _api_key = config.brain_get("OLLAMA_API_KEY")
+        if _api_key:
+            headers["Authorization"] = f"Bearer {_api_key}"
+        to = float(timeout or config.brain_get("OLLAMA_TIMEOUT_SECONDS", 60))
+        resp = httpx.get(url, headers=headers, timeout=to)
+        if resp.status_code != 200:
+            return {"ok": False, "error": f"HTTP {resp.status_code}", "models": []}
+        payload = resp.json()
+    except Exception as e:  # فشل الاتصال صادق ومنضبط — لا استثناء يكسر الواجهة
+        return {"ok": False, "error": type(e).__name__, "models": []}
+    models = []
+    try:
+        if protocol == "ollama":
+            for m in payload.get("models", []):
+                name = (m or {}).get("name") or (m or {}).get("model")
+                if name:
+                    models.append(name)
+        else:
+            for m in payload.get("data", []):
+                name = (m or {}).get("id")
+                if name:
+                    models.append(name)
+    except (AttributeError, TypeError):
+        return {"ok": False, "error": "bad_payload", "models": []}
+    models = sorted(set(models))
+    return {"ok": True, "error": None, "models": models}
+
+
 def chat(system_prompt: str, user_message: str, timeout=None,
          json_mode: bool = False, max_tokens=None, json_schema=None,
-         history=None):
+         history=None, model=None):
     """توليد رد عبر العقل (Ollama أو متوافق OpenAI) — يعيد نص النموذج أو None.
 
     لا يُستدعى فعليًا إلا إذا كان العقل مفعّلًا (OLLAMA_ENABLED + نموذج)
@@ -49,24 +102,32 @@ def chat(system_prompt: str, user_message: str, timeout=None,
     json_schema (Ollama فقط): مخطط JSON يقيّد فك الترميز نفسه (format=<schema>)
     — مثل تعداد أسماء الأدوات الحقيقية فلا يُخترع اسم؛ متوافق OpenAI يبقى
     على json_object (الأوسع دعمًا بين المزودين).
+
+    R-810 (المالك — البندان ٢ و٣): كل الإعدادات تُقرأ عبر config.brain_get —
+    طبقة التشغيل (تعديلات المالك الحية من الواجهة) فوق البيئة، بلا إعادة تشغيل.
+    model: تجاوز النموذج لهذا الطلب فقط (تبديل النماذج)؛ بلا قيمة يُستخدم
+    النموذج الفعّال.
     """
     global _LAST_OUTCOME
     import config
 
-    if not (config.OLLAMA_ENABLED and config.OLLAMA_MODEL):
+    _enabled = config.brain_get("OLLAMA_ENABLED")
+    _effective_model = model or config.brain_get("OLLAMA_MODEL")
+    if not (_enabled and _effective_model):
         return None
 
-    timeout = timeout or config.OLLAMA_TIMEOUT_SECONDS
-    protocol = getattr(config, "OLLAMA_PROTOCOL", "ollama")
+    timeout = timeout or config.brain_get("OLLAMA_TIMEOUT_SECONDS", 60)
+    protocol = str(config.brain_get("OLLAMA_PROTOCOL", "ollama") or "ollama").strip().lower() or "ollama"
     try:
         import httpx
 
         headers = {"Content-Type": "application/json"}
-        if config.OLLAMA_API_KEY:
-            headers["Authorization"] = f"Bearer {config.OLLAMA_API_KEY}"
+        _api_key = config.brain_get("OLLAMA_API_KEY")
+        if _api_key:
+            headers["Authorization"] = f"Bearer {_api_key}"
 
         payload = {
-            "model": config.OLLAMA_MODEL,
+            "model": _effective_model,
             # R-786: history = أدوار سابقة [{role: user|assistant, content}] بين
             # تعليمات النظام والرسالة الحالية — أي دور آخر (system مثلًا) يُسقط.
             "messages": (
@@ -93,10 +154,10 @@ def chat(system_prompt: str, user_message: str, timeout=None,
             if max_tokens:
                 payload["options"] = {"num_predict": int(max_tokens)}
             # R-787: نافذة السياق — افتراض Ollama (2048/4096) يقطع نتائج الأدوات بصمت
-            _num_ctx = int(getattr(config, "OLLAMA_NUM_CTX", 0) or 0)
+            _num_ctx = int(config.brain_get("OLLAMA_NUM_CTX", 0) or 0)
             if _num_ctx > 0:
                 payload.setdefault("options", {})["num_ctx"] = _num_ctx
-        base = str(config.OLLAMA_BASE_URL).rstrip("/")
+        base = str(config.brain_get("OLLAMA_BASE_URL")).rstrip("/")
         if protocol == "openai":
             # BASE_URL بادئة الإصدار كاملة (مثل .../openai/v1) — يُلحق
             # /chat/completions مرة واحدة فقط، فلا يتكرر مسار الإصدار.

@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="dark">
-<title>الذكاء السيادي — المحادثة</title>
+<title>مساحة العمل — المحادثة</title>
 <!-- R-786: واجهة المحادثة الأساسية — ملف واحد مستقل، لا اعتماد على ملفات js/ القديمة.
      الواجهة القديمة باقية كما هي على /console. -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -117,7 +117,7 @@
 </head>
 <body>
 <header>
-  <div class="brand">الذكاء السيادي</div>
+  <div class="brand">مساحة العمل</div>
   <div class="status" id="status" title="حالة الخادم والعقل"><span class="dot" id="dot"></span><span id="statusText">جارٍ الفحص…</span></div>
   <div class="spacer"></div>
   <a class="link" href="/console" title="لوحة المراقبة القديمة: السجل والذاكرة والأدوات والمهام بالتفصيل. فيها زر للعودة إلى المحادثة">اللوحة التقنية</a>
@@ -188,7 +188,7 @@
     if (extra && extra.secs != null) meta.appendChild(el("span", null, extra.secs + " ث"));
     if (extra && extra.tools && extra.tools.length) {
       var tl = el("span", "tools", "أدوات النظام المستخدمة: " + extra.tools.map(function (t) { return "\u2068" + t + "\u2069"; }).join(" · "));
-      tl.title = "استدعاءات حقيقية لأدوات المشروع، كل منها مسجل بأثر موقّع في السجل السيادي";
+      tl.title = "استدعاءات حقيقية لأدوات المشروع، كل منها مسجل بأثر موقّع في سجل النظام";
       meta.appendChild(tl);
     }
     if (extra && extra.retry) {
