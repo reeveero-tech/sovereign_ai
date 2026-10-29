@@ -63,6 +63,7 @@ function paintModelSel() {}
 function go() {}
 function toast() {}
 function loadConvs() {}
+let navSeq = 0;   // R-813 (خامسة): معرّف عملية التنقل — مشترك مع الدوال المستخرجة
 function el(tag, cls, txt) { return { className: cls, textContent: txt }; }
 function $(id) { return { appendChild() {}, textContent: '', hidden: false }; }
 
@@ -81,8 +82,9 @@ function api(url, opts) {
       const body = JSON.parse(JSON.stringify(opts.json));
       if (!body.id) { body.id = 'srv-' + (++idSeq); }  // الخادم يعين المعرف عند الاستلام لا عند التشغيل
       apiBodies.push(body);
-      if (failNextSave) {   // الخادم يرفض الحفظ القادم (اختبار مسار المالك)
-        rec.run = () => { failNextSave = false; rec.reject(new Error('500')); };
+      if (failNextSave) {   // الخادم يرفض الحفظ القادم (اختبار مسار المالك) — لمرة واحدة عند الإنشاء
+        failNextSave = false;
+        rec.run = () => rec.reject(new Error('500'));
       } else {
         rec.run = () => { convStore.set(body.id, body); resolve({ id: body.id }); };
       }
@@ -246,6 +248,41 @@ const dSwitch = await dSwitchP;
 check('رفض الخادم يعاد للمنادي في مسار المالك (لا نجاح صامت كاذب)', dSwitch === false);
 check('المحادثة الجارية للمالك سليمة — لم تُفرَّغ',
       state.messages.length === 1 && state.messages[0].content === 'رسالة D الحرجة');
+
+// ===== ٧) تنقل متداخل: فتح B ينتظر حفظ A، فتح C يكتمل أولًا، والقديم لا يفتح B =====
+// (تصحيح المراجعة الخامسة: معرّف تنقل متزايد + النتيجة القديمة إلغاء لا نجاح)
+state.sessionId = 'A'; state.convId = null; state.model = 'mA';
+state.messages = [{ role: 'user', content: 'رسالة A' }];
+apiCalls.length = 0; pendingApi.length = 0; navSeq = 0;
+convStore.set('B', { id: 'B', title: 'B', model: 'mB',
+                    messages: [{ role: 'user', content: 'سؤال B' }, { role: 'assistant', content: 'رد B' }] });
+convStore.set('C', { id: 'C', title: 'C', model: 'mC',
+                    messages: [{ role: 'user', content: 'سؤال C' }, { role: 'assistant', content: 'رد C' }] });
+fns.openConv('B');                    // التنقل الأقدم: GET(B) معلق (myNav=1)
+failNextSave = true;                  // الخادم سيرفض حفظ A المرتبط بفتح B
+const getB = pendingApi.length - 1;
+pendingApi[getB].run(); await tick(); // GET(B) يكتمل → المعالج ينتظر حفظ A (وسيرفض)
+fns.openConv('C');                    // تنقل أحدث (myNav=2) — يلغي الأقدم عند الفحص
+const getC = pendingApi.length - 1;
+pendingApi[getC].run(); await tick(); // GET(C) يكتمل → المعالج ينتظر حفظ الجارية (A)
+const saveC = pendingApi.length - 1;
+pendingApi[saveC].run(); await tick(); // حفظ C يكتمل أولًا ⇒ تُفتح C فعلًا
+check('فتح C الأحدث اكتمل فعلًا', state.sessionId === 'C' && state.messages.length === 2);
+state.messages.push({ role: 'user', content: 'رسالة C الجديدة' });   // المستخدم يكتب في C
+const saveB = getB + 1;               // رد الحفظ القديم (المرتبط بفتح B) يصل الآن مرفوضًا
+pendingApi[saveB].run(); await tick(); // القديم: الجلسة تبدلت ⇒ إلغاء (لا نجاح يفتح B)
+check('العملية القديمة لم تفتح B — C باقية برسالتها الجديدة',
+      state.sessionId === 'C' && state.messages.length === 3 &&
+      state.messages[2].content === 'رسالة C الجديدة');
+// والنجاح القديم أيضًا إلغاء: نتيجة قديمة = false لا true
+state.sessionId = 'A2'; state.convId = null; state.model = 'mA';
+state.messages = [{ role: 'user', content: 'رسالة A2' }];
+apiCalls.length = 0; pendingApi.length = 0;
+const staleP = fns.keepCurrentConversationBeforeNew();  // حفظ A2 يبدأ
+const staleSave = pendingApi.length - 1;
+state.sessionId = 'أحدث';          // تنقل أحدث بدأ أثناء انتظار الحفظ
+pendingApi[staleSave].run(); await tick();
+check('النتيجة القديمة إلغاء (false) لا نجاح (true)', (await staleP) === false);
 })().then(() => {
   console.log(results.join('\n'));
   if (results.some(r => r.startsWith('FAIL'))) process.exit(1);
@@ -290,4 +327,5 @@ def test_storage_cap_display_index_separate():
     assert "return saveLocalConvs();" in upsert
     # فشل الحفظ يوقف التفريغ في كل مسارات التبديل
     assert src.count("if (!(await keepCurrentConversationBeforeNew())) return;") >= 2  # المسارات الثلاثة تنتظر النتيجة
-    assert "if (state.sessionId !== c.id && !(await keepCurrentConversationBeforeNew())) return;" in src
+    assert "if (state.sessionId !== c.id && var myNav = ++navSeq" in src or \
+           "var myNav = ++navSeq; // R-813 (خامسة): معرّف عملية التنقل" in src  # openLocalConv محمية بمعرّف التنقل

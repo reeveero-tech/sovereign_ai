@@ -361,6 +361,9 @@
     // الجارية باعتبارها محفوظة وهي ليست كذلك (فشل ظاهر لا نجاح صامت كاذب)
     return upsertLocalConv({ id: state.sessionId, title: title, messages: state.messages, updated_at: Date.now() / 1000, model: state.model || null });
   }
+  // R-813 (تصحيح المراجعة الخامسة): معرّف عملية تنقل متزايد — العملية الأحدث فقط
+  // يجوز لها تغيير الحالة؛ الأقدم تُلغى بعد أي انتظار (لا تبديل متأخر من عملية قديمة)
+  var navSeq = 0;
 
   // ---------------- التنقل ----------------
   var TITLES = { chat: "المحادثة", tasks: "المهام والأهداف", projects: "المشاريع", files: "الملفات والوسائط",
@@ -485,9 +488,12 @@
   if (_ms) _ms.addEventListener("change", function () { state.model = _ms.value || null; save(); });
   $("newBtn").addEventListener("click", async function () {
     if (busy) return;
+    // R-813 (تصحيح المراجعة الخامسة): كل تنقل يلتقط معرّف العملية الأحدث — الأقدم يُلغى
+    var myNav = ++navSeq;
     // R-813: فشل حفظ السابقة (امتلاء مساحة الضيف أو رفض الخادم) يوقف التبديل — لا تضيع
     // R-813 (تصحيح المراجعة الرابعة): النتيجة تُنتظر — لا تفريغ قبل نجاح الحفظ الفعلي
     if (!(await keepCurrentConversationBeforeNew())) return; // R-809: السابقة تُحفظ أولًا — لا تختفي
+    if (myNav !== navSeq) return; // R-813 (خامسة): تنقل أحدث بدأ — هذه العملية ملغاة
     state.convId = null; state.sessionId = rid(); state.messages = []; attached = []; paintAttached(); save(); renderChat(); paintConvs(); go("chat"); input.focus();
   });
   async function openLocalConv(id) {
@@ -495,7 +501,11 @@
     if (!c) return;
     // R-813 (مراجعة المستشار): الجارية تُحفظ قبل أي تبديل — لا تضيع بفتح محادثة أخرى
     // R-813: فشل حفظ الجارية (ضيف أو رفض خادم) يوقف التبديل — لا تضيع بفتح محادثة أخرى
-    if (state.sessionId !== c.id && !(await keepCurrentConversationBeforeNew())) return;
+    if (state.sessionId !== c.id) {
+      var myNav = ++navSeq; // R-813 (خامسة): معرّف عملية التنقل — الأحدث فقط يغيّر الحالة
+      if (!(await keepCurrentConversationBeforeNew())) return;
+      if (myNav !== navSeq) return; // تنقل أحدث بدأ — هذه العملية ملغاة
+    }
     state.convId = null; state.sessionId = c.id; state.messages = c.messages || [];
     state.model = c.model || null; paintModelSel(); // R-810/813: نموذج المحادثة يُستعاد
     save(); renderChat(); paintConvs(); go("chat");
@@ -513,11 +523,13 @@
                  project_id: state.project ? state.project.id : null, model: state.model || null };
     var p = hadConvId ? api("/ws/conversations/" + hadConvId, { method: "PUT", json: body }) : api("/ws/conversations", { json: body });
     return p.then(function (rec) {
-      if (state.sessionId !== targetSession) return true; // الجلسة تبدلت — الحفظ تم خادميًا فعلًا
+      // R-813 (تصحيح المراجعة الخامسة): نتيجة قديمة = إلغاء لا نجاح — عملية أقدم
+      // لا تفتح تبديلًا بعد أن بدأ تنقل أحدث (الجلسة تبدلت أثناء انتظار الرد)
+      if (state.sessionId !== targetSession) return false;
       if (rec && rec.id) { state.convId = rec.id; save(); loadConvs(); }
       return true;
     }).catch(function (err) {
-      if (state.sessionId !== targetSession) return true; // تبديل سابق من مسار آخر — لا نحجب جلسة أخرى
+      if (state.sessionId !== targetSession) return false; // رفض قديم لجلسة تبدلت — إلغاء العملية الأقدم
       // R-813 (تصحيح المراجعة الرابعة): فشل حفظ الخادم ظاهر — يوقف التبديل ويعاد للمنادي
       try { toast("تعذر حفظ المحادثة الحالية على الخادم (" + (((err || {}).message) || "خطأ") + ") — لم يكتمل التبديل. أعد المحاولة.", true); } catch (t) {}
       return false;
@@ -585,10 +597,14 @@
     });
   }
   function openConv(id) {
+    // R-813 (تصحيح المراجعة الخامسة): المعرّف يُلتقط عند بدء التنقل (قبل انتظار GET)
+    var myNav = ++navSeq;
     api("/ws/conversations/" + id).then(async function (c) {
+      if (myNav !== navSeq) return; // تنقل أحدث بدأ أثناء انتظار GET — هذه العملية ملغاة
       // R-813 (مراجعة المستشار): الجارية تُحفظ قبل أي تبديل — لا تضيع بفتح محادثة أخرى
       // R-813 (تصحيح المراجعة الرابعة): النتيجة تُنتظر — فشل حفظ الخادم يوقف التبديل
       if (!(await keepCurrentConversationBeforeNew())) return;
+      if (myNav !== navSeq) return; // تنقل أحدث بدأ أثناء انتظار الحفظ — هذه العملية ملغاة
       state.convId = c.id; state.sessionId = c.id; state.messages = c.messages || [];
       state.model = c.model || null; paintModelSel(); // R-810/813: نموذج المحادثة يُستعاد
       save(); renderChat(); paintConvs(); go("chat");
