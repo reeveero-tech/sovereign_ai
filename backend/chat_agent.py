@@ -27,6 +27,8 @@ CHAT_READ_TOOLS = frozenset({
     "system.capabilities", "health.snapshot", "memory.stats", "disk.status",
     "vault.status", "brain.status", "connectors.status", "skills.status",
     "defects.scan", "sovereignty.score", "web.fetch", "github.repo",
+    # R-812/813: سير التفتيش الذاتي المدمج — قراءة + أثر موقّع، لا سر ولا تعديل
+    "system.self_review",
 })
 # R-790: قراءة الخبرة والمعرفة المكتسبة — بيانات وقائع النظام نفسه، بلا أسرار
 CHAT_READ_TOOLS = CHAT_READ_TOOLS | frozenset({"experience.stats", "experience.recall",
@@ -155,12 +157,16 @@ class ChatPlanner:
     accepts_feedback = True
 
     def __init__(self, history: Optional[List[Dict[str, str]]] = None,
-                 deadline: Optional[float] = None, chat_fn=None, lessons: str = ""):
+                 deadline: Optional[float] = None, chat_fn=None, lessons: str = "",
+                 model: Optional[str] = None):
         self.history = list(history or [])[-6:]
         # R-790: وقائع تجارب سابقة مشابهة (experience.lessons_text) — العقل يتعلم مما وقع
         self.lessons = lessons or ""
         self.deadline = deadline
         self._chat = chat_fn
+        # R-810/813 (البند ٢): نموذج هذه المحادثة — يصل كل نداء العقل (توجيهًا وجوابًا)؛
+        # بلا قيمة يُستخدم النموذج الفعّال العام
+        self.model = model
 
     def _call(self, system: str, user: str, **kw) -> Optional[str]:
         chat = self._chat
@@ -170,6 +176,9 @@ class ChatPlanner:
         timeout = None
         if self.deadline is not None:
             timeout = max(5.0, self.deadline - time.monotonic())
+        # R-810/813: النموذج المختار للمحادثة يمر لكل نداء — لا انفصام بين الاختيار والاستدلال
+        if self.model:
+            kw.setdefault("model", self.model)
         return chat(system, user, timeout=timeout, **kw)
 
     def _results(self, history: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -271,7 +280,8 @@ def brain_enabled() -> bool:
 
 def respond(text: str, history: Optional[List[Dict[str, str]]] = None, *,
             owner: bool = False, registry=None, chat_fn=None,
-            max_seconds: Optional[float] = None) -> Dict[str, Any]:
+            max_seconds: Optional[float] = None,
+            model: Optional[str] = None) -> Dict[str, Any]:
     """يعيد {reply, status, tools_used, steps, run_id} — reply نص العقل أو سبب صادق."""
     from agent_loop import AgentLoop
     if registry is None:
@@ -289,7 +299,8 @@ def respond(text: str, history: Optional[List[Dict[str, str]]] = None, *,
         lessons = experience.lessons_text(text, k=3)
     except Exception:  # TOLERATED: بلا خبرة يعمل الموجّه كما كان
         lessons = ""
-    planner = ChatPlanner(history, deadline=deadline, chat_fn=chat_fn, lessons=lessons)
+    planner = ChatPlanner(history, deadline=deadline, chat_fn=chat_fn, lessons=lessons,
+                          model=model)
     names = allowed_tools(registry, owner)
     loop = AgentLoop(registry, planner, max_steps=MAX_STEPS, max_seconds=budget,
                      allowed_tools=names, caller="chat")

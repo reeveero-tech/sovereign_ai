@@ -222,12 +222,33 @@ def test_brain_settings_put_writes_runtime_layer(client, monkeypatch, tmp_path):
                    json={"model": "switched-model", "protocol": "ollama"})
     assert r.status_code == 200, r.text
     assert config.brain_get("OLLAMA_MODEL") == "switched-model"
+    # R-813 (مراجعة المستشار): المفتاح السري مساره الخزينة المشفرة — خزينة
+    # اختبار فعلية تُركب قبل الطلب (بلا خزينة: 503 صادق لا نجاح كاذب)
+    import base64
+    import os
+
+    from sovereign.secrets_vault import SecretsVault
+    vault = SecretsVault(path=tmp_path / "vault.json",
+                          master_key_b64=base64.b64encode(os.urandom(32)).decode(),
+                          audit=lambda ev, payload: None)
+    import sovereign.secrets_vault as sv
+    monkeypatch.setattr(sv, "get_vault", lambda: vault)
+    try:
+        import backend.sovereign.secrets_vault as bsv  # مسار الاستيراد المزدوج
+        monkeypatch.setattr(bsv, "get_vault", lambda: vault)
+    except ImportError:
+        pass
+    config._BRAIN_API_KEY_CACHE.pop("value", None)
     # لا مفتاح API في الرد أبدًا
     r2 = client.put("/brain/settings", headers={"X-Sovereign-Key": KEY},
                    json={"api_key": "sk-cloud-810"})
-    assert r2.status_code == 200
+    assert r2.status_code == 200, r2.text
     assert "sk-cloud-810" not in r2.text
     assert config.brain_get("OLLAMA_API_KEY") == "sk-cloud-810"  # ساري داخليًا
+    # المفتاح في الخزينة لا في ملف التشغيل — لا نص صريح على القرص
+    assert vault.get(config.BRAIN_API_KEY_SECRET,
+                     capability=config.BRAIN_API_KEY_SCOPE, actor="owner") == "sk-cloud-810"
+    assert "sk-cloud-810" not in f.read_text(encoding="utf-8")
 
 
 def test_brain_settings_put_validation(client, monkeypatch, tmp_path):
