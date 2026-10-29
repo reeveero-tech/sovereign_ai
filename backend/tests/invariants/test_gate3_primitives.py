@@ -66,13 +66,19 @@ class TestPrimitives:
         الاختبار يتقبل الحالتين:
         - في المشروع الكامل: ledger موجود → يفحص الأحداث
         - في clone نظيف: ledger غير موجود → stats = 0 (لا فشل)
-        """
+
+        R-805: الحالة الثالثة الشريعة — ledger.jsonl موجود لكنه فارغ (0 بايت):
+        التطبيق ينشئه فارغًا عند الإقلاع قبل أول حدث (أثبت بالتشغيل الفعلي
+        للحزمة في مكانها: الملف وُلد بحجم 0). كانت تُعامل كـ«مشروع كامل»
+        فيفشل الاختبار عند إعادة تشغيل الحزمة في شجرة قذرة ببيانات تشغيل
+        متجاهلة. الفارغ = نفس معاملة clone النظيف."""
         p = self._primitives(repo_root)
         stats = p.ledger_events_stats()
         ledger_path = repo_root / "data" / "sovereign_core" / "ledger.jsonl"
+        ledger_is_empty = ledger_path.exists() and ledger_path.stat().st_size == 0
 
-        if not ledger_path.exists():
-            # clone نظيف — ledger.jsonl غير موجود (بيانات وقت تشغيل — 45MB)
+        if not ledger_path.exists() or ledger_is_empty:
+            # clone نظيف أو إقلاع جديد — ledger.jsonl غائب أو فارغ (0 بايت)
             # الاختبار يتحقق أن الدالة تُعيد قيمة فارغة صحيحة (لا ينهار)
             assert stats["events_total"] == 0, "empty ledger must return events_total=0"
             assert stats["events_signed"] == 0

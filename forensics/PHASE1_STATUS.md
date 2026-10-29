@@ -16,8 +16,12 @@
 
 ```
 $ python -m pytest tests/test_sovereign_keys.py tests/test_key_selection_rotation.py tests/test_return_none_security.py tests/test_ledger_anchor.py tests/test_ledger_verify_endpoint.py -q
-50 passed
+52 passed
 ```
+
+> تصويح R-805 (2026-10-29): 50 → **52** — أُضيف اختباران لـ`test_ledger_verify_endpoint.py`
+> (كاش `/ledger/verify` المتتابع + انتهاء TTL — تفصيل الدفعة في CHANGELOG R-805).
+> التوزيع: 11 + 5 + 17 + 12 + 7 = 52.
 
 ## تصويح رقمي (2026-10-16 — مرحلة صفر لوكيل لاحق)
 

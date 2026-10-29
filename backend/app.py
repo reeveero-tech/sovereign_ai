@@ -778,7 +778,29 @@ register_circuit_breaker(app)
 # من اليدجر (KeyRing + Merkle Anchors). للقراءة فقط.
 # ============================================================
 _LEDGER_VERIFY_LOCK = threading.Lock()
-_LEDGER_VERIFY_STATE: Dict[str, Any] = {"gen": 0, "result": None}
+_LEDGER_VERIFY_STATE: Dict[str, Any] = {"gen": 0, "result": None, "fp": None, "ts": 0.0}
+# R-805: حد عمر الكاش بالثواني (مثل SOVEREIGNY_SCORE_TTL) — يقيّد الثبات
+# عند تدوير المفاتيح (بصمة الملفات لا تلتقطه)؛ اليدجر نفسه إلحاقي فبصمته
+# تتغير مع كل حدث جديد فتُبطل الكاش طبيعيًا.
+_LEDGER_VERIFY_CACHE_TTL = 300.0
+
+
+def _ledger_verify_fingerprint():
+    """R-805: بصمة ملفات اليدجر — (المسار، الحجم، mtime) للسجل والمراسي.
+
+    اليدجر إلحاقي (append-only) فثبات البصمة يعني ثبات محتوى التحقق.
+    فشل قراءة البصمة يُعيد None ⇒ لا كاش (احتياط آمن: حساب دائمًا)."""
+    try:
+        from backend.sovereign.ledger import LedgerAnchor
+        anchor = LedgerAnchor()
+        fps = []
+        for p in (anchor.ledger_path, anchor.anchors_path):
+            if p is not None and pathlib.Path(p).exists():
+                st = pathlib.Path(p).stat()
+                fps.append((str(p), st.st_size, st.st_mtime))
+        return tuple(fps)
+    except Exception:  # TOLERATED: بصمة فاشلة = لا كاش، لا تعطل النقطة
+        return None
 
 
 @app.get("/ledger/verify")
@@ -786,13 +808,25 @@ def ledger_verify():
     """R-762: دالة متزامنة ⇒ FastAPI ينفّذها في مجمّع الخيوط لا في حلقة الأحداث
     (كانت async تتحقق من كل توقيع داخل الحلقة فتحجب /health وكل الطلبات).
     single-flight: الطلبات المتزامنة تنتظر الحساب الجاري وتأخذ نتيجته بدل
-    إطلاق حساب O(n) جديد لكل طلب."""
-    gen_seen = _LEDGER_VERIFY_STATE["gen"]
+    إطلاق حساب O(n) جديد لكل طلب.
+
+    R-805: إصلاح الكاش التتابعي — كانت البصمة gen تُقرأ قبل القفل فتساوي
+    قيمة الحالة عند الدخول دائمًا، فشرط `gen != gen_seen` لا يتحقق إلا أثناء
+    الحوسبة المتزامنة نفسها ⇒ كل استدعاء متتابع أعاد حساب O(n) كاملًا
+    (على سجل الإنتاج 138k حدث: دقائق لكل استدعاء — النقطة كانت معطولة
+    عمليًا، مثبت حيًا: استدعاءان متتابعان كلاهما تجاوز 60ث مهلة). الآن:
+    نتيجة مخزنة تُعاد فورًا ما دامت بصمة الملفات ثابتة وعمرها أقل من TTL؛
+    تغيّر اليدجر أو انتهاء المهلة ⇒ إعادة حساب واحدة يتشاركها المنتظرون."""
     with _LEDGER_VERIFY_LOCK:
-        if _LEDGER_VERIFY_STATE["gen"] != gen_seen and _LEDGER_VERIFY_STATE["result"] is not None:
-            return _LEDGER_VERIFY_STATE["result"]
+        fp = _ledger_verify_fingerprint()
+        cached = _LEDGER_VERIFY_STATE["result"]
+        fresh = (time.time() - _LEDGER_VERIFY_STATE.get("ts", 0.0)) < _LEDGER_VERIFY_CACHE_TTL
+        if cached is not None and fp is not None and _LEDGER_VERIFY_STATE.get("fp") == fp and fresh:
+            return cached
         result = _ledger_verify_compute()
         _LEDGER_VERIFY_STATE["result"] = result
+        _LEDGER_VERIFY_STATE["fp"] = fp
+        _LEDGER_VERIFY_STATE["ts"] = time.time()
         _LEDGER_VERIFY_STATE["gen"] += 1
         return result
 
