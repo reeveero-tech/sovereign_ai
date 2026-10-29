@@ -356,27 +356,34 @@ _BRAIN_API_KEY_CACHE: dict = {}
 def _brain_migrate_legacy_api_key() -> None:
     """ترحيل مفتاح مزود العقل من ملف التشغيل (نمط R-810 القديم) إلى الخزينة.
 
-    يعمل عند كل قراءة للمفتاح حتى ينجح مرة: إن وُجد نص صريح في الملف والخزينة
-    متاحة، يُخزن فيها (وضع/تدوير) ثم تُحذف نسخته الصريحة من الملف (كتابة
-    ذرّية) — لا يبقى نص مكشوف. إن تعذرت الخزينة تبقى القيمة في الملف بلا
-    فقد (القراءة حينها من البيئة/الملف) وتُعاد المحاولة لاحقًا. فشل حذف
-    النسخة بعد نجاح التخزين غير كارثي: الخزينة تسبق الملف في القراءة.
+    مبدآن صارمان (تصحيح المراجعة الثالثة):
+    ١) لا استبدال صامت لقيمة أحدث: التخزين يتم فقط إن كانت الخزينة فارغة من
+       المفتاح — قيمة الخزينة القائمة أحدث ولا تُمس.
+    ٢) لا فقد أبدًا: التنظيف (حذف النسخة الصريحة من الملف) لا يحدث إلا بعد
+       تأمين القيمة في الخزينة (أو وجود قيمة فيها أصلًا). إن تعذرت الخزينة
+       تبقى النسخة في الملف وتُخدم منها حتى ترحيل لاحق.
     """
     runtime = brain_runtime_read()
     legacy = runtime.get("OLLAMA_API_KEY")
     if not legacy:
         return
+    # التخزين فقط إن كانت الخزينة بلا مفتاح — لا استبدال صامت لقيمة أحدث
+    existing = None
     try:
-        stored = brain_api_key_set(str(legacy), actor="migration")
-    except Exception:
-        return  # الخزينة غير متاحة — لا فقد: النسخة تبقى حتى ترحيل لاحق
-    if not stored:
-        return
+        existing = brain_api_key_get()
+    except Exception:  # TOLERATED: قراءة استطلاعية — فشلها يعامل كغياب مؤقت
+        existing = None
+    if not existing:
+        try:
+            brain_api_key_set(str(legacy), actor="migration")
+        except Exception:  # TOLERATED: لا خزينة — لا فقد: النسخة تبقى في الملف
+            return        # وتُخدم منه حتى يتاح الترحيل في قراءة لاحقة
+    # القيمة مؤمّنة في الخزينة (أو كانت فيها أحدث) ⇒ التنظيف آمن الآن
     try:
         remaining = {k: v for k, v in runtime.items() if k != "OLLAMA_API_KEY"}
         atomic_write_json(BRAIN_RUNTIME_FILE, remaining, file_mode=0o600)
-    except OSError:  # TOLERATED: الخزينة تسبق الملف في القراءة — لا فقد؛ المحاولة تتكرر
-        pass
+    except OSError:  # TOLERATED: القيمة مؤمّنة والخزينة تسبق الملف في القراءة
+        pass           # إعادة المحاولة في القراءة القادمة — التخزين لن يتكرر
 
 
 def brain_api_key_get() -> Optional[str]:

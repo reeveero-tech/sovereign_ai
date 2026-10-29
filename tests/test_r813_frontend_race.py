@@ -1,20 +1,22 @@
 # -*- coding: utf-8 -*-
-"""R-813 (تصحيح المراجعة الثانية) — اختبار سلوكي حقيقي لمنطق المحادثات في
+"""R-813 (تصحيح المراجعة الثالثة) — اختبار سلوكي حقيقي لمنطق المحادثات في
 الواجهة: يُشغَّل كود الواجهة الفعلي (المستخرج من index.html) في Node مع
 كوابيل، وتُتحكم أزمنة الاستجابات يدويًا لاختبار السباق بترتيب معكوس.
 
-يغطي مطالب المراجعة الثانية:
-١) سقف الضيف: إنشاء ١٠٥ محادثات ⇒ التخزين يحفظها كلها كاملة (لا اقتطاط)،
-   وأقدمها تُستعاد كاملة بفتحها.
-٢) سباق persistConv (مسار المالك): حفظ A يبدأ، ننتقل إلى B، استجابة A
-   تكتمل بعد B (ترتيب معكوس) ⇒ حارس targetSession يمنع فساد هوية B.
-٣) فتح A وB بعد السباق: المعرفات والرسائل والنماذج بلا اختلاط.
+يغطي مطالب المراجعة الثالثة:
+١) سقف الضيف: ١٠٥ محادثات برسائل مميزة (٥ لكل محادثة) ⇒ التخزين يحفظها
+   كلها كاملة، وأقدمها (g0 — الإضافة في المقدمة تجعل الأولى أقدمها) تُستعاد
+   كاملة بعد إعادة تحميل التخزين.
+٢) سباق persistConv (مسار المالك) بترتيب معكوس: A يبدأ، ننتقل إلى B،
+   استجابة B تكتمل أولًا ثم رد A المتأخر — الحارس يمنع فساد هوية B.
+٣) فتح A وB بعد السباق من بيانات حُفظت فعلًا بطلبات الاختبار (مخزن POST/GET
+   مصغّر بالمعرف) — والمعرفات والرسائل والنماذج بلا اختلاط.
+٤) فشل حفظ التخزين (امتلاء المساحة) ظاهر لا صامت: الحفظ يفشل والتبديل
+   يتوقف والمحادثة الجارية لا تُفرَّغ باعتبارها محفوظة.
 """
 
-import json
 import re
 import subprocess
-import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -39,14 +41,17 @@ function extractFn(name) {
 
 // ---- كوابيل البيئة ----
 const store = new Map();
+let quotaExceeded = false;
 global.localStorage = {
   getItem: (k) => (store.has(k) ? store.get(k) : null),
-  setItem: (k, v) => store.set(k, String(v)),
+  setItem: (k, v) => {
+    if (quotaExceeded) { const e = new Error('QuotaExceededError'); throw e; }
+    store.set(k, String(v));
+  },
   removeItem: (k) => store.delete(k),
 };
-const state = {
-  sessionId: null, convId: null, messages: [], model: null,
-};
+global.CONV_LOCAL = 'sovereign.localConvs';
+const state = { sessionId: null, convId: null, messages: [], model: null };
 let ownerKeyValue = 'test-owner-key';
 function ownerKey() { return ownerKeyValue; }
 function save() {}
@@ -54,26 +59,48 @@ function renderChat() {}
 function paintConvs() {}
 function paintModelSel() {}
 function go() {}
-// ---- سجل نداءات المالك مع تحكم يدوي في الإكمال ----
+function toast() {}
+function loadConvs() {}
+function el(tag, cls, txt) { return { className: cls, textContent: txt }; }
+function $(id) { return { appendChild() {}, textContent: '', hidden: false }; }
+
+// ---- مخزن محادثات مصغّر حقيقي: POST يحفظ فعلًا وGET يُعيد بالمعرف ----
+const convStore = new Map();
 const apiCalls = [];
+const apiBodies = [];
 const pendingApi = [];
-const autoResponses = [];
+let idSeq = 0;
 function api(url, opts) {
-  const rec = { url, json: opts && opts.json ? JSON.parse(JSON.stringify(opts.json)) : null,
-                resolve: null };
-  apiCalls.push(rec);
-  return new Promise((resolve) => {
-    rec.resolve = resolve;
-    if (autoResponses.length) { resolve(autoResponses.shift()); return; }
+  apiCalls.push({ url, method: opts && opts.method });
+  return new Promise((resolve, reject) => {
+    const rec = { resolve, reject };
+    if (url === '/ws/conversations' && (!opts.method || opts.method === 'POST')) {
+      const body = JSON.parse(JSON.stringify(opts.json));
+      if (!body.id) { body.id = 'srv-' + (++idSeq); }  // الخادم يعين المعرف عند الاستلام لا عند التشغيل
+      apiBodies.push(body);
+      rec.run = () => { convStore.set(body.id, body); resolve({ id: body.id }); };
+    } else if (/^\/ws\/conversations\/(.+)$/.test(url)) {
+      const id = url.split('/').pop();
+      rec.run = () => {
+        if (opts && opts.method === 'PUT') {   // تحديث حقيقي للسجل المحفوظ
+          const c = convStore.get(id);
+          if (!c) { rec.reject(new Error('غير موجودة')); return; }
+          Object.assign(c, JSON.parse(JSON.stringify(opts.json)));
+          resolve({ id });
+          return;
+        }
+        const c = convStore.get(id);
+        if (!c) { rec.reject(new Error('غير موجودة')); return; }
+        resolve({ id: c.id, messages: c.messages, model: c.model, title: c.title });
+      };
+    } else {
+      rec.run = () => resolve({});
+    }
     pendingApi.push(rec);
   });
 }
 const tick = () => new Promise((r) => setImmediate(r));
-function el(tag, cls, txt) { const e = { className: cls, textContent: txt }; return e; }
-function $(id) { return { appendChild() {}, textContent: '', hidden: false }; }
 
-// ثوابت صفحة الحية التي تعتمد عليها الوظائف المستخرجة
-global.CONV_LOCAL = 'sovereign.localConvs';
 // ---- الوظائف الحية من الواجهة — تُقيَّم معًا في نطاق واحد ----
 const FN_NAMES = ['loadLocalConvs', 'saveLocalConvs', 'convTitle', 'upsertLocalConv',
                   'keepCurrentConversationBeforeNew', 'persistConv', 'openLocalConv',
@@ -86,119 +113,156 @@ let localConvs = fns.loadLocalConvs();
 const results = [];
 function check(name, cond) { results.push((cond ? 'PASS' : 'FAIL') + ' :: ' + name); }
 
-// ================= ١) سقف التخزين: ١٠٥ محادثات كلها كاملة =================
+(async () => {
+// ================= ١) سقف التخزين: ١٠٥ محادثات برسائل مميزة =================
 for (let i = 0; i < 105; i++) {
-  fns.upsertLocalConv({ id: 'g' + i, title: 'محادثة ' + i,
-    messages: [{ role: 'user', content: 'رسالة ' + i },
-               { role: 'assistant', content: 'رد ' + i }],
+  const msgs = [];
+  for (let m = 0; m < 5; m++)
+    msgs.push({ role: m % 2 ? 'assistant' : 'user', content: `رسالة ${i}-${m}` });
+  fns.upsertLocalConv({ id: 'g' + i, title: 'محادثة ' + i, messages: msgs,
     updated_at: 1000 + i, model: 'm' + (i % 3) });
 }
 const stored = JSON.parse(localStorage.getItem('sovereign.localConvs'));
 check('التخزين يحفظ ١٠٥ محادثات بلا اقتطاط', stored.length === 105);
-check('كل المحادثات كاملة الرسائل (أقدمها أيضًا)', stored.every(c => c.messages.length === 2));
-const oldest = stored.find(c => c.id === 'g104');
-check('أقدم محادثة (g104) محفوظة كاملة', oldest && oldest.messages.length === 2 &&
-      oldest.messages[1].content === 'رد 104');
+check('كل المحادثات كاملة الرسائل الخمس', stored.every(c => c.messages.length === 5));
+const g0 = stored.find(c => c.id === 'g0');
+check('أقدم محادثة (g0 — الإضافة في المقدمة) محفوظة كاملة',
+      g0 && g0.messages.length === 5 && g0.messages[4].content === 'رسالة 0-4');
 
-// استعادة أقدمها كاملة بفتحها
-state.sessionId = 'current'; state.messages = [{ role: 'user', content: 'جارية' }];
-fns.openLocalConv('g104');
-check('فتح أقدم محادثة يستعيد رسائلها كاملة',
-      state.messages.length === 2 && state.messages[0].content === 'رسالة 104');
-check('فتحها يستعيد نموذجها', state.model === 'm2');
+// استعادة أقدمها كاملة بعد إعادة تحميل التخزين (لا من الذاكرة العابرة)
+localConvs = fns.loadLocalConvs();
+state.sessionId = 'current'; state.messages = [];  // لا جارية ⇒ لا حفظ وهمي يلوث القسم التالي
+fns.openLocalConv('g0');
+check('فتح أقدم محادثة بعد إعادة التحميل يستعيد رسائلها الخمس كاملة',
+      state.messages.length === 5 && state.messages[0].content === 'رسالة 0-0' &&
+      state.messages[4].content === 'رسالة 0-4');
+check('فتحها يستعيد نموذجها', state.model === 'm0');
 
 // ================= ٢) سباق persistConv بترتيب معكوس (مسار المالك) =================
-(async () => {
 // محادثة A نشطة: حفظها يبدأ ولا تكتمل استجابته بعد
 state.sessionId = 'A'; state.convId = null; state.model = 'mA';
-state.messages = [{ role: 'user', content: 'سؤال A' }, { role: 'assistant', content: 'رد A' }];
+state.messages = [{ role: 'user', content: 'سؤال A' },
+                  { role: 'assistant', content: 'رد A-1' },
+                  { role: 'user', content: 'تتمة A' },
+                  { role: 'assistant', content: 'رد A-2' }];
 fns.persistConv();                     // نداء A — استجابته معلقة
-const callA = apiCalls[apiCalls.length - 1];
-check('نداء A حُمل بمحتوى A', callA.json.title.indexOf('سؤال A') >= 0 &&
-      callA.json.model === 'mA');
+const bodyA = apiBodies[apiBodies.length - 1];
+check('نداء A حُمل بمحتوى A كاملًا ونموذجها',
+      bodyA.messages.length === 4 && bodyA.messages[0].content === 'سؤال A' &&
+      bodyA.model === 'mA');
 
 // ننتقل إلى B ونحفظها — تكتمل استجابة B أولًا
 state.sessionId = 'B'; state.convId = null; state.model = 'mB';
-state.messages = [{ role: 'user', content: 'سؤال B' }];
+state.messages = [{ role: 'user', content: 'سؤال B' },
+                  { role: 'assistant', content: 'رد B-1' }];
 fns.persistConv();                     // نداء B
-const callB = apiCalls[apiCalls.length - 1];
-check('نداء B حُمل بمحتوى B', callB.json.title.indexOf('سؤال B') >= 0 &&
-      callB.json.model === 'mB');
-callB.resolve({ id: 'B-id' });         // B تكتمل أولًا
+const bodyB = apiBodies[apiBodies.length - 1];
+check('نداءان معلقان (A ثم B)', pendingApi.length === 2);
+check('نداء B حُمل بمحتوى B ونموذجها',
+      bodyB.messages.length === 2 && bodyB.messages[0].content === 'سؤال B' &&
+      bodyB.model === 'mB');
+pendingApi[1].run();                   // B تكتمل أولًا
 await tick();
-check('استجابة B تثبت هوية B', state.convId === 'B-id');
+check('استجابة B تثبت هوية B', state.convId === 'srv-2');
+check('B محفوظة فعلًا في المخزن بالمعرف',
+      convStore.has('srv-2') && convStore.get('srv-2').messages.length === 2 &&
+      convStore.get('srv-2').model === 'mB');
 
 // استجابة A المتأخرة تكتمل الآن (بعد التبديل) — الحارس يجب أن يمنع فساد B
-callA.resolve({ id: 'A-id' });
+pendingApi[0].run();                   // A تكتمل أخيرًا (بعد التبديل)
 await tick();
-check('حارس العرق يمنع فساد هوية B برد A المتأخر', state.convId === 'B-id');
+check('حارس العرق يمنع فساد هوية B برد A المتأخر', state.convId === 'srv-2');
 check('جلسة العرض بقيت B', state.sessionId === 'B');
+check('A محفوظة فعلًا في المخزن بالمعرف',
+      convStore.has('srv-1') && convStore.get('srv-1').messages.length === 4 &&
+      convStore.get('srv-1').model === 'mA');
 
-// فتح A وB بعد السباق عبر مسار المالك (openConv) — بلا اختلاط
-autoResponses.push({ messages: [{ role: 'user', content: 'سؤال A' },
-                                { role: 'assistant', content: 'رد A' }], model: 'mA' });
-await fns.openConv('A-id');
-check('فتح A يستعيد محتوى A لا B',
-      state.messages.length === 2 && state.messages[0].content === 'سؤال A' &&
-      state.messages[1].content === 'رد A');
-check('نموذج A مستعاد', state.model === 'mA');
-autoResponses.push({ messages: [{ role: 'user', content: 'سؤال B' }], model: 'mB' });
-await fns.openConv('B-id');
-check('فتح B يستعيد محتوى B لا A', state.messages.length === 1 &&
-      state.messages[0].content === 'سؤال B');
-check('نموذج B مستعاد', state.model === 'mB');
+// ================= ٣) فتح A وB من البيانات المحفوظة فعلًا — بلا اختلاط =====
+async function openConvAndWait(id) {           // قيادة النداءين المعلقين: GET ثم PUT الحفظ
+  fns.openConv(id);
+  const gi = pendingApi.length - 1;            // GET الاسترجاع معلق
+  pendingApi[gi].run(); await tick();           // يكتمل → .then يحفظ الجارية (PUT) ثم يفتح
+  if (pendingApi.length > gi + 1) { pendingApi[pendingApi.length - 1].run(); await tick(); }
+}
+await openConvAndWait('srv-1');
+check('فتح A من المخزن يثبت معرفها', state.sessionId === 'srv-1' && state.convId === 'srv-1');
+check('فتح A يستعيد رسائلها الأربع كاملة لا B',
+      state.messages.length === 4 && state.messages[0].content === 'سؤال A' &&
+      state.messages[3].content === 'رد A-2');
+check('نموذج A مستعاد من المخزن', state.model === 'mA');
+await openConvAndWait('srv-2');
+check('فتح B من المخزن يثبت معرفها', state.sessionId === 'srv-2' && state.convId === 'srv-2');
+check('فتح B يستعيد رسائلها لا A',
+      state.messages.length === 2 && state.messages[0].content === 'سؤال B' &&
+      state.messages[1].content === 'رد B-1');
+check('نموذج B مستعاد من المخزن', state.model === 'mB');
+
+// ================= ٤) الحفظ قبل التبديل: يرسل الجارية ويرجع النتيجة ==========
+state.sessionId = 'B'; state.convId = 'srv-2'; state.model = 'mB';
+state.messages = [{ role: 'user', content: 'سؤال B' },
+                  { role: 'assistant', content: 'رد B جديد' }];
+apiCalls.length = 0; pendingApi.length = 0;
+const okSwitch = fns.keepCurrentConversationBeforeNew();
+check('الحفظ قبل التبديل يبدأ نداء الجارية (B)', apiCalls.length === 1);
+pendingApi[0].run(); await tick();
+check('الحفظ قبل التبديل يرسل محتوى الجارية (B) بنموذجها',
+      convStore.get('srv-2').messages[1].content === 'رد B جديد' &&
+      convStore.get('srv-2').model === 'mB');
+check('نجاح الحفظ يعيد true (يسمح بالتبديل)', okSwitch === true);
+
+// ================= ٥) فشل حفظ التخزين (امتلاء المساحة) ظاهر لا صامت ============
+quotaExceeded = true;   // كل setItem يفشل من الآن — QuotaExceededError
+ownerKeyValue = null;   // مسار الضيف — المفتاح الوحيد هو التخزين المحلي
+state.sessionId = 'C'; state.convId = null; state.model = 'mC';
+state.messages = [{ role: 'user', content: 'رسالة C الحرجة' }];
+const before = state.messages.slice();
+const failedSwitch = fns.keepCurrentConversationBeforeNew();
+check('فشل الحفظ يُعاد للمنادي (لا نجاح صامت كاذب)', failedSwitch === false);
+check('المحادثة الجارية لم تُفرَّغ باعتبارها محفوظة',
+      state.messages.length === 1 && state.messages[0].content === 'رسالة C الحرجة');
+// والزر يوقف التفريغ: `if (!keepCurrentConversationBeforeNew()) return;`
 })().then(() => {
   console.log(results.join('\n'));
   if (results.some(r => r.startsWith('FAIL'))) process.exit(1);
 });
-
-// ================= ٣) الحفظ قبل التبديل لا يخلط شيئًا =================
-state.sessionId = 'B'; state.convId = 'B-id';
-state.messages = [{ role: 'user', content: 'سؤال B' }, { role: 'assistant', content: 'رد B جديد' }];
-state.model = 'mB';
-apiCalls.length = 0;
-fns.keepCurrentConversationBeforeNew();  // حفظ الجارية قبل التبديل
-const pre = apiCalls[apiCalls.length - 1];
-check('الحفظ قبل التبديل يرسل محتوى الجارية (B)', pre &&
-      pre.json.title.indexOf('سؤال B') >= 0 && pre.json.model === 'mB');
-
-
 """
 
 
 def test_frontend_race_and_full_storage(tmp_path):
-    """سباق المحادثات بترتيب معكوس + تخزين كامل بلا اقتطاط — على الكود الحي."""
+    """سباق المحادثات بترتيب معكوس + تخزين كامل + فشل حفظ ظاهر — على الكود الحي."""
     harness = tmp_path / "race_harness.js"
-    # تنظيف سطر تعريف مزدوج زائد من القالب
-    code = HARNESS.replace("function apiFetchLog = [];", "")
-    harness.write_text(code, encoding="utf-8")
+    harness.write_text(HARNESS, encoding="utf-8")
     proc = subprocess.run(
         ["node", str(harness), str(UI)],
         capture_output=True, text=True, timeout=60,
     )
     out = (proc.stdout or "") + (proc.stderr or "")
-    assert proc.returncode == 0, f"فشل اختبار السباق السلوكي:\n{out}"
-    # كل الفحوصات PASS
+    assert proc.returncode == 0, f"فشل الاختبار السلوكي:\n{out}"
     lines = [l for l in proc.stdout.splitlines() if l.strip()]
     assert lines, "لا مخرجات من الاختبار السلوكي"
     bad = [l for l in lines if not l.startswith("PASS")]
     assert not bad, f"فحوصات فاشلة: {bad}"
-    # تحقق صريح من نقاط المراجعة
     joined = "\n".join(lines)
+    # تحقق صريح من نقاط المراجعة الثالثة
     assert "١٠٥ محادثات بلا اقتطاط" in joined
+    assert "أقدم محادثة (g0" in joined
     assert "يمنع فساد هوية B" in joined
-    assert "يستعيد محتوى A لا B" in joined
-    assert "يستعيد محتوى B لا A" in joined
+    assert "يستعيد رسائلها الأربع كاملة لا B" in joined
+    assert "يستعيد رسائلها لا A" in joined
+    assert "لا نجاح صامت كاذب" in joined
+    assert "لم تُفرَّغ باعتبارها محفوظة" in joined
 
 
 def test_storage_cap_display_index_separate():
-    """فهرس العرض منفصل عن المخزن: العرض أحدث ١٠٠ قابل للتوسيع، والمخزن
-    الكامل بلا اقتطاط — مطابق لمصدر الواجهة."""
+    """فهرس العرض منفصل عن المخزن الكامل، وفشل الحفظ يوقف التبديل في كل
+    مسارات التبديل (زر جديد، فتح ضيف، فتح مالك) — مطابق للمصدر."""
     src = UI.read_text(encoding="utf-8")
     assert "CONV_DISPLAY_CAP = 100" in src
     assert "localConvs.slice(0, showAllLocalConvs ? localConvs.length : CONV_DISPLAY_CAP)" in src
-    assert "إظهار الكل" in src  # مؤشر التوسيع الصادق
-    # لا اقتطاط في مسار التخزين
+    assert "إظهار الكل" in src
     upsert = re.search(r"function upsertLocalConv.*?\n  }", src, re.DOTALL).group(0)
     assert ".slice(0, 2)" not in upsert
-    assert "archived" not in upsert
+    assert "return saveLocalConvs();" in upsert
+    # فشل الحفظ يوقف التفريغ في كل مسارات التبديل
+    assert src.count("if (!keepCurrentConversationBeforeNew()) return;") >= 2
+    assert "if (state.sessionId !== c.id && !keepCurrentConversationBeforeNew()) return;" in src

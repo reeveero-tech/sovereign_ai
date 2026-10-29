@@ -135,21 +135,23 @@ def _review_with_brain(report: Dict[str, Any]) -> Dict[str, Any]:
     )
     if not reply:
         return {"reviewer": "no_reply", "ok": None, "issues": [], "summary": None}
-    match = re.search(r"\{.*\}", reply, re.DOTALL)
-    if not match:
-        return {"reviewer": "invalid_review_reply", "ok": None, "issues": [], "summary": None}
+    # R-813 (تصحيح المراجعة الثالثة): الرد يُحلَّل كاملًا كما ورد — لا استخراج
+    # نمطي (نص قبل/بعد الكائن يُرفض)، ولا تحويل قيم: الأنواع الخاطئة تُرفض
     try:
-        verdict = json.loads(match.group(0))
+        verdict = json.loads(reply)
     except ValueError:
         return {"reviewer": "invalid_review_reply", "ok": None, "issues": [], "summary": None}
-    # R-813 (تصحيح المراجعة الثانية): العقد الصارم الكامل — الرد كائن JSON،
-    # وok منطقي حرفي، وissues قائمة (نصوصًا بعد التقليم)، وsummary نص.
-    # أي حقل ناقص أو من نوع خاطئ ⇒ لا حكم أبدًا — لا حكم مختلق ولا قيم مبتلعة
-    if not isinstance(verdict, dict) or not isinstance(verdict.get("ok"), bool) \
+    if not isinstance(verdict, dict):
+        return {"reviewer": "invalid_review_reply", "ok": None, "issues": [], "summary": None}
+    # R-813 (تصحيح المراجعة الثالثة): العقد الصارم الكامل — الرد كائن JSON
+    # كاملًا، وok منطقي حرفي، وissues قائمة عناصرها نصوص فعلًا (لا تحويل)،
+    # وsummary نص. أي حقل ناقص أو من نوع خاطئ ⇒ لا حكم أبدًا — لا حكم مختلق
+    if not isinstance(verdict.get("ok"), bool) \
             or not isinstance(verdict.get("issues"), list) \
+            or not all(isinstance(i, str) for i in verdict["issues"]) \
             or not isinstance(verdict.get("summary"), str):
         return {"reviewer": "invalid_review_reply", "ok": None, "issues": [], "summary": None}
-    issues = [str(i)[:200] for i in verdict["issues"][:20]]
+    issues = [i[:200] for i in verdict["issues"][:20]]
     return {
         "reviewer": "brain",
         "ok": verdict["ok"],

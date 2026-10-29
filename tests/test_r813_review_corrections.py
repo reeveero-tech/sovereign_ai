@@ -347,9 +347,13 @@ def test_frontend_conversation_fixes_present():
     block = _fn_block(src, "persistConv")
     assert "var targetSession = state.sessionId" in block
     assert "if (state.sessionId !== targetSession) return;" in block
-    # الحفظ قبل التبديل في المسارين (محادثة خادم ومحادثة زائر)
-    assert "keepCurrentConversationBeforeNew();" in _fn_block(src, "openLocalConv")
-    assert "keepCurrentConversationBeforeNew();" in _fn_block(src, "openConv")
+    # الحفظ قبل التبديل في المسارين (محادثة خادم ومحادثة زائر) — وفشل الحفظ
+    # يوقف التبديل (تصحيح المراجعة الثالثة): لا تفريغ جارية غير محفوظة
+    assert "if (state.sessionId !== c.id && !keepCurrentConversationBeforeNew()) return;" in \
+        _fn_block(src, "openLocalConv")
+    assert "if (!keepCurrentConversationBeforeNew()) return;" in _fn_block(src, "openConv")
+    assert "if (!keepCurrentConversationBeforeNew()) return;" in \
+        src[src.find('newBtn").addEventListener'):]  # زر محادثة جديدة أيضًا
     # النموذج لكل محادثة: يُرسل في الطلب ويُحفظ مع المحادثة ويُستعاد
     assert "if (state.model) body.model = state.model;" in src
     assert "model: state.model || null" in _fn_block(src, "persistConv")
@@ -401,6 +405,7 @@ def test_reviewer_contract_rejects_wrong_field_types(fresh_core, monkeypatch):
         {"ok": True, "summary": "س"},                               # issues ناقص
         {"issues": [], "summary": "س"},                             # ok ناقص
         {"ok": "yes", "issues": [], "summary": "س"},               # ok غير منطقي
+        {"ok": True, "issues": [42, {}], "summary": "س"},           # عناصر غير نصية
     ]
     for verdict in cases:
         srv = _fake_brain({"message": {"role": "assistant",
@@ -411,6 +416,25 @@ def test_reviewer_contract_rejects_wrong_field_types(fresh_core, monkeypatch):
         assert out["reviewer_verdict"]["reviewer"] == "invalid_review_reply", verdict
         assert out["reviewer_verdict"]["ok"] is None
         assert out["reviewer_verdict"]["issues"] == []
+        srv.shutdown()
+
+
+def test_reviewer_contract_rejects_padded_and_non_object_replies(fresh_core, monkeypatch):
+    """الرد يُحلَّل كاملًا كما ورد: نص قبل/بعد الكائن ⇒ رفض، ومصفوفة بدل
+    كائن ⇒ رفض — لا استخراج نمطي ولا تسامح."""
+    _install_registry(monkeypatch, lambda **kw: {"ok": True, "tool": "stub"})
+    padded = ("مقدمة غير مطلوبة " + json.dumps({"ok": True, "issues": [],
+                                                 "summary": "س"}, ensure_ascii=False)
+              + " خاتمة غير مطلوبة")
+    for reply in (padded,
+                  json.dumps([{"ok": True, "issues": [], "summary": "س"}]),  # مصفوفة
+                  "ليس JSON إطلاقًا"):
+        srv = _fake_brain({"message": {"role": "assistant", "content": reply},
+                           "done": True})
+        _brain_on(monkeypatch, srv)
+        out = review_workflow.run_self_review(caller="test")
+        assert out["reviewer_verdict"]["reviewer"] == "invalid_review_reply", reply[:40]
+        assert out["reviewer_verdict"]["ok"] is None
         srv.shutdown()
 
 
@@ -461,6 +485,68 @@ def test_legacy_file_api_key_migrates_to_vault(tmp_path, monkeypatch):
     config.brain_set({"OLLAMA_NUM_CTX": 4096})
     assert "legacy-plain-key" not in cfg.read_text(encoding="utf-8")
     assert config.brain_get("OLLAMA_API_KEY") == "legacy-plain-key"
+
+
+def test_legacy_file_api_key_never_replaces_newer_vault_value(tmp_path, monkeypatch):
+    """الخزينة تحمل مفتاحًا أحدث والملف نسخة قديمة مختلفة ⇒ الترحيل لا يستبدل
+    قيمة الخزينة (الأحدث)، ويكتفي بتنظيف النسخة الصريحة من الملف."""
+    from sovereign.secrets_vault import SecretsVault
+
+    key_b64 = base64.b64encode(os.urandom(32)).decode()
+    vault = SecretsVault(path=tmp_path / "vault.json", master_key_b64=key_b64,
+                         audit=lambda ev, payload: None)
+    _patch_vault(monkeypatch, vault)
+    cfg = tmp_path / "brain.json"
+    cfg.write_text(json.dumps({"OLLAMA_API_KEY": "legacy-old"}, ensure_ascii=False),
+                   encoding="utf-8")
+    monkeypatch.setattr(config, "BRAIN_RUNTIME_FILE", cfg)
+    config._BRAIN_API_KEY_CACHE.pop("value", None)
+
+    # المالك حدّث المفتاح أولًا (الخزينة تحمل الأحدث)
+    config.brain_api_key_set("vault-new", actor="owner")
+
+    # قراءة تُطلق الترحيل: القيمة الأحدث تبقى، والنسخة القديمة تُنظف من الملف
+    assert config.brain_get("OLLAMA_API_KEY") == "vault-new"
+    assert config.brain_get("OLLAMA_API_KEY") == "vault-new"  # قراءة ثانية — لا رجوع
+    assert "legacy-old" not in cfg.read_text(encoding="utf-8")
+    assert vault.get(config.BRAIN_API_KEY_SECRET,
+                     capability=config.BRAIN_API_KEY_SCOPE,
+                     actor="owner") == "vault-new"
+
+
+def test_legacy_file_api_key_cleanup_failure_does_not_replay_store(tmp_path, monkeypatch):
+    """فشل تنظيف الملف لا يجعل الترحيل يستبدل مفتاحًا حدّثه المالك لاحقًا:
+    المالك يحدّث المفتاح، ثم قراءة تالية مع فشل تنظيف مستمر — قيمة المالك
+    الجديدة تبقى (لا يعاد تخزين القديمة)."""
+    from sovereign.secrets_vault import SecretsVault
+
+    key_b64 = base64.b64encode(os.urandom(32)).decode()
+    vault = SecretsVault(path=tmp_path / "vault.json", master_key_b64=key_b64,
+                         audit=lambda ev, payload: None)
+    _patch_vault(monkeypatch, vault)
+    cfg = tmp_path / "brain.json"
+    cfg.write_text(json.dumps({"OLLAMA_API_KEY": "legacy-old"}, ensure_ascii=False),
+                   encoding="utf-8")
+    monkeypatch.setattr(config, "BRAIN_RUNTIME_FILE", cfg)
+    config._BRAIN_API_KEY_CACHE.pop("value", None)
+
+    # فشل التنظيف حتمي (محاكاة عطل القرص/الصلاحية)
+    def _boom(*a, **kw):
+        raise OSError("قرص محمي")
+    monkeypatch.setattr(config, "atomic_write_json", _boom)  # مرجع config المستورد
+    # قراءة: التخزين يحدث (الخزينة فارغة) لكن التنظيف يفشل — لا فقد
+    assert config.brain_get("OLLAMA_API_KEY") == "legacy-old"
+    assert vault.get(config.BRAIN_API_KEY_SECRET,
+                     capability=config.BRAIN_API_KEY_SCOPE,
+                     actor="migration") == "legacy-old"
+
+    # المالك يحدّث المفتاح الآن
+    config.brain_api_key_set("owner-new", actor="owner")
+    # قراءة تالية والتنظيف ما زال فاشلًا: لا يعاد تخزين legacy-old
+    assert config.brain_get("OLLAMA_API_KEY") == "owner-new"
+    assert vault.get(config.BRAIN_API_KEY_SECRET,
+                     capability=config.BRAIN_API_KEY_SCOPE,
+                     actor="owner") == "owner-new"
 
 
 def test_legacy_file_api_key_survives_without_vault(tmp_path, monkeypatch):
