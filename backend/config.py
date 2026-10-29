@@ -328,9 +328,15 @@ def brain_get(name: str, default=None):
     لا نص صريح على القرص أبدًا؛ قيمته في البيئة تبقى احتياطًا عند غيابه.
     """
     if name == "OLLAMA_API_KEY":
+        _brain_migrate_legacy_api_key()  # R-813: ترحيل النسخ القديمة أولًا — لا نص صريح يبقى
         vault_value = brain_api_key_get()
         if vault_value:
             return vault_value
+        # لا خزينة/لا قيمة فيها: النسخة القديمة في ملف التشغيل تبقى تُخدم (لا
+        # فقد قبل الترحيل) — ثم قيمة البيئة احتياطًا
+        runtime = brain_runtime_read()
+        if runtime.get("OLLAMA_API_KEY"):
+            return runtime["OLLAMA_API_KEY"]
         return getattr(sys.modules[__name__], name, default)
     runtime = brain_runtime_read()
     if name in runtime:
@@ -345,6 +351,32 @@ def brain_get(name: str, default=None):
 BRAIN_API_KEY_SECRET = "brain.provider_api_key"
 BRAIN_API_KEY_SCOPE = "brain.provider"
 _BRAIN_API_KEY_CACHE: dict = {}
+
+
+def _brain_migrate_legacy_api_key() -> None:
+    """ترحيل مفتاح مزود العقل من ملف التشغيل (نمط R-810 القديم) إلى الخزينة.
+
+    يعمل عند كل قراءة للمفتاح حتى ينجح مرة: إن وُجد نص صريح في الملف والخزينة
+    متاحة، يُخزن فيها (وضع/تدوير) ثم تُحذف نسخته الصريحة من الملف (كتابة
+    ذرّية) — لا يبقى نص مكشوف. إن تعذرت الخزينة تبقى القيمة في الملف بلا
+    فقد (القراءة حينها من البيئة/الملف) وتُعاد المحاولة لاحقًا. فشل حذف
+    النسخة بعد نجاح التخزين غير كارثي: الخزينة تسبق الملف في القراءة.
+    """
+    runtime = brain_runtime_read()
+    legacy = runtime.get("OLLAMA_API_KEY")
+    if not legacy:
+        return
+    try:
+        stored = brain_api_key_set(str(legacy), actor="migration")
+    except Exception:
+        return  # الخزينة غير متاحة — لا فقد: النسخة تبقى حتى ترحيل لاحق
+    if not stored:
+        return
+    try:
+        remaining = {k: v for k, v in runtime.items() if k != "OLLAMA_API_KEY"}
+        atomic_write_json(BRAIN_RUNTIME_FILE, remaining, file_mode=0o600)
+    except OSError:  # TOLERATED: الخزينة تسبق الملف في القراءة — لا فقد؛ المحاولة تتكرر
+        pass
 
 
 def brain_api_key_get() -> Optional[str]:

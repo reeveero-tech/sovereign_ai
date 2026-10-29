@@ -37,7 +37,9 @@ def test_guest_conversations_survive_in_browser(_ui: str):
     assert "function upsertLocalConv" in _ui, "upsertLocalConv مفقودة"
     assert "function openLocalConv" in _ui, "openLocalConv (العودة لمحادثة ضيف) مفقودة"
     # القائمة الجانبية تعرض محادثات الضيف — ليس رسالة «أدخل المفتاح» فقط
-    assert "localConvs.forEach(function (c)" in _ui, "paintConvs لا تعرض محادثات الضيف"
+    # (R-813: فهرس عرض — slice ثم forEach، والمخزن الكامل يحفظ الجميع)
+    assert "localConvs.slice(0, showAllLocalConvs ? localConvs.length : CONV_DISPLAY_CAP).forEach(function (c)" in _ui, \
+        "paintConvs لا تعرض محادثات الضيف"
 
 
 def test_owner_persist_before_switch(_ui: str):
@@ -52,9 +54,9 @@ def test_conversation_title_derived_from_first_user_message(_ui: str):
 
 
 def test_local_conversation_list_capped(_ui: str):
-    """R-809/813: سقف ١٠٠ محادثة كاملة للضيف — لا ينمو التخزين بلا حدود،
-    وما تجاوزها يُقتطع (يبقى مدخله) ويُؤرشف — لا حذفًا صامتًا (أمر المالك)."""
-    assert "for (var i = 100; i < localConvs.length; i++)" in _ui, \
-        "قائمة محادثات الضيف بلا سقف"
-    assert "archived: true" in _ui, "التجاوز يجب أن يُؤرشف لا يُحذف"
-    assert "messages: (old.messages || []).slice(0, 2)" in _ui, "الاقتطاط غير الكارثي مفقود"
+    """R-809/813 (تصحيح المراجعة الثانية): فهرس عرض بأحدث ١٠٠ قابل للتوسيع،
+    والمخزن الكامل يحفظ الجميع كاملة — لا اقتطاط ولا حذف أبدًا (أمر المالك)."""
+    assert "CONV_DISPLAY_CAP = 100" in _ui, "فهرس عرض بلا سقف"
+    assert "localConvs.slice(0, showAllLocalConvs ? localConvs.length : CONV_DISPLAY_CAP)" in _ui
+    assert "إظهار الكل" in _ui, "ما بعد السقف يجب أن يبقى قابلًا للفتح (توسيع صادق)"
+    assert ".slice(0, 2)" not in _ui, "لا اقتطاط رسائل في التخزين"
