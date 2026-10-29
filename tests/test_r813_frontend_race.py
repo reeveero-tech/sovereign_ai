@@ -283,6 +283,42 @@ const staleSave = pendingApi.length - 1;
 state.sessionId = 'أحدث';          // تنقل أحدث بدأ أثناء انتظار الحفظ
 pendingApi[staleSave].run(); await tick();
 check('النتيجة القديمة إلغاء (false) لا نجاح (true)', (await staleP) === false);
+
+// ===== ٨) حراسة navSeq مستقلة عن نتيجة الحفظ: بدء الأحدث وحده يلغي الأقدم =====
+// (تصحيح المراجعة السادسة: الحفظ ينجح والجلسة لم تتغير — ومع ذلك لا يفتح الأقدم)
+state.sessionId = 'A'; state.convId = null; state.model = 'mA';
+state.messages = [{ role: 'user', content: 'رسالة A' }];
+apiCalls.length = 0; pendingApi.length = 0; navSeq = 0;
+fns.openConv('B');                      // تنقل قديم (myNav=1): GET(B) معلق
+const gB = pendingApi.length - 1;
+pendingApi[gB].run(); await tick();     // GET(B) يكتمل → المعالج ينتظر حفظ A (سينجح)
+const sB = pendingApi.length - 1;
+fns.openConv('C');                      // تنقل أحدث (myNav=2) — GET الخاص بها يبقى معلقًا
+const gC = pendingApi.length - 1;
+check('تنقل C الأحدث بدأ ولم يكتمل (GET معلق)', gC === sB + 1);
+pendingApi[sB].run(); await tick();     // حفظ A ينجح والجلسة ما زالت A ⇒ النتيجة true
+check('نجاح حفظ الأقدم لا يفتحه — بدء الأحدث وحده ألغاه',
+      state.sessionId === 'A' && state.messages.length === 1 &&
+      state.messages[0].content === 'رسالة A');
+pendingApi[gC].run(); await tick();     // ثم يكتمل GET الأحدث فتُفتح C (الأحدث فقط يفتح)
+if (pendingApi.length > gC + 1) { pendingApi[pendingApi.length - 1].run(); await tick(); }  // وحفظ A قبلها (PUT)
+check('التنقل الأحدث هو الذي يفتح', state.sessionId === 'C' &&
+      state.messages[0].content === 'سؤال C' &&           // رسائل C (تضمنت رسالة المستخدم من قسم ٧)
+      state.messages[state.messages.length - 1].content === 'رسالة C الجديدة');
+
+// ===== ٩) إعادة اختيار المحادثة المحلية الحالية تُلغي التنقل الأقدم المعلق =====
+state.sessionId = 'A'; state.convId = null; state.model = 'mA';
+state.messages = [{ role: 'user', content: 'رسالة A الحالية' }];
+localConvs = [{ id: 'A', title: 'A', model: 'mA', messages: state.messages.slice() }];
+apiCalls.length = 0; pendingApi.length = 0; navSeq = 0;
+fns.openConv('B');                      // تنقل قديم (myNav=1) معلق على GET(B)
+const gB2 = pendingApi.length - 1;
+await fns.openLocalConv('A');           // إعادة اختيار الحالية (myNav=2) — تُلغي الأقدم وتخرج
+check('إعادة اختيار الحالية لم تعِد تحميل رسائلها', state.messages.length === 1 &&
+      state.messages[0].content === 'رسالة A الحالية');
+pendingApi[gB2].run(); await tick();    // رد GET القديم يصل الآن — ملغى بمعرّف التنقل
+check('التنقل القديم لم يفتح B — الحالية باقية',
+      state.sessionId === 'A' && state.messages[0].content === 'رسالة A الحالية');
 })().then(() => {
   console.log(results.join('\n'));
   if (results.some(r => r.startsWith('FAIL'))) process.exit(1);
@@ -327,5 +363,4 @@ def test_storage_cap_display_index_separate():
     assert "return saveLocalConvs();" in upsert
     # فشل الحفظ يوقف التفريغ في كل مسارات التبديل
     assert src.count("if (!(await keepCurrentConversationBeforeNew())) return;") >= 2  # المسارات الثلاثة تنتظر النتيجة
-    assert "if (state.sessionId !== c.id && var myNav = ++navSeq" in src or \
-           "var myNav = ++navSeq; // R-813 (خامسة): معرّف عملية التنقل" in src  # openLocalConv محمية بمعرّف التنقل
+    assert "var myNav = ++navSeq;" in src  # كل مسارات التنقل محمية بمعرّف العملية
