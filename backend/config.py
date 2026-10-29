@@ -324,31 +324,101 @@ def brain_get(name: str, default=None):
     """القيمة الفعالة لإعداد العقل: طبقة التشغيل أولًا ثم قيمة البيئة المحمّلة.
 
     هذا هو مسار القراءة الوحيد للعقل الحي (ollama_client) — مصدر واحد للحقيقة.
+    استثناء المفتاح السري (OLLAMA_API_KEY): يُقرأ من الخزينة المشفرة (R-813) —
+    لا نص صريح على القرص أبدًا؛ قيمته في البيئة تبقى احتياطًا عند غيابه.
     """
+    if name == "OLLAMA_API_KEY":
+        vault_value = brain_api_key_get()
+        if vault_value:
+            return vault_value
+        return getattr(sys.modules[__name__], name, default)
     runtime = brain_runtime_read()
     if name in runtime:
         return runtime[name]
     return getattr(sys.modules[__name__], name, default)
 
 
+# R-813 (مراجعة المستشار): مفتاح مزود العقل سرٌّ مشفَّر في الخزينة (AES-256-GCM)
+# لا نص صريح في ملف التشغيل — الخزينة مفعلة حيًا (‏/vault/status) وتدقق كل فعل
+# في السجل الموقّع. القراءة مخزنة مؤقتًا في الذاكرة: تدقيق الخزينة يكتب حدثًا
+# موقّعًا لكل قراءة، وقراءة المفتاح عند كل استدلال كانت ستفيض السجل.
+BRAIN_API_KEY_SECRET = "brain.provider_api_key"
+BRAIN_API_KEY_SCOPE = "brain.provider"
+_BRAIN_API_KEY_CACHE: dict = {}
+
+
+def brain_api_key_get() -> Optional[str]:
+    """مفتاح مزود العقل من الخزينة (مخزن مؤقتًا) — أو None عند غيابه/تعطلها."""
+    if _BRAIN_API_KEY_CACHE.get("value"):
+        return _BRAIN_API_KEY_CACHE["value"]
+    try:
+        try:
+            from backend.sovereign.secrets_vault import get_vault
+        except ImportError:  # TOLERATED: نمط الاستيراد المزدوج القائم
+            from sovereign.secrets_vault import get_vault
+        value = get_vault().get(BRAIN_API_KEY_SECRET, capability=BRAIN_API_KEY_SCOPE,
+                                actor="brain_runtime")
+        _BRAIN_API_KEY_CACHE["value"] = value
+        return value
+    except Exception:
+        # غياب السر (لم يُضبط بعد) أو خزينة معطلة — قيمة البيئة هي الفعالة
+        return None
+
+
+def brain_api_key_set(value, actor: str = "owner") -> bool:
+    """ضبط مفتاح مزود العقل في الخزينة — True إذا تغير، False إذا طُلب إلغاء غير موجود.
+
+    القيمة الفارغة تحذفه صراحةً (عودة لقيمة البيئة). الفشل يرتفع استثناءً صادقًا —
+    لا نجاح كاذبًا أبدًا.
+    """
+    try:
+        try:
+            from backend.sovereign.secrets_vault import get_vault
+        except ImportError:  # TOLERATED: نمط الاستيراد المزدوج القائم
+            from sovereign.secrets_vault import get_vault
+        vault = get_vault()
+    except Exception as exc:
+        raise RuntimeError(f"الخزينة غير متاحة — لا تخزين مفتاح مزود: {type(exc).__name__}") from exc
+    if vault is None or not getattr(vault, "enabled", False):
+        raise RuntimeError("الخزينة غير متاحة — لا تخزين مفتاح مزود: VaultDisabled")
+    if value is None or value == "":
+        vault.delete(BRAIN_API_KEY_SECRET, actor=actor)  # إلغاء صريح
+        _BRAIN_API_KEY_CACHE.pop("value", None)
+        return False
+    try:
+        vault.put(BRAIN_API_KEY_SECRET, str(value), scopes=[BRAIN_API_KEY_SCOPE], actor=actor)
+    except Exception as exc:
+        if "موجود" not in str(exc):
+            raise
+        vault.rotate(BRAIN_API_KEY_SECRET, str(value), actor=actor)  # تحديث قائم
+    _BRAIN_API_KEY_CACHE["value"] = str(value)
+    return True
+
+
 def brain_set(values: dict) -> dict:
     """كتابة تعديلات إعدادات العقل في ملف التشغيل (كتابة ذرّية R-781، وضع 0600).
 
-    القيمة الفارغة تحذف المفتاح من الطبقة فتعود قيمة البيئة. يعيد الطبقة المكتوبة.
+    R-813 (مراجعة المستشار): الحقل غير المرسل لا يُمس أبدًا — التحديث الجزئي
+    حفظ للمرسل فقط (كان مسحًا ضمنيًا لكل ما لم يُرسل). القيمة الفارغة للمرسل
+    تحذفه من الطبقة فتعود قيمة البيئة. المفتاح السري (OLLAMA_API_KEY) لا
+    يمر من هنا — الخزينة المشفرة مساره (brain_api_key_set). فشل الكتابة يرتفع
+    استثناءً — لا نجاح كاذبًا.
     """
     layer = brain_runtime_read()
+    written = False
     for k in _BRAIN_RUNTIME_KEYS:
-        v = values.get(k)
+        if k == "OLLAMA_API_KEY" or k not in values:
+            continue  # السر مساره الخزينة؛ غير المرسل لا يُمس (R-813)
+        v = values[k]
         if v is None or (isinstance(v, str) and v == ""):
             layer.pop(k, None)
         else:
             layer[k] = v
-    try:
-        BRAIN_RUNTIME_FILE.parent.mkdir(parents=True, exist_ok=True)
-        atomic_write_json(BRAIN_RUNTIME_FILE, layer, file_mode=0o600)  # سر المزود على القرص
-    # TOLERATED: قرص للقراءة فقط (نشر مبني كصورة) — التعديل يُرفض صادقًا عند الطلب
-    except OSError:
-        pass
+        written = True
+    if not written:
+        return layer  # لا كتابة بلا داعٍ
+    BRAIN_RUNTIME_FILE.parent.mkdir(parents=True, exist_ok=True)
+    atomic_write_json(BRAIN_RUNTIME_FILE, layer, file_mode=0o600)
     return layer
 
 # ============================================================

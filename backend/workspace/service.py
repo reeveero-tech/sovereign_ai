@@ -253,7 +253,8 @@ class Workspace:
 
     # ---------------- المحادثات ----------------
     def save_conversation(self, cid: Optional[str], title: str, messages: List[Dict[str, Any]],
-                          project_id: Optional[str] = None) -> Dict[str, Any]:
+                          project_id: Optional[str] = None,
+                          model: Optional[str] = None) -> Dict[str, Any]:
         old = self.conversations.get(cid) if cid else None
         clean = []
         for m in (messages or [])[-MAX_MESSAGES:]:
@@ -264,6 +265,8 @@ class Workspace:
         rec = {"id": cid or (old or {}).get("id") or new_id("C"),
                "title": (title or (clean[0]["content"][:60] if clean else "محادثة"))[:120],
                "messages": clean, "project_id": project_id if project_id is not None else (old or {}).get("project_id"),
+               # R-810/813 (البند ٢): نموذج المحادثة يُحفظ مع سجلها ويُستعاد عند فتحها
+               "model": model if model is not None else (old or {}).get("model"),
                "created_at": (old or {}).get("created_at") or time.time(), "archived": False}
         return self.conversations.put(rec)
 
@@ -273,7 +276,7 @@ class Workspace:
             if r.get("archived") or (project_id is not None and r.get("project_id") != project_id):
                 continue
             out.append({k: r.get(k) for k in ("id", "title", "project_id", "created_at", "updated_at")}
-                       | {"messages": len(r.get("messages") or [])})
+                       | {"messages": len(r.get("messages") or []), "model": r.get("model")})
         return out
 
     def get_conversation(self, cid: str) -> Dict[str, Any]:

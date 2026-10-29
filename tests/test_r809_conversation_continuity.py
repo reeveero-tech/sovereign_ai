@@ -52,5 +52,9 @@ def test_conversation_title_derived_from_first_user_message(_ui: str):
 
 
 def test_local_conversation_list_capped(_ui: str):
-    """R-809: سقف ٥٠ محادثة للضيف — لا ينمو التخزين بلا حدود."""
-    assert ".slice(0, 50)" in _ui, "قائمة محادثات الضيف بلا سقف"
+    """R-809/813: سقف ١٠٠ محادثة كاملة للضيف — لا ينمو التخزين بلا حدود،
+    وما تجاوزها يُقتطع (يبقى مدخله) ويُؤرشف — لا حذفًا صامتًا (أمر المالك)."""
+    assert "for (var i = 100; i < localConvs.length; i++)" in _ui, \
+        "قائمة محادثات الضيف بلا سقف"
+    assert "archived: true" in _ui, "التجاوز يجب أن يُؤرشف لا يُحذف"
+    assert "messages: (old.messages || []).slice(0, 2)" in _ui, "الاقتطاط غير الكارثي مفقود"

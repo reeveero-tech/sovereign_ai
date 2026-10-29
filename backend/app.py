@@ -150,6 +150,9 @@ class ChatMessage(BaseModel):
     history: Optional[List[ChatTurn]] = Field(default=None, max_length=20, description="أدوار سابقة (حتى 20)")
     # R-789: مفتاح المالك (اختياري) — يوسّع أدوات المحادثة من القراءة إلى كل السجل؛ لا يُسجل
     api_key: Optional[str] = Field(default=None, max_length=512, description="مفتاح المالك (اختياري)", repr=False)
+    # R-810/813 (البند ٢): اختيار النموذج لهذه المحادثة — يصل فعليًا نداء العقل
+    # (بلا قيمة: النموذج الفعّال العام). يُحفظ مع سجل المحادثة ويُستعاد عند فتحها.
+    model: Optional[str] = Field(default=None, max_length=100, description="النموذج لهذه المحادثة (اختياري)", repr=False)
     # R-800: ملفات مساحة العمل المرفقة بالرسالة (للمالك) — الوكيل يقرؤها بأدوات files.*
     file_ids: Optional[List[str]] = Field(default=None, max_length=10, description="معرفات ملفات مرفقة")
     # R-800: المشروع النشط — تعليماته وروابطه تُمرَّر للوكيل (للمالك فقط)
@@ -1875,7 +1878,7 @@ def _brain_status_payload() -> Dict[str, Any]:
 
 
 @app.get("/brain/models")
-async def brain_models(x_sovereign_key: Optional[str] = Header(None)):
+def brain_models(x_sovereign_key: Optional[str] = Header(None)):
     """R-810 (البند ٢): النماذج المتاحة من العقل المُعد فعليًا — اكتشاف حي (المالك فقط)."""
     if not x_sovereign_key or not verify_api_key(x_sovereign_key):
         raise HTTPException(status_code=401, detail="مفتاح المالك مطلوب (X-Sovereign-Key)")
@@ -1885,7 +1888,7 @@ async def brain_models(x_sovereign_key: Optional[str] = Header(None)):
 
 
 @app.get("/brain/settings")
-async def brain_settings_get(x_sovereign_key: Optional[str] = Header(None)):
+def brain_settings_get(x_sovereign_key: Optional[str] = Header(None)):
     """R-810: الإعدادات الفعالة للعقل (المالك فقط) — بلا أي سر في المخرجات.
 
     api_key لا يُعاد أبدًا — منطقية «مضبوط/غير مضبوط» فقط (نمط لا-سر، R-614).
@@ -1968,8 +1971,8 @@ async def brain_settings_put(request: Request, x_sovereign_key: Optional[str] = 
             values["OLLAMA_BASE_URL"] = str(b).strip().rstrip("/")
     if "api_key" in body:
         k = body["api_key"]
-        if k is None or k == "":
-            values["OLLAMA_API_KEY"] = None
+        if k is None or (isinstance(k, str) and k == ""):
+            values["OLLAMA_API_KEY"] = None  # إلغاء صريح — حذف من الخزينة
         elif isinstance(k, str):
             values["OLLAMA_API_KEY"] = k
         else:
@@ -1983,12 +1986,24 @@ async def brain_settings_put(request: Request, x_sovereign_key: Optional[str] = 
                 values["OLLAMA_NUM_CTX"] = int(n)
             except (TypeError, ValueError):
                 raise HTTPException(status_code=422, detail="num_ctx عدد صحيح")
-    layer = _config.brain_set(values)
+    # R-813 (مراجعة المستشار): المفتاح السري مساره الخزينة المشفرة (AES-256-GCM)
+    # — لا يمر من ملف التشغيل أبدًا؛ وفشل الحفظ يُرفض صادقًا (لا نجاح كاذبًا).
+    # الكتابة على القرص/الخزينة تخرج من حلقة التنفيذ (threadpool) — لا حجب
+    if "OLLAMA_API_KEY" in values:
+        try:
+            await asyncio.to_thread(_config.brain_api_key_set,
+                                    values.pop("OLLAMA_API_KEY"), actor="owner")
+        except Exception as exc:
+            raise HTTPException(status_code=503, detail=f"تعذر تخزين المفتاح في الخزينة: {type(exc).__name__}")
+    try:
+        layer = await asyncio.to_thread(_config.brain_set, values)
+    except OSError:
+        raise HTTPException(status_code=503, detail="تعذر حفظ إعدادات التشغيل (القرص)")
     # النتيجة للعرض فقط — أسماء الحقول المكتوبة، بلا أي قيمة سرية
     return {"ok": True, "runtime_keys": sorted(layer), "effective": {
-        "model": _config.brain_get("OLLAMA_MODEL"),
-        "protocol": _config.brain_get("OLLAMA_PROTOCOL", "ollama"),
-        "api_key_set": bool(_config.brain_get("OLLAMA_API_KEY")),
+        "model": await asyncio.to_thread(_config.brain_get, "OLLAMA_MODEL"),
+        "protocol": await asyncio.to_thread(_config.brain_get, "OLLAMA_PROTOCOL", "ollama"),
+        "api_key_set": bool(await asyncio.to_thread(_config.brain_get, "OLLAMA_API_KEY")),
     }}
 
 
@@ -3050,8 +3065,10 @@ async def chat(message: ChatMessage, background_tasks: BackgroundTasks):
             agent_text = message.text + await asyncio.to_thread(_attachments_note, message.file_ids)
         if owner and message.project_id:
             agent_text = agent_text + await asyncio.to_thread(_project_note, message.project_id)
+        # R-810/813 (البند ٢): اختيار النموذج يصل نداء العقل فعليًا (توجيهًا وجوابًا)
         agent_out = await asyncio.to_thread(chat_agent.respond, agent_text,
-                                            history or None, owner=owner)
+                                            history or None, owner=owner,
+                                            model=message.model)
         reply = agent_out["reply"]
         tools_used = list(agent_out.get("tools_used") or [])
         agent_status = agent_out.get("status")

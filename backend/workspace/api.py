@@ -65,6 +65,8 @@ class ConversationBody(BaseModel):
     title: str = ""
     messages: List[Dict[str, Any]] = []
     project_id: Optional[str] = None
+    # R-810/813 (البند ٢): نموذج المحادثة — يُحفظ مع سجلها ويُستعاد عند فتحها
+    model: Optional[str] = None
 
 
 class ProjectBody(BaseModel):
@@ -184,7 +186,7 @@ def make_router(verify: Callable[[str], bool]) -> APIRouter:
     @r.post("/conversations")
     async def new_conv(body: ConversationBody, x_sovereign_key: Optional[str] = Header(None)):
         owner(x_sovereign_key)
-        return await run(lambda: get_workspace().save_conversation(None, body.title, body.messages, body.project_id))
+        return await run(lambda: get_workspace().save_conversation(None, body.title, body.messages, body.project_id, body.model))
 
     @r.get("/conversations/{cid}")
     async def get_conv(cid: str, x_sovereign_key: Optional[str] = Header(None)):
@@ -194,7 +196,7 @@ def make_router(verify: Callable[[str], bool]) -> APIRouter:
     @r.put("/conversations/{cid}")
     async def put_conv(cid: str, body: ConversationBody, x_sovereign_key: Optional[str] = Header(None)):
         owner(x_sovereign_key)
-        return await run(lambda: get_workspace().save_conversation(cid, body.title, body.messages, body.project_id))
+        return await run(lambda: get_workspace().save_conversation(cid, body.title, body.messages, body.project_id, body.model))
 
     @r.post("/conversations/{cid}/archive")
     async def arch_conv(cid: str, x_sovereign_key: Optional[str] = Header(None)):

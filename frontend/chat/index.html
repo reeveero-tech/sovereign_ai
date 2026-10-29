@@ -178,6 +178,7 @@
           <div class="bar">
             <button class="btn sm" id="attachBtn" title="إرفاق ملفات (تُرفع إلى مساحة العمل ويقرؤها النظام فعليًا)">+ إرفاق</button>
             <input type="file" id="fileInput" multiple hidden>
+            <select id="modelSel" hidden dir="ltr" title="نموذج هذه المحادثة — يصل فعليًا نداء العقل ويُحفظ مع المحادثة (بلا اختيار: النموذج الفعّال العام)"></select>
             <span class="muted small" id="status"></span>
             <span class="sp"></span>
             <button class="btn sm" id="stopBtn" hidden>إيقاف</button>
@@ -329,7 +330,14 @@
     return "محادثة";
   }
   function upsertLocalConv(rec) {
-    localConvs = [rec].concat(localConvs.filter(function (c) { return c.id !== rec.id; })).slice(0, 50);
+    localConvs = [rec].concat(localConvs.filter(function (c) { return c.id !== rec.id; }));
+    // R-813 (مراجعة المستشار): سعة المتصفح محدودة — لا حذف صامت: الأقدم تُقتطع
+    // رسائله (يبقى مدخله وعنوانه وتاريخه) بدل محوه كليًا من الوجود
+    for (var i = 100; i < localConvs.length; i++) {
+      var old = localConvs[i];
+      localConvs[i] = { id: old.id, title: old.title, archived: true,
+        messages: (old.messages || []).slice(0, 2), updated_at: old.updated_at, model: old.model };
+    }
     saveLocalConvs();
   }
   function keepCurrentConversationBeforeNew() {
@@ -338,7 +346,7 @@
     if (ownerKey()) {
       persistConv(); // R-809: أثرِ أي رسائل غير محفوظة سحابيًا قبل التبديل (العنوان صار مشتقًا)
     } else {
-      upsertLocalConv({ id: state.sessionId, title: title, messages: state.messages, updated_at: Date.now() / 1000 });
+      upsertLocalConv({ id: state.sessionId, title: title, messages: state.messages, updated_at: Date.now() / 1000, model: state.model || null });
     }
   }
 
@@ -413,6 +421,7 @@
     var to = setTimeout(function () { ctrl.abort(); }, TIMEOUT_MS);
     var body = { text: text, session_id: state.sessionId, user_id: "owner", history: history };
     var k = ownerKey(); if (k) body.api_key = k;
+    if (state.model) body.model = state.model; // R-810/813 (البند ٢): نموذج هذه المحادثة
     if (fileIds && fileIds.length) body.file_ids = fileIds;
     if (state.project) body.project_id = state.project.id;
     return fetch("/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), signal: ctrl.signal })
@@ -460,6 +469,8 @@
   input.addEventListener("keydown", function (e) { if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); send(); } });
   sendBtn.addEventListener("click", function () { send(); });
   $("stopBtn").addEventListener("click", function () { if (ctrl) ctrl.abort(); });
+  var _ms = $("modelSel");
+  if (_ms) _ms.addEventListener("change", function () { state.model = _ms.value || null; save(); });
   $("newBtn").addEventListener("click", function () {
     if (busy) return;
     keepCurrentConversationBeforeNew(); // R-809: السابقة تُحفظ أولًا — لا تختفي
@@ -468,16 +479,50 @@
   function openLocalConv(id) {
     var c = localConvs.filter(function (x) { return x.id === id; })[0];
     if (!c) return;
-    state.convId = null; state.sessionId = c.id; state.messages = c.messages || []; save(); renderChat(); paintConvs(); go("chat");
+    // R-813 (مراجعة المستشار): الجارية تُحفظ قبل أي تبديل — لا تضيع بفتح محادثة أخرى
+    if (state.sessionId !== c.id) keepCurrentConversationBeforeNew();
+    state.convId = null; state.sessionId = c.id; state.messages = c.messages || [];
+    state.model = c.model || null; paintModelSel(); // R-810/813: نموذج المحادثة يُستعاد
+    save(); renderChat(); paintConvs(); go("chat");
   }
 
   // حفظ المحادثة في مساحة العمل (Supabase) — حين يكون مفتاح المالك مضبوطًا
   function persistConv() {
     if (!ownerKey() || !state.messages.length) return;
+    // R-813 (مراجعة المستشار): هوية الجلسة تُلتقط وقت الطلب — رد متأخر بعد التبديل
+    // لا يسند هوية محادثة لجلسة أخرى (كان يمكن أن يستبدل محتوى الأخرى)
+    var targetSession = state.sessionId, hadConvId = state.convId;
     var body = { title: convTitle(state.messages), messages: state.messages.map(function (m) { return { role: m.role, content: m.content, ts: m.ts, tools: m.tools, files: m.files }; }),
-                 project_id: state.project ? state.project.id : null };
-    var p = state.convId ? api("/ws/conversations/" + state.convId, { method: "PUT", json: body }) : api("/ws/conversations", { json: body });
-    p.then(function (rec) { if (rec && rec.id) { state.convId = rec.id; save(); loadConvs(); } }).catch(function () {});
+                 project_id: state.project ? state.project.id : null, model: state.model || null };
+    var p = hadConvId ? api("/ws/conversations/" + hadConvId, { method: "PUT", json: body }) : api("/ws/conversations", { json: body });
+    p.then(function (rec) {
+      if (state.sessionId !== targetSession) return; // الجلسة تبدلت — لا مساس بالهوية
+      if (rec && rec.id) { state.convId = rec.id; save(); loadConvs(); }
+    }).catch(function () {});
+  }
+  // R-810/813 (البند ٢): منتقي نموذج المحادثة — يظهر للمالك فقط (الاكتشاف محمي بمفتاحه)،
+  // والاختيار يُحفظ مع المحادثة ويُستعاد عند فتحها؛ بلا اختيار: النموذج الفعّال العام
+  var knownModels = [];
+  function paintModelSel() {
+    var sel = $("modelSel"); if (!sel) return;
+    var hasKey = !!ownerKey();
+    sel.hidden = !hasKey;
+    if (!hasKey) { state.model = null; return; }
+    sel.textContent = "";
+    var auto = el("option", null, "النموذج الفعّال"); auto.value = ""; sel.appendChild(auto);
+    knownModels.forEach(function (m) {
+      var o = el("option", null, m); o.value = m; if (m === state.model) o.selected = true; sel.appendChild(o);
+    });
+    if (state.model && knownModels.indexOf(state.model) === -1) {
+      var cur = el("option", null, state.model + " (محدد)"); cur.value = state.model; cur.selected = true; sel.appendChild(cur);
+    }
+    if (!state.model) auto.selected = true;
+  }
+  function loadModels() {
+    if (!ownerKey()) { paintModelSel(); return; }
+    api("/brain/models").then(function (d) {
+      if (d && d.ok && Array.isArray(d.models)) { knownModels = d.models; paintModelSel(); }
+    }).catch(function () {}); // فشل الاكتشاف لا يعطل المحادثة — «النموذج الفعّال» يبقى
   }
   function loadConvs() {
     if (!ownerKey()) { convs = []; paintConvs(); return; }
@@ -511,7 +556,11 @@
   }
   function openConv(id) {
     api("/ws/conversations/" + id).then(function (c) {
-      state.convId = c.id; state.sessionId = c.id; state.messages = c.messages || []; save(); renderChat(); paintConvs(); go("chat");
+      // R-813 (مراجعة المستشار): الجارية تُحفظ قبل أي تبديل — لا تضيع بفتح محادثة أخرى
+      keepCurrentConversationBeforeNew();
+      state.convId = c.id; state.sessionId = c.id; state.messages = c.messages || [];
+      state.model = c.model || null; paintModelSel(); // R-810/813: نموذج المحادثة يُستعاد
+      save(); renderChat(); paintConvs(); go("chat");
     }).catch(function (e) { toast(e.message, true); });
   }
 
@@ -851,6 +900,18 @@
       provGrid.appendChild(frow("مفتاح API", apiKeyIn2));
       provGrid.appendChild(frow("num_ctx", ctxIn));
       brainCtl.appendChild(provGrid);
+      // R-813 (مراجعة المستشار): الحقول تُملأ من الإعدادات الفعلية الحية — لا حقول فارغة تُمسح بلا قصد؛
+      // مفتاح API لا يُعاد من الخادم أبدًا — تُعرض حالته فقط (مضبوط/غير مضبوط)، وفراغ الحقل يعني «بلا تغيير»
+      api("/brain/settings").then(function (st) {
+        if (!st) return;
+        if (st.base_url) baseUrlIn.value = st.base_url;
+        if (st.protocol) protoSel.value = st.protocol;
+        if (st.num_ctx) ctxIn.value = String(st.num_ctx);
+        hint2.textContent = st.api_key_set
+          ? "مفتاح API للمزود مضبوط (محفوظ مشفرًا في الخزينة — لا يُعرض). اترك الحقل فارغًا للإبقاء عليه."
+          : "لا مفتاح API مضبوط للمزود.";
+      }).catch(function () {});
+      var hint2 = el("div", "small muted"); hint2.style.marginTop = "4px"; brainCtl.appendChild(hint2);
       var brainMsg = el("div", "small"); brainMsg.style.marginTop = "6px"; brainCtl.appendChild(brainMsg);
       var saveBrain = el("button", "btn pri", "حفظ إعدادات العقل (يسري فورًا)");
       saveBrain.style.marginTop = "8px";
@@ -890,7 +951,7 @@
     }).catch(function (e) { box.textContent = ""; box.appendChild(el("div", "card", e.message)); });
   }
   $("keySave").addEventListener("click", function () { var v = $("keyIn").value.trim(); if (!v) return; try { localStorage.setItem(KEY_STORE, v); } catch (e) {}
-    api("/ws/status").then(function () { toast("مفتاح المالك صحيح"); loadSettings(); loadConvs(); }).catch(function (e) { toast(e.message, true); try { localStorage.removeItem(KEY_STORE); } catch (x) {} paintKey(); }); });
+    api("/ws/status").then(function () { toast("مفتاح المالك صحيح"); loadSettings(); loadConvs(); loadModels(); }).catch(function (e) { toast(e.message, true); try { localStorage.removeItem(KEY_STORE); } catch (x) {} paintKey(); }); });
   $("keyClear").addEventListener("click", function () { try { localStorage.removeItem(KEY_STORE); } catch (e) {} paintKey(); loadSettings(); loadConvs(); });
   loaders.settings = loadSettings;
 
@@ -904,7 +965,7 @@
       dot.className = "dot " + (last === "error" ? "bad" : "ok"); tx.textContent = (last === "error" ? "آخر اتصال بالعقل فشل · " : "متصل · ") + (b.model || "");
     });
   }
-  paintKey(); renderChat(); paintConvs(); loadConvs(); checkStatus(); setInterval(checkStatus, 30000); input.focus();
+  paintKey(); renderChat(); paintConvs(); loadConvs(); loadModels(); checkStatus(); setInterval(checkStatus, 30000); input.focus();
 })();
 </script>
 </body>

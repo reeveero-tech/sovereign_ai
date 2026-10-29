@@ -252,8 +252,8 @@ def test_chat_passes_attachments_and_project_to_agent(client, ws, monkeypatch):
     import chat_agent
     seen = {}
 
-    def fake_respond(text, history=None, owner=False):
-        seen["text"], seen["owner"] = text, owner
+    def fake_respond(text, history=None, owner=False, model=None):
+        seen["text"], seen["owner"], seen["model"] = text, owner, model
         return {"reply": "تم", "tools_used": []}
     monkeypatch.setattr(app_mod, "_chat_agent_mode", lambda: True)
     monkeypatch.setattr(chat_agent, "respond", fake_respond)
@@ -266,6 +266,9 @@ def test_chat_passes_attachments_and_project_to_agent(client, ws, monkeypatch):
     # الضيف لا يرى مرفقات ولا مشروعًا
     client.post("/chat", json={"text": "اقرأ", "file_ids": [f["id"]], "project_id": p["id"]})
     assert seen["owner"] is False and "محتوى-المرفق-800" not in seen["text"]
+    # R-813 (البند ٢): نموذج المحادثة يصل الوكيل من الرسالة — لا انفصام
+    client.post("/chat", json={"text": "اقرأ", "api_key": KEY, "model": "m-800"})
+    assert seen["model"] == "m-800"
 
 
 # ---------------- 7. الأدوات ----------------
