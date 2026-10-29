@@ -59,7 +59,7 @@ jobs:
           [ "$CODE" = "200" ] || { echo "::error::/health رد $CODE"; cat /tmp/health.json; exit 1; }
           python3 tools/live_check_health.py /tmp/health.json
 
-      - name: Root page: 200, nonempty, no forbidden word
+      - name: Root page (200, nonempty, no forbidden word)
         run: |
           CODE=$(curl -s -o /tmp/root.html -w "%{http_code}" --max-time 30 "$BASE_URL/")
           [ "$CODE" = "200" ] || { echo "::error::الجذر رد $CODE"; exit 1; }
