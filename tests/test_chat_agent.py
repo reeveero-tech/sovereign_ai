@@ -132,6 +132,9 @@ def test_brain_failure_is_reported_honestly_not_templated():
 def test_budget_exhausted_after_results_brain_answers_from_them(monkeypatch):
     import chat_agent
     monkeypatch.setattr(chat_agent, "MAX_STEPS", 1)
+    # R-814: قراءة الويب معطلة بعلم المالك لا تُعرض للعقل — الاختبار يستخدم
+    # web.fetch كمثال أداة؛ نحاكي توفرها ليبقى الاختبار عن الميزانية لا عن الإخفاء
+    monkeypatch.setattr(chat_agent, "web_fetch_available", lambda: True)
     reg = _registry()
     brain = FakeBrain([{"tool": "web.fetch", "inputs": {"url": "https://x"}},
                        "الصفحة عنوانها T."])
