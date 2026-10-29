@@ -145,3 +145,69 @@ def test_ledger_verify_endpoint_keyring_stats(client):
     assert "active" in ks
     assert "lost" in ks
     assert ks["total_keys"] >= 0
+
+
+def test_ledger_verify_cache_serves_sequential_calls(client, monkeypatch):
+    """R-805: الاستدعاء المتتابع بيدجر غير متغير يُخدم من الكاش — لا إعادة حساب O(n).
+
+    كان الشرط القديم `gen != gen_seen` لا يتحقق أبدًا للاستدعاءات المتتابعة
+    (كانت gen تُقرأ قبل القفل فتساوي قيمة الحالة عند الدخول) ⇒ كل استدعاء
+    متتابع أعاد الحساب الكامل على السجل كله. الآن: بصمة الملفات ثابتة ⇒
+    الاستدعاء الثاني لا يعيد الحساب ويعيد نفس النتيجة حرفيًا."""
+    import app as app_module
+
+    calls = {"n": 0}
+    real_compute = app_module._ledger_verify_compute
+
+    def counting_compute():
+        calls["n"] += 1
+        return real_compute()
+
+    monkeypatch.setattr(app_module, "_ledger_verify_compute", counting_compute)
+    # حالة كاش نظيفة لاختبار معزول
+    monkeypatch.setattr(app_module, "_LEDGER_VERIFY_STATE",
+                        {"gen": 0, "result": None, "fp": None, "ts": 0.0})
+
+    r1 = client.get("/ledger/verify")
+    assert r1.status_code == 200
+    assert calls["n"] == 1, "الاستدعاء الأول يجب أن يحسب"
+
+    r2 = client.get("/ledger/verify")
+    assert r2.status_code == 200
+    assert calls["n"] == 1, (
+        "R-805: الاستدعاء المتتابع بيدجر غير متغير يجب أن يُخدم من الكاش"
+    )
+    assert r1.json() == r2.json(), "الكاش يجب أن يعيد نفس النتيجة حرفيًا"
+
+    # تغيّر بصمة الملفات (محاكاة حدث جديد في اليدجر) ⇒ إعادة حساب
+    monkeypatch.setattr(app_module, "_ledger_verify_fingerprint", lambda: (("changed", 1, 1.0),))
+    r3 = client.get("/ledger/verify")
+    assert r3.status_code == 200
+    assert calls["n"] == 2, "تغيّر البصمة يجب أن يعيد الحساب"
+
+
+def test_ledger_verify_cache_ttl_expiry(client, monkeypatch):
+    """R-805: انتهاء مهلة الكاش (TTL) يعيد الحساب حتى لو البصمة ثابتة —
+    يقيّد الثبات عند تدوير المفاتيح (البصمة لا تلتقطه)."""
+    import time as _time
+    import app as app_module
+
+    calls = {"n": 0}
+    real_compute = app_module._ledger_verify_compute
+
+    def counting_compute():
+        calls["n"] += 1
+        return real_compute()
+
+    monkeypatch.setattr(app_module, "_ledger_verify_compute", counting_compute)
+    monkeypatch.setattr(app_module, "_LEDGER_VERIFY_STATE",
+                        {"gen": 0, "result": None, "fp": None, "ts": 0.0})
+
+    r1 = client.get("/ledger/verify")
+    assert calls["n"] == 1
+
+    # نُقْدِم عمر النتيجة المخزنة إلى ما بعد TTL ⇒ إعادة حساب
+    state = app_module._LEDGER_VERIFY_STATE
+    state["ts"] = _time.time() - (app_module._LEDGER_VERIFY_CACHE_TTL + 1.0)
+    r2 = client.get("/ledger/verify")
+    assert calls["n"] == 2, "انتهاء TTL يجب أن يعيد الحساب"

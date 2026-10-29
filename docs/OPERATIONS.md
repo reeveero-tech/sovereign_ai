@@ -1,7 +1,7 @@
 # OPERATIONS.md — التشغيل والنشر
 
 > كيف يُشغَّل المشروع ويُنشر؟ الحالة الفعلية كما رُصدت.
-> آخر تحديث: 2026-10-20 (R-703 — وضع «كشف بلا تحرك» + توقيع 256 بت)
+> آخر تحديث: 2026-10-29 (R-805 — تصويب ادعاءات قديمة بلا دليل حديث: main.py يعمل، Dockerfile يبني؛ + إصلاح كاش `/ledger/verify` ٦.١.١٢)
 
 ---
 
@@ -15,8 +15,7 @@ uvicorn app:app --host 0.0.0.0 --port 8000
 ```
 
 ### الطرق المكسورة
-- ❌ `python main.py` من الجذر → `No module named 'orchestrator'` (يجب التشغيل من داخل backend).
-- ❌ `docker build` + `uvicorn backend.app:app` → `No module named 'orchestrator'` (استيراد نسبي).
+- ✅ (تصويب R-805 — كان يُدرج مكسورًا بلا دليل حديث): `python main.py` من الجذر **يعمل** — أثبت بالتشغيل الفعلي (`main.py --test` ⇒ «اكتمل الاختبار بنجاح — النظام جاهز»؛ الملف يضبط `sys.path` لـ backend في أسطره الأولى). الطرق الموثقة أعلاه تبقى الأسهل.
 
 ---
 
@@ -26,7 +25,7 @@ uvicorn app:app --host 0.0.0.0 --port 8000
 |---|---|---|
 | `start.sh` (Replit) | 5000 | يعمل |
 | `fly.toml` (Fly.io) | 8080 | app: sovereign-ai-k20elq, region ams |
-| `Dockerfile` | 8080 | ⚠️ يفشل (استيراد) |
+| `Dockerfile` | 8080 | ✅ يبني ويعمل (تصويب R-805 — كان يُدرج «يفشل (استيراد)» بلا دليل حديث؛ نشر Fly الأخير بنى نفس الملف بنجاح) |
 | `app.py` (مباشر) | 8000 | يعمل |
 | `.replit` | 5000→80 | يعمل |
 
@@ -53,7 +52,7 @@ uvicorn app:app --host 0.0.0.0 --port 8000
 
 ### Fly.io
 - `fly.toml`: app `sovereign-ai-k20elq`, region `ams`, health check `/health`, 512MB/1CPU.
-- ⚠️ Dockerfile الحالي لا يبني (R-105).
+- ✅ Dockerfile يبني وينشر عبر سير `deploy-fly.yml` الرسمي (آخر نشر ناجح على آخر التزام). (تصويب R-805 — كان يُدرج «لا يبني (R-105)» بلا دليل حديث).
 
 ### Replit
 - `.replit`: python-3.12, nodejs-20, port 5000→80.
@@ -67,6 +66,7 @@ uvicorn app:app --host 0.0.0.0 --port 8000
 
 | التاريخ | التغيير | الدفعة |
 |---|---|---|
+| 2026-10-29 | تصويب ادعاءات قديمة بلا دليل حديث (main.py يعمل؛ Dockerfile يبني وينشر) + إصلاح كاش `/ledger/verify` (٦.١.١٢) | R-805 |
 | 2026-10-12 | توثيق التشغيل والنشر من مسح M0 | M0 |
 
 ## ملاحظات M1 (R-112)
