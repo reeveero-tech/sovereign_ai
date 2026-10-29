@@ -347,12 +347,15 @@
     localConvs = [rec].concat(localConvs.filter(function (c) { return c.id !== rec.id; }));
     return saveLocalConvs(); // R-813: النتيجة تصعد — لا تبديل بعد فشل الحفظ
   }
-  function keepCurrentConversationBeforeNew() {
+  // R-813 (تصحيح المراجعة الرابعة): نتيجة الحفظ الفعلية تعود للمنادي — فشل حفظ
+  // الخادم يوقف التبديل ويُبقي الجارية سليمة (لا نجاح صامت كاذب في مسار المالك)
+  async function keepCurrentConversationBeforeNew() {
     if (!state.messages.length) return true;
     var title = convTitle(state.messages);
     if (ownerKey()) {
-      persistConv(); // R-809: أثرِ أي رسائل غير محفوظة سحابيًا قبل التبديل (العنوان صار مشتقًا)
-      return true;
+      // R-809: أثرِ أي رسائل غير محفوظة سحابيًا قبل التبديل (العنوان صار مشتقًا)
+      // R-813 (تصحيح المراجعة الرابعة): النتيجة تُنتظر — لا تبديل قبل نجاح الحفظ الفعلي
+      return persistConv(); // R-809
     }
     // R-813 (تصحيح المراجعة الثالثة): فشل حفظ الضيف يمنع التبديل — لا تُفرَّغ
     // الجارية باعتبارها محفوظة وهي ليست كذلك (فشل ظاهر لا نجاح صامت كاذب)
@@ -480,36 +483,45 @@
   $("stopBtn").addEventListener("click", function () { if (ctrl) ctrl.abort(); });
   var _ms = $("modelSel");
   if (_ms) _ms.addEventListener("change", function () { state.model = _ms.value || null; save(); });
-  $("newBtn").addEventListener("click", function () {
+  $("newBtn").addEventListener("click", async function () {
     if (busy) return;
-    // R-813: فشل حفظ السابقة (امتلاء مساحة الضيف) يوقف التبديل — لا تضيع
-    if (!keepCurrentConversationBeforeNew()) return; // R-809: السابقة تُحفظ أولًا — لا تختفي
+    // R-813: فشل حفظ السابقة (امتلاء مساحة الضيف أو رفض الخادم) يوقف التبديل — لا تضيع
+    // R-813 (تصحيح المراجعة الرابعة): النتيجة تُنتظر — لا تفريغ قبل نجاح الحفظ الفعلي
+    if (!(await keepCurrentConversationBeforeNew())) return; // R-809: السابقة تُحفظ أولًا — لا تختفي
     state.convId = null; state.sessionId = rid(); state.messages = []; attached = []; paintAttached(); save(); renderChat(); paintConvs(); go("chat"); input.focus();
   });
-  function openLocalConv(id) {
+  async function openLocalConv(id) {
     var c = localConvs.filter(function (x) { return x.id === id; })[0];
     if (!c) return;
     // R-813 (مراجعة المستشار): الجارية تُحفظ قبل أي تبديل — لا تضيع بفتح محادثة أخرى
-    // R-813: فشل حفظ الجارية يوقف التبديل — لا تضيع بفتح محادثة أخرى
-    if (state.sessionId !== c.id && !keepCurrentConversationBeforeNew()) return;
+    // R-813: فشل حفظ الجارية (ضيف أو رفض خادم) يوقف التبديل — لا تضيع بفتح محادثة أخرى
+    if (state.sessionId !== c.id && !(await keepCurrentConversationBeforeNew())) return;
     state.convId = null; state.sessionId = c.id; state.messages = c.messages || [];
     state.model = c.model || null; paintModelSel(); // R-810/813: نموذج المحادثة يُستعاد
     save(); renderChat(); paintConvs(); go("chat");
   }
 
   // حفظ المحادثة في مساحة العمل (Supabase) — حين يكون مفتاح المالك مضبوطًا
+  // R-813 (تصحيح المراجعة الرابعة): persistConv يعيد وعدًا بنتيجة الحفظ الفعلية —
+  // الفشل يصعد للمنادي (فشل ظاهر برسالة، لا تبديل ولا تفريغ) مع بقاء حارس الهوية
   function persistConv() {
-    if (!ownerKey() || !state.messages.length) return;
+    if (!ownerKey() || !state.messages.length) return Promise.resolve(true); // لا رسائل = لا حفظ مطلوب
     // R-813 (مراجعة المستشار): هوية الجلسة تُلتقط وقت الطلب — رد متأخر بعد التبديل
     // لا يسند هوية محادثة لجلسة أخرى (كان يمكن أن يستبدل محتوى الأخرى)
     var targetSession = state.sessionId, hadConvId = state.convId;
     var body = { title: convTitle(state.messages), messages: state.messages.map(function (m) { return { role: m.role, content: m.content, ts: m.ts, tools: m.tools, files: m.files }; }),
                  project_id: state.project ? state.project.id : null, model: state.model || null };
     var p = hadConvId ? api("/ws/conversations/" + hadConvId, { method: "PUT", json: body }) : api("/ws/conversations", { json: body });
-    p.then(function (rec) {
-      if (state.sessionId !== targetSession) return; // الجلسة تبدلت — لا مساس بالهوية
+    return p.then(function (rec) {
+      if (state.sessionId !== targetSession) return true; // الجلسة تبدلت — الحفظ تم خادميًا فعلًا
       if (rec && rec.id) { state.convId = rec.id; save(); loadConvs(); }
-    }).catch(function () {});
+      return true;
+    }).catch(function (err) {
+      if (state.sessionId !== targetSession) return true; // تبديل سابق من مسار آخر — لا نحجب جلسة أخرى
+      // R-813 (تصحيح المراجعة الرابعة): فشل حفظ الخادم ظاهر — يوقف التبديل ويعاد للمنادي
+      try { toast("تعذر حفظ المحادثة الحالية على الخادم (" + (((err || {}).message) || "خطأ") + ") — لم يكتمل التبديل. أعد المحاولة.", true); } catch (t) {}
+      return false;
+    });
   }
   // R-810/813 (البند ٢): منتقي نموذج المحادثة — يظهر للمالك فقط (الاكتشاف محمي بمفتاحه)،
   // والاختيار يُحفظ مع المحادثة ويُستعاد عند فتحها؛ بلا اختيار: النموذج الفعّال العام
@@ -573,9 +585,10 @@
     });
   }
   function openConv(id) {
-    api("/ws/conversations/" + id).then(function (c) {
+    api("/ws/conversations/" + id).then(async function (c) {
       // R-813 (مراجعة المستشار): الجارية تُحفظ قبل أي تبديل — لا تضيع بفتح محادثة أخرى
-      if (!keepCurrentConversationBeforeNew()) return;
+      // R-813 (تصحيح المراجعة الرابعة): النتيجة تُنتظر — فشل حفظ الخادم يوقف التبديل
+      if (!(await keepCurrentConversationBeforeNew())) return;
       state.convId = c.id; state.sessionId = c.id; state.messages = c.messages || [];
       state.model = c.model || null; paintModelSel(); // R-810/813: نموذج المحادثة يُستعاد
       save(); renderChat(); paintConvs(); go("chat");

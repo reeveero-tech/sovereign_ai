@@ -28,7 +28,7 @@ def _ui() -> str:
 def test_new_button_saves_previous_conversation(_ui: str):
     """R-809: الزر يحفظ الجارية أولًا — لا تختفي عند بدء جلسة جديدة.
     (R-813 تصحيح المراجعة الثالثة: الحفظ حارس — فشله يوقف التفريغ لا نجاحًا صامتًا)"""
-    assert "if (!keepCurrentConversationBeforeNew()) return; // R-809" in _ui, \
+    assert "if (!(await keepCurrentConversationBeforeNew())) return; // R-809" in _ui, \
         "زر «محادثة جديدة» يجب أن يحفظ الجارية قبل التفريغ ويوقف التفريغ عند فشل الحفظ"
 
 
@@ -45,7 +45,8 @@ def test_guest_conversations_survive_in_browser(_ui: str):
 
 def test_owner_persist_before_switch(_ui: str):
     """R-809: المالك — persistConv قبل التبديل حتى لا تضيع الرسائل غير المحفوظة."""
-    assert "persistConv(); // R-809" in _ui, "keepCurrentConversationBeforeNew لا يستدعي persistConv للمالك"
+    assert "return persistConv(); // R-809" in _ui, \
+        "keepCurrentConversationBeforeNew لا ينتظر نتيجة persistConv للمالك (فشل الحفظ يوقف التبديل)"
 
 
 def test_conversation_title_derived_from_first_user_message(_ui: str):

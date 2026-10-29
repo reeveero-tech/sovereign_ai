@@ -346,13 +346,18 @@ def test_frontend_conversation_fixes_present():
     # حماية العرق: persistConv يلتقط هوية الجلسة المستهدفة ويحرسها في الرد
     block = _fn_block(src, "persistConv")
     assert "var targetSession = state.sessionId" in block
-    assert "if (state.sessionId !== targetSession) return;" in block
+    assert "if (state.sessionId !== targetSession) return true;" in block
+    # نتيجة الحفظ الفعلية تعود للمنادي (تصحيح المراجعة الرابعة): persistConv وعد —
+    # فشل الخادم يوقف التبديل ويعاد للمنادي برسالة، والجارية تبقى سليمة
+    assert "return persistConv(); // R-809" in _fn_block(src, "keepCurrentConversationBeforeNew")
+    assert "return false;" in block and "Promise.resolve(true)" in block
     # الحفظ قبل التبديل في المسارين (محادثة خادم ومحادثة زائر) — وفشل الحفظ
     # يوقف التبديل (تصحيح المراجعة الثالثة): لا تفريغ جارية غير محفوظة
-    assert "if (state.sessionId !== c.id && !keepCurrentConversationBeforeNew()) return;" in \
+    # (تصحيح المراجعة الرابعة: النتيجة تُنتظر في المسارات الثلاثة)
+    assert "if (state.sessionId !== c.id && !(await keepCurrentConversationBeforeNew())) return;" in \
         _fn_block(src, "openLocalConv")
-    assert "if (!keepCurrentConversationBeforeNew()) return;" in _fn_block(src, "openConv")
-    assert "if (!keepCurrentConversationBeforeNew()) return;" in \
+    assert "if (!(await keepCurrentConversationBeforeNew())) return;" in _fn_block(src, "openConv")
+    assert "if (!(await keepCurrentConversationBeforeNew())) return;" in \
         src[src.find('newBtn").addEventListener'):]  # زر محادثة جديدة أيضًا
     # النموذج لكل محادثة: يُرسل في الطلب ويُحفظ مع المحادثة ويُستعاد
     assert "if (state.model) body.model = state.model;" in src
