@@ -261,7 +261,10 @@ class Workspace:
             if not isinstance(m, dict) or m.get("role") not in ("user", "assistant"):
                 continue
             clean.append({"role": m["role"], "content": str(m.get("content") or "")[:20000],
-                          "ts": m.get("ts"), "tools": m.get("tools"), "files": m.get("files")})
+                          "ts": m.get("ts"), "tools": m.get("tools"), "files": m.get("files"),
+                          # R-814b: علامة الفشل وتحفظ المراجع يعبران جولة الخادم
+                          # كما عبران التخزين المحلي — العرض الصادق لا يضيع بالحفظ
+                          "err": bool(m.get("err")), "rev": m.get("rev") or None})
         rec = {"id": cid or (old or {}).get("id") or new_id("C"),
                "title": (title or (clean[0]["content"][:60] if clean else "محادثة"))[:120],
                "messages": clean, "project_id": project_id if project_id is not None else (old or {}).get("project_id"),

@@ -354,11 +354,12 @@ def _brain_failure_reason() -> str:
     return "العقل اللغوي لم يرد (غير متاح أو انتهت المهلة)"
 
 
-def _learn(text: str, res: Dict[str, Any]) -> None:
-    """R-790: كل محادثة تُسجل خبرةً كما وقعت (الأدوات، الحالة، الخطأ) — لا تفسير مختلق."""
+def _learn(text: str, res: Dict[str, Any], reviewer: Optional[Dict[str, Any]] = None) -> None:
+    """R-790: كل محادثة تُسجل خبرةً كما وقعت (الأدوات، الحالة، الخطأ) — لا تفسير مختلق.
+    R-814b: حكم المراجع يُسجَّل مع الخبرة فعلًا (meta) — لا يمرر مفتاحًا صامتًا يُهمل."""
     try:
         import experience
-        experience.record_run("chat", text, res)
+        experience.record_run("chat", text, res, reviewer=reviewer)
     except Exception:  # TOLERATED: الخبرة إضافة؛ لا تكسر الرد
         pass
 
@@ -416,10 +417,17 @@ def respond(text: str, history: Optional[List[Dict[str, str]]] = None, *,
     # R-814 (البند ٥): المراجع المستقل — يحكم على الجواب الحقيقي (المبني على
     # نتائج أدوات فعلًا أو جواب العقل المباشر) بعقد JSON صارم؛ حكمه يُسجَّل
     # ويُعرض ولا يقلب نتيجة التطبيق. بلا جواب حقيقي لا مراجعة.
+    # R-814b: استثناء المراجع لا يُسقط الجواب المكتمل أبدًا — يُعلن reviewer_error
+    # صادقًا ويبقى الجواب (المراجعة إضافة، لا ركنًا ينهار به المسار).
     if out.get("reply") and out.get("status") in ("completed", "answered_from_results"):
-        out["reviewer"] = _review_answer(text, steps, out["reply"], deadline,
-                                         chat_fn=chat_fn, model=model)
-    _learn(text, {**res, "reviewer": out.get("reviewer")})
+        try:
+            out["reviewer"] = _review_answer(text, steps, out["reply"], deadline,
+                                             chat_fn=chat_fn, model=model)
+        except Exception as exc:  # TOLERATED: المراجع إضافة — فشله يُعلن ولا يُسقط الجواب
+            out["reviewer"] = {"reviewer": "reviewer_error", "ok": None,
+                               "issues": [f"{type(exc).__name__}: {exc}"[:160]],
+                               "summary": None}
+    _learn(text, res, reviewer=out.get("reviewer"))
     if out.get("reply"):
         return out
     reason = res.get("error") or res.get("status") or "سبب غير معروف"

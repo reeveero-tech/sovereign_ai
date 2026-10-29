@@ -414,6 +414,11 @@
       var tl = el("span", null, "  ·  أدوات النظام المستخدمة: " + m.tools.map(iso).join(" · "));
       tl.title = "استدعاءات حقيقية لأدوات المشروع، كل منها مسجل بأثر موقّع في سجل النظام"; meta.appendChild(tl);
     }
+    if (m.rev) {
+      // R-814b: تحفظ المراجع المستقل يُعرض في الفقاعة — رفضه لا يُخفى عن المالك
+      var rv = el("span", null, "  ·  تحفظ المراجع المستقل: " + m.rev);
+      rv.title = "المراجع (الذكاء) اعترض على هذا الجواب — مرجع لا منفذ؛ الجواب نُفذ بأدلة التطبيق"; meta.appendChild(rv);
+    }
     if (extra && extra.retry) { var r = el("button", "btn sm", "إعادة المحاولة"); r.type = "button"; r.style.marginInlineStart = "8px"; r.addEventListener("click", extra.retry); meta.appendChild(r); }
     if (m.role !== "user" && !(extra && extra.error)) {
       var cp = el("button", "btn sm", "نسخ"); cp.type = "button"; cp.style.marginInlineStart = "8px";
@@ -475,7 +480,10 @@
       // R-814: عقد الحالة الصادق — رد HTTP 200 بحالة فشل يُعرض بتنسيق الخطأ
       // لا كأنه جواب سليم (النص نفسه صادق يشرح الفشل)
       var failed = data.status && data.status !== "ok";
-      var bm = { role: "assistant", content: data.reply.trim(), ts: Date.now(), secs: Math.round((Date.now() - start) / 1000), tools: data.tools_used || [], err: !!failed };
+      // R-814b: تحفظ المراجع المستقل يظهر للمستخدم (رفضه لا يُخفى) — مرجع لا منفذ:
+      // الجواب يبقى لكن اعتراض المراجع يُعرض في الفقاعة ويُحفظ معها
+      var rev = data.reviewer && data.reviewer.ok === false ? (data.reviewer.summary || (data.reviewer.issues || []).join("؛ ")) : null;
+      var bm = { role: "assistant", content: data.reply.trim(), ts: Date.now(), secs: Math.round((Date.now() - start) / 1000), tools: data.tools_used || [], err: !!failed, rev: rev };
       state.messages.push(bm); save(); bubble(bm, failed ? { error: true } : undefined); persistConv();
     }).catch(function (err) {
       clearInterval(tick); pend.remove();
@@ -523,7 +531,7 @@
     // R-813 (مراجعة المستشار): هوية الجلسة تُلتقط وقت الطلب — رد متأخر بعد التبديل
     // لا يسند هوية محادثة لجلسة أخرى (كان يمكن أن يستبدل محتوى الأخرى)
     var targetSession = state.sessionId, hadConvId = state.convId;
-    var body = { title: convTitle(state.messages), messages: state.messages.map(function (m) { return { role: m.role, content: m.content, ts: m.ts, tools: m.tools, files: m.files }; }),
+    var body = { title: convTitle(state.messages), messages: state.messages.map(function (m) { return { role: m.role, content: m.content, ts: m.ts, tools: m.tools, files: m.files, err: !!m.err, rev: m.rev || null }; }),
                  project_id: state.project ? state.project.id : null, model: state.model || null };
     var p = hadConvId ? api("/ws/conversations/" + hadConvId, { method: "PUT", json: body }) : api("/ws/conversations", { json: body });
     return p.then(function (rec) {

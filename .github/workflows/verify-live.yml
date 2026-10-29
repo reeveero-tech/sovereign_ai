@@ -1,15 +1,21 @@
 # R-814 — التحقق الحي من المنشور (يدوي فقط — بأمر المالك 2026-10-29)
 #
 # يفحص التطبيق المنشور فعليًا على Fly مقابل المنشور نفسه لا ضد ادعاءات:
-#   1. /health يعمل ويصرح بنشر جديد، والصفحة الرئيسية بلا «سيادي».
-#   2. /brain/status يعقل العقل (مفعل/نموذج) وآخر استدعاء.
+#   1. /health يعمل وبنيته العلوية سليمة (status=healthy حرفيًا — فحص JSON بنيويًا
+#      لا بحث نص عن أي "healthy" متداخل)، والصفحة الرئيسية وصلت 200 غير فارغة
+#      وبلا «سيادي» (فحص grep بفشل صريح عند غياب الأداة — درس أول تشغيل).
+#   2. /brain/status يعقل العقل (مفعل/نموذج) بنيويًا.
 #   3. محادثة حقيقية عبر /chat تعيد جوابًا بحالة ناجحة وحالة وكيل مكتملة.
 #   4. نموذج وهمي يفشل بصدق: عقد الحالة (R-814) — الحالة العلوية error
 #      مع agent_status=planner_failed، لا ok مع فشل فعلي.
 #   5. النقاط المحمية بمفتاح المالك ترفض بلا مفتاح (401) — الحماية تعمل.
+#   6. مهمة مصادقة المالك: سر المستودع KEY_SECRET يُستهلك داخل Actions بلا
+#      كشف قيمته ولا طباعته — يفحص مسارات المالك فعلًا (النماذج/الإعدادات/
+#      حفظ محادثة واستعادتها). لا يعمل إلا بوجود السر.
 #
-# لا يمرر أي سر، ولا يطبع أي سر، ولا يعتمد على أسرار المستودع إطلاقًا —
-# فحص HTTP عام فقط. الفشل في أي فحص يفشل السير كله (لا نجاح صامت).
+# لا يمرر أي سر في السجلات، ولا يعتمد الفحص العام على أي سر. الفشل في أي فحص
+# يفشل السير كله (لا نجاح صامت). أدوات الفحص المعاد استخدامها (الجذر/الصحة)
+# سكربتات مستقلة يختبرها pytest على عينات موجبة وسالبة (tools/live_*.sh).
 # الاسم لا يحوي حرفي «C» و«I» متتاليين كبيرين حتى لا يلتقطه اختيار التشغيل
 # المرجعي في verify.sh.
 
@@ -32,12 +38,14 @@ concurrency:
 
 jobs:
   verify:
-    name: Verify live app
+    name: Verify live app (public)
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
       BASE_URL: https://sovereign-ai-k20elq.fly.dev
     steps:
+      - uses: actions/checkout@v4
+
       - name: Confirm target app
         run: |
           if [ "${{ inputs.confirm_app }}" != "sovereign-ai-k20elq" ]; then
@@ -45,49 +53,40 @@ jobs:
             exit 1
           fi
 
-      - name: Health endpoint
+      - name: Health endpoint (structural JSON)
         run: |
           CODE=$(curl -s -o /tmp/health.json -w "%{http_code}" --max-time 30 "$BASE_URL/health")
           [ "$CODE" = "200" ] || { echo "::error::/health رد $CODE"; cat /tmp/health.json; exit 1; }
-          grep -qE '"status":\s*"healthy"' /tmp/health.json || { echo "::error::/health ليس سليمًا"; cat /tmp/health.json; exit 1; }
-          echo "OK /health"
+          python3 tools/live_check_health.py /tmp/health.json
 
-      - name: Root page has no forbidden word
+      - name: Root page (200, nonempty, no forbidden word)
         run: |
-          curl -s --max-time 30 "$BASE_URL/" -o /tmp/root.html
-          if rg -q "سيادي" /tmp/root.html; then
-            echo "::error::الصفحة الرئيسية تحوي كلمة ممنوعة بأمر المالك"
-            exit 1
-          fi
-          echo "OK root page"
+          CODE=$(curl -s -o /tmp/root.html -w "%{http_code}" --max-time 30 "$BASE_URL/")
+          [ "$CODE" = "200" ] || { echo "::error::الجذر رد $CODE"; exit 1; }
+          # الفحص نفسه سكربت مستقل مُختبر (سالب/موجب) — لا grep خام داخل السير
+          bash tools/live_check_root.sh /tmp/root.html
 
-      - name: Brain status
+      - name: Brain status (structural JSON)
         run: |
-          curl -s --max-time 30 "$BASE_URL/brain/status" -o /tmp/brain.json
-          grep -qE '"enabled":\s*true' /tmp/brain.json || { echo "::error::العقل غير مفعل على المنشور"; cat /tmp/brain.json; exit 1; }
-          grep -qE '"model":\s*"[^"]+"' /tmp/brain.json || { echo "::error::لا نموذج معلن للعقل"; exit 1; }
-          echo "OK brain status"
+          CODE=$(curl -s -o /tmp/brain.json -w "%{http_code}" --max-time 30 "$BASE_URL/brain/status")
+          [ "$CODE" = "200" ] || { echo "::error::/brain/status رد $CODE"; exit 1; }
+          python3 tools/live_check_brain.py /tmp/brain.json
 
       - name: Real chat succeeds with honest status
         run: |
-          CODE=$(curl -s -o /tmp/chat.json -w "%{http_code}" --max-time 120 -X POST "$BASE_URL/chat" \
+          CODE=$(curl -s -o /tmp/chat.json -w "%{http_code}" --max-time 150 -X POST "$BASE_URL/chat" \
             -H "Content-Type: application/json" \
             -d '{"text":"رد بكلمة واحدة فقط: جاهز","user_id":"ci-verify"}')
           [ "$CODE" = "200" ] || { echo "::error::/chat رد $CODE"; cat /tmp/chat.json; exit 1; }
-          grep -qE '"status":\s*"ok"' /tmp/chat.json || { echo "::error::محادثة حقيقية بحالة فاشلة"; cat /tmp/chat.json; exit 1; }
-          grep -qE '"agent_status":\s*"(completed|answered_from_results)"' /tmp/chat.json || { echo "::error::حالة الوكيل ليست مكتملة"; cat /tmp/chat.json; exit 1; }
-          grep -qE 'جاهز' /tmp/chat.json || { echo "::error::الجواب لم يكن جاهزًا"; cat /tmp/chat.json; exit 1; }
-          echo "OK live chat"
+          python3 tools/live_check_chat.py /tmp/chat.json expect-ok
 
       - name: Bogus model fails honestly (status contract)
         run: |
-          CODE=$(curl -s -o /tmp/bogus.json -w "%{http_code}" --max-time 120 -X POST "$BASE_URL/chat" \
+          CODE=$(curl -s -o /tmp/bogus.json -w "%{http_code}" --max-time 150 -X POST "$BASE_URL/chat" \
             -H "Content-Type: application/json" \
             -d '{"text":"مرحبا","user_id":"ci-verify","model":"bogus-model-xyz"}')
           [ "$CODE" = "200" ] || { echo "::error::بروتوكول المحادثة توقع 200 (النص يفسر الفشل)"; cat /tmp/bogus.json; exit 1; }
-          grep -qE '"status":\s*"error"' /tmp/bogus.json || { echo "::error::فشل فعلي بحالة ok — عقد الحالة الصادق انكسر"; cat /tmp/bogus.json; exit 1; }
-          grep -qE '"agent_status":\s*"planner_failed"' /tmp/bogus.json || { echo "::error::حالة الوكيل للنموذج الوهمي ليست planner_failed"; cat /tmp/bogus.json; exit 1; }
-          echo "OK honest failure contract"
+          python3 tools/live_check_chat.py /tmp/bogus.json expect-error
 
       - name: Owner-key gate rejects anonymous
         run: |
@@ -96,4 +95,65 @@ jobs:
           echo "OK owner-key gate"
 
       - name: Summary
-        run: echo "التحقق الحي ناجح على $BASE_URL"
+        run: echo "التحقق العام الحي ناجح على $BASE_URL"
+
+  # R-814b: مصادقة المالك — سر KEY_SECRET يُستهلك داخل Actions ولا يُطبع أبدًا؛
+  # يفحص مسارات المالك فعلًا حيًا (اكتشاف النماذج، الإعدادات، حفظ محادثة واستعادتها)
+  verify-owner:
+    name: Verify owner flows (authenticated)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      BASE_URL: https://sovereign-ai-k20elq.fly.dev
+      KEY: ${{ secrets.KEY_SECRET }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Require owner secret
+        run: |
+          if [ -z "$KEY" ]; then
+            echo "::error::سر KEY_SECRET غير مضبوط في المستودع — لا فحص مصادقة بلا مفتاح (لا يُخترع)"
+            exit 1
+          fi
+
+      - name: Confirm target app
+        run: |
+          if [ "${{ inputs.confirm_app }}" != "sovereign-ai-k20elq" ]; then
+            echo "::error::اسم التطبيق غير مطابق — ألغيت التحقق"
+            exit 1
+          fi
+
+      - name: Models discovery (owner)
+        run: |
+          CODE=$(curl -s -o /tmp/models.json -w "%{http_code}" --max-time 30 \
+            -H "X-Sovereign-Key: $KEY" "$BASE_URL/brain/models")
+          [ "$CODE" = "200" ] || { echo "::error::/brain/models بمفتاح المالك رد $CODE"; exit 1; }
+          python3 tools/live_check_models.py /tmp/models.json
+
+      - name: Brain settings readable (owner)
+        run: |
+          CODE=$(curl -s -o /tmp/settings.json -w "%{http_code}" --max-time 30 \
+            -H "X-Sovereign-Key: $KEY" "$BASE_URL/brain/settings")
+          [ "$CODE" = "200" ] || { echo "::error::/brain/settings بمفتاح المالك رد $CODE"; exit 1; }
+          python3 tools/live_check_settings.py /tmp/settings.json
+
+      - name: Conversation save and restore roundtrip (owner)
+        run: |
+          STAMP="ci-$(date +%s)"
+          # حفظ محادثة برسالتين — إحداهما بعلامة فشل وتحفظ مراجع (R-814b)
+          cat > /tmp/conv.json <<EOF
+          {"title":"فحص حي $STAMP","messages":[{"role":"user","content":"سؤال الفحص $STAMP"},{"role":"assistant","content":"جواب الفحص","err":true,"rev":"تحفظ اختباري"}],"project_id":null,"model":null}
+          EOF
+          CODE=$(curl -s -o /tmp/conv_out.json -w "%{http_code}" --max-time 30 \
+            -H "X-Sovereign-Key: $KEY" -H "Content-Type: application/json" \
+            -X POST --data @/tmp/conv.json "$BASE_URL/ws/conversations")
+          [ "$CODE" = "200" ] || [ "$CODE" = "201" ] || { echo "::error::حفظ المحادثة رد $CODE"; cat /tmp/conv_out.json; exit 1; }
+          CID=$(python3 -c "import json,sys; print(json.load(open('/tmp/conv_out.json'))['id'])")
+          # استعادة والتحقق أن الرسالة عبرت كاملة بعلاماتها الصادقة
+          CODE=$(curl -s -o /tmp/conv_back.json -w "%{http_code}" --max-time 30 \
+            -H "X-Sovereign-Key: $KEY" "$BASE_URL/ws/conversations/$CID")
+          [ "$CODE" = "200" ] || { echo "::error::استعادة المحادثة رد $CODE"; exit 1; }
+          python3 tools/live_check_conversation.py /tmp/conv_back.json
+
+      - name: Summary
+        run: echo "التحقق المصادق كمالك ناجح على $BASE_URL"

@@ -64,6 +64,15 @@ SCRIPT_ENTRY_POINTS = {
     "infra/proof/appenv.py",
     "infra/proof/brain_pull.py",
     "infra/proof/workspace_proof.py",
+    # R-814b: سكربتات فحص المنشور الحي — تشغّلها .github/workflows/verify-live.yml
+    # كعمليات مستقلة، وتختبرها tests/test_r814b_corrective.py على عينات
+    # موجبة وسالبة (خلل الفحص ≠ نجاح — درس أول تشغيل rg)
+    "tools/live_check_brain.py",
+    "tools/live_check_chat.py",
+    "tools/live_check_conversation.py",
+    "tools/live_check_health.py",
+    "tools/live_check_models.py",
+    "tools/live_check_settings.py",
 }
 
 # الجولة <2> (اعتراض المراجع بصير): ملفات تُحمّل ديناميكيًا عبر
