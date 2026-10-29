@@ -266,12 +266,18 @@ def test_unmet_ladder_widen_then_decompose_then_owner(tmp_path):
 
     def brain(system, user, schema):
         calls.append(user)
-        return json.dumps({"subtasks": [{"title": "جزء ١", "detail": "d", "file": "backend/calc.py"},
-                                        {"title": "جزء ٢", "detail": "d", "file": ""}]})
+        # R-804: كل مهمة فرعية بملف من قائمة الدليل واقتباس حرفي منه
+        return json.dumps({"subtasks": [
+            {"title": "جزء ١", "detail": "d", "file": "backend/sum_a.py", "evidence": "def compute_total_a(x):"},
+            {"title": "جزء ٢", "detail": "d", "file": "backend/sum_b.py", "evidence": "def compute_total_b(y):"}]})
 
     disk = FakeDisk()
     um = UnmetGoals(eng, brain=brain, disk=disk)
-    first = eng.request("أصلح الجمع", "التفصيل", source="owner", ref="o1", now=0.0)
+    for n, v in (("other", "z"), ("sum_a", "x"), ("sum_b", "y")):  # R-804: مواضع دليل حقيقية
+        (repo / "backend" / f"{n}.py").write_text(f"def compute_total_{n[-1]}({v}):\n    return 0\n",
+                                                  encoding="utf-8")
+    first = eng.request("أصلح الجمع", "التفصيل: compute_total_r compute_total_a compute_total_b",
+                        source="owner", ref="o1", now=0.0)
     _set(eng, first["id"], "exhausted", file="backend/calc.py", errors=["syntax"])
     um.cycle(now=1.0)  # مزامنة ⇒ هدف owner_request ⇒ توسيع
     g = um.status()["goals"][0]
@@ -285,7 +291,7 @@ def test_unmet_ladder_widen_then_decompose_then_owner(tmp_path):
     assert g["strategies"][-1]["strategy"] == "decompose" and len(g["strategies"][-1]["tasks"]) == 2
     assert "backend/other.py" in g["files_tried"] and "ci_failed" in calls[0]
     subs = [eng.get(t) for t in g["strategies"][-1]["tasks"]]
-    assert subs[0]["files_hint"] == ["backend/calc.py"]
+    assert subs[0]["files_hint"] == ["backend/sum_a.py"]
     for t in subs:
         _set(eng, t["id"], "exhausted")
     um.cycle(now=3.0)
@@ -301,7 +307,7 @@ def test_unmet_resolves_only_when_task_promoted(tmp_path):
     repo = _repo(tmp_path)
     eng = _engine(repo)
     um = UnmetGoals(eng, brain=None, disk=False)
-    um.raise_goal("goal_blocked", "G1", "أرسل بريدًا", now=0.0)
+    um.raise_goal("goal_blocked", "G1", "أرسل بريدًا", detail="الدليل: compute_total", now=0.0)
     um.cycle(now=1.0)
     g = um.status()["goals"][0]
     tid = g["strategies"][0]["tasks"][0]
@@ -316,7 +322,7 @@ def test_unmet_resolves_only_when_task_promoted(tmp_path):
 def test_unmet_without_brain_decompose_escalates_honestly(tmp_path):
     eng = _engine(_repo(tmp_path))
     um = UnmetGoals(eng, brain=None, disk=False)
-    um.raise_goal("repair_exhausted", "T1", "x", now=0.0)
+    um.raise_goal("repair_exhausted", "T1", "x", detail="الدليل: compute_total", now=0.0)
     um.cycle(now=1.0)
     _set(eng, um.status()["goals"][0]["strategies"][0]["tasks"][0], "exhausted")
     um.cycle(now=2.0)

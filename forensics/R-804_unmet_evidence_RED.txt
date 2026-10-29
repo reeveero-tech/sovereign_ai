@@ -1,0 +1,9 @@
+# R-804 RED — tests/test_r804_unmet_evidence.py على origin/main (f36b4b6)
+# الدليل الحي: /selfdev/unmet — U-bfea1a63 (هدف عالق: فحص أخطاء النظام واستبدال الحزم المفقودة) detail='المهمة SD-25c6ad42 استنفدت 3 محاولات' فقط؛ مهام widen/decompose بلا files_hint: SD-3388ecf9 (search_occurs_0_times)، SD-40976cdf، SD-e18264ad ⇒ needs_owner
+FAILED tests/test_r804_unmet_evidence.py::test_no_evidence_spawns_nothing_and_escalates_honestly
+FAILED tests/test_r804_unmet_evidence.py::test_widen_carries_real_files_and_literal_lines
+FAILED tests/test_r804_unmet_evidence.py::test_decompose_rejects_foreign_file_and_fabricated_quote
+FAILED tests/test_r804_unmet_evidence.py::test_goal_from_exhausted_task_inherits_original_detail_and_files
+FAILED tests/test_r804_unmet_evidence.py::test_live_stuck_goal_on_real_repo_no_longer_spawns_vague_task
+FAILED tests/test_r804_unmet_evidence.py::test_wiring_gives_unmet_the_tool_aware_locator
+6 failed, 1 warning in 0.09s

@@ -560,6 +560,13 @@ class SelfDevEngine:
             t = self._tasks.get(tid)
             return self.public(t) if t else None
 
+    def brief(self, tid: str) -> Dict[str, Any]:
+        """R-804: نص المهمة الأصلي (تفصيل/آخر فشل/ملفات) — كي لا يرث الهدف المتعذر عنوانًا بلا دليل."""
+        with self._lock:
+            t = self._tasks.get(tid) or {}
+            return {"detail": str(t.get("detail") or ""), "feedback": str(t.get("feedback") or ""),
+                    "files_hint": list(t.get("files_hint") or [])}
+
     # ---------- العرض (بلا شيفرة) ----------
     @staticmethod
     def public(t: Dict[str, Any]) -> Dict[str, Any]:

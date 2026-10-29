@@ -78,7 +78,8 @@ def get_unmet() -> UnmetGoals:
     with _LOCK:
         if _UNMET is None:
             eng = self_develop.get_engine()
-            _UNMET = UnmetGoals(eng, brain=eng._brain)
+            # R-804: نفس محدد المواضع (مع معالجات الأدوات) لبوابة الدليل قبل كل جولة
+            _UNMET = UnmetGoals(eng, brain=eng._brain, locator=Locator(registry_fn=_registry, engine=eng))
         return _UNMET
 
 
