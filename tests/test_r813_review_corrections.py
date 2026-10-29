@@ -354,8 +354,8 @@ def test_frontend_conversation_fixes_present():
     # الحفظ قبل التبديل في المسارين (محادثة خادم ومحادثة زائر) — وفشل الحفظ
     # يوقف التبديل (تصحيح المراجعة الثالثة): لا تفريغ جارية غير محفوظة
     # (تصحيح المراجعة الرابعة: النتيجة تُنتظر في المسارات الثلاثة)
-    assert "var myNav = ++navSeq; // R-813 (خامسة): معرّف عملية التنقل" in _fn_block(src, "openLocalConv")
-    assert "if (myNav !== navSeq) return;" in _fn_block(src, "openLocalConv")  # الأقدم يُلغى بعد الانتظار
+    assert "var myNav = ++navSeq;" in _fn_block(src, "openLocalConv")  # كل اختيار عملية تنقل — حتى الحالية
+    assert "if (state.sessionId === c.id) return;" in _fn_block(src, "openLocalConv")  # الحالية: إلغاء الأقدم دون إعادة تحميل
     assert "if (!(await keepCurrentConversationBeforeNew())) return;" in _fn_block(src, "openConv")
     assert "var myNav = ++navSeq;" in _fn_block(src, "openConv")  # المعرّف قبل انتظار GET
     assert _fn_block(src, "openConv").count("if (myNav !== navSeq) return;") == 2  # بعد GET وبعد الحفظ

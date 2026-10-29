@@ -499,13 +499,14 @@
   async function openLocalConv(id) {
     var c = localConvs.filter(function (x) { return x.id === id; })[0];
     if (!c) return;
+    // R-813 (تصحيح المراجعة الخامسة+): كل اختيار محادثة عملية تنقل — حتى إعادة اختيار
+    // الحالية يلتقط المعرّف فيُلغي أي تنقل أقدم معلق (الأحدث فقط يغيّر الحالة)
+    var myNav = ++navSeq;
+    if (state.sessionId === c.id) return; // الحالية مطلوبة: أُلغي الأقدم وخرجنا دون إعادة تحميل
     // R-813 (مراجعة المستشار): الجارية تُحفظ قبل أي تبديل — لا تضيع بفتح محادثة أخرى
     // R-813: فشل حفظ الجارية (ضيف أو رفض خادم) يوقف التبديل — لا تضيع بفتح محادثة أخرى
-    if (state.sessionId !== c.id) {
-      var myNav = ++navSeq; // R-813 (خامسة): معرّف عملية التنقل — الأحدث فقط يغيّر الحالة
-      if (!(await keepCurrentConversationBeforeNew())) return;
-      if (myNav !== navSeq) return; // تنقل أحدث بدأ — هذه العملية ملغاة
-    }
+    if (!(await keepCurrentConversationBeforeNew())) return;
+    if (myNav !== navSeq) return; // تنقل أحدث بدأ — هذه العملية ملغاة
     state.convId = null; state.sessionId = c.id; state.messages = c.messages || [];
     state.model = c.model || null; paintModelSel(); // R-810/813: نموذج المحادثة يُستعاد
     save(); renderChat(); paintConvs(); go("chat");
