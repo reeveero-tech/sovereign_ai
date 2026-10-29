@@ -49,7 +49,7 @@ jobs:
         run: |
           CODE=$(curl -s -o /tmp/health.json -w "%{http_code}" --max-time 30 "$BASE_URL/health")
           [ "$CODE" = "200" ] || { echo "::error::/health رد $CODE"; cat /tmp/health.json; exit 1; }
-          rg -q '"status":\s*"healthy"' /tmp/health.json || { echo "::error::/health ليس سليمًا"; cat /tmp/health.json; exit 1; }
+          grep -qE '"status":\s*"healthy"' /tmp/health.json || { echo "::error::/health ليس سليمًا"; cat /tmp/health.json; exit 1; }
           echo "OK /health"
 
       - name: Root page has no forbidden word
@@ -64,8 +64,8 @@ jobs:
       - name: Brain status
         run: |
           curl -s --max-time 30 "$BASE_URL/brain/status" -o /tmp/brain.json
-          rg -q '"enabled":\s*true' /tmp/brain.json || { echo "::error::العقل غير مفعل على المنشور"; cat /tmp/brain.json; exit 1; }
-          rg -q '"model":\s*"[^"]+"' /tmp/brain.json || { echo "::error::لا نموذج معلن للعقل"; exit 1; }
+          grep -qE '"enabled":\s*true' /tmp/brain.json || { echo "::error::العقل غير مفعل على المنشور"; cat /tmp/brain.json; exit 1; }
+          grep -qE '"model":\s*"[^"]+"' /tmp/brain.json || { echo "::error::لا نموذج معلن للعقل"; exit 1; }
           echo "OK brain status"
 
       - name: Real chat succeeds with honest status
@@ -74,9 +74,9 @@ jobs:
             -H "Content-Type: application/json" \
             -d '{"text":"رد بكلمة واحدة فقط: جاهز","user_id":"ci-verify"}')
           [ "$CODE" = "200" ] || { echo "::error::/chat رد $CODE"; cat /tmp/chat.json; exit 1; }
-          rg -q '"status":\s*"ok"' /tmp/chat.json || { echo "::error::محادثة حقيقية بحالة فاشلة"; cat /tmp/chat.json; exit 1; }
-          rg -q '"agent_status":\s*"(completed|answered_from_results)"' /tmp/chat.json || { echo "::error::حالة الوكيل ليست مكتملة"; cat /tmp/chat.json; exit 1; }
-          rg -q 'جاهز' /tmp/chat.json || { echo "::error::الجواب لم يكن جاهزًا"; cat /tmp/chat.json; exit 1; }
+          grep -qE '"status":\s*"ok"' /tmp/chat.json || { echo "::error::محادثة حقيقية بحالة فاشلة"; cat /tmp/chat.json; exit 1; }
+          grep -qE '"agent_status":\s*"(completed|answered_from_results)"' /tmp/chat.json || { echo "::error::حالة الوكيل ليست مكتملة"; cat /tmp/chat.json; exit 1; }
+          grep -qE 'جاهز' /tmp/chat.json || { echo "::error::الجواب لم يكن جاهزًا"; cat /tmp/chat.json; exit 1; }
           echo "OK live chat"
 
       - name: Bogus model fails honestly (status contract)
@@ -85,8 +85,8 @@ jobs:
             -H "Content-Type: application/json" \
             -d '{"text":"مرحبا","user_id":"ci-verify","model":"bogus-model-xyz"}')
           [ "$CODE" = "200" ] || { echo "::error::بروتوكول المحادثة توقع 200 (النص يفسر الفشل)"; cat /tmp/bogus.json; exit 1; }
-          rg -q '"status":\s*"error"' /tmp/bogus.json || { echo "::error::فشل فعلي بحالة ok — عقد الحالة الصادق انكسر"; cat /tmp/bogus.json; exit 1; }
-          rg -q '"agent_status":\s*"planner_failed"' /tmp/bogus.json || { echo "::error::حالة الوكيل للنموذج الوهمي ليست planner_failed"; cat /tmp/bogus.json; exit 1; }
+          grep -qE '"status":\s*"error"' /tmp/bogus.json || { echo "::error::فشل فعلي بحالة ok — عقد الحالة الصادق انكسر"; cat /tmp/bogus.json; exit 1; }
+          grep -qE '"agent_status":\s*"planner_failed"' /tmp/bogus.json || { echo "::error::حالة الوكيل للنموذج الوهمي ليست planner_failed"; cat /tmp/bogus.json; exit 1; }
           echo "OK honest failure contract"
 
       - name: Owner-key gate rejects anonymous
