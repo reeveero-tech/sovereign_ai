@@ -100,7 +100,8 @@ function api(url, opts) {
         }
         const c = convStore.get(id);
         if (!c) { rec.reject(new Error('غير موجودة')); return; }
-        resolve({ id: c.id, messages: c.messages, model: c.model, title: c.title });
+        // نسخة JSON مستقلة كما في اتصال HTTP حقيقي — لا مرجع مشترك بين العرض والمخزن
+        resolve({ id: c.id, messages: JSON.parse(JSON.stringify(c.messages)), model: c.model, title: c.title });
       };
     } else {
       rec.run = () => resolve({});
@@ -288,6 +289,10 @@ check('النتيجة القديمة إلغاء (false) لا نجاح (true)', (
 // (تصحيح المراجعة السادسة: الحفظ ينجح والجلسة لم تتغير — ومع ذلك لا يفتح الأقدم)
 state.sessionId = 'A'; state.convId = null; state.model = 'mA';
 state.messages = [{ role: 'user', content: 'رسالة A' }];
+convStore.set('B', { id: 'B', title: 'B', model: 'mB',                   // تهيئة جديدة لكل سيناريو
+                     messages: [{ role: 'user', content: 'سؤال B' }] });
+convStore.set('C', { id: 'C', title: 'C', model: 'mC',
+                     messages: [{ role: 'user', content: 'سؤال C' }, { role: 'assistant', content: 'رد C' }] });
 apiCalls.length = 0; pendingApi.length = 0; navSeq = 0;
 fns.openConv('B');                      // تنقل قديم (myNav=1): GET(B) معلق
 const gB = pendingApi.length - 1;
@@ -302,9 +307,11 @@ check('نجاح حفظ الأقدم لا يفتحه — بدء الأحدث وح
       state.messages[0].content === 'رسالة A');
 pendingApi[gC].run(); await tick();     // ثم يكتمل GET الأحدث فتُفتح C (الأحدث فقط يفتح)
 if (pendingApi.length > gC + 1) { pendingApi[pendingApi.length - 1].run(); await tick(); }  // وحفظ A قبلها (PUT)
-check('التنقل الأحدث هو الذي يفتح', state.sessionId === 'C' &&
-      state.messages[0].content === 'سؤال C' &&           // رسائل C (تضمنت رسالة المستخدم من قسم ٧)
-      state.messages[state.messages.length - 1].content === 'رسالة C الجديدة');
+check('التنقل الأحدث هو الذي يفتح', state.sessionId === 'C' && state.messages.length === 2);
+// عزل المرجع: تعديل رسائل العرض لا يغيّر سجل المخزن إلا بنداء POST/PUT حقيقي
+state.messages.push({ role: 'user', content: 'عرض فقط' });
+check('تعديل العرض لا يغيّر المخزن (لا مرجع مشترك)',
+      convStore.get('C').messages.length === 2 && convStore.get('C').messages.every(m => m.content !== 'عرض فقط'));
 
 // ===== ٩) إعادة اختيار المحادثة المحلية الحالية تُلغي التنقل الأقدم المعلق =====
 state.sessionId = 'A'; state.convId = null; state.model = 'mA';
@@ -319,6 +326,29 @@ check('إعادة اختيار الحالية لم تعِد تحميل رسائ�
 pendingApi[gB2].run(); await tick();    // رد GET القديم يصل الآن — ملغى بمعرّف التنقل
 check('التنقل القديم لم يفتح B — الحالية باقية',
       state.sessionId === 'A' && state.messages[0].content === 'رسالة A الحالية');
+
+// ===== ١٠) إعادة اختيار المحادثة الخادمية الحالية لا تستبدل رسائلها الحديثة =====
+// (تصحيح المراجعة السابعة: الجلسة أخذت معرّفًا خادميًا بعد الإنشاء — sessionId ≠ convId،
+//  والعرض في الذاكرة أحدث من سجل الخادم: الاختيار يلغي الأقدم ولا يجلب لقطة أقدم)
+state.sessionId = 'X'; state.convId = 'A-srv'; state.model = 'mA';
+state.messages = [{ role: 'user', content: 'رسالة قديمة' },
+                  { role: 'user', content: 'رسالة أحدث لم تصل الخادم بعد' }];
+convStore.set('A-srv', { id: 'A-srv', title: 'A', model: 'mA',
+                        messages: [{ role: 'user', content: 'رسالة قديمة' }] });  // الخادم لديه الأقدم فقط
+convStore.set('B', { id: 'B', title: 'B', model: 'mB',
+                    messages: [{ role: 'user', content: 'سؤال B' }] });
+apiCalls.length = 0; pendingApi.length = 0; navSeq = 0;
+fns.openConv('B');                      // تنقل أقدم معلق على GET(B)
+const gB3 = pendingApi.length - 1;
+fns.openConv('A-srv');                 // إعادة اختيار الحالية الخادمية — إلغاء الأقدم، لا جلب ولا استبدال
+check('إعادة اختيار الخادمية الحالية: لا جلب ولا استبدال للرسائل الحديثة',
+      apiCalls.length === 1 &&                         // GET(B) القديم فقط — لا GET للحالية
+      state.messages.length === 2 &&
+      state.messages[1].content === 'رسالة أحدث لم تصل الخادم بعد');
+pendingApi[gB3].run(); await tick();    // رد GET القديم يصل — ملغى بمعرّف التنقل
+check('التنقل القديم لم يفتح B — الحالية الخادمية باقية برسائلها الحديثة',
+      state.sessionId === 'X' && state.convId === 'A-srv' &&
+      state.messages[1].content === 'رسالة أحدث لم تصل الخادم بعد');
 })().then(() => {
   console.log(results.join('\n'));
   if (results.some(r => r.startsWith('FAIL'))) process.exit(1);
