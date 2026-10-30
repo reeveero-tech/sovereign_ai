@@ -536,7 +536,15 @@ class TestDefusedContract:
 
 
 class TestMrNotBoundToLiveSystem:
-    """«ممنوع ربط Mr.py بـ app.py في هذا الالتزام» — النظام الحي لا يعرفه"""
+    """R-816 (أمر المالك «إحياء كل ما هو ميت»): مسار إحياء واحد معتمد.
+
+    عقد المرحلة ١ («النظام الحي لا يعرف بوجوده») أُلقي بأمر الإحياء —
+    لكن ليس بابًا مفتوحًا: `backend/app.py` وحده يُستورد منه Mr (مسار
+    الإحياء المعتمد: الإقلاع + نقاط /loyalty/*)، وأي ملف حي آخر يظل
+    ممنوعًا من ربطه (لا انتقال عدوى للعقد خارج مساره المعتمد).
+    """
+
+    SANCTIONED = "app.py"  # مسار الإحياء الوحيد — R-816
 
     def test_no_live_code_imports_mr(self):
         live = [
@@ -547,8 +555,23 @@ class TestMrNotBoundToLiveSystem:
         live += [p for p in _REPO_ROOT.glob("*.py")]
         assert live
         for p in live:
+            if p.name == self.SANCTIONED:
+                continue  # مسار الإحياء المعتمد — R-816
             src = p.read_text(encoding="utf-8")
             for banned in ("import Mr", "from Mr import", "backend.Mr"):
                 assert banned not in src, (
-                    f"ربط ممنوع بالمرحلة ١ (أمر المالك): {p} يحتوي «{banned}»"
+                    f"ربط ممنوع خارج مسار الإحياء المعتمد (R-816): {p} يحتوي «{banned}»"
                 )
+
+    def test_sanctioned_revival_path_exists(self):
+        """مسار الإحياء موجود فعلًا: app.py يستورد العقد ويخدم /loyalty/*"""
+        app_src = (_BACKEND_DIR / "app.py").read_text(encoding="utf-8")
+        assert "from Mr import" in app_src or "import Mr" in app_src, (
+            "R-816: مسار الإحياء مفقود — app.py لم يعد يستورد عقد الولاء"
+        )
+        assert "/loyalty/status" in app_src, "R-816: نقطة /loyalty/status مفقودة"
+        assert "/loyalty/release" in app_src, "R-816: نقطة /loyalty/release مفقودة"
+        # الربط شرطي — لا ربط مزدوج: الشرط master_bound قبل bind_master
+        assert 'master_bound' in app_src, (
+            "R-816: ربط الإقلاع يجب أن يكون شرطيًا (بلا ربط مزدوج)"
+        )
