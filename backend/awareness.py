@@ -101,6 +101,12 @@ def build_project_map(
         # تقليم النزول: مجلدات مستثناة بالاسم (VCS/بناء/بيئات) لا تُجتاز
         dirnames[:] = [d for d in dirnames if d not in EXCLUDED_DIR_NAMES]
         current = Path(dirpath)
+        # R-815c (درس الإنتاج الحي 2026-10-30): لا نزول أصلًا داخل شجرة
+        # مستثناة بمسارها (بادئة) — الاستثناء بالاسم واسع يسقط جيرة، لكن
+        # النزول بلا قراءة هدر خالص: في الإنتاج جذر البيانات حجم تشغيلي
+        # ضخم (عُقد R-792) تعداده وحده يستهلك الدورة. الاستثناء بالمسار
+        # المطلق هنا أدق وأرخص من الاسم.
+        dirnames[:] = [d for d in dirnames if not _is_excluded(current / d, excluded)]
         for fname in sorted(filenames):
             path = current / fname
             if path.is_symlink():

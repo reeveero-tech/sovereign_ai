@@ -233,6 +233,101 @@ def test_supervisor_dir_unwritable_keeps_app_alive(tmp_path):
         (tmp_path / "stop").write_text("x", encoding="utf-8")
 
 
+def test_run_wiring_excludes_runtime_data_from_awareness():
+    """R-815c (عقد التوصيل): فحص وعي الحارس يستثني جذر البيانات التشغيلية
+    ومخرجات التشغيل (logs/cache/temp) — مصدر مجاعة النبض المثبتة حيًا: كل دورة
+    تمشي حجم البيانات الضخم فلا يُكتب النبض إلا كل عدة دقائق."""
+    src = (REPO_ROOT / "backend" / "supervisor_daemon.py").read_text(encoding="utf-8")
+    assert re.search(
+        r"extra_excludes=\[\s*"
+        r"repair\._proposals_root\(data_root\),.*?"
+        r"\bdata_root,\s*\n\s*root / \"logs\", root / \"cache\", root / \"temp\"",
+        src, re.S), \
+        "فحص الوعي لا يستثني جذر البيانات — مجاعة النبض ستعود في الإنتاج"
+
+
+def test_awareness_map_excludes_runtime_data_root(tmp_path):
+    """R-815c (سلوك الخريطة): خريطة الوعي ترصد الكود فقط — جذر البيانات
+    ومخرجات التشغيل المستثناة بمسارها لا تظهر في الخريطة إطلاقًا."""
+    import sys
+    sys.path.insert(0, str(REPO_ROOT / "backend"))
+    import awareness
+
+    (tmp_path / "backend").mkdir()
+    (tmp_path / "backend" / "app.py").write_text("x = 1\n", encoding="utf-8")
+    (tmp_path / "data").mkdir()
+    (tmp_path / "data" / "ledger.jsonl").write_text("{}\n" * 100, encoding="utf-8")
+    (tmp_path / "data" / "supervisor").mkdir()
+    (tmp_path / "data" / "supervisor" / "monitor_log.jsonl").write_text("x\n", encoding="utf-8")
+    (tmp_path / "logs").mkdir()
+    (tmp_path / "logs" / "app.log").write_text("x\n", encoding="utf-8")
+    data_root = tmp_path / "data"
+
+    m = awareness.build_project_map(
+        tmp_path,
+        exclude_paths=[data_root, tmp_path / "logs", tmp_path / "cache", tmp_path / "temp"],
+    )
+    assert "backend/app.py" in m, "الكود نفسه يجب أن يُرصد — الاستثناء ليس تعميمًا"
+    assert not any(k.startswith("data/") for k in m), \
+        "جذر البيانات التشغيلية داخل الخريطة — الضجيج سيدفع حوادث سلامة زائفة"
+    assert not any(k.startswith("logs/") for k in m), "مخرجات التشغيل داخل الخريطة"
+
+
+def test_daemon_writes_heartbeat_fast_with_excluded_data(tmp_path):
+    """R-815c (سلوكي حتمي — الحلقة كاملة): الحارس الحقيقي مع جذر بيانات
+    معزول (SOVEREIGN_DATA_ROOT) وجذر شجرة صغير يكتب النبض خلال ثوانٍ،
+    وخريطته المحفوظة لا تحوي جذر البيانات — البرهان الحتمي أن دورة الحارس
+    لم تعد رهينة مشي حجم البيانات."""
+    import subprocess
+    import sys as _sys
+
+    repo = tmp_path / "repo"
+    (repo / "backend").mkdir(parents=True)
+    (repo / "backend" / "app.py").write_text("x = 1\n", encoding="utf-8")
+    # كما في الإنتاج تمامًا: جذر البيانات داخل جذر الشجرة المرصودة
+    data_root = repo / "data"
+    (data_root / "supervisor").mkdir(parents=True)
+    (data_root / "supervisor" / "monitor_log.jsonl").write_text("x\n", encoding="utf-8")
+    (data_root / "ledger.jsonl").write_text("{}\n" * 5000, encoding="utf-8")
+
+    env = {**os.environ, "SOVEREIGN_DATA_ROOT": str(data_root)}
+    proc = subprocess.Popen(
+        [_sys.executable, "-m", "backend.supervisor_daemon",
+         "--url", "http://127.0.0.1:9",  # منفذ مغلق: فشل الجلب مُعالَج لا قاتل
+         "--interval", "2", "--awareness-root", str(repo)],
+        cwd=REPO_ROOT, env=env,
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    try:
+        hb_path = data_root / "supervisor" / "status.json"
+        ok = False
+        for _ in range(40):  # مهلة 20ث — النبض السليم يظهر خلال أول دورة (~1-2ث)
+            if hb_path.exists():
+                ok = True
+                break
+            time.sleep(0.5)
+        assert ok, "النبض لم يُكتب خلال 20ث — الدورة بطيئة (مجاعة نبض)"
+        data = json.loads(hb_path.read_text(encoding="utf-8"))
+        assert 0 < data["interval"] <= 60 and time.time() - data["epoch"] < 30
+        # الخريطة المحفوظة: كود بلا ضجيج تشغيلي
+        store = data_root / "awareness" / "project_map.json"
+        for _ in range(40):
+            if store.exists():
+                break
+            time.sleep(0.5)
+        assert store.exists(), "الخريطة المرجعية لم تُحفظ"
+        payload = json.loads(store.read_text(encoding="utf-8"))
+        keys = payload["files"].keys()
+        assert any("app.py" in k for k in keys), "الكود غير مرصود في الخريطة"
+        assert not any(k.startswith("data/") for k in keys), \
+            "جذر البيانات داخل الخريطة — الاستثناء غير مفعل"
+    finally:
+        proc.terminate()
+        try:
+            proc.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+
+
 def test_entrypoint_skips_supervisor_when_disabled(tmp_path):
     """الافتراضي المحلي: بلا SOVEREIGN_SUPERVISOR لا يُطلق شيء — سلوك R-760 كما كان."""
     marker = tmp_path / "launched.txt"
