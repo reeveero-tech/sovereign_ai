@@ -273,6 +273,52 @@ def test_awareness_map_excludes_runtime_data_root(tmp_path):
     assert not any(k.startswith("logs/") for k in m), "مخرجات التشغيل داخل الخريطة"
 
 
+def test_map_pruning_uses_containment_not_file_suffixes(tmp_path):
+    """R-815c (اعتراض المراجع): تقليم النزول يحتوي المسار المستثنى صرفًا —
+    لا يصف مجلدًا بلواحق الملفات (.pyc/.pyo) فيقلمه خطأً مع كوده المرصود."""
+    import sys
+    sys.path.insert(0, str(REPO_ROOT / "backend"))
+    import awareness
+
+    (tmp_path / "dir.pyc").mkdir()
+    (tmp_path / "dir.pyc" / "code.py").write_text("x = 1\n", encoding="utf-8")
+    (tmp_path / "real.py").write_text("x = 1\n", encoding="utf-8")
+
+    m = awareness.build_project_map(tmp_path, exclude_paths=[])
+    assert "real.py" in m
+    assert "dir.pyc/code.py" in m, \
+        "مجلد وُصف بلحقة ملفات فقُلم — لواحق الملفات تخص الملفات وحدها"
+
+
+def test_map_does_not_descend_into_excluded_subtree(tmp_path, monkeypatch):
+    """R-815c (سلوك التقليم): العابر لا ينزل أصلًا داخل الشجرة المستثناة —
+    تجسّس على os.walk نفسه؛ النزول هدر خالص حتى لو قُفزت ملفاته لاحقًا."""
+    import sys
+    sys.path.insert(0, str(REPO_ROOT / "backend"))
+    import awareness
+
+    (tmp_path / "backend").mkdir()
+    (tmp_path / "backend" / "app.py").write_text("x = 1\n", encoding="utf-8")
+    excluded_dir = tmp_path / "data"
+    (excluded_dir / "nested").mkdir(parents=True)
+    (excluded_dir / "nested" / "churn.json").write_text("x\n", encoding="utf-8")
+
+    visited = []
+    real_walk = os.walk
+
+    def _spy(top, **kwargs):
+        for dirpath, dirnames, filenames in real_walk(top, **kwargs):
+            visited.append(dirpath)
+            yield dirpath, dirnames, filenames
+
+    monkeypatch.setattr(os, "walk", _spy)
+    m = awareness.build_project_map(tmp_path, exclude_paths=[excluded_dir])
+    assert "backend/app.py" in m
+    assert not any(k.startswith("data/") for k in m)
+    assert not any(Path(v).is_relative_to(excluded_dir) for v in visited), \
+        "العابر نزل داخل الشجرة المستثناة — التقليم غير مفعل"
+
+
 def test_daemon_writes_heartbeat_fast_with_excluded_data(tmp_path):
     """R-815c (سلوكي حتمي — الحلقة كاملة): الحارس الحقيقي مع جذر بيانات
     معزول (SOVEREIGN_DATA_ROOT) وجذر شجرة صغير يكتب النبض خلال ثوانٍ،

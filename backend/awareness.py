@@ -59,6 +59,21 @@ def awareness_map_path(data_root: str | os.PathLike) -> Path:
     return Path(data_root) / "awareness" / "project_map.json"
 
 
+def _is_under_excluded(path: Path, exclude_paths: List[Path]) -> bool:
+    """احتواء مسارٍّ ضمن مسار مستثنى — بادئة صرفة بلا منطق اللواحق:
+    التقليم في بناء الخريطة (R-815c) يقرر النزول بالمجلدات بهذا وحده،
+    فلوصف المجلد لواحق الملفات (.pyc/.pyo) خطأ تصنيفي: لواحق الملفات
+    تخص الملفات وحدها (اعتراض المراجع — مجلد اسمه x.pyc قد يحوي كودًا
+    يُرصد)."""
+    for ex in exclude_paths:
+        try:
+            path.relative_to(ex)
+            return True
+        except ValueError:  # R-815: احتواء صرف — ليس تحت المسار المستثنى، افحص التالي
+            continue
+    return False
+
+
 def _is_excluded(path: Path, exclude_paths: List[Path]) -> bool:
     """استثناء تشغيلي مبرر: امتداد بناء، أو مسار مخرج محدد (ملف المخزن أو
     السجل أنفسهما — لا مجلداتهما: استثناء الأب واسع يسقط جيرة وربما الشجرة
@@ -104,9 +119,10 @@ def build_project_map(
         # R-815c (درس الإنتاج الحي 2026-10-30): لا نزول أصلًا داخل شجرة
         # مستثناة بمسارها (بادئة) — الاستثناء بالاسم واسع يسقط جيرة، لكن
         # النزول بلا قراءة هدر خالص: في الإنتاج جذر البيانات حجم تشغيلي
-        # ضخم (عُقد R-792) تعداده وحده يستهلك الدورة. الاستثناء بالمسار
-        # المطلق هنا أدق وأرخص من الاسم.
-        dirnames[:] = [d for d in dirnames if not _is_excluded(current / d, excluded)]
+        # ضخم (تاريخ عُقد R-792) تعداده وحده يستهلك الدورة. الحكم بالاحتواء
+        # الصرف (`_is_under_excluded`) — بلا لواحق الملفات: لواحق الملفات
+        # تخص الملفات وحدها ولا تُعمم على المجلدات (اعتراض المراجع).
+        dirnames[:] = [d for d in dirnames if not _is_under_excluded(current / d, excluded)]
         for fname in sorted(filenames):
             path = current / fname
             if path.is_symlink():
