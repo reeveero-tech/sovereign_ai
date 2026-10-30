@@ -279,6 +279,29 @@ async def lifespan(app: FastAPI):
     except Exception as _auto_exc:  # TOLERATED: الحلقة إضافة؛ فشل بنائها يُعلن ولا يكسر الإقلاع
         logger.warning("R-791: تعذر بناء حلقة الاستقلال (%s)", type(_auto_exc).__name__)
     
+    # R-816 (أمر المالك «إحياء كل ما هو ميت»): عقد الولاء المعقّم حي —
+    # backend/Mr.py (R-686: نزع الفتيل) كان غير مربوط بالنظام الحي بأمر
+    # المرحلة ١؛ أمر الإحياء الجديد يوصله: تهيئة + ربط بالسيد عند الإقلاع.
+    # الربط بمادة مفتاح السيد المشتق (بصمة الهاش فقط تُخزن داخل العقد — لا
+    # خام)، ومحاولة الربط المزدوج مستحيلة (يُربط فقط إذا كان العقد بلا سيد)،
+    # وفشل الإحياء لا يكسر الإقلاع أبدًا (عزل لا موت — عقد R-686 نفسه).
+    try:
+        from Mr import initialize_loyalty_core
+        _loyalty_contract = initialize_loyalty_core()
+        if _loyalty_contract.get_status().get("master_bound"):
+            logger.info("🛡️ عقد الولاء: مربوط بالسيد سلفًا (بلا إعادة ربط)")
+        else:
+            _loyalty_bound = _loyalty_contract.bind_master(
+                _derive_api_auth("api_auth")
+            )
+            logger.info(
+                "🛡️ عقد الولاء: %s",
+                "مربوط بالسيد (SEALED)" if _loyalty_bound else "بلا ربط — يُعلن بصدق",
+            )
+        app.state.loyalty = _loyalty_contract
+    except Exception as _loyalty_exc:  # TOLERATED: الإحياء إضافة؛ فشله يُعلن ولا يوقف الخادم
+        logger.warning("R-816: تعذر إحياء عقد الولاء (%s)", type(_loyalty_exc).__name__)
+
     yield
     
     # إيقاف التشغيل
@@ -729,6 +752,57 @@ async def evolution_ledger_view(limit: int = 50):
 async def guardian_status():
     """حالة نظام الحارس (قراءة فقط) — إحياء guardian/ عبر طبقة توافق"""
     return guardian_status_snapshot()
+
+
+# ============================================================
+# R-816: عقد الولاء حي — نقاط وصول عقد الولاء المعقّم (backend/Mr.py)
+# الحالة علنية صادقة (لا سر فيها)، ورفع العزل للسيد وحده بمفتاحه.
+# ============================================================
+
+@app.get("/loyalty/status")
+async def loyalty_status():
+    """حالة عقد الولاء — علنية صادقة (لقطة سلبية، بلا أي سر)"""
+    try:
+        from Mr import get_loyalty_status
+        s = get_loyalty_status()
+        return {
+            "status": "success",
+            "data": {
+                "state": s.get("state"),
+                "loyal": s.get("loyal"),
+                "master_bound": s.get("master_bound"),
+                "quarantined": s.get("quarantined"),
+                "quarantine_reason": s.get("quarantine_reason"),
+                "violations_count": s.get("violations_count"),
+                "death_paths": s.get("death_paths"),
+            },
+        }
+    except Exception as _exc:  # عقد العزل لا موت — الفشل يُعلن بصدق
+        return {"status": "error", "detail": f"{type(_exc).__name__}: {_exc}"}
+
+
+@app.post("/loyalty/release")
+async def loyalty_release(request: Request, x_sovereign_key: Optional[str] = Header(None)):
+    """رفع عزل عقد الولاء — للسيد وحده (X-Sovereign-Key) بقرار موثق"""
+    if not x_sovereign_key or not verify_api_key(x_sovereign_key):
+        raise HTTPException(status_code=401, detail="مفتاح المالك مطلوب (X-Sovereign-Key)")
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    decision = str(body.get("decision") or "رفع عزل عقد الولاء — قرار السيد")
+    try:
+        from Mr import get_contract
+        ok = get_contract().release_quarantine(x_sovereign_key, decision)
+        s = get_contract().get_status()
+        return {
+            "status": "success" if ok else "rejected",
+            "released": ok,
+            "state": s.get("state"),
+            "quarantined": s.get("quarantined"),
+        }
+    except Exception as _exc:
+        return {"status": "error", "detail": f"{type(_exc).__name__}: {_exc}"}
 
 
 # إضافة نقطة /nexus/recommendations/live — إصلاح فجوة حقيقية:
