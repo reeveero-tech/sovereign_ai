@@ -27,6 +27,14 @@ start_supervisor() {
   # لا حارس بلا ملف الحارس — غيابه لا يكسر الإقلاع.
   [ -f "${APP_ROOT}/backend/supervisor_daemon.py" ] || return 0
   mkdir -p "${DATA_DIR}/supervisor" 2>/dev/null || return 0
+  # R-815b (درس النشر الأول 2026-10-30): في مسار الجذر يُستدعى هذا التابع بعد
+  # تملّك جذر البيانات للمستخدم — المجلد الجديد يُنشأ هنا بملكية الجذر، وإعادة
+  # توجيه سجل الحارس (يعمل بمستخدم التطبيق عبر setpriv) تفشل قبله أصلًا فلا ينطلق
+  # الحارس أبدًا (النبض غاب في النشر الأول رغم نجاح الفحوص). تملّك المجلد للمستخدم
+  # هنا يضمن نجاح الإطلاق من أول إقلاع، والفشل يُبلع (best-effort) كالعادة.
+  if [ "$(id -u)" = "0" ]; then
+    chown -R "$APP_UID:$APP_UID" "${DATA_DIR}/supervisor" 2>/dev/null || true
+  fi
   # فاصل الحارس (0، 60] ثانية هو النطاق الذي يقبل /n نبضه — خارجه يُعدّ تالفًا.
   SUP_CMD="cd '${APP_ROOT}' && nohup python3 -m backend.supervisor_daemon --url 'http://127.0.0.1:${PORT:-8080}' --interval '${SOVEREIGN_SUPERVISOR_INTERVAL:-30}' >> '${DATA_DIR}/supervisor/supervisor_stdout.log' 2>&1 &"
   if [ "$(id -u)" = "0" ]; then

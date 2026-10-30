@@ -128,6 +128,111 @@ def test_entrypoint_launches_supervisor_when_enabled(tmp_path):
         (tmp_path / "stop").write_text("x", encoding="utf-8")
 
 
+def _fake_root_tools(tmp_path: Path) -> Path:
+    """أدوات وهمية لدخول فرع الجذر بلا جذر فعلي: id يُبلغ 0، وchown يسجّل
+    استدعاءاته (عقد الإصلاح R-815b)، وsetpriv ينفّذ أمره مباشرة بلا إسقاط
+    امتياز حقيقي (المستخدم واحد أصلًا في بيئة الاختبار)."""
+    fake_bin = tmp_path / "rbin"
+    fake_bin.mkdir(exist_ok=True)
+    (fake_bin / "id").write_text(
+        "#!/bin/sh\n"
+        'if [ "$1" = "-u" ]; then echo 0; exit 0; fi\n'
+        'exec /usr/bin/id "$@"\n', encoding="utf-8")
+    (fake_bin / "chown").write_text(
+        "#!/bin/sh\n"
+        'echo "chown $*" >> "' + str(tmp_path / "chown_log.txt") + '"\n'
+        "exit 0\n", encoding="utf-8")
+    (fake_bin / "setpriv").write_text(
+        "#!/bin/sh\n"
+        'while [ "$1" != "--" ] && [ $# -gt 0 ]; do shift; done\n'
+        '[ $# -gt 0 ] && shift\n'
+        'exec "$@"\n', encoding="utf-8")
+    for name in ("id", "chown", "setpriv"):
+        (fake_bin / name).chmod(0o755)
+    return fake_bin
+
+
+def test_entrypoint_chowns_supervisor_dir_when_root(tmp_path):
+    """R-815b (درس النشر الأول): في فرع الجذر يُنشأ مجلد الحارس بعد تملّك جذر
+    البيانات — بلا تملّكٍ للمجلد الجديد تفشل إعادة توجيه سجل الحارس (بمستخدم
+    التطبيق) قبل انطلاقه، فيغيب النبض كليًا رغم نجاح الفحوص. العقد: قبل الإطلاق
+    يُملَّك المجلد لمستخدم التطبيق صراحةً، والإطلاق نفسه ينجح (السجل يُنشأ)."""
+    app_root = tmp_path / "app"
+    (app_root / "backend").mkdir(parents=True)
+    (app_root / "backend" / "supervisor_daemon.py").write_text("# fake\n", encoding="utf-8")
+    marker = tmp_path / "launched.txt"
+    fake_bin = _fake_python(tmp_path, marker)
+    root_bin = _fake_root_tools(tmp_path)
+    data_dir = tmp_path / "data"
+    env = {
+        **os.environ,
+        "PATH": f"{fake_bin}:{root_bin}:{os.environ['PATH']}",
+        "SOVEREIGN_SUPERVISOR": "1",
+        "SOVEREIGN_APP_ROOT": str(app_root),
+        "SOVEREIGN_CONTAINER_DATA": str(data_dir),
+        "SOVEREIGN_SUPERVISOR_INTERVAL": "30",
+        "PORT": "8080",
+    }
+    try:
+        out = subprocess.run(
+            ["sh", str(ENTRY), "sh", "-c", "echo app-ran"],
+            env=env, capture_output=True, text=True, timeout=30)
+        assert out.returncode == 0, out.stderr
+        assert out.stdout.strip() == "app-ran", "التطبيق نفسه توقف — ممنوع"
+        # عقد R-815b: تملّك مجلد الحارس لمستخدم التطبيق قبل الإطلاق
+        chown_log = (tmp_path / "chown_log.txt").read_text(encoding="utf-8")
+        assert "1001:1001" in chown_log, "لا تملّيك لمستخدم التطبيق — النشر الأول سيتكرر"
+        assert str(data_dir / "supervisor") in chown_log, \
+            "التملّيك لا يستهدف مجلد الحارس"
+        for _ in range(50):
+            if marker.exists():
+                break
+            time.sleep(0.1)
+        assert marker.exists(), "الحارس لم يُطلق رغم التملّيك — فرع الجذر مكسور"
+        # إعادة توجيه السجل نجحت فعلًا (هي التي كانت تفشل قبل R-815b)
+        assert (data_dir / "supervisor" / "supervisor_stdout.log").exists(), \
+            "سجل الحارس لم يُنشأ — الإطلاق بلا كتابة سجل"
+    finally:
+        (tmp_path / "stop").write_text("x", encoding="utf-8")
+
+
+def test_supervisor_dir_unwritable_keeps_app_alive(tmp_path):
+    """توثيق نمط الفشل الصامت: مجلد حارس غير قابل للكتابة لمستخدم التطبيق يجعل
+    الإطلاق يفشل بصمت (لا علامة إطلاق ولا سجل) — لكن الإقلاق نفسه لا يتوقف
+    أبدًا (best-effort). هذا هو سبب فحص النبض الحي في سير النشر (R-815b)."""
+    app_root = tmp_path / "app"
+    (app_root / "backend").mkdir(parents=True)
+    (app_root / "backend" / "supervisor_daemon.py").write_text("# fake\n", encoding="utf-8")
+    marker = tmp_path / "launched.txt"
+    fake_bin = _fake_python(tmp_path, marker)
+    data_dir = tmp_path / "data"
+    (data_dir / "supervisor").mkdir(parents=True)
+    (data_dir / "supervisor").chmod(0o555)  # موجود لكن غير قابل للكتابة
+    env = {
+        **os.environ,
+        "PATH": f"{fake_bin}:{os.environ['PATH']}",
+        "SOVEREIGN_SUPERVISOR": "1",
+        "SOVEREIGN_APP_ROOT": str(app_root),
+        "SOVEREIGN_CONTAINER_DATA": str(data_dir),
+        "SOVEREIGN_SUPERVISOR_INTERVAL": "30",
+        "PORT": "8080",
+    }
+    try:
+        out = subprocess.run(
+            ["sh", str(ENTRY), "sh", "-c", "echo app-ran"],
+            env=env, capture_output=True, text=True, timeout=30)
+        # التطبيق نجح رغم فشل إطلاق الحارس — الإقلاع لا يتوقف أبدًا
+        assert out.returncode == 0, out.stderr
+        assert out.stdout.strip() == "app-ran"
+        time.sleep(0.8)
+        assert not marker.exists(), \
+            "إطلاق في مجلد غير قابل للكتابة — نمط الفشل تغير (حدّث الاختبار)"
+        assert not (data_dir / "supervisor" / "supervisor_stdout.log").exists(), \
+            "السجل كُتب رغم منع الكتابة — الفرضية خاطئة"
+    finally:
+        (tmp_path / "stop").write_text("x", encoding="utf-8")
+
+
 def test_entrypoint_skips_supervisor_when_disabled(tmp_path):
     """الافتراضي المحلي: بلا SOVEREIGN_SUPERVISOR لا يُطلق شيء — سلوك R-760 كما كان."""
     marker = tmp_path / "launched.txt"

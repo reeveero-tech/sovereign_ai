@@ -199,3 +199,21 @@ jobs:
             sleep 10
           done
           echo "❌ $URL لم يصبح healthy"; echo "$BODY" | head -c 500; exit 1
+
+      # R-815b (درس النشر الأول 2026-10-30): فحص /health وحده أثبت فشله — النشر
+      # الأول لعملية الحارس المرافقة (R-815) نجح بكل الفحوص والنبض غائب (فشل
+      # صامت: مجلد جذر الملكية أفشل إعادة توجيه السجل قبل انطلاق الحارس). النبض
+      # الحي هو الدليل الوحيد أن الحارس يعمل فعلًا — لا يكتفى بـ200 على /health.
+      - name: 'R-815b: Smoke — supervisor heartbeat live'
+        run: |
+          URL="https://${FLY_APP}.fly.dev/supervisor/status"
+          # نافذة 6 دقائق: أول دورة حارس تكتب النبض فور الإقلاع لكن إعادة تشغيل
+          # الآلة/مزامنة الأسرار بعد النشر قد تؤجل الإقلاع النهائي — تسامح لا عمى.
+          for i in $(seq 1 36); do
+            BODY=$(curl -s -m 10 "$URL" || true)
+            if echo "$BODY" | grep -q '"supervisor": *"up"'; then
+              echo "✅ نبض الحارس حي"; echo "$BODY" | head -c 300; exit 0
+            fi
+            sleep 10
+          done
+          echo "❌ نبض الحارس غائب بعد النشر (سبب محتمل: الحارس المرافق لم يُطلق)"; echo "$BODY" | head -c 500; exit 1
