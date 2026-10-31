@@ -307,3 +307,13 @@ def test_grounded_reply_lists_only_cited_sources(client, monkeypatch):
     body = client.post("/chat", json={"text": "كم مساحة اليابان", "user_id": "t"}).json()
     assert "ar.wikipedia.org/wiki/JP" in body["reply"]
     assert "pubmed" not in body["reply"], body["reply"]
+
+
+def test_unanswered_detected_despite_sentiment_suffix():
+    """ثبت حيًا: ملحق المشاعر بعد إعلان التعذر كان يمنع السقوط للبحث العالمي."""
+    import sovereign_response
+    from app import _is_unanswered
+    base = sovereign_response.UNREACHABLE_UNANSWERED
+    assert _is_unanswered(base)
+    assert _is_unanswered(base + " (مشاعرك: إيجابية)")
+    assert not _is_unanswered("جواب حقيقي")

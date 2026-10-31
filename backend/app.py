@@ -2731,7 +2731,9 @@ def _is_unanswered(reply) -> bool:
     """R-822c: الرد هو الإعلان الصادق بتعذر الجواب (لا جواب حقيقي)."""
     try:
         import sovereign_response
-        return str(reply or "") == sovereign_response.UNREACHABLE_UNANSWERED
+        # R-824d: ملحق المشاعر «(مشاعرك: …)» يُضاف بعد الإعلان ⇒ المساواة التامة كانت تُسقط البحث العالمي
+        # (ثُبت حيًا: سؤال النظام الغذائي بمشاعر «إيجابية» أعاد الإعلان في ثانية بلا بحث)
+        return str(reply or "").startswith(sovereign_response.UNREACHABLE_UNANSWERED.rstrip())
     except Exception:  # TOLERATED: تعذر المقارنة ⇒ الحالة كما هي
         return False
 
