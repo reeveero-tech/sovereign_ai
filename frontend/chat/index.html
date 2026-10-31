@@ -55,7 +55,7 @@
   .side-foot { border-top: 1px solid var(--border); padding: 10px 14px; display: flex; gap: 8px;
                align-items: center; font-size: 13px; color: var(--muted); }
   .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); flex: 0 0 auto; }
-  .dot.ok { background: var(--accent); } .dot.bad { background: var(--danger); }
+  .dot.ok { background: var(--accent); } .dot.bad { background: var(--danger); } .dot.warn { background: #d4a017; }
   .main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
   .topbar { display: flex; align-items: center; gap: 10px; padding: 10px 18px;
             border-bottom: 1px solid var(--border); background: var(--surface); min-height: 52px; }
@@ -112,6 +112,9 @@
   .msg.err .body { color: var(--danger); }
   .msg .meta { font-size: 12px; color: var(--muted); margin-top: 6px; }
   .msg details { margin-top: 6px; font-size: 13px; color: var(--muted); }
+  .msg .media { margin-top: 8px; display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+  .msg .media img, .msg .media video { max-width: 100%; max-height: 520px; border-radius: 12px; display: block; }
+  .msg .media .dl { font-size: 13px; }
   .msg .att { margin-top: 6px; display: flex; gap: 6px; flex-wrap: wrap; }
   .thinking { color: var(--muted); }
   .thinking::after { content: "…"; animation: blink 1.2s infinite; }
@@ -401,10 +404,36 @@
     else { c.style.cursor = "pointer"; c.addEventListener("click", function () { go("files"); openFile(f.id); }); }
     return c;
   }
+  // R-824: نص غني آمن (روابط قابلة للنقر بلا innerHTML) + عرض وسائط الاستوديو (صورة/فيديو) من روابط موقّعة فقط
+  var URL_RE = /(https?:\/\/[^\s<>"'،)\]]+|\/media\/file\/F-[0-9a-f]{12}\?sig=[0-9a-f]{32})/g;
+  var MEDIA_RE = /^\/media\/file\/F-[0-9a-f]{12}\?sig=[0-9a-f]{32}$/;
+  function richText(node, text) {
+    node.textContent = ""; var s = String(text || ""), last = 0, m; URL_RE.lastIndex = 0;
+    while ((m = URL_RE.exec(s))) {
+      if (m.index > last) node.appendChild(document.createTextNode(s.slice(last, m.index)));
+      var a = document.createElement("a"); a.href = m[0]; a.target = "_blank"; a.rel = "noopener noreferrer";
+      a.textContent = m[0]; node.appendChild(a); last = m.index + m[0].length;
+    }
+    if (last < s.length) node.appendChild(document.createTextNode(s.slice(last)));
+  }
+  function mediaBox(list) {
+    var box = document.createElement("div"); box.className = "media";
+    (list || []).forEach(function (md) {
+      if (!md || typeof md.url !== "string" || !MEDIA_RE.test(md.url)) return;
+      var n;
+      if (md.type === "video") { n = document.createElement("video"); n.controls = true; n.preload = "metadata"; n.playsInline = true; }
+      else { n = document.createElement("img"); n.alt = md.name || "صورة"; n.loading = "lazy"; }
+      n.src = md.url; box.appendChild(n);
+      var dl = document.createElement("a"); dl.href = md.url; dl.download = md.name || ""; dl.className = "dl";
+      dl.textContent = "تنزيل " + (md.type === "video" ? "الفيديو" : "الصورة"); box.appendChild(dl);
+    });
+    return box;
+  }
   function bubble(m, extra) {
     var wrap = el("div", "msg " + (m.role === "user" ? "user" : "bot") + (extra && extra.error ? " err" : ""));
     wrap.appendChild(el("div", "who", m.role === "user" ? "أنت" : "النظام"));
-    var b = el("div", "body"); b.textContent = m.content; wrap.appendChild(b);
+    var b = el("div", "body"); richText(b, m.content); wrap.appendChild(b);
+    if (m.media && m.media.length) wrap.appendChild(mediaBox(m.media)); // R-824
     if (m.files && m.files.length) { var a = el("div", "att"); m.files.forEach(function (f) { a.appendChild(fileChip(f, false)); }); wrap.appendChild(a); }
     var meta = el("div", "meta"); var parts = [];
     if (m.ts) parts.push(fmtTime(m.ts));
@@ -484,7 +513,7 @@
       // الجواب يبقى لكن اعتراض المراجع يُعرض في الفقاعة ويُحفظ معها؛ وحتى لو جاء
       // الحكم بلا تفصيل (summary/issues فارغتان) يظهر نص افتراضي صريح لا يختفي الرفض
       var rev = data.reviewer && data.reviewer.ok === false ? (data.reviewer.summary || (data.reviewer.issues || []).join("؛ ") || "اعترض المراجع المستقل على هذا الجواب (جاء الحكم بلا تفصيل)") : null;
-      var bm = { role: "assistant", content: data.reply.trim(), ts: Date.now(), secs: Math.round((Date.now() - start) / 1000), tools: data.tools_used || [], err: !!failed, rev: rev };
+      var bm = { role: "assistant", content: data.reply.trim(), ts: Date.now(), secs: Math.round((Date.now() - start) / 1000), tools: data.tools_used || [], err: !!failed, rev: rev, media: data.media || [] };
       state.messages.push(bm); save(); bubble(bm, failed ? { error: true } : undefined); persistConv();
     }).catch(function (err) {
       clearInterval(tick); pend.remove();
@@ -1026,7 +1055,10 @@
       if (!b || !b.enabled) { dot.className = "dot bad"; tx.textContent = "متصل — العقل غير مفعّل"; return; }
       var last = b.last_call && b.last_call.result;
       if (last === "unreachable_latched") last = "error"; // R-822c: المزلاج المفتوح فشل وصول لا «متصل»
-      dot.className = "dot " + (last === "error" ? "bad" : "ok"); tx.textContent = (last === "error" ? "آخر اتصال بالعقل فشل · " : "متصل · ") + (b.model || "");
+      var cf = b.cloud_fallback || {};
+      // R-824: العقل الأساسي متعذر والاحتياطي السحابي مفعّل ⇒ حالة صادقة مركبة لا «فشل» مطلق ولا «متصل»
+      if (last === "error" && cf.enabled) { dot.className = "dot warn"; tx.textContent = "العقل الأساسي غير متصل · احتياطي سحابي: " + (cf.model || ""); }
+      else { dot.className = "dot " + (last === "error" ? "bad" : "ok"); tx.textContent = (last === "error" ? "آخر اتصال بالعقل فشل · " : "متصل · ") + (b.model || ""); }
     });
   }
   paintKey(); renderChat(); paintConvs(); loadConvs(); loadModels(); checkStatus(); setInterval(checkStatus, 30000); input.focus();

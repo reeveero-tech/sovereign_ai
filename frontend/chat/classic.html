@@ -113,6 +113,9 @@
     .send { padding: 0 16px; }
     .hint { display: none; }
   }
+  .msg .media { margin-top: 8px; display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+  .msg .media img, .msg .media video { max-width: 100%; max-height: 520px; border-radius: 12px; display: block; }
+  .msg .media .dl { font-size: 13px; }
 </style>
 </head>
 <body>
@@ -180,9 +183,35 @@
     thread.appendChild(box);
   }
 
+  // R-824: نص غني آمن (روابط قابلة للنقر بلا innerHTML) + عرض وسائط الاستوديو (صورة/فيديو) من روابط موقّعة فقط
+  var URL_RE = /(https?:\/\/[^\s<>"'،)\]]+|\/media\/file\/F-[0-9a-f]{12}\?sig=[0-9a-f]{32})/g;
+  var MEDIA_RE = /^\/media\/file\/F-[0-9a-f]{12}\?sig=[0-9a-f]{32}$/;
+  function richText(node, text) {
+    node.textContent = ""; var s = String(text || ""), last = 0, m; URL_RE.lastIndex = 0;
+    while ((m = URL_RE.exec(s))) {
+      if (m.index > last) node.appendChild(document.createTextNode(s.slice(last, m.index)));
+      var a = document.createElement("a"); a.href = m[0]; a.target = "_blank"; a.rel = "noopener noreferrer";
+      a.textContent = m[0]; node.appendChild(a); last = m.index + m[0].length;
+    }
+    if (last < s.length) node.appendChild(document.createTextNode(s.slice(last)));
+  }
+  function mediaBox(list) {
+    var box = document.createElement("div"); box.className = "media";
+    (list || []).forEach(function (md) {
+      if (!md || typeof md.url !== "string" || !MEDIA_RE.test(md.url)) return;
+      var n;
+      if (md.type === "video") { n = document.createElement("video"); n.controls = true; n.preload = "metadata"; n.playsInline = true; }
+      else { n = document.createElement("img"); n.alt = md.name || "صورة"; n.loading = "lazy"; }
+      n.src = md.url; box.appendChild(n);
+      var dl = document.createElement("a"); dl.href = md.url; dl.download = md.name || ""; dl.className = "dl";
+      dl.textContent = "تنزيل " + (md.type === "video" ? "الفيديو" : "الصورة"); box.appendChild(dl);
+    });
+    return box;
+  }
   function bubble(role, text, extra) {
     var wrap = el("div", "msg " + (role === "user" ? "user" : "bot") + (extra && extra.error ? " error" : ""));
-    var b = el("div", "bubble"); b.textContent = text; wrap.appendChild(b);
+    var b = el("div", "bubble"); richText(b, text); wrap.appendChild(b);
+    if (extra && extra.media && extra.media.length) wrap.appendChild(mediaBox(extra.media)); // R-824
     var meta = el("div", "meta");
     if (extra && extra.ts) meta.appendChild(el("span", null, fmtTime(extra.ts)));
     if (extra && extra.secs != null) meta.appendChild(el("span", null, extra.secs + " ث"));
@@ -203,7 +232,7 @@
   function renderAll() {
     thread.textContent = "";
     if (!state.messages.length) { renderEmpty(); return; }
-    state.messages.forEach(function (m) { bubble(m.role, m.content, { ts: m.ts, secs: m.secs, tools: m.tools }); });
+    state.messages.forEach(function (m) { bubble(m.role, m.content, { ts: m.ts, secs: m.secs, tools: m.tools, media: m.media }); });
     scrollDown();
   }
 
@@ -282,9 +311,9 @@
     request(text, history).then(function (data) {
       p.stop();
       var secs = Math.round((Date.now() - p.start) / 1000);
-      var bm = { role: "assistant", content: data.reply.trim(), ts: Date.now(), secs: secs, tools: data.tools_used || [] };
+      var bm = { role: "assistant", content: data.reply.trim(), ts: Date.now(), secs: secs, tools: data.tools_used || [], media: data.media || [] };
       state.messages.push(bm); save();
-      bubble("assistant", bm.content, { ts: bm.ts, secs: secs, tools: bm.tools });
+      bubble("assistant", bm.content, { ts: bm.ts, secs: secs, tools: bm.tools, media: bm.media });
     }).catch(function (err) {
       p.stop();
       var node = bubble("assistant", err.message, { error: true, retry: function () { node.remove(); send(text); } });

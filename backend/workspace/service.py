@@ -210,6 +210,19 @@ class Workspace:
         if not prompt:
             raise WorkspaceError("الوصف فارغ")
         got = media_client.generate_image(prompt, size or None)
+        if not got and media_client.last_outcome().get("result") == "disabled":
+            # R-824 إحياء: بلا خادم ذاتي ⇒ سلسلة استوديو الوسائط (مولدات مأذونة ⇒ مصمم محلي) بإعلان المزود
+            import media_studio
+            req = media_studio.detect(prompt) or {"kind": "image", "subject": prompt, "style": "photo",
+                                                  "edit_of": None, "request": prompt}
+            en, shown = media_studio.build_prompt(req)
+            try:
+                side = max(256, min(1024, int(str(size or "512x512").lower().split("x")[0])))
+            except ValueError:
+                side = 512
+            g = media_studio.generate_image(en, shown, req["style"], (side, side))
+            got = (g["data"], g["mime"])
+            title = title or ("[" + g["provider"] + "] " + prompt[:30])
         if not got:
             reason = media_client.last_outcome().get("result")
             hint = {"disabled": "توليد الصور غير مفعّل (MEDIA_ENABLED)",

@@ -20,6 +20,7 @@ import asyncio
 import hashlib
 import hmac
 import json
+import re  # R-824: تمييز الطلبات الإنشائية في مسار المحادثة
 import time
 import threading
 import uuid
@@ -185,6 +186,10 @@ class ChatResponse(BaseModel):
     # R-814 (البند ٥): حكم المراجع المستقل (brain/skipped_*/no_reply/invalid_review_reply)
     # يُسجَّل ويُعرض — لا يقلب نتيجة التطبيق أبدًا
     reviewer: Optional[Dict[str, Any]] = None
+    # R-824: وسائط أنشأها النظام لهذا الرد (صورة/فيديو) — روابط موقّعة قابلة للعرض مباشرة
+    media: List[Dict[str, Any]] = []
+    # R-824: السؤال كما فهمه النظام من سياق المحادثة (متابعة «وكم سكانها؟» ⇒ سؤال مكتمل)
+    resolved_question: Optional[str] = None
 
 
 class SovereignCommand(BaseModel):
@@ -700,7 +705,10 @@ async def ws_settings(x_sovereign_key: Optional[str] = Header(None)):
                      "SOVEREIGN_AUTONOMY_INTERVAL", "SOVEREIGN_SELFDEV_INTERVAL", "VISION_ENABLED",
                      "VISION_MODEL", "STT_ENABLED", "TTS_ENABLED", "MEDIA_ENABLED", "MEDIA_BASE_URL",
                      "SEARCH_PROVIDER", "SEARCH_BASE_URL", "SEARCH_API_KEY", "STT_BASE_URL",
-                     "TTS_BASE_URL", "GITHUB_TOKEN", "AI_ENVIRONMENT"]
+                     "TTS_BASE_URL", "GITHUB_TOKEN", "AI_ENVIRONMENT",
+                     # R-824: العقل السحابي الاحتياطي واستوديو الوسائط والبحث العالمي
+                     "CLOUD_BRAIN_ENABLED", "CLOUD_BRAIN_URL", "CLOUD_BRAIN_MODEL", "CLOUD_BRAIN_API_KEY",
+                     "MEDIA_EXTERNAL_PROVIDERS", "WORLD_SEARCH_ENABLED", "WORLD_SEARCH_LANGS"]
         # مفتاح المالك: يُعلن ضبطه فقط عبر المحمّل القائم (لا قراءة مباشرة للجذر — حارس الاشتقاق)
         env = [{"name": "OWNER_KEY (مفتاح المالك)", "set": bool(SOVEREIGN_API_KEY), "value": None}]
         for n in env_names:
@@ -736,12 +744,18 @@ async def ws_settings(x_sovereign_key: Optional[str] = Header(None)):
              "ready": bool(_cfg("VISION_ENABLED") and _cfg("VISION_MODEL")), "detail": str(_cfg("VISION_MODEL") or "VISION_MODEL غير مضبوط")},
             {"id": "media", "name": "توليد الصور", "tool": "media.image",
              "ready": bool(_cfg("MEDIA_ENABLED")) and not _local(_cfg("MEDIA_BASE_URL")), "detail": "خادم توليد ذاتي الاستضافة (MEDIA_BASE_URL)"},
+            # R-824: استوديو الوسائط — جاهز دائمًا (المصمم المحلي حتمي) ويعلن سلسلة مولداته الفعلية
+            {"id": "media_studio", "name": "استوديو الصور والفيديو", "tool": "media.create",
+             "ready": True, "detail": _media_studio_detail()},
+            {"id": "cloud_brain", "name": "العقل السحابي الاحتياطي", "tool": None,
+             "ready": bool(_cloud_brain_status().get("enabled")),
+             "detail": str(_cloud_brain_status().get("model") or "CLOUD_BRAIN_ENABLED غير مفعّل")},
             {"id": "stt", "name": "تفريغ الصوت", "tool": "files.analyze",
              "ready": bool(_cfg("STT_ENABLED")), "detail": "STT_BASE_URL"},
             {"id": "tts", "name": "تحويل النص إلى صوت", "tool": None,
              "ready": bool(_cfg("TTS_ENABLED")), "detail": "TTS_BASE_URL"},
             {"id": "ffmpeg", "name": "معالجة الفيديو والصوت (ffmpeg)", "tool": "files.analyze",
-             "ready": bool(shutil.which("ffprobe")), "detail": "ffprobe/ffmpeg في الحاوية"},
+             "ready": bool(shutil.which("ffprobe") or _media_ffmpeg()), "detail": "ffprobe/ffmpeg في الحاوية أو imageio-ffmpeg المضمّن"},
         ]
         return {
             "integrations": integrations,
@@ -1922,6 +1936,28 @@ async def connectors_revoke(request: ConnectorGrantRequest):
     return _connector_owner_op(request, "revoke")
 
 
+@app.get("/media/file/{fid}")
+async def media_file(fid: str, sig: str = ""):
+    """R-824: عرض وسائط الاستوديو برابط موقّع (HMAC مشتق) — للمحادثة بلا مفتاح المالك في المتصفح."""
+    from urllib.parse import quote
+    from workspace.service import get_workspace
+    if not re.fullmatch(r"F-[0-9a-f]{12}", fid or "") or not _media_sig_ok(fid, sig):
+        raise HTTPException(status_code=404, detail="غير موجود")
+    ws = get_workspace()
+    try:
+        rec = await asyncio.to_thread(ws.get_file, fid)
+        if rec.get("source") != "media_studio":
+            raise HTTPException(status_code=404, detail="غير موجود")
+        data = await asyncio.to_thread(ws.raw, fid)
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=404, detail="غير موجود")
+    return Response(content=data, media_type=rec.get("content_type") or "application/octet-stream",
+                    headers={"Cache-Control": "private, max-age=86400",
+                             "Content-Disposition": f"inline; filename*=UTF-8''{quote(rec.get('name') or fid)}"})
+
+
 @app.get("/brain/status")
 async def brain_status():
     """حالة عقل Ollama ومصدر الردود (R-726 — البند ١.٦ بأمر المالك).
@@ -1979,7 +2015,33 @@ def _brain_status_payload() -> Dict[str, Any]:
         "base_url": safe_base,
         "timeout_seconds": _config.brain_get("OLLAMA_TIMEOUT_SECONDS", 60),
         "last_call": outcome,
+        "cloud_fallback": _cloud_brain_status(),  # R-824: العقل السحابي الاحتياطي (حالة مستقلة صادقة)
     }
+
+
+def _media_studio_detail() -> str:
+    try:
+        import media_studio
+        c = media_studio.capabilities()
+        return "المولدات: " + " ← ".join(c.get("providers") or ["local_design"]) + (" — فيديو MP4" if c.get("video") else "")
+    except Exception as e:  # TOLERATED: التفصيل يعلن خطأه
+        return type(e).__name__
+
+
+def _media_ffmpeg():
+    try:
+        import media_studio
+        return media_studio.ffmpeg_exe()
+    except Exception:  # TOLERATED: غياب المحلّل = غير جاهز
+        return None
+
+
+def _cloud_brain_status():
+    try:
+        import cloud_brain
+        return cloud_brain.status()
+    except Exception as e:  # TOLERATED: الحالة تعلن خطأها
+        return {"enabled": False, "error": type(e).__name__}
 
 
 # ============================================================
@@ -2644,7 +2706,7 @@ def _brain_unreachable_now() -> bool:
         return False
 
 
-def _world_answer_for_chat(text: str):
+def _world_answer_for_chat(text: str, raw: bool = False):
     """R-823: البحث العالمي عبر السجل (أثر TOOL_INVOKED موقّع) — (الرد، الحالة) أو None إن لم يُتح."""
     try:
         import world_search
@@ -2656,6 +2718,8 @@ def _world_answer_for_chat(text: str):
             logger.warning("R-823: فشل world.answer (%s)", str(out.get("error"))[:160])
             return None
         res = out.get("result") or {}
+        if raw:  # R-824: النتيجة الخام للصياغة المقيدة بالمصادر
+            return res
         status = "brain_unreachable_world_search" if res.get("ok") else "brain_unreachable_unanswered"
         return world_search.format_reply(res), status
     except Exception as e:  # TOLERATED: يبقى الإعلان الصادق R-822c — يُسجل
@@ -2670,6 +2734,138 @@ def _is_unanswered(reply) -> bool:
         return str(reply or "") == sovereign_response.UNREACHABLE_UNANSWERED
     except Exception:  # TOLERATED: تعذر المقارنة ⇒ الحالة كما هي
         return False
+
+
+# ============================================================
+# R-824: السياق + الوسائط + العقل السحابي الاحتياطي — منظومة واحدة من المحادثة
+# ============================================================
+_CREATIVE = re.compile(
+    r"^(?:من فضلك\s+|لو سمحت\s+)?(?:اكتب|أكتب|صغ|اصغ|ألف|الف|أنشئ نص|اقترح|برمج|ارسل|حرر|حرّر|راجع|صحح|"
+    r"اعد صياغة|أعد صياغة|ترجم|لخص|write|draft|compose|code|program|suggest|rewrite|fix|edit|translate)"
+    r"|(?:قصيدة|قصة|رسالة|ايميل|إيميل|مقال|تغريدة|منشور|سيناريو|كود|دالة|سكربت|خطة|جدول|برنامج تدريبي|"
+    r"poem|story|email|essay|tweet|script|function|plan)", re.I)
+
+
+def _media_link(fid: str) -> str:
+    """R-824: رابط موقّع لعرض وسائط مولدة بلا مفتاح المالك في المتصفح (HMAC مشتق — لا تخمين)."""
+    # مفتاح api_auth المشتق مع وسم غرض منفصل في الرسالة (الأغراض المعتمدة للاشتقاق محصورة)
+    sig = hmac.new(_derive_api_auth("api_auth").encode("utf-8"), ("media_link:" + str(fid)).encode("utf-8"),
+                   hashlib.sha256).hexdigest()[:32]
+    return f"/media/file/{fid}?sig={sig}"
+
+
+def _media_sig_ok(fid: str, sig: str) -> bool:
+    good = _media_link(fid).rsplit("sig=", 1)[1]
+    return hmac.compare_digest(str(sig or "").encode("utf-8"), good.encode("utf-8"))
+
+
+def _media_for_chat(req: Dict[str, Any]):
+    """R-824: ينفذ طلب صورة/فيديو عبر السجل (أثر موقّع) ⇒ (الرد، [وسائط]، الحالة)."""
+    import media_studio
+    try:
+        from tool_registry import get_registry
+        out = get_registry().invoke("media.create", caller="chat",
+                                    inputs={"request": req.get("request") or req.get("subject"),
+                                            "kind": req.get("kind"), "base_prompt": req.get("edit_of") or ""})
+        res = out.get("result") if out.get("ok") else {"ok": False, "kind": req.get("kind"),
+                                                        "error": str(out.get("error"))[:200]}
+    except Exception as e:  # TOLERATED: الفشل يُعلن بسببه في الرد
+        res = {"ok": False, "kind": req.get("kind"), "error": type(e).__name__}
+    media = []
+    if res.get("ok") and res.get("file"):
+        f = res["file"]
+        media.append({"type": res["kind"], "url": _media_link(f["id"]), "file_id": f["id"],
+                      "name": f.get("name"), "mime": res.get("mime"), "provider": res.get("provider"),
+                      "ai": res.get("ai"), "prompt": res.get("prompt")})
+    return media_studio.format_reply(res), media, ("media_created" if media else "media_failed")
+
+
+def _tool_media_create(request: str, kind: str = None, base_prompt: str = ""):
+    import media_studio
+    hist = [{"role": "assistant", "content": f"الوصف المستخدم: {base_prompt}"}] if base_prompt else None
+    req = media_studio.detect(request, hist) or {"kind": (kind or "image"), "subject": request,
+                                                 "style": "photo", "edit_of": None, "request": request}
+    if base_prompt:
+        req["edit_of"] = base_prompt
+    if kind in ("image", "video"):
+        req["kind"] = kind
+
+    from workspace.service import get_workspace
+
+    def _save(name, data, mime):
+        rec = get_workspace().add_file(name, data, mime, source="media_studio")
+        return {"id": rec["id"], "name": rec.get("name")}
+    res = media_studio.create(req, save=_save)
+    res.pop("data", None)
+    return res
+
+
+def _prev_op_reply(resolved: Dict[str, Any]) -> Optional[str]:
+    """R-824: «ترجمه/لخصه» على الرد السابق — حتمي بلا نموذج (ترجمة آلية/تلخيص استخلاصي)."""
+    import context_resolver
+    prev = str(resolved.get("previous_answer") or "")
+    if not prev:
+        return None
+    if resolved.get("op") == "summarize":
+        return "ملخص الرد السابق (تلخيص استخلاصي):\n" + context_resolver.summarize_extractive(prev)
+    import world_search
+    target = resolved.get("target_lang") or "en"
+    body = re.split(r"\n\s*المصادر", prev, maxsplit=1)[0]
+    parts, used = [], set()
+    for para in [p for p in body.split("\n") if p.strip()][:40]:
+        tr, who = world_search.translate(para, target)
+        parts.append(tr if who else para)
+        if who:
+            used.add(who)
+    if not used:
+        return "تعذرت ترجمة الرد السابق الآن (مزودات الترجمة غير متاحة) — أعد المحاولة بعد قليل."
+    return "\n".join(parts) + f"\n\n(ترجمة آلية إلى {target} عبر {', '.join(sorted(used))})"
+
+
+def _sources_block(res: Dict[str, Any]) -> str:
+    lines = ["المصادر:"]
+    for s_ in res.get("sources") or []:
+        lines.append(f"[{s_['n']}] {s_.get('title', '')} — {s_.get('credibility_label', '')} — {s_.get('url', '')}")
+    return "\n".join(lines)
+
+
+def _chat_answer_without_brain(text: str, history, resolved: Dict[str, Any]):
+    """R-823/824: الطلب المفتوح والعقل الأساسي متعذر ⇒ (الرد، الحالة، الأدوات) أو None.
+    ١) طلب إنشائي (اكتب/لخص/خطة/كود) ⇒ العقل السحابي مع سياق المحادثة.
+    ٢) سؤال معرفي ⇒ البحث العالمي ⇒ صياغة سحابية مقيّدة بالمصادر (حارس الاستشهاد) أو الرد الحتمي.
+    ٣) فشل البحث ⇒ العقل السحابي العام (معلن) ⇒ وإلا None (يبقى الإعلان الصادق)."""
+    import cloud_brain
+    import world_search
+    tools = []
+    lang = world_search.detect_lang(text) if text else "ar"
+    note = (f"فهمت سؤالك في سياق المحادثة: «{resolved['standalone']}»\n\n"
+            if resolved.get("followup") and resolved.get("kind") != "prev_op" else "")
+    if _CREATIVE.search(str(resolved.get("original") or text)) and cloud_brain.enabled():
+        g = cloud_brain.general(text, history=history, lang=lang)
+        if g:
+            return (g["text"] + f"\n\n— صياغة: نموذج سحابي احتياطي ({g['model']}) لأن العقل الأساسي غير متصل.",
+                    "cloud_brain_general", ["العقل السحابي الاحتياطي"])
+    world = _world_answer_for_chat(text, raw=True)
+    if world is not None and world.get("ok"):
+        tools.append("بحث عالمي متعدد اللغات (بلا نموذج لغوي)")
+        if cloud_brain.enabled():
+            g = cloud_brain.grounded(text, world, history=history)
+            if g:
+                tools.append("صياغة سحابية مقيّدة بالمصادر")
+                reply = (note + g["text"] + "\n\n" + _sources_block(world)
+                         + f"\n\nالمنهج: بحث عالمي متعدد اللغات وتقييم حتمي للمصادر، ثم صياغة بنموذج سحابي "
+                           f"احتياطي ({g['model']}) مقيّد بالنقاط المرقمة فقط — أي استشهاد خارج المصادر يُرفض.")
+                return reply, "brain_unreachable_world_search", tools
+        return note + world_search.format_reply(world), "brain_unreachable_world_search", tools
+    if cloud_brain.enabled():
+        g = cloud_brain.general(text, history=history, lang=lang)
+        if g:
+            return (note + g["text"] + f"\n\n— تنبيه: لم أجد مصادر موثوقة كافية؛ هذا جواب نموذج سحابي احتياطي "
+                    f"({g['model']}) بلا تحقق من مصادر — تحقق من الحقائق المهمة.",
+                    "cloud_brain_general", ["العقل السحابي الاحتياطي"])
+    if world is not None:
+        return note + world_search.format_reply(world), "brain_unreachable_unanswered", tools
+    return None
 
 
 def _chat_agent_mode() -> bool:
@@ -2948,6 +3144,14 @@ def _register_real_tools() -> None:
         outputs="points[]/sources[]/providers/method",
         handler=lambda question, target_lang=None: __import__("world_search").answer(question, target_lang)))
     registry.register(ToolSpec(
+        name="media.create",
+        description=("R-824: استوديو الوسائط — تصميم صورة أو فيديو MP4 من وصف بأي لغة (خادم ذاتي ⇒ مولدات "
+                     "ذكاء اصطناعي مأذونة ⇒ مصمم محلي) وحفظه في مساحة العمل"),
+        inputs={"request": "الطلب/الوصف", "kind": "image أو video (اختياري)",
+                "base_prompt": "وصف صورة سابقة لتعديلها (اختياري)"},
+        outputs="ok/kind/provider/file/prompt/tried",
+        handler=_tool_media_create))
+    registry.register(ToolSpec(
         name="research.run",
         description="المنسّق: هدف → بحث ← قراءة مصادر ← استخراج ← استدلال ← تقرير مستشهد",
         inputs={"goal": "هدف البحث"}, outputs="report/sources/facts/steps",
@@ -3201,6 +3405,42 @@ async def chat(message: ChatMessage, background_tasks: BackgroundTasks):
         if turn.role == "user" and enforce_input_safety(turn.content, is_sovereign=False) is not None:
             continue
         history.append({"role": turn.role, "content": turn.content})
+    # R-824 (أمر المالك: «المشروع ينسى سياق المحادثة»): المتابعة تُحل إلى سؤال مكتمل حتميًا —
+    # الجسر والبحث العالمي والوسائط ترى «كم عدد سكان اليابان» لا «وكم عدد سكانها» وحدها
+    try:
+        import context_resolver
+        resolved = context_resolver.resolve(message.text, history)
+    except Exception as e:  # TOLERATED: بلا محلل ⇒ الرسالة كما هي (يُسجل)
+        logger.warning("R-824: تعذر حل السياق (%s)", type(e).__name__)
+        resolved = {"original": message.text, "standalone": message.text, "followup": False, "kind": "none"}
+    eff_text = resolved.get("standalone") or message.text
+    _resolved_q = eff_text if resolved.get("followup") and resolved.get("kind") != "prev_op" else None
+
+    def _early(reply_text, status_, tools_, media_=None):
+        _ok = status_ in ("media_created", "prev_op_done")
+        return ChatResponse(
+            reply=reply_text, status="ok" if (result.success and _ok) else "error", cycle_id=result.cycle_id,
+            processing_time_ms=round((time.time() - start_time) * 1000, 2), cycle_time_ms=cycle_time_ms,
+            timestamp=start_time, tools_used=tools_, agent_status=status_, media=media_ or [],
+            resolved_question=_resolved_q)
+
+    # R-824 (أمر المالك: «لا يستطيع تصميم صور وفيديوهات»): طلب الوسائط يُنفذ مباشرة بالاستوديو —
+    # بعقل أو بدونه — والناتج ملف حقيقي في مساحة العمل يُعرض في المحادثة برابط موقّع
+    try:
+        import media_studio
+        media_req = media_studio.detect(eff_text if resolved.get("kind") != "prev_op" else "", history)
+    except Exception as e:  # TOLERATED: كشف الوسائط مكمّل — فشله يُسجل والمحادثة تكمل
+        logger.warning("R-824: تعذر كشف طلب الوسائط (%s)", type(e).__name__)
+        media_req = None
+    if media_req:
+        m_reply, m_media, m_status = await asyncio.to_thread(_media_for_chat, media_req)
+        _tools = ["استوديو الوسائط (" + ("فيديو" if media_req["kind"] == "video" else "صورة") + ")"]
+        return _early(m_reply, m_status, _tools, m_media)
+    if resolved.get("kind") == "prev_op" and _brain_unreachable_now():
+        op_reply = await asyncio.to_thread(_prev_op_reply, resolved)
+        if op_reply:
+            return _early(op_reply, "prev_op_done",
+                          ["ترجمة آلية" if resolved.get("op") == "translate" else "تلخيص استخلاصي"])
     # R-787: جسر المحادثة ↔ الأدوات — جرد القدرات وقراءة الروابط عبر السجل (أثر موقّع)
     tools_used: List[str] = []
     tool_context = ""
@@ -3212,7 +3452,7 @@ async def chat(message: ChatMessage, background_tasks: BackgroundTasks):
     async def _run_bridge():
         try:
             import chat_tools
-            bridged = await asyncio.to_thread(chat_tools.gather, message.text, _capabilities_payload)
+            bridged = await asyncio.to_thread(chat_tools.gather, eff_text, _capabilities_payload)  # R-824
             return (bridged.get("context") or "", list(bridged.get("tools_used") or []),
                     bridged.get("direct_reply"))
         except Exception as e:  # TOLERATED: الجسر مكمّل — فشله لا يسقط المحادثة ويُسجل
@@ -3277,21 +3517,24 @@ async def chat(message: ChatMessage, background_tasks: BackgroundTasks):
         agent_status = "brain_unreachable_unanswered"
         # R-823 (أمر المالك: «البحث في مواقع العالم بكل اللغات وتقييم أصدق إجابة وترجمتها لا
         # يتطلب نموذجًا لغويًا»): الطلب المفتوح يُجاب بالبحث العالمي الحتمي بأثر موقّع
-        world = await asyncio.to_thread(_world_answer_for_chat, message.text)
+        # R-824: بالسؤال المحلول من السياق، مع صياغة سحابية مقيدة بالمصادر أو عقل سحابي للمهام الإنشائية
+        world = await asyncio.to_thread(_chat_answer_without_brain, eff_text, history or None, resolved)
         if world is not None:
-            reply, agent_status = world
-            tools_used = tools_used + ["بحث عالمي متعدد اللغات (بلا نموذج لغوي)"]
+            reply, agent_status, _wt = world
+            tools_used = tools_used + _wt
     # R-823: العقل معطّل كليًا (لا وضع وكيل) والرد قالب قرار داخلي لا يجيب الطلب ⇒ البحث العالمي
     if agent_status is None and not direct_reply and str(reply or "").startswith("تم تنفيذ القرار:"):
-        world = await asyncio.to_thread(_world_answer_for_chat, message.text)
+        world = await asyncio.to_thread(_chat_answer_without_brain, eff_text, history or None, resolved)
         if world is not None:
             reply = world[0]
-            agent_status = "world_search" if world[1].endswith("world_search") else "world_search_unanswered"
-            tools_used = tools_used + ["بحث عالمي متعدد اللغات (بلا نموذج لغوي)"]
+            agent_status = {"brain_unreachable_world_search": "world_search",
+                            "cloud_brain_general": "cloud_brain_general"}.get(world[1], "world_search_unanswered")
+            tools_used = tools_used + world[2]
     # R-822: brain_unreachable_fallback = جواب حقيقي من الأدوات/الحالة الحية (معلن في agent_status)
     _agent_ok = agent_status in (None, "completed", "answered_from_results",
                                  "brain_unreachable_fallback",
-                                 "brain_unreachable_world_search", "world_search")  # R-823: جواب مستشهد من مصادر حقيقية
+                                 "brain_unreachable_world_search", "world_search",  # R-823: جواب مستشهد من مصادر حقيقية
+                                 "cloud_brain_general")  # R-824: عقل سحابي احتياطي معلن في الرد
     return ChatResponse(
         reply=reply,
         status="ok" if (result.success and _agent_ok) else "error",
@@ -3303,6 +3546,7 @@ async def chat(message: ChatMessage, background_tasks: BackgroundTasks):
         tools_used=tools_used,
         agent_status=agent_status,
         reviewer=agent_reviewer,
+        resolved_question=_resolved_q,
     )
 
 

@@ -158,6 +158,8 @@ class MemoryEvolution:
         self.genome: Dict[str, ConceptGene] = {}
         self.mutations: List[EvolutionMutation] = []
         self.generations: List[GenerationStats] = []
+        # R-824: عدّاد الجيل الأخير — كان يُكتب في evolve_generation بلا تهيئة فتسقط كل دورة تطور
+        self.stats: Dict[str, Any] = {}
         
         # معاملات التطور
         self.mutation_rate = 0.1          # 10% فرصة طفرة
@@ -199,6 +201,7 @@ class MemoryEvolution:
         
         # مسح سجل الأجيال
         self.generations.clear()
+        self.stats = {}  # R-824
         
         # إعادة تعيين الجيل الحالي
         self.current_generation = 0

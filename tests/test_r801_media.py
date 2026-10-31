@@ -120,9 +120,13 @@ def test_service_video_stored(ws, tmp_path):
 def test_generate_image_disabled_is_honest(ws, monkeypatch):
     import config
     monkeypatch.setattr(config, "MEDIA_ENABLED", False)
-    with pytest.raises(WorkspaceError, match="غير مفعّل"):
-        ws.generate_image("منارة عند الغروب")
-    assert ws.list_files() == []  # لا ملف مختلق
+    # R-824: بلا خادم وسائط ⇒ سلسلة استوديو الوسائط (لا رفض) — والمزود معلن في العنوان، لا ادعاء خادم ذاتي
+    import media_studio
+    monkeypatch.setattr(media_studio, "translate_prompt", lambda t: None)
+    monkeypatch.setenv("MEDIA_EXTERNAL_PROVIDERS", "")
+    rec = ws.generate_image("منارة عند الغروب")
+    assert "local_design" in rec["name"] and len(ws.list_files()) == 1
+    assert ws.list_files() and ws.raw(ws.list_files()[0]["id"])[:8] == b"\x89PNG\r\n\x1a\n"
     with pytest.raises(WorkspaceError, match="فارغ"):
         ws.generate_image("  ")
 
@@ -182,8 +186,11 @@ def test_media_api_flow(client, monkeypatch):
     import config
     h = {"X-Sovereign-Key": KEY}
     monkeypatch.setattr(config, "MEDIA_ENABLED", False)
+    import media_studio  # R-824: بلا خادم وسائط ⇒ تصميم حقيقي من الاستوديو بإعلان المزود (لا 400)
+    monkeypatch.setattr(media_studio, "translate_prompt", lambda t: None)
+    monkeypatch.setenv("MEDIA_EXTERNAL_PROVIDERS", "")
     r = client.post("/ws/image", headers=h, json={"prompt": "قطة"})
-    assert r.status_code == 400 and "غير مفعّل" in r.text
+    assert r.status_code == 200, r.text
     st = client.get("/ws/status", headers=h).json()
     assert st["video"]["available"] == HAS_FFMPEG and st["imagegen"]["available"] is False
     if HAS_FFMPEG:

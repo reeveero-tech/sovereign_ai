@@ -25,8 +25,17 @@ class VideoError(Exception):
     pass
 
 
+def _ffmpeg() -> Optional[str]:
+    """R-824: ffmpeg النظام أو الثنائي المضمّن (imageio-ffmpeg) — نفس محلّل استوديو الوسائط."""
+    try:
+        import media_studio
+        return media_studio.ffmpeg_exe()
+    except Exception:  # TOLERATED: الرجوع لبحث النظام
+        return shutil.which("ffmpeg")
+
+
 def available() -> Dict[str, Any]:
-    ff = shutil.which("ffmpeg")
+    ff = _ffmpeg()
     return {"available": bool(ff), "ffmpeg": ff,
             "reason": None if ff else "ffmpeg غير مثبت في هذه البيئة",
             "kind": "slideshow", "ai_text_to_video": False}
@@ -96,7 +105,8 @@ def _fit(img_bytes: bytes, size: Tuple[int, int]) -> bytes:
 def make_video(slides: List[Dict[str, Any]], seconds: float = 3.0, audio: Optional[bytes] = None,
                audio_name: str = "audio", size: Tuple[int, int] = (1280, 720), fps: int = 25) -> bytes:
     """slides: [{"image": bytes} | {"text": str, "title": str}] → بايتات MP4 (H.264/yuv420p)."""
-    if not shutil.which("ffmpeg"):
+    ff = _ffmpeg()
+    if not ff:
         raise VideoError("ffmpeg غير مثبت — لا يمكن إنشاء فيديو")
     if not slides:
         raise VideoError("لا شرائح — أعط صورًا أو نصوصًا")
@@ -118,14 +128,14 @@ def make_video(slides: List[Dict[str, Any]], seconds: float = 3.0, audio: Option
             p.write_bytes(png)
             lines += [f"file '{p.name}'", f"duration {seconds}"]
         (tdp / "list.txt").write_text("\n".join(lines) + "\n", encoding="utf-8")
-        cmd = ["ffmpeg", "-hide_banner", "-loglevel", "error", "-y", "-f", "concat", "-safe", "0",
+        cmd = [ff, "-hide_banner", "-loglevel", "error", "-y", "-f", "concat", "-safe", "0",
                "-i", "list.txt"]
         if audio:
             ext = Path(audio_name).suffix or ".bin"
             (tdp / f"audio{ext}").write_bytes(audio)
             cmd += ["-i", f"audio{ext}"]
         enc = "libx264" if b"libx264" in subprocess.run(
-            ["ffmpeg", "-hide_banner", "-encoders"], capture_output=True, timeout=30).stdout else "mpeg4"
+            [ff, "-hide_banner", "-encoders"], capture_output=True, timeout=30).stdout else "mpeg4"
         total = seconds * len(slides)
         cmd += ["-vf", f"fps={fps},format=yuv420p", "-c:v", enc, "-t", f"{total:.2f}"]
         if enc == "libx264":
