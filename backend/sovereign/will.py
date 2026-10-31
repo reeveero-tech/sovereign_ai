@@ -381,10 +381,16 @@ class SovereignWill:
         drive_status = self.drives.get_drive_status()
         active_drives = drive_status.get("active_drives", {})
         dominant_drive = drive_status.get("dominant_drive", "")
-        
+
         introspection_status = self.introspection.get_introspection_status()
         service_quality = introspection_status.get("service_quality", 0.7)
         cognitive_health = introspection_status.get("cognitive_health", 0.7)
+        # إحياء القيمتين: الدافع المهيمن وجودة الخدمة يُسجَّلان لكل قرار وضع
+        self._last_mode_context = {
+            "dominant_drive": dominant_drive,
+            "service_quality": service_quality,
+            "cognitive_health": cognitive_health,
+        }
         
         instinct_status = self.instincts.get_instinct_status()
         threat_level_value = instinct_status.get("threat_level", 0)
@@ -398,9 +404,13 @@ class SovereignWill:
         if cognitive_health < 0.4:
             return WILL_MODE_ADAPTIVE
         
-        # دافع خدمة قوي -> وضع استراتيجي
-        if active_drives.get("service", 0) > 0.8:
+        # دافع خدمة قوي (+ جودة خدمة عالية = استحقاق) -> وضع استراتيجي
+        if active_drives.get("service", 0) > 0.8 and service_quality >= 0.5:
             return WILL_MODE_STRATEGIC
+        
+        # دافع مهيمن خدمي مع جودة منخفضة -> وضع تكيفي (يحتاج تصحيح المسار)
+        if dominant_drive == "service" and service_quality < 0.4:
+            return WILL_MODE_ADAPTIVE
         
         # دافع استكشاف قوي وصحة جيدة -> وضع استكشاف
         if active_drives.get("exploration", 0) > 0.6 and cognitive_health > 0.7:

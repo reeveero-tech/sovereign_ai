@@ -96,8 +96,10 @@ def _pearsonr_safe(a: List[float], b: List[float]) -> Tuple[float, float]:
     
     # p-value تقريبية
     import math
+    # R-817 إحياء: إحصاءة t تُستخدم فعليًا في تقدير p-value بدل ثابت بلا معنى
     t_stat = corr * math.sqrt((n - 2) / (1 - corr * corr)) if abs(corr) < 0.9999 else 0
-    p_value = 2 * (1 - 0.5)  # تقريب بسيط
+    # تقدير p من |t| عبر تقريب التوزيع الطبيعي (كافٍ للتشخيص، ليس للتحقق الإحصائي)
+    p_value = max(0.0, min(1.0, 2 * (1 - 0.5 * (1 + math.erf(abs(t_stat) / math.sqrt(2))))))
     
     return corr, p_value
 
@@ -857,6 +859,10 @@ class SimulationAnalyzer:
             if ANALYZER_STATE_FILE.exists():
                 with open(ANALYZER_STATE_FILE, 'r', encoding='utf-8') as f:
                     state = json.load(f)
+                # R-817 إحياء: الحالة المُحمّلة تُطبَّق فعلًا (إحصاءات وتحليلات سابقة)
+                self.stats.update(state.get("stats", {}))
+                self.last_report = state.get("last_report")
+                self.analysis_history = state.get("analysis_history", self.analysis_history)
                 logger.info("📂 تم تحميل حالة المحلل")
         except Exception as e:
             logger.error(f"خطأ في تحميل حالة المحلل: {e}")
@@ -1055,7 +1061,7 @@ if __name__ == "__main__":
     # 8) أحدث تقرير
     latest = analyzer.get_latest_report()
     if latest:
-        print(f"\n📄 أحدث تقرير:")
+        print("\n📄 أحدث تقرير:")
         print(f"   المعرف: {latest['id']}")
         print(f"   الرؤى: {latest['insights'][:3] if latest['insights'] else 'لا توجد'}")
     

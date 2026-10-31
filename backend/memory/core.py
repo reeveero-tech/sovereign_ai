@@ -742,7 +742,7 @@ class SovereignCore:
         self._integrity_lock = threading.RLock()
         self._genesis_created = self._load_genesis_status()
         
-        logger.info(f"✅ نواة الذاكرة السيادية جاهزة")
+        logger.info("✅ نواة الذاكرة السيادية جاهزة")
         logger.info(f"   - السجل: {self.log_file}")
         logger.info(f"   - آخر تجزئة: {self._last_hash[:16]}...")
         logger.info(f"   - عدد الأحداث: {self.index.data['events_count']}")

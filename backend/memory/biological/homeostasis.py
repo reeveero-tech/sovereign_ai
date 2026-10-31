@@ -503,28 +503,29 @@ class CognitiveHomeostasis:
             
             if disturbance.type == DISTURBANCE_TYPE_MEMORY_LEAK:
                 # تنظيف الذاكرة
+                # R-817 إحياء: عدد المُنقّى يُسجَّل في الإجراء (أثر التنظيف)
                 removed = self.metabolism.prune_low_importance(threshold=0.2)
                 self.metabolism.burn_noise()
-                actions_taken.append(f"cleanup_memory")
+                actions_taken.append(f"cleanup_memory({len(removed) if hasattr(removed, '__len__') else 0})")
                 disturbance.resolved_at = time.time()
                 
             elif disturbance.type == DISTURBANCE_TYPE_COGNITIVE_OVERLOAD:
                 # تبريد النظام
                 self.forgetting.forget_everything_temporarily()
                 self.metabolism.burn_noise()
-                actions_taken.append(f"cooldown_system")
+                actions_taken.append("cooldown_system")
                 disturbance.resolved_at = time.time()
                 
             elif disturbance.type == DISTURBANCE_TYPE_CONCEPTUAL_DRIFT:
                 # تثبيت المفاهيم
                 self.evolution.natural_selection()
-                actions_taken.append(f"stabilize_concepts")
+                actions_taken.append("stabilize_concepts")
                 disturbance.resolved_at = time.time()
                 
             elif disturbance.type == DISTURBANCE_TYPE_ENERGY_DEPLETION:
                 # تجديد الطاقة
                 self.metabolism.metabolic_cycle(level=3)
-                actions_taken.append(f"recharge_energy")
+                actions_taken.append("recharge_energy")
                 disturbance.resolved_at = time.time()
         
         # تسجيل الإجراءات

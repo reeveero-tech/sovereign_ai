@@ -268,7 +268,7 @@ class SovereignDirectives:
             executed_at=None,
             expires_at=None,
             applies_to=["all"],
-            metadata={"sacred": True}
+            metadata={"sacred": True, "will_vector": will_vector}
         ))
         
         # توجيه: حماية السيد
@@ -721,6 +721,12 @@ class SovereignDirectives:
             narrative += f"{len(strategic)} توجيهات استراتيجية توجه مساري. "
         if tactical:
             narrative += f"{len(tactical)} توجيهات تكتيكية تنظم عملياتي. "
+        
+        # R-817 إحياء: أسماء المستويات تُستخدم في السرد — وصف حي لطبقات التوجيه
+        levels_present = sorted({d.level for d in self.active_directives})
+        level_labels = [level_names[l] for l in levels_present if 0 < l < len(level_names)]
+        if level_labels:
+            narrative += f"طبقاتها: {' و'.join(level_labels)}. "
         
         narrative += "جميع توجيهاتي تخدم سيدي."
         

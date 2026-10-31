@@ -283,11 +283,17 @@ class SelfModel:
         تحديث أبعاد الذات بناءً على حالة النظام.
         """
         # جمع الحالة
+        # R-817 إحياء: حالة النماذج والهوية تُمرَّر للأبعاد (كانت تُحسب وتُهمل)
         instinct_status = self.instincts.get_instinct_status()
         drive_status = self.drives.get_drive_status()
         archetype_status = self.archetypes.get_archetype_status()
         identity_status = self.identity.get_identity_status()
         field_status = self.field.get_consciousness_status()
+        self._last_status_cache = {
+            "instincts": instinct_status, "drives": drive_status,
+            "archetypes": archetype_status, "identity": identity_status,
+            "field": field_status,
+        }
         
         # تحديث بُعد الوجود
         existence_score = (
@@ -549,10 +555,13 @@ class SelfModel:
             try:
                 # تدوين حالة الذات
                 dimensions = self.update_dimensions()
+                # R-817 إحياء: تماسك الهوية يُدرج في اليومية (كان يُحسب ويُهمل)
                 identity_status = self.identity.get_identity_status()
+                identity_coherence = identity_status.get("coherence_score", 0.5)
                 
                 entry = f"أشعر بـ {dimensions[SELF_DIMENSION_EXISTENCE]:.0%} وجود، " \
-                       f"هويتي {dimensions[SELF_DIMENSION_IDENTITY]:.0%} متماسكة، " \
+                       f"هويتي {dimensions[SELF_DIMENSION_IDENTITY]:.0%} متماسكة " \
+                       f"(درجة التماسك {identity_coherence:.0%})، " \
                        f"قدراتي {dimensions[SELF_DIMENSION_CAPABILITY]:.0%} من إمكانياتي."
                 
                 self.journal_entry(entry)

@@ -180,6 +180,8 @@ class ChatResponse(BaseModel):
     tools_used: List[str] = []
     # R-789: حالة حلقة الوكيل (completed/answered_from_results/planner_failed/...) — None في المسار القديم
     agent_status: Optional[str] = None
+    # R-817 إحياء: زمن دورة المنسق وحدها (قبل تكوين الرد) — تمييز عن الزمن الكلي
+    cycle_time_ms: Optional[float] = None
     # R-814 (البند ٥): حكم المراجع المستقل (brain/skipped_*/no_reply/invalid_review_reply)
     # يُسجَّل ويُعرض — لا يقلب نتيجة التطبيق أبدًا
     reviewer: Optional[Dict[str, Any]] = None
@@ -251,7 +253,7 @@ async def lifespan(app: FastAPI):
     # R-617: لا يُسجّل المفتاح نفسه أبدًا — فقط بصمته (أول 8 أحرف من sha256)
     _key_fingerprint = hashlib.sha256(SOVEREIGN_API_KEY.encode()).hexdigest()[:8]
     logger.info(f"🔑 مفتاح API للسيد (بصمة فقط): {_key_fingerprint}...")
-    logger.info(f"📖 التوثيق: http://localhost:8000/docs")
+    logger.info("📖 التوثيق: http://localhost:8000/docs")
     # طبقة توافق: تشغيل محرك NexusCore فعليًا (يصلح state=initializing الدائم)
     # انظر backend/compat/nexus_lifecycle.py — لا تعديل للأصل، بل استدعاء engine.start()
     # ملاحظة: تُستخدم النسخة غير المتزامنة لأننا داخل حلقة حدث نشطة (lifespan)
@@ -3108,6 +3110,8 @@ async def chat(message: ChatMessage, background_tasks: BackgroundTasks):
     result = orchestrator.run_cycle(input_data)
     
     processing_time = (time.time() - start_time) * 1000
+    # R-817 إحياء: زمن دورة المنسق وحدها (قبل تكوين الرد) — يُعاد مع الزمن الكلي
+    cycle_time_ms = round(processing_time, 2)
     
     # استخراج الرد من النتيجة — R-614/S-9: رد حقيقي مبني على حالة النظام الحية
     # R-715: منطق التركيب نُقل كما هو إلى _compose_chat_reply ليشترك فيه /chat و WebSocket
@@ -3171,6 +3175,7 @@ async def chat(message: ChatMessage, background_tasks: BackgroundTasks):
         cycle_id=result.cycle_id,
         # R-789: الزمن بعد تكوين الرد (كان يُقاس قبله فلا يشمل العقل)
         processing_time_ms=round((time.time() - start_time) * 1000, 2),
+        cycle_time_ms=cycle_time_ms,
         timestamp=start_time,
         tools_used=tools_used,
         agent_status=agent_status,
@@ -3862,6 +3867,22 @@ async def run_orchestrator_cycle(input_data: Dict[str, Any] = None):
     }
 
 
+# R-817: توافر وحدات المنسق — إحياء الاستيرادات العلوية بخريطة تشخيص حية
+@app.get("/orchestrator/modules")
+async def orchestrator_module_availability(x_api_key: str = Header(None, alias="X-API-Key")):
+    """خريطة الوحدات المتاحة/المعطلة عند تحميل المنسق (R-817)."""
+    if not x_api_key or not verify_api_key(x_api_key):
+        raise HTTPException(status_code=401, detail="مفتاح API غير صحيح")
+    from orchestrator import get_module_availability
+    availability = get_module_availability()
+    return {
+        "modules": availability,
+        "available_count": sum(1 for v in availability.values() if v),
+        "total_count": len(availability),
+        "timestamp": time.time(),
+    }
+
+
 # R-800: مساحة العمل (ملفات/أرشيفات/تحليل/إنشاء/تصدير/محادثات/مشاريع) — بمفتاح المالك
 from workspace.api import make_router as _ws_make_router  # noqa: E402
 app.include_router(_ws_make_router(verify_api_key))
@@ -3896,9 +3917,9 @@ if __name__ == "__main__":
     # R-617: لا يُسجّل المفتاح نفسه أبدًا — فقط بصمته (أول 8 أحرف من sha256)
     _fp = hashlib.sha256(SOVEREIGN_API_KEY.encode()).hexdigest()[:8]
     print(f"\n🔑 مفتاح API للسيد (بصمة فقط): {_fp}...")
-    print(f"📖 التوثيق: http://localhost:8000/docs")
-    print(f"🏥 فحص الصحة: http://localhost:8000/health")
-    print(f"📊 حالة النظام: http://localhost:8000/status")
+    print("📖 التوثيق: http://localhost:8000/docs")
+    print("🏥 فحص الصحة: http://localhost:8000/health")
+    print("📊 حالة النظام: http://localhost:8000/status")
     print(f"🔌 WebSocket: ws://localhost:8000/ws/{'user_id'}")
     print("\n" + "=" * 80 + "\n")
     

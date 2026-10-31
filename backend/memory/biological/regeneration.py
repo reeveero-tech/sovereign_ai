@@ -288,7 +288,7 @@ class MemoryRegeneration:
             differentiated = {
                 "type": "procedural",
                 "name": stem_cell.essence[:50],
-                "description": f"إجراء معاد بناؤه من خلية جذعية",
+                "description": "إجراء معاد بناؤه من خلية جذعية",
                 "confidence": stem_cell.importance * stem_cell.plasticity
             }
         elif target_type == "episodic":
@@ -396,7 +396,7 @@ class MemoryRegeneration:
             if success:
                 self.dynamic.working.clear_user(user_id)
                 # إضافة السياق المستعاد
-                self.dynamic.working.add(user_id, "system", f"تم تجديد ذاكرتك بنجاح", importance=1.0)
+                self.dynamic.working.add(user_id, "system", "تم تجديد ذاكرتك بنجاح", importance=1.0)
             
             # تسجيل العملية
             self.operations_history.append(operation)

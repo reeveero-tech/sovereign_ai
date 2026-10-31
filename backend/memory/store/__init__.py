@@ -428,7 +428,7 @@ class SolidMemoryStore:
             self._auto_rebuild_loop, owner=self, stop_event=self._bg_stop
         )
         
-        logger.info(f"📀 الطبقات الصلبة جاهزة")
+        logger.info("📀 الطبقات الصلبة جاهزة")
         self._log_statistics()
     
     # -------------------------

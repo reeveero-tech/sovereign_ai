@@ -110,16 +110,16 @@ def assert_usable_for_verification(state: KeyState) -> VerificationResult:
         return VerificationResult.VERIFIED  # تحقق تاريخي — مسموح
     elif state == KeyState.LOST:
         raise KeyStateError(
-            f"LOST key cannot verify — UNVERIFIABLE_MISSING_KEY "
-            f"(we don't know, not forged)"
+            "LOST key cannot verify — UNVERIFIABLE_MISSING_KEY "
+            "(we don't know, not forged)"
         )
     elif state == KeyState.COMPROMISED:
         raise KeyStateError(
-            f"COMPROMISED key cannot verify — UNVERIFIABLE_COMPROMISED"
+            "COMPROMISED key cannot verify — UNVERIFIABLE_COMPROMISED"
         )
     elif state == KeyState.EXPIRED:
         raise KeyStateError(
-            f"EXPIRED key cannot verify — UNVERIFIABLE_EXPIRED"
+            "EXPIRED key cannot verify — UNVERIFIABLE_EXPIRED"
         )
     else:
         raise KeyStateError(

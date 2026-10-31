@@ -631,7 +631,9 @@ class SimulationController:
         - توصيات عالية المستوى
         """
         # جمع البيانات
+        # R-817 إحياء: عدد قوالب البيئات يُعاد في الحالة (مؤشر جاهزية المحاكاة)
         templates = self.env_manager.list_templates()
+        templates_count = len(templates)
         scheduler_status = self.scheduler.get_scheduler_status()
         latest_analysis = self.analyzer.get_latest_report()
         
@@ -668,7 +670,8 @@ class SimulationController:
                 "status": snapshot.status,
                 "active_batches": snapshot.active_batches,
                 "scheduled_jobs": snapshot.scheduled_jobs,
-                "system_health": snapshot.system_health
+                "system_health": snapshot.system_health,
+                "templates_count": templates_count
             }
         )
         

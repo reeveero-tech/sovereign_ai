@@ -777,7 +777,7 @@ if __name__ == "__main__":
     print("\n💥 تفعيل فخ (محاكاة هجوم)...")
     result = defense.trigger_trap(trap.id, {"source": "203.0.113.100", "attempt": "bruteforce"})
     if result:
-        print(f"   تم تفعيل الفخ! مهاجم مكتشف")
+        print("   تم تفعيل الفخ! مهاجم مكتشف")
     
     # 6) الحالة
     print("\n📊 حالة الدفاع:")

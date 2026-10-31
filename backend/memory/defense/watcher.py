@@ -948,7 +948,7 @@ if __name__ == "__main__":
     print("\n📋 الحالة الكاملة:")
     status = watcher.get_status()
     print(f"   الصحة: {status['health']['status']} ({status['health']['overall']:.1%})")
-    print(f"   المكونات:")
+    print("   المكونات:")
     for comp, val in status['health']['components'].items():
         print(f"     - {comp}: {val:.1%}")
     print(f"   الخط الأساسي: {status['baseline']['samples']} عينة")

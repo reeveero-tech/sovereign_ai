@@ -307,11 +307,14 @@ class RansomwareDefense:
         """
         try:
             # جمع الجوهر الأساسي
+            # R-817 إحياء: إحصاءات النواة تُسجَّل في البذرة (بصمة حالة الانبعاث)
             core_stats = self.core.get_statistics()
             core_fingerprint = self.core._last_hash
             
             # استخراج الذاكرة الجوهرية (من core و store)
             essential_memory = self._extract_essential_memory()
+            # R-817 إحياء: إحصاءات النواة تُدمج في الجوهر (بصمة حالة الانبعاث)
+            essential_memory.setdefault("_core_stats", core_stats)
             
             # معرف البذرة أولًا ثم مفتاح حتمي (قابل للاشتقاق بعد إعادة التشغيل)
             seed_id = f"phoenix_seed_{int(time.time())}_{secrets.token_hex(8)}"
@@ -1080,7 +1083,7 @@ class RansomwareDefense:
                 event_type="phoenix::failed_resurrection_attempt",
                 payload={"method": method, "timestamp": time.time()}
             )
-            logger.warning(f"⚠️ محاولة قيامة فاشلة - مفتاح غير صحيح")
+            logger.warning("⚠️ محاولة قيامة فاشلة - مفتاح غير صحيح")
             return {"success": False, "error": "مفتاح القيامة غير صحيح"}
         
         start_time = time.time()
@@ -1582,7 +1585,9 @@ class RansomwareDefense:
                         # بذرة منتهية - تجديد
                         new_seed = self.create_phoenix_seed(reason="seed_renewal")
                         del self.seeds[seed_id]
-                        logger.debug(f"🌱 تجديد بذرة: {seed_id[:16]}...")
+                        # R-817 إحياء: معرف البذرة الجديدة يُحصى (أثر التجديد)
+                        self.seeds_renewed = getattr(self, "seeds_renewed", 0) + 1
+                        logger.debug(f"🌱 تجديد بذرة: {seed_id[:16]}... -> {new_seed.id[:16]}...")
                 
                 threads.interruptible_sleep(3600)  # كل ساعة
             except:

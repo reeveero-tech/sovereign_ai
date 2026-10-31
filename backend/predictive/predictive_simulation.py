@@ -374,15 +374,19 @@ class PredictiveSimulation:
         future_map = predictive_status.get("future_map", {})
         
         # الحصول على السيناريوهات
+        # R-817 إحياء: حالة السيناريوهات (التحديث الأخير) تُسجَّل في حالة البدء
         scenarios_status = self.scenarios.get_scenario_status()
         scenarios = self.scenarios.get_scenarios()
+        scenarios_last_updated = scenarios_status.get("last_updated", 0)
         
         start_state = {
             "stability": future_map.get("identity_stability", 0.5),
             "alignment": future_map.get("service_quality", 0.5),
             "health": future_map.get("knowledge_growth", 0.5),
             "growth": future_map.get("evolution_pace", 0.5),
-            "threat": future_map.get("threat_level", 0.3)
+            "threat": future_map.get("threat_level", 0.3),
+            # R-817: عمر السيناريوهات وقت بدء المحاكاة (تشخيص نضارة المدخلات)
+            "scenarios_age_s": max(0.0, time.time() - scenarios_last_updated),
         }
         
         trajectories = []

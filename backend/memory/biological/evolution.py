@@ -592,7 +592,9 @@ class MemoryEvolution:
         adaptations = self.adapt_to_environment()
         
         # 2) الانتقاء الطبيعي
+        # R-817 إحياء: عدد الناجين يُسجَّل في إحصاءات الدورة
         survivors = self.natural_selection()
+        self.stats["last_survivors"] = len(survivors) if hasattr(survivors, "__len__") else 0
         
         # 3) الطفرات على المفاهيم القوية
         mutations_count = 0

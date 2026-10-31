@@ -113,7 +113,7 @@ def _status_path(data_root: Path | None = None) -> Path:
 
 
 def _write_status_file(
-    interval: float, active_alerts: int,
+    interval: float, active_alerts: int, cycle_elapsed: float = 0.0,
 ) -> bool:
     """كتابة ملف الحالة ذرّيًا (tmp ثم replace) — فشل الكتابة لا يقتل
     الحارس: يعاد في الدورة التالية. النبض طابع زمني فعلي، وشرطا التنبيه
@@ -127,6 +127,8 @@ def _write_status_file(
         "epoch": time.time(),
         "interval": float(interval),
         "active_alerts": int(active_alerts),
+        # R-817 إحياء: زمن آخر دورة (تشخيص إيقاع الحارس)
+        "cycle_elapsed_s": round(float(cycle_elapsed), 3),
     }
     tmp = path.with_suffix(".json.tmp")
     try:
@@ -352,11 +354,14 @@ def run(
         # R-694: الترتيب الإلزامي — إلحاق ناجح أولًا ثم حفظ المرجعية:
         # فشل السجل يُبقي المرجعية السابقة (إعادة المحاولة — لا يضيع الأثر)
         # R-696: ملف الحالة كل دورة — النبض + شرطا التنبيه الحاليان
+        # R-817 إحياء: زمن الدورة يُقاس قبل كتابة الحالة (تشخيص إيقاع الحارس)
+        elapsed = time.time() - started
         # (فشل جلب هذه الدورة، وتغيّر الوعي المرصود آخر فحص)
         _write_status_file(
             interval,
             (1 if fetch_alert_active else 0)
             + (1 if awareness_alert_active else 0),
+            cycle_elapsed=elapsed,
         )
         if _append_log_line(log_path, entry) and new_baseline is not None:
             try:
@@ -364,7 +369,6 @@ def run(
             except OSError:  # R-694: المحاولة تُعاد لاحقًا — لا يقتل الحارس
                 pass
         # نوم متقطع يستجيب للإشارة بسرعة — لا نوم كتلي طويل
-        elapsed = time.time() - started
         while not _STOP and time.time() - started < interval:
             time.sleep(min(0.1, max(0.01, interval)))
     return 0
