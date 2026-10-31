@@ -17,6 +17,9 @@ from .writers import FONTS
 
 MAX_SLIDES = 60
 MAX_SECONDS = 20.0
+import logging
+
+logger = logging.getLogger("sovereign.workspace.video")
 _AR = re.compile(r"[\u0600-\u06FF]")
 _NOTO_OK = re.compile(r"[\u0600-\u06FF\s0-9.,:;!?()\-]*")
 
@@ -49,13 +52,36 @@ def _font(size: int, text: str):
     return ImageFont.truetype(str(FONTS / name), size, layout_engine=layout), layout
 
 
+def shape(text: str, layout) -> str:
+    """R-824: بلا libraqm (Pillow على بعض المنصات) يُرسم العربي حروفًا منفصلة معكوسة — تشكيل وترتيب
+    بصري احتياطي (arabic-reshaper + python-bidi). مع RAQM النص يمر كما هو (المحرك يشكّله)."""
+    from PIL import ImageFont
+    if layout == ImageFont.Layout.RAQM or not _AR.search(text or ""):
+        return text
+    try:
+        import arabic_reshaper
+        try:
+            from bidi import get_display
+        except ImportError:  # TOLERATED: إصدارات python-bidi الأقدم
+            from bidi.algorithm import get_display
+        return get_display(arabic_reshaper.reshape(text))
+    except Exception:  # TOLERATED: بلا المكتبتين يبقى الرسم الأساسي (معلن في السجل)
+        logger.warning("R-824: تشكيل العربية الاحتياطي غير متاح — النص يُرسم بلا تشكيل")
+        return text
+
+
+def _layout_of(font):
+    from PIL import ImageFont
+    return getattr(font, "layout_engine", ImageFont.Layout.BASIC)
+
+
 def _wrap(dr, text: str, font, kw, width: int) -> List[str]:
     out: List[str] = []
     for para in text.splitlines() or [""]:
         line = ""
         for word in para.split():
             cand = (line + " " + word).strip()
-            if line and dr.textlength(cand, font=font, **kw) > width:
+            if line and dr.textlength(shape(cand, _layout_of(font)), font=font, **kw) > width:
                 out.append(line)
                 line = word
             else:
@@ -79,9 +105,10 @@ def text_slide(text: str, size: Tuple[int, int] = (1280, 720), title: str = "") 
         for line in _wrap(dr, chunk, font, kw, W - 160):
             if y > H - 70:
                 break
-            w = dr.textlength(line, font=font, **kw)
+            vis = shape(line, layout)
+            w = dr.textlength(vis, font=font, **kw)
             x = (W - w) / 2
-            dr.text((x, y), line, font=font, fill=color, **kw)
+            dr.text((x, y), vis, font=font, fill=color, **kw)
             y += int(sz * 1.55)
         y += 20
     buf = io.BytesIO()

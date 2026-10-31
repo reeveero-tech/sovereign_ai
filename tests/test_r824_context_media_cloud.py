@@ -239,3 +239,13 @@ def test_evolution_initialises_stats_before_threads():
     from memory.biological.evolution import MemoryEvolution
     src = inspect.getsource(MemoryEvolution.__init__)
     assert src.index("self.stats") < src.index("start_managed"), "الحلقة الخلفية تكتب stats — تهيئتها أولًا"
+
+
+def test_arabic_shaping_fallback_without_raqm():
+    """بلا libraqm (منصة النشر قد تفتقده) يُشكَّل العربي ويُرتب بصريًا بدل حروف منفصلة معكوسة."""
+    from PIL import ImageFont
+    from workspace.video import shape
+    vis = shape("مطعم القمة", ImageFont.Layout.BASIC)
+    assert vis != "مطعم القمة" and any(0xFE70 <= ord(ch) <= 0xFEFF for ch in vis), "أشكال العرض المتصلة"
+    assert shape("مطعم القمة", ImageFont.Layout.RAQM) == "مطعم القمة"
+    assert shape("Hello", ImageFont.Layout.BASIC) == "Hello"

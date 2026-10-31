@@ -268,7 +268,7 @@ def design_local(title: str, size: Tuple[int, int] = (1024, 1024), style: str = 
                  subtitle: str = "") -> Tuple[bytes, str]:
     """مصمم محلي حتمي: خلفية متدرجة + أشكال + عنوان عربي مشكّل — بلا أي طرف ثالث."""
     from PIL import Image, ImageDraw, ImageFilter, ImageFont
-    from workspace.video import _font, _wrap
+    from workspace.video import _font, _wrap, shape
     W, H = size
     c0, c1, c2, c3 = _palette(title)
     grad = Image.linear_gradient("L").resize((W, H))  # تدرج رأسي c0 ⇒ c1
@@ -296,8 +296,9 @@ def design_local(title: str, size: Tuple[int, int] = (1024, 1024), style: str = 
         mono = w0[0].upper()
         font, layout = _font(int(R * 0.9), mono)
         kw = {"direction": "rtl"} if layout == ImageFont.Layout.RAQM and _AR.search(mono) else {}
-        bx = dr.textbbox((0, 0), mono, font=font, **kw)
-        dr.text((cx - (bx[0] + bx[2]) / 2, cy - (bx[1] + bx[3]) / 2), mono, font=font, fill=c0 + (255,), **kw)
+        mono_v = shape(mono, layout)
+        bx = dr.textbbox((0, 0), mono_v, font=font, **kw)
+        dr.text((cx - (bx[0] + bx[2]) / 2, cy - (bx[1] + bx[3]) / 2), mono_v, font=font, fill=c0 + (255,), **kw)
         ty = cy + R + int(H * 0.05)
     else:
         pad = int(W * 0.07)
@@ -313,14 +314,16 @@ def design_local(title: str, size: Tuple[int, int] = (1024, 1024), style: str = 
     if style != "logo":
         ty = int(H * 0.5 - len(lines_t) * tsize * 1.5 / 2)
     for line in lines_t:
-        tw = dr.textlength(line, font=font, **kw)
-        dr.text(((W - tw) / 2, ty), line, font=font, fill=(255, 255, 255, 255), **kw)
+        vis = shape(line, layout)
+        tw = dr.textlength(vis, font=font, **kw)
+        dr.text(((W - tw) / 2, ty), vis, font=font, fill=(255, 255, 255, 255), **kw)
         ty += int(tsize * 1.5)
     if subtitle:
         sf, sl = _font(int(tsize * 0.45), subtitle)
         skw = {"direction": "rtl"} if sl == ImageFont.Layout.RAQM and _AR.search(subtitle) else {}
-        sw = dr.textlength(subtitle, font=sf, **skw)
-        dr.text(((W - sw) / 2, H - int(H * 0.09)), subtitle, font=sf, fill=(255, 255, 255, 200), **skw)
+        sub_v = shape(subtitle, sl)
+        sw = dr.textlength(sub_v, font=sf, **skw)
+        dr.text(((W - sw) / 2, H - int(H * 0.09)), sub_v, font=sf, fill=(255, 255, 255, 200), **skw)
     buf = io.BytesIO()
     im.convert("RGB").save(buf, "PNG", optimize=True)
     return buf.getvalue(), "image/png"
