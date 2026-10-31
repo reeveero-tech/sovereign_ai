@@ -1482,10 +1482,10 @@ def answer(question: str, target_lang: Optional[str] = None) -> Dict[str, Any]:
             texts = sentences(s["snippet"])[:2] + texts  # مقتطف المحرك غالبًا أدق جملة
         for sent in dict.fromkeys(texts):
             c_cred = cred
-            if (local_focus and sp.mentions_other_region(sent, regions)) or \
-                    (intent["currencies"] and "currency" in intent["kinds"]
-                     and sp.mentions_other_currency(sent, intent["currencies"])) or \
-                    sp.mentions_other_asset(sent, intent):
+            if (intent["currencies"] and "currency" in intent["kinds"]
+                    and sp.mentions_other_currency(sent, intent["currencies"])) or sp.mentions_other_asset(sent, intent):
+                continue  # R-826: جملة عن أصل/عملة أخرى ليست جوابًا (ذهب في سؤال صرف، ديزل في سؤال ذهب)
+            if local_focus and sp.mentions_other_region(sent, regions):
                 c_cred = round(cred * 0.5, 3)  # R-826: سؤال عن دولة ⇒ جملة عن دولة أخرى أضعف
             candidates.append({"text": sent, "lang": s.get("lang") or detect_lang(sent),
                                "source_idx": idx, "cred": c_cred, "fresh": fr,
@@ -1522,6 +1522,9 @@ def answer(question: str, target_lang: Optional[str] = None) -> Dict[str, Any]:
     if any(s_.get("platform") for s_ in sources):
         # R-826: المنصة أجابت (فيديو/آية/مستودع) ⇒ الجملة المقتبسة تُرفق فقط إن غطت كل مفاهيم السؤال
         chosen = [c for c in chosen if c.get("coverage", 0) >= 0.99 and c.get("score", 0) >= 0.5]
+        if {"video", "religion"} & set(intent["kinds"]) and any(
+                s_.get("kind") in ("video", "verse") for s_ in sources):
+            chosen = []  # طُلب فيديو/آية ⇒ الفيديوهات/الآيات بنصها هي الجواب؛ جملة موسوعية عامة حشو
     if instants:  # الرقم الحي هو الجواب ⇒ الجمل المقتبسة سياق فقط (أقوى ٣، وحديثة إن كانت مؤرخة)
         chosen = [c for c in chosen if c.get("score", 0) >= 0.5
                   and (age_days(sources[c["source_idx"]].get("published")) or 0) <= 7][:3]
@@ -1557,6 +1560,8 @@ def answer(question: str, target_lang: Optional[str] = None) -> Dict[str, Any]:
     reject = (lambda s_: _off_topic(f"{s_.get('title', '')} {s_.get('snippet', '')}")) \
         if (local_focus or asked_cur or {"metal", "crypto"} & set(intent["kinds"])) else None
     digest = news_digest(sources, qterms, limit=_env_int("WORLD_SEARCH_NEWS_ITEMS", 5), reject=reject) if fresh else []
+    if "time" in intent["kinds"] and instants:
+        digest = []  # الوقت المحلي محسوب بدقة؛ عناوين الأخبار عن البلد لا تجيب «كم الساعة»
     if instants:  # R-826: مع رقم حي، الأخبار القديمة (أسبوع+) لا تضيف — «حرارة جدة» قبل عام ليست حرارتها الآن
         digest = [d for d in digest if (age_days(sources[d["source_idx"]].get("published")) or 0) <= 7]
     for lang_ in {sources[d["source_idx"]].get("lang") for d in digest}:

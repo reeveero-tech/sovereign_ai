@@ -292,3 +292,12 @@ def test_cache_key_includes_engine_version(monkeypatch):
     k1 = search_index.cache_key("سؤال", "ar")
     monkeypatch.setattr(search_index, "ENGINE_VERSION", "next")
     assert search_index.cache_key("سؤال", "ar") != k1
+
+
+def test_r826d_refinements():
+    gold = sp.analyze("Quel est le prix de l'or aujourd'hui en France", None, "fr", True)
+    assert sp.mentions_other_asset("Prix du diesel : ce que TotalEnergies change dès aujourd'hui", gold)
+    assert not sp.mentions_other_asset("Le prix de l'or recule aujourd'hui", gold)
+    cur = sp.analyze("كم سعر الدولار مقابل الريال اليوم", "dollar against riyal today", "ar", True)
+    assert cur["regions"] == ["SA"]  # النطاق من العملة المحلية
+    assert sp.github_query("best python library for making a telegram bot") == "python telegram bot"

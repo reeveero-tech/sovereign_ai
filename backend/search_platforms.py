@@ -151,10 +151,10 @@ def mentions_other_asset(text: str, intent: Dict[str, Any]) -> bool:
     has_crypto = any(re.search(row[1], t) or re.search(row[2], t, re.I) for row in CRYPTO.values())
     if "currency" in k:
         return has_metal or has_crypto
-    if "metal" in k:
-        return has_crypto
+    if "metal" in k:  # سؤال ذهب ⇒ نص لا يذكر المعدن (سعر الديزل/الغاز) أو يذكر عملة رقمية خارج المطلوب
+        return has_crypto or not has_metal
     if "crypto" in k:
-        return has_metal
+        return has_metal or not has_crypto
     return False
 
 
@@ -334,6 +334,9 @@ def analyze(question: str, en_q: Optional[str], user_lang: str, fresh: bool = Fa
     # عملة: زوج صريح، أو عملة واحدة مع كلمة سعر/صرف (وليست مجرد عملة تسعير لمعدن)
     if (len(currencies) >= 2 or (currencies and _FX_WORD.search(both))) and not metal and not crypto:
         kinds.append("currency")
+    if not regions and "currency" in kinds:  # «الدولار مقابل الريال» ⇒ النطاق دولة العملة المحلية (السعودية)
+        regions = list(dict.fromkeys(c[0] for cur in currencies if cur not in ("USD", "EUR")
+                                     for c in COUNTRIES if c[2] == cur))[:1]
     if _DIRECT & set(kinds) and "definition" in kinds:
         kinds.remove("definition")  # «ما هو سعر…/ما هي درجة الحرارة» طلب قيمة لا تعريف
     answer_type = next((t for t in _TYPE_ORDER if t in kinds), "general")
@@ -673,13 +676,26 @@ def p_youtube(q: str, lang: str) -> List[Dict[str, Any]]:
     return parse_youtube(r.text, lang)
 
 
+_GH_STOP = {"best", "top", "good", "great", "library", "libraries", "lib", "package", "packages", "module", "tool", "tools",
+            "framework", "frameworks", "make", "making", "create", "creating", "build", "building", "how", "to", "for",
+            "a", "an", "the", "which", "what", "is", "are", "with", "in", "of", "using", "use", "write", "writing",
+            "recommended", "popular", "simple", "easy", "free", "open", "source"}
+
+
+def github_query(q: str) -> str:
+    """كلمات المستودع الجوهرية: «best python library for making a telegram bot» ⇒ «python telegram bot»."""
+    words = [x for x in re.findall(r"[A-Za-z0-9+#.-]+", q or "") if x.lower() not in _GH_STOP]
+    return " ".join(words[:5]) or q
+
+
 def p_github(q: str, lang: str) -> List[Dict[str, Any]]:
     headers = {"Accept": "application/vnd.github+json", "User-Agent": "SovereignAI-search"}
     tok = os.getenv("GITHUB_TOKEN")
     if tok:  # الرمز يُرسل إلى api.github.com وحدها
         headers["Authorization"] = f"Bearer {tok}"
     with _http(8.0, headers) as c:
-        r = c.get("https://api.github.com/search/repositories", params={"q": q, "sort": "stars", "per_page": 6})
+        r = c.get("https://api.github.com/search/repositories",
+                  params={"q": github_query(q), "sort": "stars", "per_page": 6})
         r.raise_for_status()
         items = r.json().get("items") or []
     return [{"title": it["full_name"], "url": it["html_url"], "snippet": (it.get("description") or "")[:300],
