@@ -258,7 +258,9 @@ def test_brain_timeout_with_tools_returns_fetched_data_not_template(monkeypatch,
         r = c.post("/chat", json={"text": "قم بتحليل المشروع https://github.com/acme/demo تحليلًا دقيقًا"})
     assert r.status_code == 200
     reply = r.json()["reply"]
-    assert "لم يُكمل العقل اللغوي التحليل في المهلة" in reply
+    # R-822: فشل الاتصال (لا خادم) يُعلن «غير قابل للوصول» بدقة؛ المهلة الفعلية تبقى بنصها
+    assert ("لم يُكمل العقل اللغوي التحليل في المهلة" in reply
+            or "غير قابل للوصول من هذا الخادم" in reply)
     assert "وصف-المستودع-المزيف-787" in reply, "honest fallback must carry the real fetched data"
     assert "المخاطر الكلية" not in reply, "must not fall back to the unrelated predictive template"
 

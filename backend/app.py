@@ -2635,6 +2635,15 @@ async def tools_invoke(request: ToolInvokeRequest):
         )
 
 
+def _brain_unreachable_now() -> bool:
+    """R-822: مزلاج وصول العقل (R-821) مفتوح — آخر اتصال فشل وفترة الهدوء جارية."""
+    try:
+        import ollama_client
+        return bool(ollama_client._brain_latch_open())
+    except Exception:  # TOLERATED: غياب المزلاج = لا سقوط إضافي (السلوك القديم)
+        return False
+
+
 def _chat_agent_mode() -> bool:
     """R-789: المحادثة عبر حلقة الوكيل حين يكون العقل مفعّلًا (CHAT_AGENT_MODE=0 يعيد المسار
     القديم صراحةً). بلا عقل يبقى المسار القائم كما هو."""
@@ -3161,19 +3170,28 @@ async def chat(message: ChatMessage, background_tasks: BackgroundTasks):
     tools_used: List[str] = []
     tool_context = ""
     direct_reply = None
-    try:
-        if not _chat_agent_mode():  # R-789: في وضع الوكيل العقل يقرر ما يُجلب، لا الجسر
+    # R-822: العقل مفعّل لكن غير قابل للوصول (مزلاج R-821 مفتوح) ⇒ وضع الوكيل
+    # لا يُجرَّب أصلًا — المحادثة تمر بالجسر الحتمي (أدوات حقيقية: GitHub/روابط/جرد)
+    _use_agent = _chat_agent_mode() and not _brain_unreachable_now()
+
+    async def _run_bridge():
+        try:
             import chat_tools
             bridged = await asyncio.to_thread(chat_tools.gather, message.text, _capabilities_payload)
-            tool_context = bridged.get("context") or ""
-            tools_used = list(bridged.get("tools_used") or [])
-            direct_reply = bridged.get("direct_reply")
-    except Exception as e:  # TOLERATED: الجسر مكمّل — فشله لا يسقط المحادثة ويُسجل
-        logger.warning("R-787: فشل جسر الأدوات (%s)", type(e).__name__)
+            return (bridged.get("context") or "", list(bridged.get("tools_used") or []),
+                    bridged.get("direct_reply"))
+        except Exception as e:  # TOLERATED: الجسر مكمّل — فشله لا يسقط المحادثة ويُسجل
+            logger.warning("R-787: فشل جسر الأدوات (%s)", type(e).__name__)
+            return "", [], None
+
+    if not _use_agent:  # R-789: في وضع الوكيل العقل يقرر ما يُجلب، لا الجسر
+        tool_context, tools_used, direct_reply = await _run_bridge()
     _bridge_kw = {"tool_context": tool_context} if tool_context else {}
     agent_status = None
     agent_reviewer = None
-    if _chat_agent_mode():
+    if _chat_agent_mode() and not _use_agent:
+        agent_status = "brain_unreachable_fallback"  # R-822: إعلان صادق للمسار المستخدم
+    if _use_agent:
         # R-789 (أمر المالك: لا أجوبة مزروعة): العقل يفهم الرسالة ويختار الأدوات الحقيقية
         # بنفسه ويجيب من نتائجها؛ الجسر الحتمي والقوالب لا يُستعملان في هذا المسار.
         import chat_agent
@@ -3191,6 +3209,21 @@ async def chat(message: ChatMessage, background_tasks: BackgroundTasks):
         tools_used = list(agent_out.get("tools_used") or [])
         agent_status = agent_out.get("status")
         agent_reviewer = agent_out.get("reviewer")
+        # R-822: فشل المخطط لأن العقل غير قابل للوصول (فشل اتصال فتح المزلاج الآن) ⇒
+        # لا رسالة فشل للمالك؛ الجسر الحتمي يجيب من الأدوات الحقيقية في نفس الطلب
+        if agent_status == "planner_failed" and _brain_unreachable_now():
+            tool_context, tools_used, direct_reply = await _run_bridge()
+            _bridge_kw = {"tool_context": tool_context} if tool_context else {}
+            agent_status = "brain_unreachable_fallback"
+            if direct_reply:
+                reply = direct_reply
+            else:
+                reply = await _compose_chat_reply(
+                    message.text, result, orchestrator,
+                    default="تم استلام رسالتك. أنا الذكاء السيادي، جاهز لخدمتك.",
+                    history=history or None,
+                    **_bridge_kw,
+                )
     elif direct_reply:
         reply = direct_reply  # R-787b: سؤال القدرات يُجاب من الجرد الحي حرفيًا بلا نموذج
     else:
@@ -3204,7 +3237,9 @@ async def chat(message: ChatMessage, background_tasks: BackgroundTasks):
     # R-814: عقد الحالة الصادق — لا «ok» وحلقة الوكيل فشلت فعلًا؛ نجاح الجواب
     # في وضع الوكيل هو completed/answered_from_results فقط (وأي حالة أخرى فشل
     # يُعلن في الحالة العلوية مع بقاء النص الصادق). المسار القديم كما كان.
-    _agent_ok = agent_status in (None, "completed", "answered_from_results")
+    # R-822: brain_unreachable_fallback = جواب حقيقي من الأدوات/الحالة الحية (معلن في agent_status)
+    _agent_ok = agent_status in (None, "completed", "answered_from_results",
+                                 "brain_unreachable_fallback")
     return ChatResponse(
         reply=reply,
         status="ok" if (result.success and _agent_ok) else "error",

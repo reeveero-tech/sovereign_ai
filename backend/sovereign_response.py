@@ -172,6 +172,15 @@ def _risk_label(level) -> str:
     return str(level)
 
 
+def _brain_unreachable() -> bool:
+    """R-822: مزلاج وصول العقل (R-821) مفتوح — يميّز «لا وصول» عن «انتهت المهلة» بصدق."""
+    try:
+        import ollama_client
+        return bool(ollama_client._brain_latch_open())
+    except Exception:  # TOLERATED: تعذر القراءة ⇒ الرسالة القائمة (المهلة) كما كانت
+        return False
+
+
 def _llm_reply(intent_name: str, text: str, ev: Dict[str, Any], history=None,
                tool_context: str = "") -> Optional[str]:
     """R-704: الرد عبر عقل Ollama المحلي إن كان مفعّلًا — سقوط آمن للقوالب.
@@ -269,6 +278,10 @@ def build_reply(
     if tool_context:
         # R-787a: مشاهد حيًا — انتهت مهلة العقل فسقط الرد إلى قالب «التحليل» التنبئي
         # الذي لا علاقة له بالسؤال. الآن: إعلان صادق + البيانات الحقيقية التي جلبتها الأدوات.
+        if _brain_unreachable():
+            # R-822: السبب الفعلي ليس «المهلة» بل أن خادم العقل لا يُوصل إليه (مزلاج R-821 مفتوح)
+            return ("العقل اللغوي (Ollama) غير قابل للوصول من هذا الخادم الآن، فلم يُحلَّل الطلب لغويًا. "
+                    "هذه البيانات الحقيقية التي جلبتها أدوات النظام الآن، بلا تعديل:\n\n" + tool_context)
         return ("لم يُكمل العقل اللغوي التحليل في المهلة (نموذج صغير يعمل على معالج بلا GPU). "
                 "هذه البيانات الحقيقية التي جلبتها أدوات النظام الآن، بلا تعديل:\n\n" + tool_context)
 
