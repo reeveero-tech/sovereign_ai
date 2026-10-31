@@ -83,3 +83,34 @@ def test_github_token_sent_only_to_api_github(monkeypatch):
     assert web_tools._auth_headers_for("evil.example") == {}
     monkeypatch.delenv("GITHUB_TOKEN")
     assert web_tools._auth_headers_for("api.github.com") == {}
+
+
+def test_open_request_unreachable_is_honest_not_decision_template(monkeypatch):
+    """R-822c: طلب مفتوح والعقل غير قابل للوصول ⇒ لا «تم تنفيذ القرار: continue.»."""
+    import sovereign_response
+    monkeypatch.setattr(ollama_client, "_brain_latch_open", lambda *a, **k: True)
+    monkeypatch.setattr(sovereign_response, "_llm_reply", lambda *a, **k: None)
+    out = sovereign_response.build_reply("unknown", "أريد بحثًا معمقًا عن النظام الغذائي")
+    assert out == sovereign_response.UNREACHABLE_UNANSWERED
+    assert "تم تنفيذ القرار" not in out
+    # قوالب البيانات الحية تبقى
+    assert sovereign_response.build_reply("greet", "مرحبا") != sovereign_response.UNREACHABLE_UNANSWERED
+
+
+def test_chat_open_request_unreachable_status_error(monkeypatch):
+    monkeypatch.setattr(chat_agent, "brain_enabled", lambda: True)
+    monkeypatch.setattr(ollama_client, "_brain_latch_open", lambda *a, **k: True)
+    monkeypatch.setattr(chat_tools, "gather", lambda t, c: {"context": "", "tools_used": [], "direct_reply": None})
+    with _client() as c:
+        body = c.post("/chat", json={"text": "اريد ان تقوم بانشاء بحث معمق عن النظام الغذائي",
+                                     "user_id": "t"}).json()
+    assert "تم تنفيذ القرار" not in body["reply"]
+    assert body["agent_status"] == "brain_unreachable_unanswered"
+    assert body["status"] == "error"
+
+
+def test_frontend_treats_latched_as_failure():
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[1] / "frontend" / "chat"
+    for name in ("index.html", "classic.html"):
+        assert 'last === "unreachable_latched"' in (root / name).read_text(encoding="utf-8")

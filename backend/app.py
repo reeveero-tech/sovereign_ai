@@ -2644,6 +2644,15 @@ def _brain_unreachable_now() -> bool:
         return False
 
 
+def _is_unanswered(reply) -> bool:
+    """R-822c: الرد هو الإعلان الصادق بتعذر الجواب (لا جواب حقيقي)."""
+    try:
+        import sovereign_response
+        return str(reply or "") == sovereign_response.UNREACHABLE_UNANSWERED
+    except Exception:  # TOLERATED: تعذر المقارنة ⇒ الحالة كما هي
+        return False
+
+
 def _chat_agent_mode() -> bool:
     """R-789: المحادثة عبر حلقة الوكيل حين يكون العقل مفعّلًا (CHAT_AGENT_MODE=0 يعيد المسار
     القديم صراحةً). بلا عقل يبقى المسار القائم كما هو."""
@@ -3237,6 +3246,9 @@ async def chat(message: ChatMessage, background_tasks: BackgroundTasks):
     # R-814: عقد الحالة الصادق — لا «ok» وحلقة الوكيل فشلت فعلًا؛ نجاح الجواب
     # في وضع الوكيل هو completed/answered_from_results فقط (وأي حالة أخرى فشل
     # يُعلن في الحالة العلوية مع بقاء النص الصادق). المسار القديم كما كان.
+    # R-822c: العقل غير قابل للوصول والطلب مفتوح بلا أدوات ⇒ لم يُجب فعلًا (عقد R-814: لا ok)
+    if agent_status == "brain_unreachable_fallback" and _is_unanswered(reply):
+        agent_status = "brain_unreachable_unanswered"
     # R-822: brain_unreachable_fallback = جواب حقيقي من الأدوات/الحالة الحية (معلن في agent_status)
     _agent_ok = agent_status in (None, "completed", "answered_from_results",
                                  "brain_unreachable_fallback")

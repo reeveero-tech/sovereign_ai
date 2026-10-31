@@ -312,6 +312,7 @@
       if (!h || h.status !== "healthy") { dot.className = "dot bad"; statusText.textContent = "الخادم لا يستجيب"; return; }
       if (!b || !b.enabled) { dot.className = "dot bad"; statusText.textContent = "متصل — العقل غير مفعّل"; return; }
       var last = b.last_call && b.last_call.result;
+      if (last === "unreachable_latched") last = "error"; // R-822c: المزلاج المفتوح فشل وصول لا «متصل»
       dot.className = "dot " + (last === "error" ? "bad" : "ok");
       statusText.textContent = (last === "error" ? "متصل — آخر اتصال بالعقل فشل · " : "متصل · ") + (b.model || "");
     });
