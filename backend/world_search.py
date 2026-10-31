@@ -44,6 +44,13 @@ LANG_NAMES_AR = {
     "de": "الألمانية", "ru": "الروسية", "zh": "الصينية", "ja": "اليابانية",
     "ko": "الكورية", "fa": "الفارسية", "ur": "الأردية", "tr": "التركية",
     "hi": "الهندية", "pt": "البرتغالية", "it": "الإيطالية", "he": "العبرية",
+    # R-826: لغات العالم الأوسع (كشف + بحث + ترجمة)
+    "uk": "الأوكرانية", "el": "اليونانية", "th": "التايلاندية", "bn": "البنغالية", "ta": "التاميلية",
+    "am": "الأمهرية", "ka": "الجورجية", "hy": "الأرمنية", "nl": "الهولندية", "sv": "السويدية",
+    "pl": "البولندية", "id": "الإندونيسية", "ms": "الملايوية", "sw": "السواحيلية", "vi": "الفيتنامية",
+    "ro": "الرومانية", "cs": "التشيكية", "hu": "المجرية", "fi": "الفنلندية", "da": "الدنماركية",
+    "no": "النرويجية", "tl": "الفلبينية", "ha": "الهوسا", "so": "الصومالية", "az": "الأذربيجانية",
+    "uz": "الأوزبكية", "kk": "الكازاخية", "ps": "البشتو", "ku": "الكردية",
 }
 
 
@@ -93,7 +100,34 @@ _SCRIPTS = [
     ("ru", re.compile(r"[\u0400-\u04FF]")), ("zh", re.compile(r"[\u4E00-\u9FFF]")),
     ("ja", re.compile(r"[\u3040-\u30FF]")), ("ko", re.compile(r"[\uAC00-\uD7AF]")),
     ("hi", re.compile(r"[\u0900-\u097F]")),
+    # R-826: أنظمة كتابة إضافية
+    ("el", re.compile(r"[\u0370-\u03FF]")), ("th", re.compile(r"[\u0E00-\u0E7F]")),
+    ("bn", re.compile(r"[\u0980-\u09FF]")), ("ta", re.compile(r"[\u0B80-\u0BFF]")),
+    ("am", re.compile(r"[\u1200-\u137F]")), ("ka", re.compile(r"[\u10A0-\u10FF]")),
+    ("hy", re.compile(r"[\u0530-\u058F]")),
 ]
+# داخل الحرف العربي: الفارسية والأردية والبشتو بحروفها المميزة؛ داخل السيريلية: الأوكرانية
+_FA = re.compile(r"[پچژگکی]")
+_UR = re.compile(r"[ٹڈڑںےھ]")
+_UK = re.compile(r"[іїєґІЇЄҐ]")
+# اللاتينية: كلمات وظيفية شائعة لكل لغة (حتمي، بلا نموذج)
+_LATIN_WORDS = {
+    "fr": "le la les des est une un et pour pas qui quel quelle quels comment pourquoi où dans avec sur du au aux ce cette sont",
+    "es": "el la los las es una un y para por qué cómo cuál dónde cuándo con del al que son está muy más",
+    "de": "der die das ist und nicht ein eine wie was warum wo wer mit für auf von den dem im sind",
+    "pt": "o os as é uma um e para por que como qual onde quando com do da dos não são você mais",
+    "it": "il lo gli è una un e per che come qual quale dove quando con del della non sono più perché",
+    "tr": "ve bir bu ne nedir nasıl neden için ile mi mı da de en çok gibi var nerede",
+    "nl": "de het een is en niet hoe wat waarom waar wie met voor op van zijn",
+    "id": "apa yang dan bagaimana adalah untuk dengan di ini itu tidak dari ke berapa kapan",
+    "sw": "na ya wa ni kwa za la je nini vipi gani wapi lini",
+    "pl": "jest nie jak co dlaczego gdzie kto się na w z do że czy",
+    "sv": "och är det en ett inte hur vad varför var som med för på av",
+    "vi": "là và của có không một những các cho với trong như thế nào gì",
+    "ro": "și este nu un o ce cum de ce unde când cu pentru din care",
+    "en": "the is are and of to in what how why where when who which for with does do on",
+}
+_LATIN_SETS = {k: set(v.split()) for k, v in _LATIN_WORDS.items()}
 
 
 def detect_lang(text: str) -> str:
@@ -104,8 +138,37 @@ def detect_lang(text: str) -> str:
         n = len(rx.findall(text))
         if n > best_n:
             best, best_n = code, n
-    latin = len(re.findall(r"[A-Za-z]", text))
-    return best if best_n > latin else "en"
+    latin = len(re.findall(r"[A-Za-zÀ-ÿĀ-žƀ-ɏ]", text))
+    if best_n > latin:
+        if best == "ar":
+            if len(_UR.findall(text)) >= 1:
+                return "ur"
+            if len(_FA.findall(text)) >= 2:
+                return "fa"
+        if best == "ru" and _UK.search(text):
+            return "uk"
+        if best == "zh" and re.search(r"[\u3040-\u30FF]", text):
+            return "ja"  # الكانجي مشترك؛ وجود الكانا يحسم اليابانية
+        return best
+    return _latin_lang(text)
+
+
+def _latin_lang(text: str) -> str:
+    """R-826: لغة النص اللاتيني بعدّ الكلمات الوظيفية (الإنجليزية عند التعادل/القصر)."""
+    words = re.findall(r"[a-zà-ÿā-žƀ-ɏ]+", text.lower())
+    if not words:
+        return "en"
+    scores = {lang: sum(1 for w_ in words if w_ in st) for lang, st in _LATIN_SETS.items()}
+    if re.search(r"[ğışİ]", text):
+        scores["tr"] = scores.get("tr", 0) + 2
+    if re.search(r"[ãõ]", text):
+        scores["pt"] = scores.get("pt", 0) + 1
+    if re.search(r"[ñ¿¡]", text):
+        scores["es"] = scores.get("es", 0) + 1
+    if re.search(r"[ß]|[äöü]\w", text):
+        scores["de"] = scores.get("de", 0) + 1
+    best = max(scores, key=lambda k: (scores[k], k == "en"))
+    return best if scores[best] > scores["en"] else "en"
 
 
 _AR_REQUEST_PREFIX = re.compile(
@@ -643,12 +706,23 @@ def _p_owner(q: str, lang: str) -> List[Dict[str, Any]]:
 # ============================================================
 _BING_MKT = {"ar": "ar-SA", "en": "en-US", "fr": "fr-FR", "es": "es-ES", "de": "de-DE", "ru": "ru-RU",
              "zh": "zh-CN", "ja": "ja-JP", "ko": "ko-KR", "tr": "tr-TR", "pt": "pt-BR", "it": "it-IT",
-             "hi": "en-IN", "fa": "en-US", "ur": "en-US", "he": "en-US"}
+             "hi": "en-IN", "fa": "en-US", "ur": "en-US", "he": "en-US",
+             # R-826
+             "nl": "nl-NL", "sv": "sv-SE", "pl": "pl-PL", "id": "id-ID", "ms": "en-MY", "uk": "uk-UA",
+             "el": "el-GR", "th": "th-TH", "vi": "vi-VN", "ro": "ro-RO", "cs": "cs-CZ", "hu": "hu-HU",
+             "fi": "fi-FI", "da": "da-DK", "no": "nb-NO", "bn": "en-IN", "ta": "en-IN", "sw": "en-KE"}
 _GNEWS = {"ar": ("ar", "SA", "SA:ar"), "en": ("en-US", "US", "US:en"), "fr": ("fr", "FR", "FR:fr"),
           "es": ("es-419", "US", "US:es-419"), "de": ("de", "DE", "DE:de"), "ru": ("ru", "RU", "RU:ru"),
           "zh": ("zh-CN", "CN", "CN:zh-Hans"), "ja": ("ja", "JP", "JP:ja"), "ko": ("ko", "KR", "KR:ko"),
           "tr": ("tr", "TR", "TR:tr"), "pt": ("pt-BR", "BR", "BR:pt-419"), "it": ("it", "IT", "IT:it"),
-          "hi": ("hi", "IN", "IN:hi"), "he": ("he", "IL", "IL:he")}
+          "hi": ("hi", "IN", "IN:hi"), "he": ("he", "IL", "IL:he"),
+          # R-826
+          "nl": ("nl", "NL", "NL:nl"), "sv": ("sv", "SE", "SE:sv"), "pl": ("pl", "PL", "PL:pl"),
+          "id": ("id", "ID", "ID:id"), "uk": ("uk", "UA", "UA:uk"), "el": ("el", "GR", "GR:el"),
+          "th": ("th", "TH", "TH:th"), "vi": ("vi", "VN", "VN:vi"), "ro": ("ro", "RO", "RO:ro"),
+          "cs": ("cs", "CZ", "CZ:cs"), "hu": ("hu", "HU", "HU:hu"), "bn": ("bn", "BD", "BD:bn"),
+          "ta": ("ta", "IN", "IN:ta"), "sw": ("sw", "KE", "KE:sw"), "fa": ("fa", "IR", "IR:fa"),
+          "ur": ("ur", "PK", "PK:ur"), "ms": ("ms", "MY", "MY:ms")}
 
 
 def _plain_client(timeout: Optional[float] = None):
@@ -915,7 +989,12 @@ _FRESH = re.compile(
     r"(?<![\w])(?:ب|وب|و|ال|بال|وال)?سعر(?!ات)|أسعار|اسعار|أخبار|اخبار|عاجل|مستجدات|"
     r"هذا الأسبوع|هذا الشهر|هذه السنة|هذا العام|مباراة|طقس|"
     r"\b(?:today|now|currently|latest|newest|recent|price|prices|news|breaking|this week|this month|"
-    r"this year|tonight|score|weather|stock price|exchange rate)\b|\b20[2-3]\d\b", re.I)
+    r"this year|tonight|score|weather|stock price|exchange rate)\b|\b20[2-3]\d\b|"
+    # R-826: كلمات الآنية بلغات العالم الكبرى (فرنسية/إسبانية/ألمانية/برتغالية/إيطالية/تركية/روسية/صينية/يابانية…)
+    r"aujourd['’]hui|maintenant|actualités|\bprix\b|\bhoy\b|\bahora\b|precio|noticias|\bheute\b|\bjetzt\b|"
+    r"\bpreis\b|nachrichten|\bhoje\b|\bagora\b|preço|notícias|\boggi\b|prezzo|notizie|bugün|\bşimdi\b|"
+    r"fiyat|haber|сегодня|сейчас|цена|новости|今天|现在|价格|新闻|今日|現在|価格|ニュース|오늘|지금|가격|뉴스|"
+    r"\bhari ini\b|\bharga\b|امروز|قیمت|آج|قیمت", re.I)
 _TECH = re.compile(
     r"برمج|كود|بايثون|جافا|خطأ برمجي|مكتبة|\b(?:python|javascript|typescript|java|rust|golang|c\+\+|c#|sql|"
     r"api|bug|error|exception|library|framework|react|docker|kubernetes|linux|git|npm|pip|code|"
@@ -939,11 +1018,17 @@ def freshness(iso: Optional[str], horizon_days: float = 30.0) -> float:
     return round(max(0.0, 1.0 - d / horizon_days), 3)
 
 
-def news_digest(sources: List[Dict[str, Any]], qterms: Dict[str, List[str]], limit: int = 6) -> List[Dict[str, Any]]:
-    """أحدث العناوين المطابقة (أخبار Bing/Google/HN) — تغطية مصطلحات السؤال × الحداثة، مع تنويع الناشرين."""
+def news_digest(sources: List[Dict[str, Any]], qterms: Dict[str, List[str]], limit: int = 6,
+                reject=None) -> List[Dict[str, Any]]:
+    """أحدث العناوين المطابقة (أخبار Bing/Google/HN) — تغطية مصطلحات السؤال × الحداثة، مع تنويع الناشرين.
+
+    R-826: reject(source) ⇒ True يستبعد الخبر (مثل خبر عن دولة أخرى غير المسؤول عنها).
+    """
     scored = []
     for i, s in enumerate(sources):
         if not s.get("news"):
+            continue
+        if reject is not None and reject(s):
             continue
         lang = s.get("lang") or "en"
         q = qterms.get(lang) or qterms.get("en") or []
@@ -1016,7 +1101,10 @@ def credibility(url: str, scholarly: bool = False) -> Tuple[float, str]:
 # ============================================================
 _BOILER = re.compile(r"cookie|subscribe|sign up|newsletter|all rights reserved|javascript|privacy policy|"
                      r"click here|advertis|log in|skip to|main content|search the|back to|"
-                     r"ملفات تعريف|اشترك|جميع الحقوق|انتقل إلى المحتوى", re.I)
+                     r"ملفات تعريف|اشترك|جميع الحقوق|انتقل إلى المحتوى|"
+                     # R-826: حشو الصفحات الإخبارية (تابعنا/مقالات ذات صلة/اقرأ أيضًا) ليس جوابًا
+                     r"تابعنا|تابعونا|فيس ?بوك|مقالات ذات صلة|اقرأ أيضا|اقرأ أيضًا|إقرأ أيضا|شاهد أيضا|"
+                     r"follow us|related articles|read more|read also|share this", re.I)
 
 
 def sentences(text: str) -> List[str]:
@@ -1123,9 +1211,11 @@ def evaluate(candidates: List[Dict[str, Any]], qterms_by_lang: Dict[str, List[st
         c["relevance"] = round(rel[i], 3)
         c["agreement"] = round(agree[i], 3)
         if fresh_mode:
-            c["score"] = round(0.4 * rel[i] + 0.25 * c["cred"] + 0.15 * agree[i] + 0.2 * c.get("fresh", 0.0), 3)
+            c["score"] = round(0.4 * rel[i] + 0.25 * c["cred"] + 0.15 * agree[i] + 0.2 * c.get("fresh", 0.0)
+                               + 0.08 * c.get("type_bonus", 0.0), 3)
         else:
-            c["score"] = round(0.45 * rel[i] + 0.35 * c["cred"] + 0.2 * agree[i], 3)
+            # R-826: مكافأة «نوع الإجابة» — جملة فيها رقم لسؤال «كم»، تاريخ لـ«متى»، تعريف لـ«ما هو»
+            c["score"] = round(0.45 * rel[i] + 0.35 * c["cred"] + 0.2 * agree[i] + 0.08 * c.get("type_bonus", 0.0), 3)
         c["pivot"] = pivot_text.get(i, c["text"])
     chosen: List[int] = []
     per_source: Dict[int, int] = {}
@@ -1184,7 +1274,12 @@ def engine_status() -> Dict[str, Any]:
             "index": search_index.status(),
             "providers": ["bing", "bing-news", "google-news", "wikipedia-*", "wikidata", "pubmed",
                           "europepmc", "openalex", "stackoverflow", "hackernews", "index",
-                          "duckduckgo", "marginalia", "owner-provider"]}
+                          "duckduckgo", "marginalia", "owner-provider",
+                          # R-826: المنصات والإجابات المباشرة
+                          "youtube", "github", "crossref", "arxiv", "semanticscholar", "openlibrary", "lemmy",
+                          "stackexchange-<site>", "baidu", "quran", "instant-currency", "instant-metal",
+                          "instant-crypto", "instant-weather", "instant-time"],
+            "detectable_languages": sorted(LANG_NAMES_AR)}
 
 
 def search_results(query: str, max_results: int = 10) -> Dict[str, Any]:
@@ -1244,7 +1339,11 @@ def answer(question: str, target_lang: Optional[str] = None) -> Dict[str, Any]:
         if hit and hit.get("ok"):
             hit["elapsed_seconds"] = round(time.monotonic() - t0, 2)
             return hit
-    langs = list(dict.fromkeys([user_lang] + search_langs()))
+    import search_platforms as sp
+    # R-826: تمييز المطلوب قبل البحث — دولة السؤال تضيف لغتها (اليابان ⇒ اليابانية…)
+    intent = sp.analyze(question, None, user_lang)
+    max_langs = _env_int("WORLD_SEARCH_MAX_LANGS", 7)
+    langs = list(dict.fromkeys([user_lang] + search_langs() + intent["region_langs"]))[:max_langs]
     translators_used: Dict[str, str] = {}
 
     # ١) ترجمة جوهر السؤال إلى لغات البحث (متوازية)
@@ -1262,6 +1361,19 @@ def answer(question: str, target_lang: Optional[str] = None) -> Dict[str, Any]:
     en_q = queries.get("en")
     fresh = is_fresh(question) or is_fresh(en_q or "")
     tech = is_tech(question) or is_tech(en_q or "")
+    intent = sp.analyze(question, en_q, user_lang, fresh, tech)
+    extra = [lg for lg in intent["region_langs"] if lg not in queries][:2]
+    if extra and time.monotonic() < deadline - 20:  # دولة ظهرت بعد الترجمة (سؤال فرنسي عن اليابان…)
+        tq2, _ = _run_parallel([(lg, translate, (en_q or core, lg, "en" if en_q else user_lang)) for lg in extra],
+                               time.monotonic() + 5.0)
+        for lg in extra:
+            if lg in tq2 and tq2[lg][1]:
+                queries[lg] = tq2[lg][0]
+                qterms[lg] = _terms(queries[lg], lg)
+                translators_used[f"سؤال→{lg}"] = tq2[lg][1]
+    regions = intent["regions"]
+    local_focus = bool(regions) and (fresh or intent["answer_type"] == "numeric"
+                                     or bool({"metal", "currency", "crypto"} & set(intent["kinds"])))
 
     # ٢) البحث المتوازي
     jobs = []
@@ -1296,6 +1408,16 @@ def answer(question: str, target_lang: Optional[str] = None) -> Dict[str, Any]:
     jobs.append(("owner-provider", _p_owner, (web_q, web_lang)))
     if en_q:
         jobs.append(("wikidata", _p_wikidata, (en_q, user_lang)))
+    # R-826: محرك البحث الوطني للغة الدولة المسؤول عنها (Bing بسوق تلك اللغة)
+    for lg in intent["region_langs"]:
+        if lg in queries and lg not in (user_lang, web_lang) and lg != "zh":
+            jobs.append((f"bing-{lg}", _p_bing, (keyword_query(queries[lg], lg), lg)))
+            if fresh:
+                jobs.append((f"google-news-{lg}", _p_google_news, (keyword_query(queries[lg], lg), lg)))
+            break
+    # R-826: الإجابات المباشرة (صرف/ذهب/عملات رقمية/طقس/وقت) + المنصات (YouTube/GitHub/كتب/نقاشات/قرآن/Baidu…)
+    jobs = sp.instant_jobs(intent, question, en_q, user_lang) + jobs
+    jobs += sp.platform_jobs(intent, queries, user_lang, keyword_query, scholarly_query)
     sres, providers = _run_parallel(jobs, min(deadline, time.monotonic() + 14.0))
     providers = {k: v for k, v in providers.items() if not (k == "owner-provider" and v.startswith("ok (0"))}
 
@@ -1310,6 +1432,8 @@ def answer(question: str, target_lang: Optional[str] = None) -> Dict[str, Any]:
                 continue
             seen.add(url)
             cred, label = credibility(url, bool(r.get("scholarly")))
+            if r.get("instant"):
+                cred, label = 0.95, "بيانات مباشرة"
             sources.append({**r, "cred": cred, "cred_label": label})
     # R-825: ترتيب القراءة = موثوقية + مكافأة ترتيب محرك البحث (أعلى نتائج Bing) + للآني: أخبار Bing
     def _read_priority(s_):
@@ -1319,7 +1443,7 @@ def answer(question: str, target_lang: Optional[str] = None) -> Dict[str, Any]:
         if fresh and s_.get("news"):
             bonus += 0.2
         return -(s_["cred"] + bonus)
-    readable = [s_ for s_ in sources if not s_.get("text")
+    readable = [s_ for s_ in sources if (not s_.get("text") and not s_.get("platform"))
                 or (fresh and s_.get("provider") == "bing-news" and s_.get("rank", 99) < 3)]
     web_to_read = sorted(readable, key=_read_priority)[:_env_int("WORLD_SEARCH_MAX_PAGES", 6)]
 
@@ -1343,6 +1467,10 @@ def answer(question: str, target_lang: Optional[str] = None) -> Dict[str, Any]:
     for idx, s in enumerate(sources):
         if fresh and s.get("news") and s.get("text") == s.get("title"):
             continue  # عنوان خبر مجرد ⇒ يُعرض في «أحدث العناوين» لا كنقطة مكررة
+        if s.get("instant") or s.get("kind") in ("video", "repo", "book", "verse"):
+            continue  # الإجابة المباشرة نقطة مستقلة؛ عناصر المنصات تُعرض في «من المنصات» لا كجمل
+        if s.get("platform") and len(s.get("text") or "") < 150:
+            continue
         fr = freshness(s.get("published"), 30.0)
         cred = s["cred"]
         if fresh and (s.get("provider", "").startswith("wikipedia") or s.get("scholarly")):
@@ -1351,8 +1479,14 @@ def answer(question: str, target_lang: Optional[str] = None) -> Dict[str, Any]:
         if s.get("snippet") and s.get("text") != s.get("snippet"):
             texts = sentences(s["snippet"])[:2] + texts  # مقتطف المحرك غالبًا أدق جملة
         for sent in dict.fromkeys(texts):
+            c_cred = cred
+            if (local_focus and sp.mentions_other_region(sent, regions)) or \
+                    (intent["currencies"] and "currency" in intent["kinds"]
+                     and sp.mentions_other_currency(sent, intent["currencies"])):
+                c_cred = round(cred * 0.5, 3)  # R-826: سؤال عن دولة ⇒ جملة عن دولة أخرى أضعف
             candidates.append({"text": sent, "lang": s.get("lang") or detect_lang(sent),
-                               "source_idx": idx, "cred": cred, "fresh": fr})
+                               "source_idx": idx, "cred": c_cred, "fresh": fr,
+                               "type_bonus": sp.type_bonus(sent, intent["answer_type"])})
     for c in candidates:  # لغة الجملة الفعلية (صفحة إنجليزية من بحث عربي مثلًا)
         c["lang"] = detect_lang(c["text"]) if c["lang"] not in ("fr", "es", "de") else c["lang"]
 
@@ -1379,8 +1513,12 @@ def answer(question: str, target_lang: Optional[str] = None) -> Dict[str, Any]:
     else:
         chosen = evaluate(candidates, qterms, _to_pivot, top_k=top_k, fresh_mode=fresh)
     wd = next((s_ for s_ in sources if s_.get("provider") == "wikidata"), None)
+    instants = [s_ for s_ in sources if s_.get("instant")]
     if wd:  # الحقيقة المنظّمة تجيب ⇒ لا يُرفق من الجمل إلا القوي جدًا (لا حشو)
         chosen = [c for c in chosen if c.get("score", 0) >= 0.75 and c.get("coverage", 0) >= 0.99][:3]
+    if instants:  # الرقم الحي هو الجواب ⇒ الجمل المقتبسة سياق فقط (أقوى ٣، وحديثة إن كانت مؤرخة)
+        chosen = [c for c in chosen if c.get("score", 0) >= 0.5
+                  and (age_days(sources[c["source_idx"]].get("published")) or 0) <= 7][:3]
 
     # ٥) الترجمة إلى لغة السائل
     for c in chosen:
@@ -1394,8 +1532,26 @@ def answer(question: str, target_lang: Optional[str] = None) -> Dict[str, Any]:
         c["translated"], c["translator"] = translate(c["text"], user_lang, c["lang"])
         if not c["translator"] and c.get("pivot") and c["pivot"] != c["text"]:
             c["translated"], c["translator"] = translate(c["pivot"], user_lang, "en")
+    # R-826: تنقيح — نقطتان صارتا بعد الترجمة بالمعنى نفسه (من لغتين) ⇒ تبقى الأعلى تقييمًا
+    refined, kept_sets = [], []
+    for c in sorted(chosen, key=lambda x: -x.get("score", 0)):
+        ts = set(_terms(c.get("translated") or c["text"], user_lang))
+        if ts and any(_jaccard(ts, k_) > 0.6 for k_ in kept_sets):
+            continue
+        kept_sets.append(ts)
+        refined.append(c)
+    chosen = [c for c in chosen if c in refined]
     # R-825: أحدث العناوين المطابقة (للأسئلة الآنية) — مؤرخة ومترجمة إلى لغة السائل
-    digest = news_digest(sources, qterms, limit=_env_int("WORLD_SEARCH_NEWS_ITEMS", 5)) if fresh else []
+    asked_cur = intent["currencies"] if "currency" in intent["kinds"] else []
+
+    def _off_topic(text_):
+        return ((local_focus and sp.mentions_other_region(text_, regions))
+                or (bool(asked_cur) and sp.mentions_other_currency(text_, asked_cur)))
+    reject = (lambda s_: _off_topic(f"{s_.get('title', '')} {s_.get('snippet', '')}")) \
+        if (local_focus or asked_cur) else None
+    digest = news_digest(sources, qterms, limit=_env_int("WORLD_SEARCH_NEWS_ITEMS", 5), reject=reject) if fresh else []
+    if instants:  # R-826: مع رقم حي، الأخبار القديمة (أسبوع+) لا تضيف — «حرارة جدة» قبل عام ليست حرارتها الآن
+        digest = [d for d in digest if (age_days(sources[d["source_idx"]].get("published")) or 0) <= 7]
     for lang_ in {sources[d["source_idx"]].get("lang") for d in digest}:
         idxs = [d for d in digest if sources[d["source_idx"]].get("lang") == lang_]
         titles = [sources[d["source_idx"]]["title"] for d in idxs]
@@ -1407,7 +1563,7 @@ def answer(question: str, target_lang: Optional[str] = None) -> Dict[str, Any]:
             tname = tname if out_t is not titles else None
         for d, t in zip(idxs, out_t):
             d["translated"], d["translator"] = t, tname
-    used_idx = [sources.index(wd)] if wd else []
+    used_idx = [sources.index(x) for x in instants] + ([sources.index(wd)] if wd else [])
     for c in chosen:
         if c["source_idx"] not in used_idx:
             used_idx.append(c["source_idx"])
@@ -1432,27 +1588,58 @@ def answer(question: str, target_lang: Optional[str] = None) -> Dict[str, Any]:
              "score": d["score"], "translator": d.get("translator")} for d in digest]
     if wd:  # الحقيقة المنظّمة أولًا — أدق من أي جملة مقتبسة
         points.insert(0, {"text": wd["fact_text"], "original": wd["fact_text"], "lang": user_lang,
-                          "source": 1, "score": 1.0,
+                          "source": num[sources.index(wd)], "score": 1.0,
                           "relevance": 1.0, "agreement": 0.0, "credibility": wd["cred"],
                           "translator": "identity", "structured": True})
+    # R-826: الإجابة المباشرة الحية (سعر صرف/ذهب/عملة رقمية/طقس/وقت) قبل كل شيء
+    for x in reversed(instants):
+        txt, tname = x["fact_text"], "identity"
+        if x.get("lang") != user_lang and time.monotonic() < deadline - 1:
+            t_, n_ = translate(txt, user_lang, x.get("lang") or "en")
+            if n_:
+                txt, tname = t_, n_
+        points.insert(0, {"text": txt, "original": x["fact_text"], "lang": user_lang, "source": num[sources.index(x)],
+                          "score": 1.0, "relevance": 1.0, "agreement": 0.0, "credibility": x["cred"],
+                          "translator": tname, "structured": True, "instant": True,
+                          "published": x.get("published"), "provider": x.get("provider")})
+    # R-826: من المنصات — فيديوهات/مستودعات/كتب/نقاشات/أسئلة وأجوبة/آيات، بعناوين مترجمة
+    plats = [s_ for s_ in sources if s_.get("platform")][:_env_int("WORLD_SEARCH_PLATFORM_ITEMS", 8)]
+    plat_titles: Dict[int, str] = {}
+    for lang_ in {s_.get("lang") or "en" for s_ in plats}:
+        grp = [s_ for s_ in plats if (s_.get("lang") or "en") == lang_]
+        if lang_ == user_lang or time.monotonic() > deadline - 1:
+            continue
+        joined, tname = translate("\n".join(s_["title"] for s_ in grp), user_lang, lang_)
+        lines = joined.split("\n") if tname else []
+        if len(lines) == len(grp):
+            for s_, t_ in zip(grp, lines):
+                plat_titles[id(s_)] = t_
+    platforms = [{"platform": s_["platform"], "kind": s_.get("kind"), "title": plat_titles.get(id(s_), s_["title"]),
+                  "original": s_["title"], "url": s_["url"], "site": s_.get("site"), "meta": s_.get("meta"),
+                  "published": s_.get("published"), "snippet": (s_.get("snippet") or "")[:220]} for s_ in plats]
     # R-825: الفهرس الذاتي ينمو — كل ما قُرئ أو وُجد بنص كافٍ يُحفظ في الخلفية
     search_index.store_pages_async([s_ for s_ in sources if s_.get("provider") != "index" and
                                     (s_.get("read") or s_.get("news") or s_.get("scholarly")
                                      or str(s_.get("provider", "")).startswith("wikipedia"))])
     result = {
-        "ok": bool(points or news), "question": question, "core_question": core, "user_lang": user_lang,
-        "fresh": fresh, "news": news, "cached": False,
+        "ok": bool(points or news or platforms), "question": question, "core_question": core, "user_lang": user_lang,
+        "fresh": fresh, "news": news, "cached": False, "platforms": platforms,
+        "intent": {"label_ar": intent["label_ar"], "answer_type": intent["answer_type"], "kinds": intent["kinds"],
+                   "regions": regions, "regions_ar": intent["regions_ar"]},
+        "instant": len(instants),
         "index_used": sum(1 for i in used_idx if sources[i].get("provider") == "index"),
         "queries": queries, "languages_searched": sorted({s.get("lang") for s in sources if s.get("lang")}),
         "points": points, "sources": cited, "sources_considered": len(sources),
         "candidates_evaluated": len(candidates), "providers": providers,
         "translators": translators_used, "elapsed_seconds": round(time.monotonic() - t0, 2),
-        "error": None if (points or news) else "لم يُعثر على جمل ذات صلة كافية في المصادر المتاحة",
-        "method": ("بحث متعدد المزودات واللغات (Bing وأخبار Bing/Google وويكيبيديا وويكي بيانات والأبحاث "
-                   "المحكّمة والفهرس الذاتي) ← قراءة المصادر ← تقييم حتمي ("
+        "error": None if (points or news or platforms) else "لم يُعثر على جمل ذات صلة كافية في المصادر المتاحة",
+        "method": ("تمييز المطلوب (نوع السؤال والدولة والعملة) ← إجابات مباشرة حية (صرف/ذهب/عملات رقمية/طقس/وقت) ← "
+                   "بحث متعدد المزودات واللغات (Bing وأخبار Bing/Google وويكيبيديا وويكي بيانات والأبحاث "
+                   "المحكّمة وYouTube وGitHub وStack Exchange وLemmy وOpen Library وBaidu والقرآن الكريم والفهرس الذاتي) "
+                   "← قراءة المصادر ← تقييم حتمي ("
                    + ("صلة ٤٠٪ + موثوقية ٢٥٪ + توافق ١٥٪ + حداثة ٢٠٪ — سؤال آني"
                       if fresh else "صلة BM25 وتغطية المفاهيم ٤٥٪ + موثوقية المصدر ٣٥٪ + توافق المصادر المستقلة ٢٠٪")
-                   + ") ← ترجمة آلية — بلا نموذج لغوي"),
+                   + " + مكافأة نوع الإجابة، وتخفيض الجمل عن دولة أخرى) ← تنقيح التكرار ← ترجمة آلية — بلا نموذج لغوي"),
     }
     if use_cache and result["ok"]:
         search_index.cache_put_async(ckey, result, _env_int("WORLD_SEARCH_FRESH_TTL_SECONDS", 900) if fresh
@@ -1488,16 +1675,28 @@ def format_reply(res: Dict[str, Any]) -> str:
             + "، ".join(LANG_NAMES_AR.get(x, x) for x in res.get("languages_searched") or []) + ")")
     if res.get("cached"):
         head += f" — من ذاكرة المحرك (عمرها {int(res.get('cache_age_seconds') or 0) // 60} دقيقة)"
-    lines = [head + ":", ""]
+    lines = [head + ":"]
+    it = res.get("intent") or {}
+    if it.get("label_ar"):  # R-826: ما فهمه المحرك من السؤال — شفافية التمييز
+        lines.append("فهمت المطلوب: " + it["label_ar"] + (f" — النطاق: {it['regions_ar']}" if it.get("regions_ar") else ""))
+    lines.append("")
 
     def _d(p):
         dd = _date_ar(p.get("published"))
         return f" ({dd})" if dd and res.get("fresh") else ""
-    if pts:
-        lines.append(f"الخلاصة الأقوى: {pts[0]['text']} [{pts[0]['source']}]{_d(pts[0])}")
-        if len(pts) > 1:
+    direct = [p for p in pts if p.get("instant")]
+    rest = [p for p in pts if not p.get("instant")]
+    if direct:
+        lines.append("الإجابة المباشرة (بيانات حية):")
+        lines += [f"• {p['text']} [{p['source']}]" for p in direct]
+        if rest:
+            lines += ["", "من المصادر:"]
+            lines += [f"• {p['text']} [{p['source']}]{_d(p)}" for p in rest]
+    elif rest:
+        lines.append(f"الخلاصة الأقوى: {rest[0]['text']} [{rest[0]['source']}]{_d(rest[0])}")
+        if len(rest) > 1:
             lines += ["", "نقاط داعمة:"]
-            lines += [f"• {p['text']} [{p['source']}]{_d(p)}" for p in pts[1:]]
+            lines += [f"• {p['text']} [{p['source']}]{_d(p)}" for p in rest[1:]]
     if news:
         if pts:
             lines.append("")
@@ -1505,6 +1704,17 @@ def format_reply(res: Dict[str, Any]) -> str:
         for n in news:
             meta = " — ".join(x for x in (n.get("site") or "", _date_ar(n.get("published"))) if x)
             lines.append(f"• {n['title']} [{n['source']}]" + (f" ({meta})" if meta else ""))
+    plats = res.get("platforms") or []
+    if plats:
+        if pts or news:
+            lines.append("")
+        lines.append("من المنصات:")
+        for p in plats:
+            meta = " · ".join(x for x in (p.get("site") or "", p.get("meta") or "") if x)
+            if p.get("kind") == "verse" and p.get("snippet"):  # الآية بنصها لا بعنوانها
+                lines.append(f"• ﴿{p['snippet']}﴾ — {p['url']}")
+                continue
+            lines.append(f"• [{p['platform']}] {p['title']}" + (f" ({meta})" if meta else "") + f" — {p['url']}")
     lines += ["", "المصادر (مرتبة بالاستشهاد):"]
     for s in res["sources"]:
         dd = _date_ar(s.get("published"))

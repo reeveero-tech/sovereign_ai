@@ -948,8 +948,15 @@
     var o = r.result || {};
     if (!o.ok) { box.appendChild(el("div", "muted", o.error || "لا إجابة موثوقة كافية")); return; }
     box.appendChild(el("div", "small muted", (o.sources || []).length + " مصدرًا مستشهدًا من " + (o.sources_considered || 0) + " — " + (o.elapsed_seconds || 0) + " ث" + (o.cached ? " — من ذاكرة المحرك" : "")));
-    (o.points || []).forEach(function (p, i) {
-      var row = el("div", "srch-item"); row.appendChild(el(i === 0 ? "strong" : "span", null, p.text + " [" + p.source + "]"));
+    // R-826: ما فهمه المحرك من السؤال + الإجابة المباشرة الحية + المنصات
+    if (o.intent && o.intent.label_ar) box.appendChild(el("div", "small muted", "فهمت المطلوب: " + o.intent.label_ar + (o.intent.regions_ar ? " — النطاق: " + o.intent.regions_ar : "")));
+    var direct = (o.points || []).filter(function (p) { return p.instant; });
+    if (direct.length) {
+      box.appendChild(el("h3", null, "الإجابة المباشرة (بيانات حية)"));
+      direct.forEach(function (p) { var row = el("div", "srch-item"); row.appendChild(el("strong", null, p.text + " [" + p.source + "]")); box.appendChild(row); });
+    }
+    (o.points || []).filter(function (p) { return !p.instant; }).forEach(function (p, i) {
+      var row = el("div", "srch-item"); row.appendChild(el(i === 0 && !direct.length ? "strong" : "span", null, p.text + " [" + p.source + "]"));
       var d = ago(p.published); if (d && o.fresh) row.appendChild(el("span", "small muted", " (" + d + ")"));
       box.appendChild(row);
     });
@@ -958,6 +965,15 @@
       o.news.forEach(function (n) {
         var row = el("div", "srch-item"); row.appendChild(link(n.url, n.title));
         row.appendChild(el("div", "small muted", [n.site, ago(n.published), "[" + n.source + "]"].filter(Boolean).join(" · ")));
+        box.appendChild(row);
+      });
+    }
+    if ((o.platforms || []).length) {
+      box.appendChild(el("h3", null, "من المنصات"));
+      o.platforms.forEach(function (p) {
+        var row = el("div", "srch-item");
+        row.appendChild(link(p.url, p.kind === "verse" && p.snippet ? "﴿" + p.snippet + "﴾" : p.title));
+        row.appendChild(el("div", "small muted", [p.platform, p.site, p.meta, ago(p.published)].filter(Boolean).join(" · ")));
         box.appendChild(row);
       });
     }

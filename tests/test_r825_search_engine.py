@@ -205,6 +205,10 @@ def fresh_world(monkeypatch):
     monkeypatch.setattr(w, "_p_index", lambda terms, lang, fresh=False: [])
     import web_tools
     monkeypatch.setattr(web_tools, "fetch", lambda url, timeout=None: {"text": ""})
+    # R-826: طبقة المنصات والإجابات المباشرة تُعزل (بلا شبكة)
+    import search_platforms
+    monkeypatch.setattr(search_platforms, "instant_jobs", lambda *a, **k: [])
+    monkeypatch.setattr(search_platforms, "platform_jobs", lambda *a, **k: [])
 
 
 def test_fresh_answer_has_dated_news_and_recent_point_first(fresh_world):

@@ -118,6 +118,10 @@ def fake_world(monkeypatch):
         monkeypatch.setattr(w, _name, lambda q, lang: [])
     monkeypatch.setattr(w, "_p_index", lambda terms, lang, fresh=False: [])
     monkeypatch.setenv("WORLD_SEARCH_INDEX_ENABLED", "false")
+    # R-826: طبقة المنصات والإجابات المباشرة تُعزل (بلا شبكة)
+    import search_platforms
+    monkeypatch.setattr(search_platforms, "instant_jobs", lambda *a, **k: [])
+    monkeypatch.setattr(search_platforms, "platform_jobs", lambda *a, **k: [])
     import web_tools
     monkeypatch.setattr(web_tools, "fetch", lambda url, timeout=None: {
         "text": "The football club won the national championship fourteen times since it was founded long ago."})
