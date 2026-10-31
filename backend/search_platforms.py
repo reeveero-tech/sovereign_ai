@@ -143,6 +143,21 @@ def mentions_other_currency(text: str, codes: List[str]) -> bool:
     return bool(here - set(codes))
 
 
+def mentions_other_asset(text: str, intent: Dict[str, Any]) -> bool:
+    """تنقيح موضوعي: سؤال صرف ⇒ جملة عن الذهب/البيتكوين خارج المطلوب؛ سؤال ذهب ⇒ جملة عن عملة رقمية، والعكس."""
+    k = set(intent.get("kinds") or [])
+    t = str(text or "")
+    has_metal = any(re.search(row[2], t) or re.search(row[3], t, re.I) for row in METALS.values())
+    has_crypto = any(re.search(row[1], t) or re.search(row[2], t, re.I) for row in CRYPTO.values())
+    if "currency" in k:
+        return has_metal or has_crypto
+    if "metal" in k:
+        return has_crypto
+    if "crypto" in k:
+        return has_metal
+    return False
+
+
 # ============================================================
 # ٢) العملات والمعادن والعملات الرقمية
 # ============================================================

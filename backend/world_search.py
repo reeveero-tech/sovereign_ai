@@ -1396,13 +1396,15 @@ def answer(question: str, target_lang: Optional[str] = None) -> Dict[str, Any]:
     if tech and en_q:
         jobs.append(("stackoverflow", _p_stackexchange, (keyword_query(en_q, "en"), "en")))
         jobs.append(("hackernews", _p_hackernews, (keyword_query(en_q, "en"), "en")))
-    if en_q and not fresh:
+    # R-826: الأبحاث المحكّمة لا تجيب سؤال صرف/طقس/وقت/آية/فيديو — حشو يضر الدقة ويستهلك الوقت
+    no_sch = bool({"religion", "video", "currency", "metal", "crypto", "weather", "time"} & set(intent["kinds"]))
+    if en_q and not fresh and not no_sch:
         jobs.append(("openalex", _p_openalex, (scholarly_query(en_q), "en")))
     jobs.append(("duckduckgo", _p_duckduckgo, (web_q, web_lang)))
     if user_lang != web_lang:
         jobs.append((f"duckduckgo-{user_lang}", _p_duckduckgo, (keyword_query(core, user_lang), user_lang)))
     jobs.append(("marginalia", _p_marginalia, (web_q, web_lang)))
-    if en_q:
+    if en_q and not no_sch:
         jobs.append(("europepmc", _p_europepmc, (scholarly_query(en_q), "en")))
         jobs.append(("pubmed", _p_pubmed, (scholarly_query(en_q), "en")))
     jobs.append(("owner-provider", _p_owner, (web_q, web_lang)))
@@ -1482,7 +1484,8 @@ def answer(question: str, target_lang: Optional[str] = None) -> Dict[str, Any]:
             c_cred = cred
             if (local_focus and sp.mentions_other_region(sent, regions)) or \
                     (intent["currencies"] and "currency" in intent["kinds"]
-                     and sp.mentions_other_currency(sent, intent["currencies"])):
+                     and sp.mentions_other_currency(sent, intent["currencies"])) or \
+                    sp.mentions_other_asset(sent, intent):
                 c_cred = round(cred * 0.5, 3)  # R-826: سؤال عن دولة ⇒ جملة عن دولة أخرى أضعف
             candidates.append({"text": sent, "lang": s.get("lang") or detect_lang(sent),
                                "source_idx": idx, "cred": c_cred, "fresh": fr,
@@ -1516,6 +1519,9 @@ def answer(question: str, target_lang: Optional[str] = None) -> Dict[str, Any]:
     instants = [s_ for s_ in sources if s_.get("instant")]
     if wd:  # الحقيقة المنظّمة تجيب ⇒ لا يُرفق من الجمل إلا القوي جدًا (لا حشو)
         chosen = [c for c in chosen if c.get("score", 0) >= 0.75 and c.get("coverage", 0) >= 0.99][:3]
+    if any(s_.get("platform") for s_ in sources):
+        # R-826: المنصة أجابت (فيديو/آية/مستودع) ⇒ الجملة المقتبسة تُرفق فقط إن غطت كل مفاهيم السؤال
+        chosen = [c for c in chosen if c.get("coverage", 0) >= 0.99 and c.get("score", 0) >= 0.5]
     if instants:  # الرقم الحي هو الجواب ⇒ الجمل المقتبسة سياق فقط (أقوى ٣، وحديثة إن كانت مؤرخة)
         chosen = [c for c in chosen if c.get("score", 0) >= 0.5
                   and (age_days(sources[c["source_idx"]].get("published")) or 0) <= 7][:3]
@@ -1546,9 +1552,10 @@ def answer(question: str, target_lang: Optional[str] = None) -> Dict[str, Any]:
 
     def _off_topic(text_):
         return ((local_focus and sp.mentions_other_region(text_, regions))
-                or (bool(asked_cur) and sp.mentions_other_currency(text_, asked_cur)))
+                or (bool(asked_cur) and sp.mentions_other_currency(text_, asked_cur))
+                or sp.mentions_other_asset(text_, intent))
     reject = (lambda s_: _off_topic(f"{s_.get('title', '')} {s_.get('snippet', '')}")) \
-        if (local_focus or asked_cur) else None
+        if (local_focus or asked_cur or {"metal", "crypto"} & set(intent["kinds"])) else None
     digest = news_digest(sources, qterms, limit=_env_int("WORLD_SEARCH_NEWS_ITEMS", 5), reject=reject) if fresh else []
     if instants:  # R-826: مع رقم حي، الأخبار القديمة (أسبوع+) لا تضيف — «حرارة جدة» قبل عام ليست حرارتها الآن
         digest = [d for d in digest if (age_days(sources[d["source_idx"]].get("published")) or 0) <= 7]

@@ -277,3 +277,11 @@ def test_engine_status_lists_platforms():
     st = w.engine_status()
     assert "youtube" in st["providers"] and "instant-currency" in st["providers"]
     assert "fa" in st["detectable_languages"]
+
+
+def test_other_asset_refinement():
+    cur = sp.analyze("كم سعر الدولار مقابل الريال اليوم", "dollar against riyal today", "ar", True)
+    assert sp.mentions_other_asset("سعر غرام الذهب عيار 24 بالريال", cur)
+    assert not sp.mentions_other_asset("سعر الدولار مقابل الريال مستقر", cur)
+    gold = sp.analyze("أسعار الذهب اليوم", "gold prices today", "ar", True)
+    assert sp.mentions_other_asset("سعر البيتكوين يهبط", gold)
