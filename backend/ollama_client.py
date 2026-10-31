@@ -22,12 +22,115 @@ R-736 (البند ٢.١ — عقل المنشور على Fly، بأمر الما
 """
 
 import logging
+import os
+import time
 
 logger = logging.getLogger("sovereign.ollama")
 
 # R-736: آخر نتيجة استدعاء (عملية واحدة في الذاكرة — لا كتابة قرص).
 # "none" = لم يُستدعَ العقل بعد في هذه العملية.
 _LAST_OUTCOME = {"result": "none", "error": None}
+
+# ============================================================
+# R-821: مزلاج وصول العقل (نصف-مفتوح) — إحياء سرعة السقوط الرشيد
+# ============================================================
+# المشكلة الحية (لوحظت على النشر): العقل مفعّل (OLLAMA_ENABLED=true) لكن
+# المزود بعيد (خادم Ollama على شبكة المالك الخاصة لا تصل إليها السحابة) —
+# كل استدعاء عقل ينتظر مهلة كاملة (3-60ث) قبل السقوط للقالبي، ودورة
+# المحادثة تستدعي العقل مرات عدة فتصبح المحادثة بطيئة جدًا (دقائق).
+# المزلاج: أول فشل اتصال يُغلق الدائرة لمدة تهدئة (60ث افتراضيًا) —
+# خلالها كل استدعاء يعيد None فورًا (بلا انتظار) والمستدعي يسقط للقالبي
+# بسرعة كاملة. أول نجاح (أو انقضاء الهدوء) يعيد المحاولة — نمط نصف-مفتوح:
+# لا يمنع الاسترداد أبدًا، فقط يوقف الطوفان البطيء. قابل للضبط:
+# OLLAMA_UNREACHABLE_COOLDOWN_SECONDS=0 يعطّل المزلاج تمامًا.
+_UNREACHABLE_UNTIL = 0.0
+_LATCH_FAILURES = 0
+_LATCH_KEY = None
+
+
+def _brain_latch_key():
+    """هوية العقل الحالية — تغيّرها (بروتوكول/عنوان/نموذج) يعيد ضبط المزلاج.
+
+    يلتقط تبديل المالك الحي للمزود من الواجهة (طبقة التشغيل فوق البيئة)
+    وتبديل الاختبارات للعقل الوهمي (منفذ جديد لكل اختبار) — الدائرة لا
+    تعاقب مزودًا جديدًا بذنب المزود السابق.
+    """
+    try:
+        import config
+        return (
+            str(config.brain_get("OLLAMA_PROTOCOL", "ollama") or "ollama"),
+            str(config.brain_get("OLLAMA_BASE_URL", "") or ""),
+            str(config.brain_get("OLLAMA_MODEL", "") or ""),
+        )
+    except Exception:
+        return ()
+
+
+def _latch_sync_key():
+    """ضبط المزلاج على هوية العقل الحالية — إعادة ضبط عند أي تبديل."""
+    global _LATCH_KEY, _UNREACHABLE_UNTIL, _LATCH_FAILURES
+    k = _brain_latch_key()
+    if k != _LATCH_KEY:
+        _LATCH_KEY = k
+        _UNREACHABLE_UNTIL = 0.0
+        _LATCH_FAILURES = 0
+
+
+def _latch_cooldown_seconds() -> float:
+    try:
+        return max(0.0, float(os.getenv(
+            "OLLAMA_UNREACHABLE_COOLDOWN_SECONDS", "60",
+        )))
+    except ValueError:
+        return 60.0
+
+
+def _connect_timeout(total: float) -> float:
+    """R-821: مهلة الاتصال وحدها — قصيرة دائمًا.
+
+    ميزانية الوكيل (deadline) تُمرر كمهلة كلية للنداء الواحد — لكنها
+    مهلة قراءة/توليد، ليست مهلة انتظار اتصال. الخادم البعيد (شبكة خاصة
+    لا تصلها السحابة مثلًا) كان ينتظر الميزانية كاملة قبل فشل الاتصال،
+    فكانت أول محادثة تستغرق دقائق. الاتصال الناجح (خادم المالك الحي)
+    يستمر بمهلة التوليد الكاملة كما هو — لا خسارة أبدًا.
+    """
+    try:
+        cap = float(os.getenv("OLLAMA_CONNECT_TIMEOUT_SECONDS", "3"))
+    except ValueError:
+        cap = 3.0
+    if cap <= 0:
+        return total
+    return min(total, max(0.5, cap))
+
+
+def _brain_latch_open() -> bool:
+    """هل الدائرة مفتوحة الآن (تخطي الاتصال والسقوط الفوري)؟"""
+    _latch_sync_key()
+    return time.monotonic() < _UNREACHABLE_UNTIL
+
+
+def _brain_latch_trip() -> None:
+    """افتتاح الدائرة بعد فشل — لمدة الهدوء فقط."""
+    global _UNREACHABLE_UNTIL, _LATCH_FAILURES
+    _latch_sync_key()
+    _LATCH_FAILURES += 1
+    cooldown = _latch_cooldown_seconds()
+    _UNREACHABLE_UNTIL = time.monotonic() + cooldown
+    if cooldown > 0:
+        logger.warning(
+            "R-821 [BRAIN]: مزلاج الوصول مفتوح لمدة %.0fث (فشل متوالٍ #%d) — "
+            "سقوط فوري للمحرك القالبي خلال الهدوء",
+            cooldown, _LATCH_FAILURES,
+        )
+
+
+def _brain_latch_reset() -> None:
+    """إغلاق الدائرة عند أول نجاح — لا عقوبة على العقل الحي."""
+    global _UNREACHABLE_UNTIL, _LATCH_FAILURES
+    _latch_sync_key()
+    if _LATCH_FAILURES or _UNREACHABLE_UNTIL:
+        _LATCH_FAILURES = 0
+        _UNREACHABLE_UNTIL = 0.0
 
 
 def last_outcome():
@@ -47,6 +150,9 @@ def list_models(timeout=None):
 
     if not config.brain_get("OLLAMA_ENABLED"):
         return {"ok": False, "error": "disabled", "models": []}
+    # R-821: دائرة الوصول مفتوحة — اكتشاف فوري بلا انتظار مهلة
+    if _brain_latch_open():
+        return {"ok": False, "error": "unreachable_latched", "models": []}
     protocol = str(config.brain_get("OLLAMA_PROTOCOL", "ollama") or "ollama").strip().lower() or "ollama"
     base = str(config.brain_get("OLLAMA_BASE_URL")).rstrip("/")
     if protocol == "ollama":
@@ -64,12 +170,15 @@ def list_models(timeout=None):
         if _api_key:
             headers["Authorization"] = f"Bearer {_api_key}"
         to = float(timeout or config.brain_get("OLLAMA_TIMEOUT_SECONDS", 60))
-        resp = httpx.get(url, headers=headers, timeout=to)
+        # R-821: مهلة اتصال قصيرة — الاكتشاف لا ينتظر ميزانية كاملة على خادم بعيد
+        resp = httpx.get(url, headers=headers, timeout=httpx.Timeout(to, connect=_connect_timeout(to)))
         if resp.status_code != 200:
             return {"ok": False, "error": f"HTTP {resp.status_code}", "models": []}
         payload = resp.json()
     except Exception as e:  # فشل الاتصال صادق ومنضبط — لا استثناء يكسر الواجهة
+        _brain_latch_trip()  # R-821: فشل اكتشاف يفتح الدائرة أيضًا
         return {"ok": False, "error": type(e).__name__, "models": []}
+    _brain_latch_reset()  # R-821: اتصال حي ناجح
     models = []
     try:
         if protocol == "ollama":
@@ -114,6 +223,11 @@ def chat(system_prompt: str, user_message: str, timeout=None,
     _enabled = config.brain_get("OLLAMA_ENABLED")
     _effective_model = model or config.brain_get("OLLAMA_MODEL")
     if not (_enabled and _effective_model):
+        return None
+
+    # R-821: دائرة الوصول مفتوحة (فشل اتصال حديث) — سقوط فوري بلا انتظار مهلة
+    if _brain_latch_open():
+        _LAST_OUTCOME = {"result": "unreachable_latched", "error": None}
         return None
 
     timeout = timeout or config.brain_get("OLLAMA_TIMEOUT_SECONDS", 60)
@@ -173,7 +287,9 @@ def chat(system_prompt: str, user_message: str, timeout=None,
             )
             _LAST_OUTCOME = {"result": "misconfigured", "error": "unknown_protocol"}
             return None
-        with httpx.Client(timeout=timeout) as client:
+        # R-821: مهلة الاتصال قصيرة (بعيد؟ فشل سريع) ومهلة القراءة/التوليد كاملة
+        _to = httpx.Timeout(timeout, connect=_connect_timeout(timeout))
+        with httpx.Client(timeout=_to) as client:
             resp = client.post(url, json=payload, headers=headers)
         resp.raise_for_status()
         data = resp.json()
@@ -185,6 +301,7 @@ def chat(system_prompt: str, user_message: str, timeout=None,
             content = (data.get("message") or {}).get("content")
         if isinstance(content, str) and content.strip():
             _LAST_OUTCOME = {"result": "ok", "error": None}
+            _brain_latch_reset()  # R-821: نجاح حي يغلق الدائرة فورًا
             return content.strip()
         logger.warning("R-704 [OLLAMA]: رد فارغ/فاسد — سقوط للمحرك القالبي")
         _LAST_OUTCOME = {"result": "error", "error": "empty_or_malformed_response"}
@@ -199,4 +316,5 @@ def chat(system_prompt: str, user_message: str, timeout=None,
         code = getattr(getattr(e, "response", None), "status_code", None)
         kind = type(e).__name__ + (f":{code}" if code else "")
         _LAST_OUTCOME = {"result": "error", "error": kind}
+        _brain_latch_trip()  # R-821: فشل اتصال يفتح الدائرة لمدة الهدوء
         return None
