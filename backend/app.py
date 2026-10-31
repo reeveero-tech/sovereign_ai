@@ -233,6 +233,39 @@ class ResetRequest(BaseModel):
 # دورة حياة التطبيق (Lifespan)
 # ============================================================
 
+def _bootstrap_signing_key() -> None:
+    """R-818 (أمر المالك «إحياء كل ما هو ميت»): أول إقلاع على قرص جديد.
+
+    KeyRing فارغ ⇒ كل أحداث السجل تُرفض فشلًا مغلقًا (R-635) — النظام يبدو
+    حيًا (health=healthy) لكن لُبّه المعرفي معطّل (المراقبة/الأيض/التطور كلها
+    تُخطئ). الإحياء: إن لم يوجد مفتاح نشاط، يُولَّد مفتاح Ed25519 أولي
+    ويُحفظ ويُسجل في التاريخ — مرة واحدة فقط (الاقتلاعات التالية تجد مفتاحًا
+    ولا تفعل شيئًا). التعطيل الصريح للاختبارات المعزولة:
+    KEYRING_AUTOBOOTSTRAP=0
+    """
+    if str(os.getenv("KEYRING_AUTOBOOTSTRAP", "1")).strip().lower() in (
+        "0", "false", "no", "off",
+    ):
+        return
+    try:
+        from backend.sovereign.keys import KeyRing
+
+        _kr = KeyRing()
+        _kr.load_from_disk()
+        if _kr.get_active_key() is not None:
+            return  # المفتاح موجود سلفًا — لا إعادة توليد أبدًا
+        _rec = _kr.generate_new_ed25519_key(reason="initial-auto-bootstrap")
+        if not _kr.save_to_disk():
+            logger.error("❌ R-818: فشل حفظ KeyRing بعد توليد المفتاح الأولي")
+            return
+        logger.info(
+            "🔑 R-818: مفتاح توقيع أولي مولَّد (%s) — السجل السيادي حي الآن",
+            _rec.key_id,
+        )
+    except Exception as _bk_exc:  # TOLERATED: لا يكسر الإقلاع أبدًا
+        logger.warning(f"R-818: تعذر تهيئة مفتاح التوقيع الأول: {_bk_exc}")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """
@@ -240,7 +273,10 @@ async def lifespan(app: FastAPI):
     """
     # بدء التشغيل
     logger.info("🚀 بدء تشغيل خادم Sovereign AI...")
-    
+
+    # R-818: إحياء مفتاح التوقيع قبل تهيئة أي مكوّن يعتمد السجل
+    _bootstrap_signing_key()
+
     # تهيئة Orchestrator
     orchestrator = get_orchestrator()
     app.state.orchestrator = orchestrator

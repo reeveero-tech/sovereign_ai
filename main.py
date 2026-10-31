@@ -728,11 +728,11 @@ class SovereignCLI:
         result = self.orchestrator.run_cycle(input_data)
         
         if result.success:
-            print(f"\n🧠 [الذكاء السيادي]:")
+            print("\n🧠 [الذكاء السيادي]:")
             print(f"   القرار: {result.decision.get('action', 'continue')}")
             print(f"   الثقة: {result.decision.get('confidence', 0.5):.1%}")
         else:
-            print(f"\n⚠️ [الذكاء السيادي]: حدث خطأ")
+            print("\n⚠️ [الذكاء السيادي]: حدث خطأ")
     
     def _cmd_clear(self, args: str = ""):
         """مسح الشاشة"""
@@ -866,12 +866,12 @@ def run_test(config: SovereignConfig):
     # 3) اختبار التنبيهات
     print("\n3) اختبار التنبيهات...")
     alert_manager.add_alert(AlertLevel.INFO, "اختبار", "هذا تنبيه اختباري")
-    print(f"   ✅ تم إضافة تنبيه")
+    print("   ✅ تم إضافة تنبيه")
     
     # 4) اختبار إعادة التهيئة
     print("\n4) اختبار إعادة التهيئة...")
     orchestrator.reset_all()
-    print(f"   ✅ تم إعادة التهيئة بنجاح")
+    print("   ✅ تم إعادة التهيئة بنجاح")
     
     print("\n✅ جميع الاختبارات اجتازت بنجاح!")
 

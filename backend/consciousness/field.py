@@ -809,7 +809,9 @@ class ConsciousnessFieldEngine:
             "initial_self_awareness": initial_self_awareness,
             "final_self_awareness": min(1.0, initial_self_awareness + 0.1),
             "improvement": 0.1,
-            "timestamp": time.time()
+            "timestamp": time.time(),
+            # R-820 إحياء: زمن التأمل الفعلي المقيس لا المطلوب فقط
+            "elapsed_seconds": round(time.time() - start_time, 3),
         }
         
         self.core.append_event(

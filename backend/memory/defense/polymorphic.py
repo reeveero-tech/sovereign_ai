@@ -19,6 +19,7 @@ import json
 from runtime.atomic_json import atomic_write_json  # R-781
 import hashlib
 import secrets
+import os
 import time
 import threading
 import runtime.threads as threads
@@ -150,6 +151,7 @@ class PolymorphicDefense:
         # حالة التحول
         self.mutation_level = MUTATION_LEVEL_DNA
         self.mutation_frequency = MUTATION_FREQUENCY_NORMAL
+        self._last_mutation_log = 0.0  # R-819: خنق سطر السجل النصي (لا الأحداث)
         self.counter_attack_mode = COUNTER_ATTACK_MODE_PASSIVE
         
         # سجل الهجمات المكتشفة
@@ -456,7 +458,19 @@ class PolymorphicDefense:
         if level <= MUTATION_LEVEL_BEHAVIOR:
             self._shift_behavior_pattern()
         
-        # تسجيل التحول
+        # تسجيل التحول (الحدث يخضع لدمج R-771؛ السطر النصي يُخنق هنا — R-819)
+        # ⚠️ R-819: الحلقة المستمرة تدور كل 100ms — بلا خنق يغرق السجل النصي
+        # بـ ~10 أسطر/ثانية (لاحُظ أثناء التشغيل الحي). الخنق للنص فقط؛
+        # الأحداث تبقى كما هي (يحكمها R-771).
+        _now = time.time()
+        _min_log_gap = float(os.getenv(
+            "SOVEREIGN_DEFENSE_MUTATION_LOG_MIN_INTERVAL_SECONDS", "30"
+        ))
+        if _now - self._last_mutation_log >= max(0.0, _min_log_gap):
+            self._last_mutation_log = _now
+            logger.info(f"🔄 تحول كامل (مستوى {level}) - تغير كل شيء")
+        else:
+            logger.debug(f"🔄 تحول (مستوى {level}) — مختصر (خنق R-819)")
         self.core.append_event(
             event_type="defense::full_mutation",
             payload={
@@ -465,8 +479,6 @@ class PolymorphicDefense:
                 "active_phantoms": len(self.active_phantoms)
             }
         )
-        
-        logger.info(f"🔄 تحول كامل (مستوى {level}) - تغير كل شيء")
     
     def _shift_virtual_location(self):
         """تغيير الموقع الظاهري للنظام"""

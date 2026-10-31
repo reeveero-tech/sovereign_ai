@@ -218,7 +218,7 @@ class LedgerAnchor:
                     logger.warning(
                         "⚠️ R-641: legacy signature format (batch range only) — "
                         "signature does not cover merkle_root. "
-                        "Use v2 format: anchor_sig_v2|..."
+                        f"Use v2 format: {sig_v2_data}"
                     )
 
             # R-664: حماية توقيع المرساة (البوابة 4 — GREEN)
