@@ -301,3 +301,13 @@ def test_r826d_refinements():
     cur = sp.analyze("كم سعر الدولار مقابل الريال اليوم", "dollar against riyal today", "ar", True)
     assert cur["regions"] == ["SA"]  # النطاق من العملة المحلية
     assert sp.github_query("best python library for making a telegram bot") == "python telegram bot"
+
+
+def test_repo_titles_not_translated(platform_world, monkeypatch):
+    monkeypatch.setattr(sp, "platform_jobs", lambda *a, **k: [("github", lambda q, l: [
+        {"title": "python-telegram-bot/python-telegram-bot", "url": "https://github.com/python-telegram-bot/x",
+         "snippet": "", "provider": "github", "platform": "GitHub", "kind": "repo", "lang": "en", "published": None}],
+        ("q", "en"))])
+    monkeypatch.setattr(w, "translate", lambda text, target, source="auto": ("[tr] " + text, "fake"))
+    res = w.answer("كم سعر الدولار مقابل الريال اليوم")
+    assert res["platforms"][0]["title"] == "python-telegram-bot/python-telegram-bot"

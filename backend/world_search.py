@@ -1618,7 +1618,10 @@ def answer(question: str, target_lang: Optional[str] = None) -> Dict[str, Any]:
     plats = [s_ for s_ in sources if s_.get("platform")][:_env_int("WORLD_SEARCH_PLATFORM_ITEMS", 8)]
     plat_titles: Dict[int, str] = {}
     for lang_ in {s_.get("lang") or "en" for s_ in plats}:
-        grp = [s_ for s_ in plats if (s_.get("lang") or "en") == lang_]
+        # أسماء المستودعات أسماء علم برمجية — لا تُترجم (python-telegram-bot لا «بيثون-برقية-بوت»)
+        grp = [s_ for s_ in plats if (s_.get("lang") or "en") == lang_ and s_.get("kind") != "repo"]
+        if not grp:
+            continue
         if lang_ == user_lang or time.monotonic() > deadline - 1:
             continue
         joined, tname = translate("\n".join(s_["title"] for s_ in grp), user_lang, lang_)
