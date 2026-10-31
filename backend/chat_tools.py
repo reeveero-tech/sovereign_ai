@@ -103,6 +103,8 @@ def search_configured() -> bool:
     import config
     provider = str(getattr(config, "SEARCH_PROVIDER", "") or "").lower()
     base = str(getattr(config, "SEARCH_BASE_URL", "") or "")
+    if provider == "world":
+        return True  # R-823: مزودات عامة بلا مفتاح (world_search) — الإتاحة الفعلية تُعلن لكل بحث
     if provider == "tavily":
         return bool(getattr(config, "SEARCH_API_KEY", None))
     if provider == "searxng":

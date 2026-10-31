@@ -117,6 +117,10 @@ def search(query: str, max_results=None):
     provider = str(config.SEARCH_PROVIDER or "").strip().lower()
     import httpx
 
+    if provider == "world":
+        # R-823: البحث العالمي الحتمي بلا مفتاح (DuckDuckGo/Marginalia/ويكيبيديا) — لا نموذج لغوي
+        import world_search
+        return world_search.search_results(query, max_results=max_results)
     try:
         if provider == "searxng":
             base = str(config.SEARCH_BASE_URL).rstrip("/")

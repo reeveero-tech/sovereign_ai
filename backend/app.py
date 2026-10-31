@@ -2644,6 +2644,25 @@ def _brain_unreachable_now() -> bool:
         return False
 
 
+def _world_answer_for_chat(text: str):
+    """R-823: البحث العالمي عبر السجل (أثر TOOL_INVOKED موقّع) — (الرد، الحالة) أو None إن لم يُتح."""
+    try:
+        import world_search
+        if not world_search.enabled():
+            return None
+        from tool_registry import get_registry
+        out = get_registry().invoke("world.answer", caller="chat", inputs={"question": text})
+        if not out.get("ok"):
+            logger.warning("R-823: فشل world.answer (%s)", str(out.get("error"))[:160])
+            return None
+        res = out.get("result") or {}
+        status = "brain_unreachable_world_search" if res.get("ok") else "brain_unreachable_unanswered"
+        return world_search.format_reply(res), status
+    except Exception as e:  # TOLERATED: يبقى الإعلان الصادق R-822c — يُسجل
+        logger.warning("R-823: تعذر البحث العالمي (%s)", type(e).__name__)
+        return None
+
+
 def _is_unanswered(reply) -> bool:
     """R-822c: الرد هو الإعلان الصادق بتعذر الجواب (لا جواب حقيقي)."""
     try:
@@ -2921,6 +2940,13 @@ def _register_real_tools() -> None:
             name=f"reasoning.{_rname}", description=_rdesc,
             inputs=_rinputs, outputs="حسب الأداة",
             handler=_make_reasoning_handler(_rname)))
+    registry.register(ToolSpec(
+        name="world.answer",
+        description=("R-823: بحث عالمي بكل اللغات بلا نموذج لغوي — ترجمة السؤال ← بحث متعدد المزودات "
+                     "(ويب/ويكيبيديا/أبحاث محكّمة) ← تقييم حتمي (صلة/موثوقية/توافق) ← ترجمة الجواب مع مصادره"),
+        inputs={"question": "السؤال بأي لغة", "target_lang": "لغة الجواب (اختياري — لغة السؤال افتراضيًا)"},
+        outputs="points[]/sources[]/providers/method",
+        handler=lambda question, target_lang=None: __import__("world_search").answer(question, target_lang)))
     registry.register(ToolSpec(
         name="research.run",
         description="المنسّق: هدف → بحث ← قراءة مصادر ← استخراج ← استدلال ← تقرير مستشهد",
@@ -3249,9 +3275,23 @@ async def chat(message: ChatMessage, background_tasks: BackgroundTasks):
     # R-822c: العقل غير قابل للوصول والطلب مفتوح بلا أدوات ⇒ لم يُجب فعلًا (عقد R-814: لا ok)
     if agent_status == "brain_unreachable_fallback" and _is_unanswered(reply):
         agent_status = "brain_unreachable_unanswered"
+        # R-823 (أمر المالك: «البحث في مواقع العالم بكل اللغات وتقييم أصدق إجابة وترجمتها لا
+        # يتطلب نموذجًا لغويًا»): الطلب المفتوح يُجاب بالبحث العالمي الحتمي بأثر موقّع
+        world = await asyncio.to_thread(_world_answer_for_chat, message.text)
+        if world is not None:
+            reply, agent_status = world
+            tools_used = tools_used + ["بحث عالمي متعدد اللغات (بلا نموذج لغوي)"]
+    # R-823: العقل معطّل كليًا (لا وضع وكيل) والرد قالب قرار داخلي لا يجيب الطلب ⇒ البحث العالمي
+    if agent_status is None and not direct_reply and str(reply or "").startswith("تم تنفيذ القرار:"):
+        world = await asyncio.to_thread(_world_answer_for_chat, message.text)
+        if world is not None:
+            reply = world[0]
+            agent_status = "world_search" if world[1].endswith("world_search") else "world_search_unanswered"
+            tools_used = tools_used + ["بحث عالمي متعدد اللغات (بلا نموذج لغوي)"]
     # R-822: brain_unreachable_fallback = جواب حقيقي من الأدوات/الحالة الحية (معلن في agent_status)
     _agent_ok = agent_status in (None, "completed", "answered_from_results",
-                                 "brain_unreachable_fallback")
+                                 "brain_unreachable_fallback",
+                                 "brain_unreachable_world_search", "world_search")  # R-823: جواب مستشهد من مصادر حقيقية
     return ChatResponse(
         reply=reply,
         status="ok" if (result.success and _agent_ok) else "error",

@@ -82,6 +82,20 @@ def run_research(goal: str) -> dict:
                           "facts": extracted.get("extraction")})
 
         if not facts:
+            # R-823: الاستخراج يحتاج العقل — إن تعذر فالتقييم الحتمي (world.answer) يكمل البحث
+            # من المصادر نفسها بلا نموذج لغوي، معلنًا في الخطة والخطوات
+            import world_search
+            world = None
+            if world_search.enabled():  # مفعّل صراحة فقط — وإلا يبقى الفشل الصادق
+                try:
+                    world = _invoke("world.answer", {"question": goal})
+                except RuntimeError:
+                    world = None
+            if world and world.get("ok"):
+                return {"ok": True, "goal": goal, "deterministic": True,
+                        "plan": ["web.search", "web.fetch", "world.answer"], "steps": steps,
+                        "sources": world.get("sources", []), "facts": world.get("points", []),
+                        "report": world_search.format_reply(world)}
             raise RuntimeError(first_error or "تعذر استخراج الحقائق من المصادر")
 
         # ٤) الاستدلال والتوليف — تقرير من المصادر حصرًا
