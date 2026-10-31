@@ -249,3 +249,61 @@ def test_arabic_shaping_fallback_without_raqm():
     assert vis != "مطعم القمة" and any(0xFE70 <= ord(ch) <= 0xFEFF for ch in vis), "أشكال العرض المتصلة"
     assert shape("مطعم القمة", ImageFont.Layout.RAQM) == "مطعم القمة"
     assert shape("Hello", ImageFont.Layout.BASIC) == "Hello"
+
+
+def test_remote_generators_race_and_fastest_wins(monkeypatch):
+    """المولدات الخارجية تعمل بالتوازي: الأسرع يفوز ولا انتظار تسلسلي لمولّد محدود المعدل."""
+    import time as _t
+    from PIL import Image
+    buf = io.BytesIO()
+    Image.new("RGB", (64, 64), (200, 100, 50)).save(buf, "PNG")
+    monkeypatch.setenv("MEDIA_EXTERNAL_PROVIDERS", "pollinations,horde")
+    monkeypatch.setattr(ms, "media_client_configured", lambda: False)
+
+    def slow(p, s):
+        _t.sleep(1.5)
+        raise RuntimeError("HTTP 402")
+    monkeypatch.setattr(ms, "_gen_pollinations", slow)
+    monkeypatch.setattr(ms, "_gen_horde", lambda p, s: (buf.getvalue(), "image/png"))
+    t0 = _t.time()
+    g = ms.generate_image("a cat, photo", "قطة", "photo", (64, 64))
+    assert g["provider"] == "horde" and _t.time() - t0 < 1.4
+
+
+def test_logo_gets_correct_local_typography_over_ai_art(monkeypatch):
+    """رسمة الذكاء الاصطناعي بلا نص + الاسم بطباعة محلية صحيحة (المولدات تشوه الحروف — ثبت حيًا)."""
+    from PIL import Image
+    buf = io.BytesIO()
+    Image.new("RGB", (512, 512), (30, 120, 200)).save(buf, "PNG")
+    monkeypatch.setenv("MEDIA_EXTERNAL_PROVIDERS", "pollinations")
+    monkeypatch.setattr(ms, "media_client_configured", lambda: False)
+    monkeypatch.setattr(ms, "_gen_pollinations", lambda p, s: (buf.getvalue(), "image/png"))
+    en, shown = ms.build_prompt({"kind": "image", "subject": "Al Qimma Restaurant", "style": "logo", "edit_of": None})
+    assert "no text" in en
+    g = ms.generate_image(en, "مطعم القمة", "logo", (512, 512))
+    assert g["ai"] and g["typography"]
+    im = Image.open(io.BytesIO(g["data"]))
+    assert im.size == (512, 512) and im.getpixel((5, 5)) != (30, 120, 200), "لوحة الشعار لا الرسمة الخام"
+    assert "طباعة محلية" in ms.format_reply({"ok": True, "kind": "image", "seconds": 1, "provider": "pollinations",
+                                             "tried": g["tried"], "prompt": en, "ai": True, "typography": True})
+
+
+def test_grounded_reply_lists_only_cited_sources(client, monkeypatch):
+    """ثبت حيًا: قائمة المصادر ضمت أبحاثًا لا علاقة لها بالجواب — الآن المستشهد بها فقط."""
+    import chat_tools
+    monkeypatch.setattr(chat_tools, "gather", lambda t, c: {"context": "", "tools_used": [], "direct_reply": None})
+    monkeypatch.setattr(w, "enabled", lambda: True)
+    monkeypatch.setattr(w, "answer", lambda question, target_lang=None: {
+        "ok": True, "points": [{"text": "378 ألف كم²", "source": 1, "translator": "identity", "lang": "ar"},
+                               {"text": "داء السكري", "source": 2, "translator": "identity", "lang": "ar"}],
+        "sources": [{"n": 1, "title": "اليابان", "url": "https://ar.wikipedia.org/wiki/JP", "credibility_label": "موسوعة"},
+                    {"n": 2, "title": "Diabetes", "url": "https://pubmed.ncbi.nlm.nih.gov/9075599/",
+                     "credibility_label": "بحث"}],
+        "languages_searched": ["ar"], "sources_considered": 2, "candidates_evaluated": 2, "user_lang": "ar",
+        "method": "منهج"})
+    monkeypatch.setattr(cloud_brain, "enabled", lambda: True)
+    monkeypatch.setattr(cloud_brain, "grounded", lambda q, world, history=None: {"text": "المساحة 378 ألف كم² [1].",
+                                                                                 "model": "m"})
+    body = client.post("/chat", json={"text": "كم مساحة اليابان", "user_id": "t"}).json()
+    assert "ar.wikipedia.org/wiki/JP" in body["reply"]
+    assert "pubmed" not in body["reply"], body["reply"]

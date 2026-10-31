@@ -156,8 +156,11 @@ def build_prompt(req: Dict[str, Any]) -> Tuple[str, str]:
     if req.get("edit_of"):
         en = f"{req['edit_of']}, {en}"
         shown = f"{req['edit_of']} + {subject}"
-    style = {"logo": ", minimalist flat vector logo, centered emblem, clean background, professional branding",
-             "poster": ", professional poster design, bold composition, vibrant colors, high detail",
+    # R-824c: المولدات تكتب النصوص حروفًا مشوهة (ثُبت حيًا) ⇒ تُطلب الرسمة بلا أي نص، والاسم يُكتب محليًا صحيحًا
+    style = {"logo": ", minimalist flat vector emblem icon, centered symbol, plain background, professional "
+                     "branding, no text, no letters, no words, no watermark",
+             "poster": ", professional poster artwork, bold composition, vibrant colors, high detail, "
+                       "no text, no letters, no words, no watermark",
              "photo": ", highly detailed, professional photography, sharp focus, beautiful lighting"}[req["style"]]
     if req.get("edit_of"):
         style = ""
@@ -217,7 +220,7 @@ def _gen_pollinations(prompt: str, size: Tuple[int, int]) -> Optional[Tuple[byte
     raise RuntimeError("حد المعدل")
 
 
-def _gen_horde(prompt: str, size: Tuple[int, int]) -> Optional[Tuple[bytes, str]]:
+def _gen_horde(prompt: str, size: Tuple[int, int], cancel=None) -> Optional[Tuple[bytes, str]]:
     import httpx
     key = _env("HORDE_API_KEY", "0000000000")
     hdr = {"apikey": key, "Client-Agent": "sovereign_ai:1.0:" + _env("WORLD_SEARCH_CONTACT_EMAIL", "anon")}
@@ -231,7 +234,7 @@ def _gen_horde(prompt: str, size: Tuple[int, int]) -> Optional[Tuple[bytes, str]
             raise RuntimeError(f"HTTP {r.status_code}")
         jid = r.json().get("id")
         t0 = time.time()
-        while time.time() - t0 < max_wait:
+        while time.time() - t0 < max_wait and not (cancel is not None and cancel.is_set()):
             time.sleep(6)
             chk = c.get(f"https://aihorde.net/api/v2/generate/check/{jid}", headers=hdr).json()
             if chk.get("faulted"):
@@ -250,7 +253,7 @@ def _gen_horde(prompt: str, size: Tuple[int, int]) -> Optional[Tuple[bytes, str]
             c.delete(f"https://aihorde.net/api/v2/generate/status/{jid}", headers=hdr)
         except Exception:  # TOLERATED: إلغاء مجاملة للطابور
             pass
-        raise RuntimeError(f"الطابور تجاوز {int(max_wait)}ث")
+        raise RuntimeError("أُلغي" if cancel is not None and cancel.is_set() else f"الطابور تجاوز {int(max_wait)}ث")
 
 
 def _palette(seed_text: str) -> List[Tuple[int, int, int]]:
@@ -334,6 +337,51 @@ _PROVIDER_LABEL = {"self_hosted": "خادم التوليد الذاتي للما
                    "local_design": "المصمم المحلي (تصميم قالبي بلا ذكاء اصطناعي)"}
 
 
+def brand_overlay(art: bytes, title: str, style: str, size: Tuple[int, int]) -> Tuple[bytes, str]:
+    """R-824c: رسمة الذكاء الاصطناعي + طباعة محلية صحيحة للاسم (عربي مشكّل) — شعار/بوستر قابل للاستخدام."""
+    from PIL import Image, ImageDraw, ImageOps
+    from workspace.video import _font, _wrap, shape
+    W, H = size
+    src = Image.open(io.BytesIO(art)).convert("RGB")
+    title = (title or "").strip()[:120]
+    if style == "logo":
+        c0, c1, c2, c3 = _palette(title or "logo")
+        im = Image.new("RGBA", (W, H), (250, 250, 248, 255))
+        side = int(min(W, H) * 0.62)
+        emb = ImageOps.fit(src, (side, side), method=Image.LANCZOS)
+        mask = Image.new("L", (side, side), 0)
+        ImageDraw.Draw(mask).rounded_rectangle((0, 0, side, side), radius=side // 6, fill=255)
+        x0, y0 = (W - side) // 2, int(H * 0.08)
+        im.paste(emb, (x0, y0), mask)
+        dr = ImageDraw.Draw(im)
+        tsize = int(min(W, H) * (0.085 if len(title) < 24 else 0.06))
+        color = c0 + (255,)
+        top, band = y0 + side + int(H * 0.04), H - (y0 + side + int(H * 0.04))
+    else:
+        im = ImageOps.fit(src, (W, H), method=Image.LANCZOS).convert("RGBA")
+        shade = Image.new("L", (1, 256))
+        for i in range(256):
+            shade.putpixel((0, i), min(235, int(max(0, i - 90) * 1.6)))
+        shade = shade.resize((W, H))
+        im = Image.composite(Image.new("RGBA", (W, H), (0, 0, 0, 255)), im, shade)
+        dr = ImageDraw.Draw(im)
+        tsize = int(min(W, H) * (0.075 if len(title) < 40 else 0.055))
+        color = (255, 255, 255, 255)
+        top, band = int(H * 0.66), int(H * 0.30)
+    font, layout = _font(tsize, title or " ")
+    kw = {"direction": "rtl"} if layout.name == "RAQM" and _AR.search(title) else {}
+    lines = _wrap(dr, title, font, kw, int(W * 0.86))[:3] if title else []
+    y = top + max(0, (band - len(lines) * int(tsize * 1.45)) // 2)
+    for line in lines:
+        vis = shape(line, layout)
+        tw = dr.textlength(vis, font=font, **kw)
+        dr.text(((W - tw) / 2, y), vis, font=font, fill=color, **kw)
+        y += int(tsize * 1.45)
+    buf = io.BytesIO()
+    im.convert("RGB").save(buf, "PNG", optimize=True)
+    return buf.getvalue(), "image/png"
+
+
 def generate_image(prompt_en: str, shown: str, style: str, size: Tuple[int, int]) -> Dict[str, Any]:
     tried: List[Dict[str, str]] = []
     chain = []
@@ -350,16 +398,66 @@ def generate_image(prompt_en: str, shown: str, style: str, size: Tuple[int, int]
         tried.append({"provider": "translation", "result": "تعذرت ترجمة الوصف — لم يُرسل لمولّد قد يسيء فهمه",
                       "seconds": "0"})
         chain = []
-    for name, fn in chain:
+    def _attempt(name, fn):
         t0 = time.time()
         try:
             got = fn(prompt_en, size)
             if got:
-                tried.append({"provider": name, "result": "ok", "seconds": f"{time.time() - t0:.1f}"})
-                return {"ok": True, "data": got[0], "mime": got[1], "provider": name, "tried": tried, "ai": True}
+                return got, {"provider": name, "result": "ok", "seconds": f"{time.time() - t0:.1f}"}
+            return None, {"provider": name, "result": "لا ناتج", "seconds": f"{time.time() - t0:.1f}"}
         except Exception as e:  # TOLERATED: المزود التالي — والسبب معلن في tried
-            tried.append({"provider": name, "result": str(e)[:120] or type(e).__name__,
-                          "seconds": f"{time.time() - t0:.1f}"})
+            return None, {"provider": name, "result": str(e)[:120] or type(e).__name__,
+                          "seconds": f"{time.time() - t0:.1f}"}
+
+    def _finish(name, got):
+        data, mime, typo = got[0], got[1], False
+        # «+» = طلب تعديل (الوصف المعروض يحوي الوصف الإنجليزي السابق) ⇒ لا اسم يُطبع فوق الرسمة
+        if style in ("logo", "poster") and shown and "+" not in shown:
+            try:  # الاسم بطباعة محلية صحيحة فوق رسمة الذكاء الاصطناعي
+                data, mime = brand_overlay(data, shown, style, size)
+                typo = True
+            except Exception as e:  # TOLERATED: تبقى الرسمة الأصلية والسبب في السجل
+                logger.warning("R-824c: تعذر تركيب الطباعة (%s)", type(e).__name__)
+        return {"ok": True, "data": data, "mime": mime, "provider": name, "tried": tried, "ai": True,
+                "typography": typo}
+
+    # الخادم الذاتي أولًا (تسلسلي)، ثم المولدات الخارجية في سباق متوازٍ: أول ناتج صالح يفوز
+    local = [c for c in chain if c[0] == "self_hosted"]
+    remote = [c for c in chain if c[0] != "self_hosted"]
+    for name, fn in local:
+        got, entry = _attempt(name, fn)
+        tried.append(entry)
+        if got:
+            return _finish(name, got)
+    if len(remote) == 1:
+        got, entry = _attempt(*remote[0])
+        tried.append(entry)
+        if got:
+            return _finish(remote[0][0], got)
+    elif remote:
+        import concurrent.futures as cf
+        import threading
+        stop = threading.Event()  # يوقف طابور Horde الخاسر (ويحذف مهمته مجاملةً) بدل استهلاكه 150ث
+        ex = cf.ThreadPoolExecutor(max_workers=len(remote), thread_name_prefix="media-race")
+        import inspect
+
+        def _cancellable(f):
+            if "cancel" in inspect.signature(f).parameters:
+                return lambda p, z: f(p, z, cancel=stop)
+            return f
+        futs = {ex.submit(_attempt, n, _cancellable(f)): n for n, f in remote}
+        try:
+            for fut in cf.as_completed(futs):
+                got, entry = fut.result()
+                tried.append(entry)
+                if got:
+                    for other, n in futs.items():
+                        if other is not fut and not other.done():
+                            tried.append({"provider": n, "result": "أُلغي (سبقه مولّد آخر)", "seconds": "-"})
+                    return _finish(futs[fut], got)
+        finally:
+            stop.set()
+            ex.shutdown(wait=False, cancel_futures=True)
     data, mime = design_local(shown, size, "logo" if style == "logo" else "poster", "الذكاء السيادي")
     tried.append({"provider": "local_design", "result": "ok", "seconds": "0"})
     return {"ok": True, "data": data, "mime": mime, "provider": "local_design", "tried": tried, "ai": False}
@@ -426,6 +524,7 @@ def create(req: Dict[str, Any], save=None) -> Dict[str, Any]:
         size = (768, 1024)
     img = generate_image(prompt_en, shown, req["style"], size)
     out = {"ok": False, "kind": kind, "provider": img["provider"], "ai": img["ai"], "prompt": prompt_en,
+           "typography": bool(img.get("typography")),
            "shown": shown, "tried": img["tried"], "notes": []}
     data, mime, ext = img["data"], img["mime"], "png"
     if kind == "video":
@@ -453,7 +552,7 @@ def format_reply(res: Dict[str, Any]) -> str:
     shown_ar = "معروض" if res.get("kind") == "video" else "معروضة"
     lines = [f"تم إنشاء {kind_ar} ({res.get('seconds')} ث) — {shown_ar} أدناه."]
     lines.append(f"المولّد: {_PROVIDER_LABEL.get(res['provider'], res['provider'])}.")
-    failed = [t for t in res.get("tried", []) if t["result"] != "ok"]
+    failed = [t for t in res.get("tried", []) if t["result"] != "ok" and t.get("seconds") != "-"]
     if failed:
         lines.append("مزودات جُرّبت قبله وتعذرت: " + "، ".join(f"{t['provider']} ({t['result']})" for t in failed) + ".")
     if res.get("kind") == "video":
@@ -461,7 +560,9 @@ def format_reply(res: Dict[str, Any]) -> str:
     if not res.get("ai"):
         lines.append("تنبيه: هذا تصميم محلي قالبي لأن مزودات التوليد بالذكاء الاصطناعي لم تُتح الآن — أعد الطلب "
                      "بعد دقيقة لنسخة مولّدة.")
-    elif res["provider"] in ("pollinations", "horde"):
+    if res.get("typography"):
+        lines.append("الاسم مكتوب بطباعة محلية صحيحة فوق رسمة الذكاء الاصطناعي (المولدات تشوّه الحروف).")
+    if res.get("ai") and res["provider"] in ("pollinations", "horde"):
         lines.append("ملاحظة خصوصية: الوصف أُرسل إلى مزود توليد خارجي (مفعّل بإذن MEDIA_EXTERNAL_PROVIDERS).")
     lines.append(f"الوصف المستخدم: {res.get('prompt')}")
     lines.append("لتعديلها اكتب مثلًا: «اجعلها ليلية» أو «أضف بحرًا في الخلفية».")

@@ -2822,9 +2822,13 @@ def _prev_op_reply(resolved: Dict[str, Any]) -> Optional[str]:
     return "\n".join(parts) + f"\n\n(ترجمة آلية إلى {target} عبر {', '.join(sorted(used))})"
 
 
-def _sources_block(res: Dict[str, Any]) -> str:
+def _sources_block(res: Dict[str, Any], answer: str = "") -> str:
+    """المصادر المرقمة — مع نص جواب: المستشهد بها فقط (مصدر غير مستشهد به في القائمة يوهم بدعم غير موجود)."""
+    cited = {int(n) for n in re.findall(r"\[(\d{1,3})\]", answer or "")}
     lines = ["المصادر:"]
     for s_ in res.get("sources") or []:
+        if cited and s_.get("n") not in cited:
+            continue
         lines.append(f"[{s_['n']}] {s_.get('title', '')} — {s_.get('credibility_label', '')} — {s_.get('url', '')}")
     return "\n".join(lines)
 
@@ -2852,7 +2856,7 @@ def _chat_answer_without_brain(text: str, history, resolved: Dict[str, Any]):
             g = cloud_brain.grounded(text, world, history=history)
             if g:
                 tools.append("صياغة سحابية مقيّدة بالمصادر")
-                reply = (note + g["text"] + "\n\n" + _sources_block(world)
+                reply = (note + g["text"] + "\n\n" + _sources_block(world, g["text"])
                          + f"\n\nالمنهج: بحث عالمي متعدد اللغات وتقييم حتمي للمصادر، ثم صياغة بنموذج سحابي "
                            f"احتياطي ({g['model']}) مقيّد بالنقاط المرقمة فقط — أي استشهاد خارج المصادر يُرفض.")
                 return reply, "brain_unreachable_world_search", tools
