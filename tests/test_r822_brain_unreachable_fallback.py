@@ -72,3 +72,14 @@ def test_template_header_says_unreachable_not_timeout(monkeypatch):
     monkeypatch.setattr(sovereign_response, "_llm_reply", lambda *a, **k: None)
     out = sovereign_response.build_reply("question", "راجع", tool_context="بيانات حقيقية")
     assert "غير قابل للوصول" in out and out.endswith("بيانات حقيقية")
+
+
+def test_github_token_sent_only_to_api_github(monkeypatch):
+    import web_tools
+    monkeypatch.setenv("GITHUB_TOKEN", "tkn")
+    assert web_tools._auth_headers_for("api.github.com")["Authorization"] == "Bearer tkn"
+    assert web_tools._auth_headers_for("API.GITHUB.COM")
+    assert web_tools._auth_headers_for("raw.githubusercontent.com") == {}
+    assert web_tools._auth_headers_for("evil.example") == {}
+    monkeypatch.delenv("GITHUB_TOKEN")
+    assert web_tools._auth_headers_for("api.github.com") == {}

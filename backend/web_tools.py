@@ -13,6 +13,7 @@
 مفتاح في السجلات.
 """
 
+import os
 import ipaddress
 import json
 import socket
@@ -162,6 +163,15 @@ def search(query: str, max_results=None):
             "count": len(results), "results": results}
 
 
+def _auth_headers_for(host) -> dict:
+    """R-822: رمز GITHUB_TOKEN يُرسل إلى api.github.com وحده (لا لأي مضيف آخر ولا بعد تحويل
+    لمضيف مختلف) — عنوان IP المشترك في السحابة يستنفد حد GitHub المجهول (60/ساعة) فيرد 403."""
+    token = os.getenv("GITHUB_TOKEN") or ""
+    if token and str(host or "").lower() == "api.github.com":
+        return {"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json"}
+    return {}
+
+
 def fetch(url: str, timeout=None):
     """جلب صفحة وتحويلها لنص — محروس ضد SSRF في كل قفزة (يشمل التحويلات)."""
     config = _require_enabled()
@@ -177,7 +187,7 @@ def fetch(url: str, timeout=None):
         for hop in range(config.WEB_FETCH_MAX_REDIRECTS + 1):
             parsed = urlsplit(current)
             _validate_host(parsed.hostname)
-            resp = client.get(current)
+            resp = client.get(current, headers=_auth_headers_for(parsed.hostname))
             if resp.is_redirect:
                 location = resp.headers.get("location")
                 if not location:
