@@ -292,7 +292,34 @@ def _tr_lingva(text: str, target: str, source: str) -> str:
     raise RuntimeError(f"lingva: {type(last).__name__ if last else 'empty'}")
 
 
-TRANSLATORS = (("google", _tr_google), ("mymemory", _tr_mymemory), ("lingva", _tr_lingva))
+_GDICT_HOSTS = ("translate.googleapis.com", "clients5.google.com", "clients1.google.com", "clients2.google.com")
+_GDICT_ZH = {"zh": "zh-CN"}
+
+
+def _tr_google_dict(text: str, target: str, source: str) -> str:
+    """R-825: واجهة Google لإضافة الترجمة (client=dict-chrome-ex) — حصتها مستقلة عن gtx (فُحص من Render:
+    gtx يعيد 429 وهذه تعمل) وتقبل دفعة أسطر (q متعددة) فتُحفظ بنية الأسطر بدقة. تتنقل بين أربعة مضيفين."""
+    lines = [ln for ln in str(text).split("\n")]
+    params = [("client", "dict-chrome-ex"), ("sl", _GDICT_ZH.get(source, source or "auto")),
+              ("tl", _GDICT_ZH.get(target, target))] + [("q", ln) for ln in lines]
+    last: Optional[Exception] = None
+    for host in _GDICT_HOSTS:
+        try:
+            with _plain_client(8.0) as c:
+                r = c.get(f"https://{host}/translate_a/t", params=params)
+                r.raise_for_status()
+                data = r.json()
+            out = [(x[0] if isinstance(x, list) else x) for x in (data if isinstance(data, list) else [data])]
+            if len(out) != len(lines) or not any(str(x).strip() for x in out):
+                raise RuntimeError("google-dict: رد غير متوقع")
+            return "\n".join(str(x) for x in out)
+        except Exception as e:  # TOLERATED: المضيف التالي
+            last = e
+    raise RuntimeError(f"google-dict: {type(last).__name__ if last else 'empty'}")
+
+
+TRANSLATORS = (("google-dict", _tr_google_dict), ("google", _tr_google), ("mymemory", _tr_mymemory),
+               ("lingva", _tr_lingva))
 _TR_DEAD: Dict[str, float] = {}
 
 
@@ -310,10 +337,12 @@ def translate(text: str, target: str, source: str = "auto") -> Tuple[str, Option
         if time.monotonic() < _TR_DEAD.get(name, 0):
             continue
         try:
-            chunks, out = _chunks(text, 450 if name == "mymemory" else 1800), []
+            size = 450 if name == "mymemory" else 900 if name == "google-dict" else 1800
+            chunks, out = (_line_chunks(text, size) if name == "google-dict" else _chunks(text, size)), []
             for ch in chunks:
                 out.append(fn(ch, target, source))
-            res = (" ".join(x.strip() for x in out if x).strip(), name)
+            sep = "\n" if name == "google-dict" else " "
+            res = (sep.join(x.strip() for x in out if x).strip(), name)
             if res[0]:
                 _TR_CACHE[key] = res
                 return res
@@ -321,6 +350,21 @@ def translate(text: str, target: str, source: str = "auto") -> Tuple[str, Option
             _TR_DEAD[name] = time.monotonic() + 300
             logger.info("R-823: مترجم %s فشل (%s)", name, type(e).__name__)
     return text, None
+
+
+def _line_chunks(text: str, size: int) -> List[str]:
+    """تقطيع يحفظ الأسطر (للدفعات: سطر = جملة مرشحة) — السطر الأطول من الحد يُقطع جمليًا."""
+    parts, cur = [], []
+    for ln in text.split("\n"):
+        pieces = _chunks(ln, size) if len(ln) > size else [ln]
+        for pc in pieces:
+            if cur and sum(len(x) + 1 for x in cur) + len(pc) > size:
+                parts.append("\n".join(cur))
+                cur = []
+            cur.append(pc)
+    if cur:
+        parts.append("\n".join(cur))
+    return parts
 
 
 def _chunks(text: str, size: int) -> List[str]:

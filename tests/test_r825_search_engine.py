@@ -340,3 +340,37 @@ def test_frontend_search_panel_renders_answers_and_status():
     for needle in ('id="aBtn"', 'id="stBtn"', 'id="sList"', 'tool("world.answer"', 'tool("search.status"',
                    "function renderAnswer", "function renderResults", "noopener noreferrer"):
         assert needle in html
+
+
+# ---------- مترجم Google للإضافة (حصة مستقلة عن gtx) ----------
+def test_google_dict_translator_batches_lines_and_rotates_hosts(monkeypatch):
+    hosts = []
+
+    def factory(timeout=None):
+        def handler(req):
+            hosts.append(req.url.host)
+            if req.url.host == "translate.googleapis.com":
+                return httpx.Response(429, text="rate")
+            qs = req.url.params.get_list("q")
+            return httpx.Response(200, json=[f"EN:{q}" for q in qs])
+        return httpx.Client(transport=httpx.MockTransport(handler))
+    monkeypatch.setattr(w, "_plain_client", factory)
+    out = w._tr_google_dict("سطر أول\nسطر ثان", "en", "ar")
+    assert out == "EN:سطر أول\nEN:سطر ثان"
+    assert hosts == ["translate.googleapis.com", "clients5.google.com"]
+
+
+def test_google_dict_auto_detect_pair_format(monkeypatch):
+    monkeypatch.setattr(w, "_plain_client", lambda timeout=None: httpx.Client(transport=httpx.MockTransport(
+        lambda req: httpx.Response(200, json=[["انخفض الذهب اليوم.", "en"]]))))
+    assert w._tr_google_dict("Gold fell today.", "ar", "auto") == "انخفض الذهب اليوم."
+
+
+def test_translate_prefers_google_dict_and_keeps_line_structure(monkeypatch):
+    w._TR_CACHE.clear()
+    w._TR_DEAD.clear()
+    assert [n for n, _ in w.TRANSLATORS][0] == "google-dict"
+    monkeypatch.setattr(w, "TRANSLATORS", (("google-dict", lambda text, target, source: text.upper()),)
+                        + tuple(w.TRANSLATORS[1:]))
+    out, name = w.translate("one\ntwo\nthree", "fr", "en")
+    assert name == "google-dict" and out.split("\n") == ["ONE", "TWO", "THREE"]
