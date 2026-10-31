@@ -285,3 +285,10 @@ def test_other_asset_refinement():
     assert not sp.mentions_other_asset("سعر الدولار مقابل الريال مستقر", cur)
     gold = sp.analyze("أسعار الذهب اليوم", "gold prices today", "ar", True)
     assert sp.mentions_other_asset("سعر البيتكوين يهبط", gold)
+
+
+def test_cache_key_includes_engine_version(monkeypatch):
+    import search_index
+    k1 = search_index.cache_key("سؤال", "ar")
+    monkeypatch.setattr(search_index, "ENGINE_VERSION", "next")
+    assert search_index.cache_key("سؤال", "ar") != k1

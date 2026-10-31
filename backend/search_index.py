@@ -128,9 +128,13 @@ def query(terms: List[str], limit: int = 8, max_age_days: int = 3650) -> List[Di
 # ============================================================
 # ذاكرة الإجابات المؤقتة
 # ============================================================
+ENGINE_VERSION = "r826"
+
+
 def cache_key(question: str, lang: str) -> str:
     norm = " ".join(re.sub(r"[^\w]+", " ", str(question or "").lower()).split())  # ؟ و، علامات لا حروف
-    return "wa:" + hashlib.sha256(f"{lang}|{norm}".encode()).hexdigest()[:40]
+    # R-826c: إصدار المحرك جزء من المفتاح — ترقية المنطق لا تُخدم بإجابات قديمة (السجلات القديمة تبقى، لا حذف)
+    return "wa:" + hashlib.sha256(f"{ENGINE_VERSION}|{lang}|{norm}".encode()).hexdigest()[:40]
 
 
 def cache_get(key: str) -> Optional[Dict[str, Any]]:
