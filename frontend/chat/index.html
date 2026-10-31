@@ -142,6 +142,10 @@
     body.side-open aside { transform: none; }
     .menu { display: inline-block; }
   }
+  .srch { margin-top: 10px; display: flex; flex-direction: column; gap: 10px; }
+  .srch-item { border-bottom: 1px solid var(--border); padding-bottom: 8px; line-height: 1.6; }
+  .srch-item a { font-weight: 600; word-break: break-word; }
+  .srch h3 { margin: 6px 0 0; font-size: 15px; }
 </style>
 </head>
 <body>
@@ -248,7 +252,9 @@
     </div></section>
     <section class="view" id="view-connect"><div class="pad">
       <div class="card"><h2>بحث في الويب</h2>
-        <div class="row"><input type="text" id="sQ" placeholder="سؤال البحث" style="flex:1"><button class="btn pri" id="sBtn">بحث</button><button class="btn" id="rBtn" title="بحث عميق متعدد المصادر عبر research.run">بحث عميق</button></div>
+        <div class="row"><input type="text" id="sQ" placeholder="سؤال البحث" style="flex:1"><button class="btn pri" id="sBtn">بحث</button><button class="btn" id="aBtn" title="إجابة مقيّمة من مصادر العالم بكل اللغات مترجمة ومستشهدة (world.answer)">إجابة موثقة</button><button class="btn" id="rBtn" title="بحث عميق متعدد المصادر عبر research.run">بحث عميق</button><button class="btn" id="stBtn" title="حالة مزودات محرك البحث والفهرس الذاتي (search.status)">حالة المحرك</button></div>
+        <div class="small muted" style="margin-top:6px">محرك البحث: Bing وأخبار Bing/Google وويكيبيديا وويكي بيانات وPubMed وOpenAlex وStack Overflow وفهرس ذاتي ينمو مع كل بحث.</div>
+        <div id="sList" class="srch" hidden></div>
         <pre id="sOut" hidden></pre></div>
       <div class="card"><h2>الاتصال بأي موقع أو مستودع</h2>
         <div class="row"><input type="url" id="uQ" placeholder="https://… أو owner/repo" style="flex:1" dir="ltr">
@@ -912,8 +918,63 @@
   loaders.agents = function () { paintAgents(); getJ("/tools/list").then(function (d) { allTools = (d && d.tools) || []; paintTools(); }); };
 
   // ---------------- البحث والاتصال ----------------
-  $("sBtn").addEventListener("click", function () { var q = $("sQ").value.trim(); if (!q) return; show($("sOut"), "جارٍ البحث…"); tool("web.search", { query: q }).then(function (r) { show($("sOut"), resultText(r)); }).catch(function (e) { show($("sOut"), e.message); }); });
-  $("rBtn").addEventListener("click", function () { var q = $("sQ").value.trim(); if (!q) return; show($("sOut"), "بحث عميق جارٍ… (قد يستغرق دقائق)"); tool("research.run", { goal: q }).then(function (r) { show($("sOut"), resultText(r)); }).catch(function (e) { show($("sOut"), e.message); }); });
+  // R-825: عرض نتائج محرك البحث قائمةً قابلة للنقر (المزود والتاريخ) والإجابة الموثقة بنقاطها ومصادرها
+  function el(tag, cls, text) { var n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; }
+  function safeHref(u) { return /^https?:\/\//i.test(String(u || "")) ? String(u) : "#"; }
+  function ago(iso) {
+    if (!iso) return ""; var t = Date.parse(iso); if (isNaN(t)) return "";
+    var h = Math.floor((Date.now() - t) / 3600000);
+    if (h < 1) return "منذ أقل من ساعة"; if (h < 24) return "منذ " + h + " ساعة";
+    var d = Math.floor(h / 24); return d < 7 ? "منذ " + d + " يوم" : String(iso).slice(0, 10);
+  }
+  function link(url, text) { var a = el("a", null, text || url); a.href = safeHref(url); a.target = "_blank"; a.rel = "noopener noreferrer"; return a; }
+  function searchList(box) { $("sOut").hidden = true; box.hidden = false; box.innerHTML = ""; return box; }
+  function renderResults(r) {
+    var box = searchList($("sList"));
+    if (!r || r.ok === false) { box.appendChild(el("div", "muted", "فشل: " + ((r && r.error) || "خطأ"))); return; }
+    var o = r.result || {}; var items = o.results || [];
+    box.appendChild(el("div", "small muted", items.length + " نتيجة" + (o.fresh ? " — سؤال آني: الأخبار والحداثة أولًا" : "")));
+    items.forEach(function (it) {
+      var row = el("div", "srch-item"); row.appendChild(link(it.url, it.title || it.url));
+      var meta = [it.site || (String(it.url).split("/")[2] || ""), it.provider || "", ago(it.published)].filter(Boolean).join(" · ");
+      row.appendChild(el("div", "small muted", meta));
+      if (it.snippet) row.appendChild(el("div", "small", it.snippet));
+      box.appendChild(row);
+    });
+  }
+  function renderAnswer(r) {
+    var box = searchList($("sList"));
+    if (!r || r.ok === false) { box.appendChild(el("div", "muted", "فشل: " + ((r && r.error) || "خطأ"))); return; }
+    var o = r.result || {};
+    if (!o.ok) { box.appendChild(el("div", "muted", o.error || "لا إجابة موثوقة كافية")); return; }
+    box.appendChild(el("div", "small muted", (o.sources || []).length + " مصدرًا مستشهدًا من " + (o.sources_considered || 0) + " — " + (o.elapsed_seconds || 0) + " ث" + (o.cached ? " — من ذاكرة المحرك" : "")));
+    (o.points || []).forEach(function (p, i) {
+      var row = el("div", "srch-item"); row.appendChild(el(i === 0 ? "strong" : "span", null, p.text + " [" + p.source + "]"));
+      var d = ago(p.published); if (d && o.fresh) row.appendChild(el("span", "small muted", " (" + d + ")"));
+      box.appendChild(row);
+    });
+    if ((o.news || []).length) {
+      box.appendChild(el("h3", null, "أحدث العناوين"));
+      o.news.forEach(function (n) {
+        var row = el("div", "srch-item"); row.appendChild(link(n.url, n.title));
+        row.appendChild(el("div", "small muted", [n.site, ago(n.published), "[" + n.source + "]"].filter(Boolean).join(" · ")));
+        box.appendChild(row);
+      });
+    }
+    box.appendChild(el("h3", null, "المصادر"));
+    (o.sources || []).forEach(function (src) {
+      var row = el("div", "srch-item small"); row.appendChild(el("span", null, "[" + src.n + "] "));
+      row.appendChild(link(src.url, src.title || src.url));
+      row.appendChild(el("span", "muted", " — " + (src.credibility_label || "") + (src.published ? " — " + ago(src.published) : "")));
+      box.appendChild(row);
+    });
+    box.appendChild(el("div", "small muted", o.method || ""));
+  }
+  $("sBtn").addEventListener("click", function () { var q = $("sQ").value.trim(); if (!q) return; var b = searchList($("sList")); b.textContent = "جارٍ البحث…"; tool("web.search", { query: q }).then(renderResults).catch(function (e) { $("sList").textContent = e.message; }); });
+  $("aBtn").addEventListener("click", function () { var q = $("sQ").value.trim(); if (!q) return; var b = searchList($("sList")); b.textContent = "جارٍ البحث في مصادر العالم وتقييمها…"; tool("world.answer", { question: q }).then(renderAnswer).catch(function (e) { $("sList").textContent = e.message; }); });
+  $("sQ").addEventListener("keydown", function (e) { if (e.key === "Enter") $("aBtn").click(); });
+  $("stBtn").addEventListener("click", function () { $("sList").hidden = true; show($("sOut"), "جارٍ الفحص…"); tool("search.status", {}).then(function (r) { show($("sOut"), resultText(r)); }).catch(function (e) { show($("sOut"), e.message); }); });
+  $("rBtn").addEventListener("click", function () { var q = $("sQ").value.trim(); if (!q) return; $("sList").hidden = true; show($("sOut"), "بحث عميق جارٍ… (قد يستغرق دقائق)"); tool("research.run", { goal: q }).then(function (r) { show($("sOut"), resultText(r)); }).catch(function (e) { show($("sOut"), e.message); }); });
   var lastFetched = "";
   function isRepo(u) { return /github\.com\//i.test(u) || /^[\w.-]+\/[\w.-]+$/.test(u); }
   $("uBtn").addEventListener("click", function () {

@@ -112,6 +112,12 @@ def fake_world(monkeypatch):
         "provider": "duckduckgo"}])
     monkeypatch.setattr(w, "_p_marginalia", lambda q, lang: [])
     monkeypatch.setattr(w, "_p_wikidata", lambda q, lang: [])
+    # R-825: مزودات المحرك المطوَّر تُعزل أيضًا — الاختبار بلا شبكة وبلا فهرس Supabase
+    for _name in ("_p_bing", "_p_bing_news", "_p_google_news", "_p_openalex", "_p_stackexchange",
+                  "_p_hackernews"):
+        monkeypatch.setattr(w, _name, lambda q, lang: [])
+    monkeypatch.setattr(w, "_p_index", lambda terms, lang, fresh=False: [])
+    monkeypatch.setenv("WORLD_SEARCH_INDEX_ENABLED", "false")
     import web_tools
     monkeypatch.setattr(web_tools, "fetch", lambda url, timeout=None: {
         "text": "The football club won the national championship fourteen times since it was founded long ago."})

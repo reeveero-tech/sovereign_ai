@@ -342,7 +342,8 @@ def _chunks(text: str, size: int) -> List[str]:
 # ============================================================
 def _p_duckduckgo(q: str, lang: str) -> List[Dict[str, Any]]:
     region = {"en": "us-en", "fr": "fr-fr", "es": "es-es", "de": "de-de", "ar": "xa-ar"}.get(lang, "wt-wt")
-    with _client() as c:
+    # R-825: مهلة أقصر — من عناوين السحابة كثيرًا ما تنتهي مهلته فلا يحجز ميزانية البحث
+    with _client(_env_float("WORLD_SEARCH_LEGACY_TIMEOUT_SECONDS", 4.0)) as c:
         r = c.post("https://html.duckduckgo.com/html/", data={"q": q, "kl": region})
         r.raise_for_status()
         html = r.text
@@ -365,7 +366,7 @@ def _p_duckduckgo(q: str, lang: str) -> List[Dict[str, Any]]:
 
 def _p_marginalia(q: str, lang: str) -> List[Dict[str, Any]]:
     key = os.getenv("MARGINALIA_API_KEY", "public") or "public"
-    with _client() as c:
+    with _client(_env_float("WORLD_SEARCH_LEGACY_TIMEOUT_SECONDS", 4.0)) as c:  # R-825: مهلة أقصر
         r = c.get(f"https://api.marginalia.nu/{key}/search/{quote(q, safe='')}", params={"count": 8})
         r.raise_for_status()
         data = r.json()
@@ -591,6 +592,343 @@ def _p_owner(q: str, lang: str) -> List[Dict[str, Any]]:
              "provider": provider, "lang": lang} for x in res.get("results", [])]
 
 
+# ============================================================
+# R-825: مزودات محرك البحث المطوَّر — مصادر تعمل فعلًا من عناوين السحابة
+# (فُحصت حيًا من Render: Bing وأخبار Bing وأخبار Google وOpenAlex تجيب؛ DuckDuckGo
+# وMarginalia تنتهي مهلتها هناك فخُفضت مهلتها ولم تُحذف — تبقى مفيدة محليًا)
+# ============================================================
+_BING_MKT = {"ar": "ar-SA", "en": "en-US", "fr": "fr-FR", "es": "es-ES", "de": "de-DE", "ru": "ru-RU",
+             "zh": "zh-CN", "ja": "ja-JP", "ko": "ko-KR", "tr": "tr-TR", "pt": "pt-BR", "it": "it-IT",
+             "hi": "en-IN", "fa": "en-US", "ur": "en-US", "he": "en-US"}
+_GNEWS = {"ar": ("ar", "SA", "SA:ar"), "en": ("en-US", "US", "US:en"), "fr": ("fr", "FR", "FR:fr"),
+          "es": ("es-419", "US", "US:es-419"), "de": ("de", "DE", "DE:de"), "ru": ("ru", "RU", "RU:ru"),
+          "zh": ("zh-CN", "CN", "CN:zh-Hans"), "ja": ("ja", "JP", "JP:ja"), "ko": ("ko", "KR", "KR:ko"),
+          "tr": ("tr", "TR", "TR:tr"), "pt": ("pt-BR", "BR", "BR:pt-419"), "it": ("it", "IT", "IT:it"),
+          "hi": ("hi", "IN", "IN:hi"), "he": ("he", "IL", "IL:he")}
+
+
+def _plain_client(timeout: Optional[float] = None):
+    """عميل بلا ترويسة متصفح — Bing يقدّم صفحة نتائج كاملة لعميل برمجي صريح (فُحص من Render)."""
+    import httpx
+    return httpx.Client(timeout=timeout or _env_float("WORLD_SEARCH_HTTP_TIMEOUT_SECONDS", 8.0),
+                        follow_redirects=True)
+
+
+def _bing_real_url(href: str) -> str:
+    """روابط Bing الوسيطة (bing.com/ck/a?…&u=a1<base64url>) ⇒ الرابط الحقيقي."""
+    import base64
+    import html as _html
+    href = _html.unescape(href or "")
+    parts = urlsplit(href)
+    if (parts.hostname or "").endswith("bing.com"):
+        qs = parse_qs(parts.query)
+        u = (qs.get("u") or [""])[0]
+        if u.startswith("a1"):
+            raw = u[2:]
+            try:
+                return base64.urlsafe_b64decode(raw + "=" * (-len(raw) % 4)).decode("utf-8", "replace")
+            except Exception:  # TOLERATED: ترميز غير متوقع ⇒ يُترك الرابط كما هو
+                return href
+        if qs.get("url"):
+            return unquote(qs["url"][0])
+    return href
+
+
+_REL_AGO = re.compile(r"^\s*(\d+)\s*(minute|min|hour|day|week|month|year|دقيقة|دقائق|ساعة|ساعات|يوم|أيام|"
+                      r"أسبوع|أسابيع|شهر|أشهر|سنة|سنوات)s?\s*(?:ago)?", re.I)
+_REL_SECONDS = {"minute": 60, "min": 60, "دقيقة": 60, "دقائق": 60, "hour": 3600, "ساعة": 3600,
+                "ساعات": 3600, "day": 86400, "يوم": 86400, "أيام": 86400, "week": 604800,
+                "أسبوع": 604800, "أسابيع": 604800, "month": 2592000, "شهر": 2592000,
+                "أشهر": 2592000, "year": 31536000, "سنة": 31536000, "سنوات": 31536000}
+
+
+def _iso(ts: float) -> str:
+    return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(ts))
+
+
+def parse_date(text: str) -> Optional[str]:
+    """تاريخ النشر بصيغة ISO من «14 hours ago» أو RFC-822 (RSS) أو ISO — وإلا None."""
+    s = str(text or "").strip()
+    if not s:
+        return None
+    m = _REL_AGO.match(s)
+    if m:
+        unit = m.group(2).lower()
+        return _iso(time.time() - int(m.group(1)) * _REL_SECONDS.get(unit, _REL_SECONDS.get(unit.rstrip("s"), 86400)))
+    try:
+        from email.utils import parsedate_to_datetime
+        return _iso(parsedate_to_datetime(s).timestamp())
+    except Exception:  # TOLERATED: ليست RFC-822 — نجرب ISO
+        pass
+    try:
+        from datetime import datetime
+        return _iso(datetime.fromisoformat(s.replace("Z", "+00:00")).timestamp())
+    except Exception:  # TOLERATED: بلا تاريخ مقروء
+        return None
+
+
+def age_days(iso: Optional[str]) -> Optional[float]:
+    if not iso:
+        return None
+    try:
+        from datetime import datetime
+        return max(0.0, (time.time() - datetime.fromisoformat(str(iso).replace("Z", "+00:00")).timestamp()) / 86400)
+    except Exception:  # TOLERATED: تاريخ غير مقروء
+        return None
+
+
+def parse_bing_html(html: str, lang: str) -> List[Dict[str, Any]]:
+    """صفحة نتائج Bing ⇒ نتائج (عنوان/رابط حقيقي/مقتطف/تاريخ). متسامح مع تغيّر التنسيق."""
+    out = []
+    for block in re.split(r'<li class="b_algo\b', html)[1:]:
+        block = block[:20000]
+        m = re.search(r"<h2[^>]*>\s*<a\b[^>]*href=\"([^\"]+)\"[^>]*>(.*?)</a>", block, re.S)
+        if not m:
+            continue
+        url = _bing_real_url(m.group(1))
+        if not url.startswith("http") or "bing.com/" in url.split("?")[0]:
+            continue
+        snip_html = ""
+        for pat in (r'<p\b[^>]*class="[^"]*b_lineclamp[^"]*"[^>]*>(.*?)</p>',
+                    r'<div class="b_caption[^"]*"[^>]*>.*?<p\b[^>]*>(.*?)</p>', r"<p\b[^>]*>(.*?)</p>"):
+            sm = re.search(pat, block, re.S)
+            if sm:
+                snip_html = sm.group(1)
+                break
+        published = None
+        dm = re.search(r'<span class="news_dt"[^>]*>(.*?)</span>', snip_html, re.S)
+        if dm:
+            published = parse_date(_strip_tags(dm.group(1)))
+            snip_html = snip_html.replace(dm.group(0), " ")
+        snippet = _strip_tags(snip_html).lstrip("·•-– ").rstrip(" …").strip()
+        out.append({"title": _strip_tags(m.group(2)), "url": url, "snippet": snippet,
+                    "provider": "bing", "lang": lang, "published": published, "rank": len(out)})
+    return out
+
+
+def _rss_items(xml: str) -> List[Dict[str, str]]:
+    import html as _html
+    items = []
+    for it in re.findall(r"<item\b[^>]*>(.*?)</item>", xml, re.S):
+        def tag(name):
+            m = re.search(rf"<{name}\b[^>]*>(.*?)</{name}>", it, re.S)
+            v = m.group(1) if m else ""
+            v = re.sub(r"^<!\[CDATA\[(.*)\]\]>$", r"\1", v.strip(), flags=re.S)
+            return _html.unescape(v)
+        src = re.search(r'<source\b[^>]*url="([^"]*)"[^>]*>(.*?)</source>', it, re.S)
+        items.append({"title": _strip_tags(tag("title")), "link": tag("link").strip(),
+                      "description": _strip_tags(tag("description")), "pubDate": tag("pubDate"),
+                      "source": _strip_tags(tag("News:Source")) or (_strip_tags(src.group(2)) if src else ""),
+                      "source_url": _html.unescape(src.group(1)) if src else ""})
+    return items
+
+
+def _p_bing(q: str, lang: str) -> List[Dict[str, Any]]:
+    """Bing (الويب العام): صفحة النتائج HTML بلغة/سوق البحث، ثم RSS بديلًا إن خلت."""
+    mkt = _BING_MKT.get(lang, "en-US")
+    with _plain_client() as c:
+        r = c.get("https://www.bing.com/search", params={"q": q, "setlang": lang, "mkt": mkt})
+        r.raise_for_status()
+        out = parse_bing_html(r.text, lang)
+        if not out:
+            rr = c.get("https://www.bing.com/search", params={"q": q, "format": "rss", "setlang": lang, "mkt": mkt})
+            if rr.status_code == 200:
+                for i, it in enumerate(_rss_items(rr.text)):
+                    if it["link"].startswith("http"):
+                        out.append({"title": it["title"], "url": it["link"], "snippet": it["description"],
+                                    "provider": "bing", "lang": lang, "published": parse_date(it["pubDate"]),
+                                    "rank": i})
+    if not out and re.search(r"captcha|b_no\b", r.text[:200000], re.I):
+        raise RuntimeError("bing: لا نتائج لهذا العنوان (حجب/تقييد)")
+    if out and not results_match_query(out, q, lang):
+        raise RuntimeError("bing: نتائج غير مطابقة للسؤال (تقييد العنوان) — رُفضت")
+    return out[:10]
+
+
+def results_match_query(results: List[Dict[str, Any]], q: str, lang: str, min_ratio: float = 0.3) -> bool:
+    """حارس جودة: محرك مقيَّد قد يعيد صفحات لا علاقة لها بالسؤال (سياحة لسؤال حمية) —
+    إن لم يحمل ٣٠٪ من النتائج على الأقل مصطلحًا من السؤال تُرفض الدفعة كلها."""
+    qt = set(_terms(q, lang))
+    if not qt or not results:
+        return True
+    hit = sum(1 for r in results if qt & set(_terms(f"{r.get('title', '')} {r.get('snippet', '')}", lang)))
+    return hit / len(results) >= min_ratio
+
+
+def _p_bing_news(q: str, lang: str) -> List[Dict[str, Any]]:
+    """أخبار Bing (RSS): روابط المقالات الأصلية مباشرة + وصف + تاريخ نشر + اسم المصدر."""
+    with _plain_client() as c:
+        r = c.get("https://www.bing.com/news/search",
+                  params={"q": q, "format": "rss", "setlang": lang, "mkt": _BING_MKT.get(lang, "en-US")})
+        r.raise_for_status()
+    out = []
+    for i, it in enumerate(_rss_items(r.text)):
+        url = _bing_real_url(it["link"])
+        if not url.startswith("http"):
+            continue
+        out.append({"title": it["title"], "url": url, "snippet": it["description"],
+                    "text": f"{it['title']}. {it['description']}".strip(), "provider": "bing-news",
+                    "lang": lang, "published": parse_date(it["pubDate"]), "news": True,
+                    "site": it["source"], "rank": i})
+    return out[:10]
+
+
+def _p_google_news(q: str, lang: str) -> List[Dict[str, Any]]:
+    """أخبار Google (RSS) بلغة وبلد البحث: عناوين حديثة مؤرخة مع اسم الناشر."""
+    hl, gl, ceid = _GNEWS.get(lang, ("en-US", "US", "US:en"))
+    with _plain_client() as c:
+        r = c.get("https://news.google.com/rss/search", params={"q": q, "hl": hl, "gl": gl, "ceid": ceid})
+        r.raise_for_status()
+    out = []
+    for i, it in enumerate(_rss_items(r.text)[:15]):
+        title = it["title"]
+        site = it["source"]
+        if site and title.endswith(" - " + site):
+            title = title[: -len(site) - 3]
+        out.append({"title": title, "url": it["link"], "snippet": "", "text": title,
+                    "provider": "google-news", "lang": lang, "published": parse_date(it["pubDate"]),
+                    "news": True, "site": site, "site_url": it["source_url"], "rank": i})
+    return out
+
+
+def _openalex_abstract(inv: Optional[Dict[str, List[int]]]) -> str:
+    if not inv:
+        return ""
+    pos: Dict[int, str] = {}
+    for word, idxs in inv.items():
+        for i in idxs:
+            pos[i] = word
+    return " ".join(pos[i] for i in sorted(pos))
+
+
+def _p_openalex(q: str, lang: str) -> List[Dict[str, Any]]:
+    """OpenAlex: فهرس عالمي مفتوح لـ ٢٥٠+ مليون عمل علمي — الملخص يُعاد بناؤه من الفهرس المقلوب."""
+    params = {"search": q, "per-page": 6, "select": "id,doi,title,publication_year,abstract_inverted_index,"
+              "primary_location,cited_by_count"}
+    mail = os.getenv("WORLD_SEARCH_CONTACT_EMAIL")
+    if mail:
+        params["mailto"] = mail
+    with _client() as c:
+        r = c.get("https://api.openalex.org/works", params=params)
+        r.raise_for_status()
+        data = r.json()
+    out = []
+    for w in data.get("results") or []:
+        abstract = _openalex_abstract(w.get("abstract_inverted_index"))
+        if len(abstract) < 120:
+            continue
+        loc = (w.get("primary_location") or {})
+        url = w.get("doi") or loc.get("landing_page_url") or w.get("id")
+        out.append({"title": str(w.get("title") or "")[:300], "url": url, "snippet": abstract[:300],
+                    "text": abstract, "provider": "openalex", "lang": "en", "scholarly": True,
+                    "published": f"{w['publication_year']}-01-01T00:00:00Z" if w.get("publication_year") else None,
+                    "cited_by": w.get("cited_by_count")})
+    return out
+
+
+def _p_stackexchange(q: str, lang: str) -> List[Dict[str, Any]]:
+    """Stack Overflow (أسئلة وأجوبة برمجية) — مقتطفات الأسئلة والأجوبة المطابقة."""
+    with _client() as c:
+        r = c.get("https://api.stackexchange.com/2.3/search/excerpts",
+                  params={"order": "desc", "sort": "relevance", "q": q, "site": "stackoverflow", "pagesize": 8})
+        r.raise_for_status()
+        items = r.json().get("items") or []
+    out = []
+    for it in items:
+        qid = it.get("question_id")
+        if not qid:
+            continue
+        url = f"https://stackoverflow.com/q/{qid}" + (f"#{it['answer_id']}" if it.get("answer_id") else "")
+        body = _strip_tags(it.get("excerpt") or "")
+        out.append({"title": _strip_tags(it.get("title") or ""), "url": url, "snippet": body[:300],
+                    "text": f"{_strip_tags(it.get('title') or '')}. {body}", "provider": "stackoverflow",
+                    "lang": "en", "published": _iso(it["last_activity_date"]) if it.get("last_activity_date") else None})
+    return out
+
+
+def _p_hackernews(q: str, lang: str) -> List[Dict[str, Any]]:
+    """Hacker News (Algolia): أخبار التقنية ونقاشاتها مع الرابط الأصلي والتاريخ."""
+    with _client() as c:
+        r = c.get("https://hn.algolia.com/api/v1/search", params={"query": q, "tags": "story", "hitsPerPage": 8})
+        r.raise_for_status()
+        hits = r.json().get("hits") or []
+    return [{"title": h.get("title") or "", "url": h.get("url") or f"https://news.ycombinator.com/item?id={h.get('objectID')}",
+             "snippet": "", "text": h.get("title") or "", "provider": "hackernews", "lang": "en",
+             "published": h.get("created_at"), "news": True, "site": "Hacker News", "rank": i}
+            for i, h in enumerate(hits) if h.get("title")]
+
+
+def _p_index(terms: List[str], lang: str, fresh: bool = False) -> List[Dict[str, Any]]:
+    """الفهرس الذاتي (search_index): صفحات قرأها المحرك سابقًا — لا يحجبه أحد. للآني: يومان فقط."""
+    import search_index
+    return search_index.query(terms, limit=6, max_age_days=2 if fresh else 3650)
+
+
+# ---------- نوايا السؤال ----------
+_FRESH = re.compile(
+    r"اليوم|الآن|الان|حاليًا|حاليا|الحالي|الحالية|أحدث|احدث|"
+    r"آخر\s+(?:أخبار|اخبار|إصدار|اصدار|تحديث|نسخة|موديل|سعر|مستجدات|التطورات)|"
+    r"(?<![\w])(?:ب|وب|و|ال|بال|وال)?سعر(?!ات)|أسعار|اسعار|أخبار|اخبار|عاجل|مستجدات|"
+    r"هذا الأسبوع|هذا الشهر|هذه السنة|هذا العام|مباراة|طقس|"
+    r"\b(?:today|now|currently|latest|newest|recent|price|prices|news|breaking|this week|this month|"
+    r"this year|tonight|score|weather|stock price|exchange rate)\b|\b20[2-3]\d\b", re.I)
+_TECH = re.compile(
+    r"برمج|كود|بايثون|جافا|خطأ برمجي|مكتبة|\b(?:python|javascript|typescript|java|rust|golang|c\+\+|c#|sql|"
+    r"api|bug|error|exception|library|framework|react|docker|kubernetes|linux|git|npm|pip|code|"
+    r"programming|compile|regex|llm|ai model|gpu)\b", re.I)
+
+
+def is_fresh(text: str) -> bool:
+    """سؤال آني (أسعار/أخبار/اليوم/أحدث/سنة حديثة) ⇒ الأولوية لمصادر الأخبار والحداثة."""
+    return bool(_FRESH.search(str(text or "")))
+
+
+def is_tech(text: str) -> bool:
+    return bool(_TECH.search(str(text or "")))
+
+
+def freshness(iso: Optional[str], horizon_days: float = 30.0) -> float:
+    """درجة الحداثة 0..1 (اليوم=1، تتناقص حتى الأفق، بلا تاريخ=0)."""
+    d = age_days(iso)
+    if d is None:
+        return 0.0
+    return round(max(0.0, 1.0 - d / horizon_days), 3)
+
+
+def news_digest(sources: List[Dict[str, Any]], qterms: Dict[str, List[str]], limit: int = 6) -> List[Dict[str, Any]]:
+    """أحدث العناوين المطابقة (أخبار Bing/Google/HN) — تغطية مصطلحات السؤال × الحداثة، مع تنويع الناشرين."""
+    scored = []
+    for i, s in enumerate(sources):
+        if not s.get("news"):
+            continue
+        lang = s.get("lang") or "en"
+        q = qterms.get(lang) or qterms.get("en") or []
+        groups = _concepts(q) or [set(q)]
+        ds = set(_terms(f"{s.get('title', '')} {s.get('snippet', '')}", lang))
+        cov = (sum(1 for g in groups if g & ds) / len(groups)) if groups else 0.0
+        need = 1.0 if len(groups) <= 2 else 0.6
+        if cov < need - 1e-9:
+            continue
+        fr = freshness(s.get("published"), 14.0)
+        direct = 0.05 if s.get("provider") != "google-news" else 0.0  # رابط المقالة المباشر أفضل للقارئ
+        scored.append((0.6 * cov + 0.4 * fr + direct, i))
+    out, seen_titles, per_site = [], [], {}
+    for sc, i in sorted(scored, key=lambda x: -x[0]):
+        s = sources[i]
+        tset = set(_terms(s.get("title", ""), s.get("lang") or "en"))
+        if any(_jaccard(tset, t) > 0.6 for t in seen_titles):
+            continue
+        site = (s.get("site") or urlsplit(s["url"]).hostname or "").lower()
+        if per_site.get(site, 0) >= 2:
+            continue
+        per_site[site] = per_site.get(site, 0) + 1
+        seen_titles.append(tset)
+        out.append({"source_idx": i, "score": round(sc, 3)})
+        if len(out) >= limit:
+            break
+    return out
+
+
 def _strip_tags(s: str) -> str:
     import html as _html
     return " ".join(_html.unescape(re.sub(r"<[^>]+>", " ", str(s or ""))).split())
@@ -608,6 +946,10 @@ _LOW = ("reddit.com", "quora.com", "pinterest.", "facebook.com", "tiktok.com", "
         "x.com", "twitter.com", "youtube.com", "answers.", "forum", "blogspot.", "medium.com")
 
 
+_TECH_COMMUNITY = ("stackoverflow.com", "stackexchange.com", "superuser.com", "serverfault.com",
+                   "github.com", "docs.python.org", "developer.mozilla.org", "learn.microsoft.com")
+
+
 def credibility(url: str, scholarly: bool = False) -> Tuple[float, str]:
     host = (urlsplit(url).hostname or "").lower()
     if scholarly:
@@ -620,6 +962,8 @@ def credibility(url: str, scholarly: bool = False) -> Tuple[float, str]:
         return 0.95, "قاعدة بيانات منظّمة (ويكي بيانات)"
     if any(h in host for h in _LOW):
         return 0.35, "منتدى/شبكة اجتماعية"
+    if any(host == h or host.endswith("." + h) for h in _TECH_COMMUNITY):  # R-825
+        return 0.7, "مجتمع تقني (أسئلة وأجوبة/مستودعات)"
     return 0.6, "موقع عام"
 
 
@@ -682,10 +1026,12 @@ def split_subquestions(en_q: str) -> List[str]:
 
 
 def evaluate(candidates: List[Dict[str, Any]], qterms_by_lang: Dict[str, List[str]],
-             to_pivot=None, top_k: int = 6) -> List[Dict[str, Any]]:
+             to_pivot=None, top_k: int = 6, fresh_mode: bool = False) -> List[Dict[str, Any]]:
     """يقيّم الجمل المرشحة ويختار أفضلها — حتمي بالكامل وقابل للتفسير.
 
-    candidates: [{text, lang, source_idx, cred}] — to_pivot(list[str], lang) يوحّد اللغة للتوافق.
+    candidates: [{text, lang, source_idx, cred, fresh?}] — to_pivot(list[str], lang) يوحّد اللغة للتوافق.
+    R-825: fresh_mode (سؤال آني) ⇒ بُعد رابع «الحداثة» من تاريخ نشر المصدر:
+    0.4·صلة + 0.25·موثوقية + 0.15·توافق + 0.2·حداثة — فخبر الأمس يغلب مقالة تاريخية.
     """
     if not candidates:
         return []
@@ -732,7 +1078,10 @@ def evaluate(candidates: List[Dict[str, Any]], qterms_by_lang: Dict[str, List[st
         c = candidates[i]
         c["relevance"] = round(rel[i], 3)
         c["agreement"] = round(agree[i], 3)
-        c["score"] = round(0.45 * rel[i] + 0.35 * c["cred"] + 0.2 * agree[i], 3)
+        if fresh_mode:
+            c["score"] = round(0.4 * rel[i] + 0.25 * c["cred"] + 0.15 * agree[i] + 0.2 * c.get("fresh", 0.0), 3)
+        else:
+            c["score"] = round(0.45 * rel[i] + 0.35 * c["cred"] + 0.2 * agree[i], 3)
         c["pivot"] = pivot_text.get(i, c["text"])
     chosen: List[int] = []
     per_source: Dict[int, int] = {}
@@ -753,43 +1102,84 @@ def evaluate(candidates: List[Dict[str, Any]], qterms_by_lang: Dict[str, List[st
 # ٦) الخط الكامل
 # ============================================================
 def _run_parallel(jobs: List[Tuple[str, Any, tuple]], deadline: float) -> Tuple[Dict[str, Any], Dict[str, str]]:
+    """تشغيل متوازٍ بميزانية زمنية حقيقية.
+
+    R-825 (إصلاح): كان `with ThreadPoolExecutor` ينتظر عند الخروج كل مزود بطيء حتى انتهاء مهلته
+    الخاصة — فالميزانية لم تكن تُطبَّق فعليًا. الآن: عند انتهاء الميزانية يُعلن ما لم يكتمل
+    «تجاوز المهلة» ويُترك خيطه يكمل في الخلفية دون أن يحجز الجواب.
+    """
     results, status = {}, {}
-    with ThreadPoolExecutor(max_workers=min(12, max(1, len(jobs)))) as ex:
-        futs = {ex.submit(fn, *args): name for name, fn, args in jobs}
-        try:
-            for f in as_completed(futs, timeout=max(1.0, deadline - time.monotonic())):
-                name = futs[f]
-                try:
-                    results[name] = f.result()
-                    status[name] = f"ok ({len(results[name]) if isinstance(results[name], list) else 1})"
-                except Exception as e:  # TOLERATED: مزود واحد يفشل لا يسقط البحث — يُعلن
-                    status[name] = f"فشل: {type(e).__name__}: {str(e)[:80]}"
-        except Exception:  # TOLERATED: انتهاء الميزانية — ما لم يكتمل يُعلن
-            for f, name in futs.items():
-                status.setdefault(name, "تجاوز المهلة")
+    if not jobs:
+        return results, status
+    ex = ThreadPoolExecutor(max_workers=min(24, max(1, len(jobs))))
+    futs = {ex.submit(fn, *args): name for name, fn, args in jobs}
+    try:
+        for f in as_completed(futs, timeout=max(1.0, deadline - time.monotonic())):
+            name = futs[f]
+            try:
+                results[name] = f.result()
+                status[name] = f"ok ({len(results[name]) if isinstance(results[name], list) else 1})"
+            except Exception as e:  # TOLERATED: مزود واحد يفشل لا يسقط البحث — يُعلن
+                status[name] = f"فشل: {type(e).__name__}: {str(e)[:80]}"
+    except Exception:  # TOLERATED: انتهاء الميزانية — ما لم يكتمل يُعلن
+        for f, name in futs.items():
+            status.setdefault(name, "تجاوز المهلة")
+    finally:
+        ex.shutdown(wait=False, cancel_futures=True)
+    _LAST_STATUS.update({k: {"status": v, "at": int(time.time())} for k, v in status.items()})
     return results, status
 
 
+_LAST_STATUS: Dict[str, Dict[str, Any]] = {}
+
+
+def engine_status() -> Dict[str, Any]:
+    """حالة محرك البحث: آخر نتيجة لكل مزود (من عمليات حقيقية) + حالة الفهرس الذاتي."""
+    import search_index
+    return {"enabled": enabled(), "languages": search_langs(), "providers_last_run": dict(_LAST_STATUS),
+            "index": search_index.status(),
+            "providers": ["bing", "bing-news", "google-news", "wikipedia-*", "wikidata", "pubmed",
+                          "europepmc", "openalex", "stackoverflow", "hackernews", "index",
+                          "duckduckgo", "marginalia", "owner-provider"]}
+
+
 def search_results(query: str, max_results: int = 10) -> Dict[str, Any]:
-    """نتائج بحث موحدة من كل المزودات (يخدم web.search بالمزود world)."""
+    """نتائج بحث موحدة من كل المزودات (يخدم web.search بالمزود world).
+
+    R-825: Bing أولًا (يعمل من السحابة) + الفهرس الذاتي + أخبار Google للأسئلة الآنية، ثم
+    DuckDuckGo/Marginalia/ويكيبيديا. الدمج تبادلي (الأول من كل مزود ثم الثاني…) بلا تكرار.
+    """
     lang = detect_lang(query)
-    q = keyword_query(core_question(query), lang)
+    core = core_question(query)
+    q = keyword_query(core, lang)
+    fresh = is_fresh(query)
     deadline = time.monotonic() + _env_float("WORLD_SEARCH_SEARCH_BUDGET_SECONDS", 12.0)
-    jobs = [("duckduckgo", _p_duckduckgo, (q, lang)), ("marginalia", _p_marginalia, (q, lang)),
+    jobs = [("bing", _p_bing, (q, lang)), ("index", _p_index, (_terms(core, lang), lang, fresh)),
+            ("duckduckgo", _p_duckduckgo, (q, lang)), ("marginalia", _p_marginalia, (q, lang)),
             (f"wikipedia-{lang}", _p_wikipedia, (q, lang))]
+    if fresh:
+        jobs.insert(1, ("google-news", _p_google_news, (q, lang)))
+        jobs.insert(2, ("bing-news", _p_bing_news, (q, lang)))
+    if is_tech(query):
+        jobs.append(("stackoverflow", _p_stackexchange, (q, lang)))
     results, status = _run_parallel(jobs, deadline)
+    lists = [results.get(name) or [] for name, *_ in jobs]
     merged, seen = [], set()
-    for name in ("duckduckgo", "marginalia", f"wikipedia-{lang}"):
-        for r in results.get(name) or []:
-            if r["url"] in seen:
-                continue
-            seen.add(r["url"])
-            merged.append({"title": r["title"][:200], "url": r["url"][:500],
-                           "snippet": (r.get("snippet") or r.get("text") or "")[:500]})
+    for depth in range(max((len(x) for x in lists), default=0)):
+        for lst in lists:
+            if depth < len(lst):
+                r = lst[depth]
+                if not r.get("url") or r["url"] in seen:
+                    continue
+                seen.add(r["url"])
+                merged.append({"title": r["title"][:200], "url": r["url"][:500],
+                               "snippet": (r.get("snippet") or r.get("text") or "")[:500],
+                               "provider": r.get("provider"), "published": r.get("published"),
+                               "site": r.get("site")})
     if not merged:
         raise RuntimeError("فشل البحث العالمي — كل المزودات: " + "؛ ".join(f"{k}: {v}" for k, v in status.items()))
     return {"query": query, "provider": "world", "count": min(len(merged), max_results),
-            "results": merged[:max_results], "providers": status}
+            "results": merged[:max_results], "providers": status, "fresh": fresh}
 
 
 def answer(question: str, target_lang: Optional[str] = None) -> Dict[str, Any]:
@@ -802,6 +1192,14 @@ def answer(question: str, target_lang: Optional[str] = None) -> Dict[str, Any]:
         return {"ok": False, "error": "سؤال فارغ"}
     user_lang = target_lang or detect_lang(question)
     core = core_question(question)
+    import search_index
+    use_cache = str(os.getenv("WORLD_SEARCH_CACHE", "true")).strip().lower() != "false"
+    ckey = search_index.cache_key(core, user_lang)
+    if use_cache:
+        hit = search_index.cache_get(ckey)
+        if hit and hit.get("ok"):
+            hit["elapsed_seconds"] = round(time.monotonic() - t0, 2)
+            return hit
     langs = list(dict.fromkeys([user_lang] + search_langs()))
     translators_used: Dict[str, str] = {}
 
@@ -818,6 +1216,8 @@ def answer(question: str, target_lang: Optional[str] = None) -> Dict[str, Any]:
             translators_used[f"سؤال→{lang}"] = tq[lang][1]
     qterms = {lang: _terms(q, lang) for lang, q in queries.items()}
     en_q = queries.get("en")
+    fresh = is_fresh(question) or is_fresh(en_q or "")
+    tech = is_tech(question) or is_tech(en_q or "")
 
     # ٢) البحث المتوازي
     jobs = []
@@ -825,6 +1225,23 @@ def answer(question: str, target_lang: Optional[str] = None) -> Dict[str, Any]:
         jobs.append((f"wikipedia-{lang}", _p_wikipedia, (keyword_query(q, lang), lang)))
     web_lang = "en" if en_q else user_lang
     web_q = keyword_query(queries.get(web_lang, core), web_lang)
+    user_q = keyword_query(core, user_lang)
+    # R-825: Bing أولًا (يعمل من السحابة) بلغة السائل وبالإنجليزية، والفهرس الذاتي دائمًا
+    jobs.insert(0, ("bing", _p_bing, (web_q, web_lang)))
+    if user_lang != web_lang:
+        jobs.insert(1, (f"bing-{user_lang}", _p_bing, (user_q, user_lang)))
+    idx_terms = list(dict.fromkeys(t for lang in queries for t in qterms.get(lang, [])))[:16]
+    jobs.append(("index", _p_index, (idx_terms, user_lang, fresh)))
+    if fresh:  # سؤال آني ⇒ مصادر الأخبار المؤرخة بلغة السائل وبالإنجليزية
+        for lang_ in dict.fromkeys([user_lang, web_lang]):
+            qq = user_q if lang_ == user_lang else web_q
+            jobs.append((f"bing-news-{lang_}", _p_bing_news, (qq, lang_)))
+            jobs.append((f"google-news-{lang_}", _p_google_news, (qq, lang_)))
+    if tech and en_q:
+        jobs.append(("stackoverflow", _p_stackexchange, (keyword_query(en_q, "en"), "en")))
+        jobs.append(("hackernews", _p_hackernews, (keyword_query(en_q, "en"), "en")))
+    if en_q and not fresh:
+        jobs.append(("openalex", _p_openalex, (scholarly_query(en_q), "en")))
     jobs.append(("duckduckgo", _p_duckduckgo, (web_q, web_lang)))
     if user_lang != web_lang:
         jobs.append((f"duckduckgo-{user_lang}", _p_duckduckgo, (keyword_query(core, user_lang), user_lang)))
@@ -850,8 +1267,17 @@ def answer(question: str, target_lang: Optional[str] = None) -> Dict[str, Any]:
             seen.add(url)
             cred, label = credibility(url, bool(r.get("scholarly")))
             sources.append({**r, "cred": cred, "cred_label": label})
-    web_to_read = sorted([s for s in sources if not s.get("text")],
-                         key=lambda s: -s["cred"])[:_env_int("WORLD_SEARCH_MAX_PAGES", 5)]
+    # R-825: ترتيب القراءة = موثوقية + مكافأة ترتيب محرك البحث (أعلى نتائج Bing) + للآني: أخبار Bing
+    def _read_priority(s_):
+        bonus = 0.0
+        if str(s_.get("provider", "")).startswith("bing") and s_.get("rank", 99) < 4:
+            bonus += 0.3 - 0.05 * s_.get("rank", 0)
+        if fresh and s_.get("news"):
+            bonus += 0.2
+        return -(s_["cred"] + bonus)
+    readable = [s_ for s_ in sources if not s_.get("text")
+                or (fresh and s_.get("provider") == "bing-news" and s_.get("rank", 99) < 3)]
+    web_to_read = sorted(readable, key=_read_priority)[:_env_int("WORLD_SEARCH_MAX_PAGES", 6)]
 
     def _read(src):
         import web_tools
@@ -861,7 +1287,8 @@ def answer(question: str, target_lang: Optional[str] = None) -> Dict[str, Any]:
         pres, pstat = _run_parallel([(s["url"], _read, (s,)) for s in web_to_read],
                                     min(deadline - 5, time.monotonic() + 12.0))
         for s in web_to_read:
-            s["text"] = pres.get(s["url"]) or s.get("snippet") or ""
+            base = s.get("text") or ""
+            s["text"] = ((base + "\n") if base and s["url"] in pres else "") + (pres.get(s["url"]) or base or s.get("snippet") or "")
             s["read"] = s["url"] in pres
     for s in sources:
         if not s.get("text"):
@@ -870,9 +1297,18 @@ def answer(question: str, target_lang: Optional[str] = None) -> Dict[str, Any]:
     # ٤) المرشحات والتقييم
     candidates = []
     for idx, s in enumerate(sources):
-        for sent in sentences(s["text"])[:60]:
+        if fresh and s.get("news") and s.get("text") == s.get("title"):
+            continue  # عنوان خبر مجرد ⇒ يُعرض في «أحدث العناوين» لا كنقطة مكررة
+        fr = freshness(s.get("published"), 30.0)
+        cred = s["cred"]
+        if fresh and (s.get("provider", "").startswith("wikipedia") or s.get("scholarly")):
+            cred = round(cred * 0.7, 3)  # الآني: الموسوعة والأبحاث لا تعرف سعر اليوم
+        texts = sentences(s["text"])[:60]
+        if s.get("snippet") and s.get("text") != s.get("snippet"):
+            texts = sentences(s["snippet"])[:2] + texts  # مقتطف المحرك غالبًا أدق جملة
+        for sent in dict.fromkeys(texts):
             candidates.append({"text": sent, "lang": s.get("lang") or detect_lang(sent),
-                               "source_idx": idx, "cred": s["cred"]})
+                               "source_idx": idx, "cred": cred, "fresh": fr})
     for c in candidates:  # لغة الجملة الفعلية (صفحة إنجليزية من بحث عربي مثلًا)
         c["lang"] = detect_lang(c["text"]) if c["lang"] not in ("fr", "es", "de") else c["lang"]
 
@@ -892,12 +1328,12 @@ def answer(question: str, target_lang: Optional[str] = None) -> Dict[str, Any]:
         chosen, seen_txt = [], set()
         for part in parts:
             for c in evaluate([dict(x) for x in candidates], {**qterms, "en": _terms(part, "en")},
-                              _to_pivot, top_k=max(2, top_k // len(parts))):
+                              _to_pivot, top_k=max(2, top_k // len(parts)), fresh_mode=fresh):
                 if c["text"] not in seen_txt:
                     seen_txt.add(c["text"])
                     chosen.append(c)
     else:
-        chosen = evaluate(candidates, qterms, _to_pivot, top_k=top_k)
+        chosen = evaluate(candidates, qterms, _to_pivot, top_k=top_k, fresh_mode=fresh)
     wd = next((s_ for s_ in sources if s_.get("provider") == "wikidata"), None)
     if wd:  # الحقيقة المنظّمة تجيب ⇒ لا يُرفق من الجمل إلا القوي جدًا (لا حشو)
         chosen = [c for c in chosen if c.get("score", 0) >= 0.75 and c.get("coverage", 0) >= 0.99][:3]
@@ -914,60 +1350,132 @@ def answer(question: str, target_lang: Optional[str] = None) -> Dict[str, Any]:
         c["translated"], c["translator"] = translate(c["text"], user_lang, c["lang"])
         if not c["translator"] and c.get("pivot") and c["pivot"] != c["text"]:
             c["translated"], c["translator"] = translate(c["pivot"], user_lang, "en")
+    # R-825: أحدث العناوين المطابقة (للأسئلة الآنية) — مؤرخة ومترجمة إلى لغة السائل
+    digest = news_digest(sources, qterms, limit=_env_int("WORLD_SEARCH_NEWS_ITEMS", 5)) if fresh else []
+    for lang_ in {sources[d["source_idx"]].get("lang") for d in digest}:
+        idxs = [d for d in digest if sources[d["source_idx"]].get("lang") == lang_]
+        titles = [sources[d["source_idx"]]["title"] for d in idxs]
+        if lang_ == user_lang or time.monotonic() > deadline - 2:
+            out_t, tname = titles, ("identity" if lang_ == user_lang else None)
+        else:
+            joined, tname = translate("\n".join(titles), user_lang, lang_ or "auto")
+            out_t = joined.split("\n") if tname and len(joined.split("\n")) == len(titles) else titles
+            tname = tname if out_t is not titles else None
+        for d, t in zip(idxs, out_t):
+            d["translated"], d["translator"] = t, tname
     used_idx = [sources.index(wd)] if wd else []
     for c in chosen:
         if c["source_idx"] not in used_idx:
             used_idx.append(c["source_idx"])
+    for d in digest:
+        if d["source_idx"] not in used_idx:
+            used_idx.append(d["source_idx"])
     cited = [{"n": n + 1, "title": sources[i].get("title", "")[:160], "url": sources[i]["url"],
               "provider": sources[i].get("provider"), "credibility": sources[i]["cred"],
-              "credibility_label": sources[i]["cred_label"], "lang": sources[i].get("lang")}
+              "credibility_label": sources[i]["cred_label"], "lang": sources[i].get("lang"),
+              "published": sources[i].get("published"), "site": sources[i].get("site")}
              for n, i in enumerate(used_idx)]
-    num = {i: n + 1 for n, i in enumerate(used_idx)}
+    num = {i: n + 1 for n, i in enumerate(used_idx)}  # يشمل مصادر الأخبار
     points = [{"text": c.get("translated") or c["text"], "original": c["text"], "lang": c["lang"],
                "source": num[c["source_idx"]], "score": c["score"], "relevance": c["relevance"],
-               "agreement": c["agreement"], "credibility": c["cred"], "translator": c.get("translator")}
+               "agreement": c["agreement"], "credibility": c["cred"], "translator": c.get("translator"),
+               "published": sources[c["source_idx"]].get("published"), "freshness": c.get("fresh", 0.0)}
               for c in chosen]
+    news = [{"title": d.get("translated") or sources[d["source_idx"]]["title"],
+             "original": sources[d["source_idx"]]["title"], "source": num.get(d["source_idx"]) or
+             (used_idx.index(d["source_idx"]) + 1), "site": sources[d["source_idx"]].get("site"),
+             "published": sources[d["source_idx"]].get("published"), "url": sources[d["source_idx"]]["url"],
+             "score": d["score"], "translator": d.get("translator")} for d in digest]
     if wd:  # الحقيقة المنظّمة أولًا — أدق من أي جملة مقتبسة
         points.insert(0, {"text": wd["fact_text"], "original": wd["fact_text"], "lang": user_lang,
                           "source": 1, "score": 1.0,
                           "relevance": 1.0, "agreement": 0.0, "credibility": wd["cred"],
                           "translator": "identity", "structured": True})
-    return {
-        "ok": bool(points), "question": question, "core_question": core, "user_lang": user_lang,
+    # R-825: الفهرس الذاتي ينمو — كل ما قُرئ أو وُجد بنص كافٍ يُحفظ في الخلفية
+    search_index.store_pages_async([s_ for s_ in sources if s_.get("provider") != "index" and
+                                    (s_.get("read") or s_.get("news") or s_.get("scholarly")
+                                     or str(s_.get("provider", "")).startswith("wikipedia"))])
+    result = {
+        "ok": bool(points or news), "question": question, "core_question": core, "user_lang": user_lang,
+        "fresh": fresh, "news": news, "cached": False,
+        "index_used": sum(1 for i in used_idx if sources[i].get("provider") == "index"),
         "queries": queries, "languages_searched": sorted({s.get("lang") for s in sources if s.get("lang")}),
         "points": points, "sources": cited, "sources_considered": len(sources),
         "candidates_evaluated": len(candidates), "providers": providers,
         "translators": translators_used, "elapsed_seconds": round(time.monotonic() - t0, 2),
-        "error": None if points else "لم يُعثر على جمل ذات صلة كافية في المصادر المتاحة",
-        "method": "بحث متعدد المزودات واللغات ← قراءة المصادر ← تقييم حتمي (صلة BM25 وتغطية المفاهيم ٤٥٪ + "
-                  "موثوقية المصدر ٣٥٪ + توافق المصادر المستقلة ٢٠٪) ← ترجمة آلية — بلا نموذج لغوي",
+        "error": None if (points or news) else "لم يُعثر على جمل ذات صلة كافية في المصادر المتاحة",
+        "method": ("بحث متعدد المزودات واللغات (Bing وأخبار Bing/Google وويكيبيديا وويكي بيانات والأبحاث "
+                   "المحكّمة والفهرس الذاتي) ← قراءة المصادر ← تقييم حتمي ("
+                   + ("صلة ٤٠٪ + موثوقية ٢٥٪ + توافق ١٥٪ + حداثة ٢٠٪ — سؤال آني"
+                      if fresh else "صلة BM25 وتغطية المفاهيم ٤٥٪ + موثوقية المصدر ٣٥٪ + توافق المصادر المستقلة ٢٠٪")
+                   + ") ← ترجمة آلية — بلا نموذج لغوي"),
     }
+    if use_cache and result["ok"]:
+        search_index.cache_put_async(ckey, result, _env_int("WORLD_SEARCH_FRESH_TTL_SECONDS", 900) if fresh
+                                     else _env_int("WORLD_SEARCH_CACHE_TTL_SECONDS", 259200))
+    return result
+
+
+def _date_ar(iso: Optional[str]) -> str:
+    """تاريخ مختصر للعرض: «منذ ٣ ساعات» للحديث جدًا وإلا YYYY-MM-DD."""
+    d = age_days(iso)
+    if d is None:
+        return ""
+    def _n(k, one, two, few, many):
+        return one if k == 1 else two if k == 2 else f"{k} {few}" if 3 <= k <= 10 else f"{k} {many}"
+    if d < 1:
+        h = int(d * 24)
+        return "منذ أقل من ساعة" if h < 1 else "منذ " + _n(h, "ساعة", "ساعتين", "ساعات", "ساعة")
+    if d < 7:
+        return "منذ " + _n(int(d), "يوم", "يومين", "أيام", "يومًا")
+    return str(iso)[:10]
 
 
 def format_reply(res: Dict[str, Any]) -> str:
-    """تنسيق عربي للجواب — كل جملة مقتبسة برقم مصدرها."""
+    """تنسيق عربي للجواب — كل جملة مقتبسة برقم مصدرها، والأخبار مؤرخة."""
     if not res.get("ok"):
         prov = "؛ ".join(f"{k}: {v}" for k, v in (res.get("providers") or {}).items())
         return ("بحثت في مصادر العالم بلا نموذج لغوي لكن لم أجد إجابة موثوقة كافية: "
                 f"{res.get('error') or 'فشل'}." + (f"\nحالة المزودات: {prov}" if prov else ""))
-    pts = res["points"]
-    lines = [f"إجابة مجمّعة من {len(res['sources'])} مصدر (من {res.get('sources_considered', 0)} مصدرًا "
-             f"و{res.get('candidates_evaluated', 0)} جملة قُيّمت، لغات البحث: "
-             + "، ".join(LANG_NAMES_AR.get(x, x) for x in res.get("languages_searched") or [])
-             + "):", "", f"الخلاصة الأقوى: {pts[0]['text']} [{pts[0]['source']}]"]
-    if len(pts) > 1:
-        lines += ["", "نقاط داعمة:"]
-        lines += [f"• {p['text']} [{p['source']}]" for p in pts[1:]]
+    pts = res.get("points") or []
+    news = res.get("news") or []
+    head = (f"إجابة مجمّعة من {len(res['sources'])} مصدر (من {res.get('sources_considered', 0)} مصدرًا "
+            f"و{res.get('candidates_evaluated', 0)} جملة قُيّمت، لغات البحث: "
+            + "، ".join(LANG_NAMES_AR.get(x, x) for x in res.get("languages_searched") or []) + ")")
+    if res.get("cached"):
+        head += f" — من ذاكرة المحرك (عمرها {int(res.get('cache_age_seconds') or 0) // 60} دقيقة)"
+    lines = [head + ":", ""]
+
+    def _d(p):
+        dd = _date_ar(p.get("published"))
+        return f" ({dd})" if dd and res.get("fresh") else ""
+    if pts:
+        lines.append(f"الخلاصة الأقوى: {pts[0]['text']} [{pts[0]['source']}]{_d(pts[0])}")
+        if len(pts) > 1:
+            lines += ["", "نقاط داعمة:"]
+            lines += [f"• {p['text']} [{p['source']}]{_d(p)}" for p in pts[1:]]
+    if news:
+        if pts:
+            lines.append("")
+        lines.append("أحدث العناوين المطابقة:")
+        for n in news:
+            meta = " — ".join(x for x in (n.get("site") or "", _date_ar(n.get("published"))) if x)
+            lines.append(f"• {n['title']} [{n['source']}]" + (f" ({meta})" if meta else ""))
     lines += ["", "المصادر (مرتبة بالاستشهاد):"]
     for s in res["sources"]:
-        lines.append(f"[{s['n']}] {s['title'] or s['url']} — {s['credibility_label']} — {s['url']}")
-    machine = any(p.get("translator") not in (None, "identity") for p in pts)
-    untrans = any(p.get("translator") is None and p.get("lang") != res.get("user_lang") for p in pts)
+        dd = _date_ar(s.get("published"))
+        lines.append(f"[{s['n']}] {s['title'] or s['url']} — {s['credibility_label']}"
+                     + (f" — {dd}" if dd else "") + f" — {s['url']}")
+    allp = pts + news
+    machine = any(p.get("translator") not in (None, "identity") for p in allp)
+    untrans = any(p.get("translator") is None and p.get("lang", "") != res.get("user_lang") for p in pts)
     lines += ["", "المنهج: " + res["method"] + "."]
+    if res.get("fresh"):
+        lines.append("تنبيه: سؤال آني — القيم تتغير باستمرار؛ التاريخ بجانب كل معلومة هو تاريخ نشر مصدرها.")
     if machine:
         lines.append("تنبيه: الترجمة آلية — راجع النص الأصلي في المصدر عند الحاجة.")
     if untrans:
         lines.append("تنبيه: تعذرت ترجمة بعض الجمل فبقيت بلغتها الأصلية.")
     lines.append("هذه معلومات عامة من المصادر وليست استشارة طبية أو مهنية شخصية."
-                 if any(s.get("provider") in ("europepmc", "pubmed") for s in res["sources"]) else "")
+                 if any(s.get("provider") in ("europepmc", "pubmed", "openalex") for s in res["sources"]) else "")
     return "\n".join(x for x in lines if x is not None).rstrip()

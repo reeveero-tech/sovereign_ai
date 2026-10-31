@@ -3108,7 +3108,8 @@ def _register_real_tools() -> None:
 
     registry.register(ToolSpec(
         name="web.search",
-        description="بحث ويب حي (searxng محلي أو tavily) — نتائج مستشهدة بمصادر",
+        description=("بحث ويب حي — محرك world (R-825: Bing + أخبار Bing/Google + الفهرس الذاتي + "
+                     "ويكيبيديا…) أو searxng/tavily إن ضُبطا — نتائج مستشهدة بمصادر وتواريخ"),
         inputs={"query": "سؤال البحث"}, outputs="results[] (title/url/snippet)",
         handler=lambda query: __import__("web_tools").search(query)))
     registry.register(ToolSpec(
@@ -3149,6 +3150,12 @@ def _register_real_tools() -> None:
         inputs={"question": "السؤال بأي لغة", "target_lang": "لغة الجواب (اختياري — لغة السؤال افتراضيًا)"},
         outputs="points[]/sources[]/providers/method",
         handler=lambda question, target_lang=None: __import__("world_search").answer(question, target_lang)))
+    registry.register(ToolSpec(
+        name="search.status",
+        description=("R-825: حالة محرك البحث — آخر نتيجة حقيقية لكل مزود (Bing/الأخبار/ويكيبيديا/الأبحاث/…) "
+                     "وحجم الفهرس الذاتي في Supabase وعدادات الذاكرة المؤقتة"),
+        inputs={}, outputs="enabled/providers_last_run/index",
+        handler=lambda: __import__("world_search").engine_status()))
     registry.register(ToolSpec(
         name="media.create",
         description=("R-824: استوديو الوسائط — تصميم صورة أو فيديو MP4 من وصف بأي لغة (خادم ذاتي ⇒ مولدات "
