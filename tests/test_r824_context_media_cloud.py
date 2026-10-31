@@ -331,3 +331,53 @@ def test_cloud_output_markdown_becomes_plain_text():
     out = cloud_brain.plain("- **الحمية منخفضة** نص [3].\n> **ما يفتقد**\n## عنوان\n---\nنهاية")
     assert "**" not in out and "##" not in out and not out.startswith("-")
     assert "• الحمية منخفضة نص [3]." in out and "[3]" in out
+
+
+def test_edit_after_video_stays_video():
+    """ثبت حيًا: «اجعلها ليلية» بعد فيديو أعاد صورة."""
+    hist = [{"role": "user", "content": "اصنع فيديو عن الغروب"},
+            {"role": "assistant", "content": "تم إنشاء الفيديو (80 ث) — معروض أدناه.\nالوصف المستخدم: sunset on the sea"}]
+    r = ms.detect("اجعلها ليلية", hist)
+    assert r and r["kind"] == "video" and r["edit_of"] == "sunset on the sea"
+
+
+def test_horde_request_within_anonymous_limit(monkeypatch):
+    """ثبت حيًا: 1024×576 مجهولًا ⇒ 403 KudosUpfront — الطلب الآن ≤630 لكل بُعد والناتج يُكبَّر محليًا."""
+    import httpx
+    from PIL import Image
+    small = io.BytesIO()
+    Image.new("RGB", (576, 320), (1, 2, 3)).save(small, "PNG")
+    sent = {}
+
+    class R:
+        def __init__(self, code, js=None, content=b""):
+            self.status_code, self._js, self.content = code, js, content
+
+        def json(self):
+            return self._js
+
+    class C:
+        def __init__(self, *a, **k):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def post(self, url, headers=None, json=None):
+            sent.update(json["params"])
+            return R(202, {"id": "j"})
+
+        def get(self, url, headers=None, follow_redirects=False):
+            if "/check/" in url:
+                return R(200, {"done": True})
+            if "/status/" in url:
+                return R(200, {"generations": [{"img": "https://x/img.webp"}]})
+            return R(200, content=small.getvalue())
+    monkeypatch.setattr(httpx, "Client", C)
+    monkeypatch.setattr(ms.time, "sleep", lambda s: None)
+    data, mime = ms._gen_horde("a cat", (1024, 576))
+    assert sent["width"] <= 630 and sent["height"] <= 630
+    assert Image.open(io.BytesIO(data)).size == (1024, 576)

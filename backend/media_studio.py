@@ -112,7 +112,8 @@ def detect(text: str, history=None) -> Optional[Dict[str, Any]]:
         prev_prompt = context_resolver.last_media_prompt(history)
         if not (prev_prompt and _EDIT.search(t) and len(t.split()) <= 14):
             return None
-        is_vid = bool(re.search(_VID_NOUNS, t, re.I))
+        # R-824f: «اجعلها ليلية» بعد فيديو ⇒ فيديو (ثُبت حيًا: كان يعيد صورة)
+        is_vid = bool(re.search(_VID_NOUNS, t, re.I)) or context_resolver.last_media_kind(history) == "video"
     m = _DETECT_VID.search(t) if is_vid else (_DETECT_IMG.search(t) or _BARE.match(t) or _DRAW.match(t))
     subject = t[m.end():] if m else t
     # R-824e: صفات المدة/الحجم بعد الاسم ليست موضوعًا («فيديو قصير عن الغروب» ⇒ «الغروب»)
@@ -225,12 +226,25 @@ def _gen_pollinations(prompt: str, size: Tuple[int, int]) -> Optional[Tuple[byte
     raise RuntimeError("حد المعدل")
 
 
+def _fit_size(img: Tuple[bytes, str], size: Tuple[int, int]) -> Tuple[bytes, str]:
+    """ناتج أصغر من المطلوب (حدود المولد المجاني) ⇒ تكبير LANCZOS للمقاس المطلوب PNG."""
+    from PIL import Image
+    im = Image.open(io.BytesIO(img[0]))
+    if im.size == tuple(size):
+        return img
+    out = io.BytesIO()
+    im.convert("RGB").resize(tuple(size), Image.LANCZOS).save(out, "PNG", optimize=True)
+    return out.getvalue(), "image/png"
+
+
 def _gen_horde(prompt: str, size: Tuple[int, int], cancel=None) -> Optional[Tuple[bytes, str]]:
     import httpx
     key = _env("HORDE_API_KEY", "0000000000")
     hdr = {"apikey": key, "Client-Agent": "sovereign_ai:1.0:" + _env("WORLD_SEARCH_CONTACT_EMAIL", "anon")}
-    w, h = (int(x / 64) * 64 for x in size)
-    body = {"prompt": prompt[:900], "params": {"width": min(w, 768), "height": min(h, 768), "steps": 20, "n": 1},
+    # R-824f: المجهول محدود بـ630×630 لكل بُعد («KudosUpfront» = HTTP 403 ثُبت حيًا) ⇒ تصغير بنسبة ثم تكبير محلي
+    sc = min(1.0, 576 / max(size))
+    w, h = (max(64, int(x * sc / 64) * 64) for x in size)
+    body = {"prompt": prompt[:900], "params": {"width": w, "height": h, "steps": 20, "n": 1},
             "nsfw": False, "censor_nsfw": True, "r2": True, "shared": False}
     max_wait = float(_env("MEDIA_HORDE_MAX_WAIT_SECONDS", "150"))
     with httpx.Client(timeout=30) as c:
@@ -252,7 +266,7 @@ def _gen_horde(prompt: str, size: Tuple[int, int], cancel=None) -> Optional[Tupl
                 img = c.get(gens[0]["img"], follow_redirects=True)
                 v = _valid_image(img.content)
                 if v:
-                    return v
+                    return _fit_size(v, size)
                 raise RuntimeError("صورة غير صالحة")
         try:
             c.delete(f"https://aihorde.net/api/v2/generate/status/{jid}", headers=hdr)

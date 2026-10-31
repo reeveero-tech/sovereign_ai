@@ -174,6 +174,16 @@ def last_media_prompt(history) -> Optional[str]:
     return None
 
 
+def last_media_kind(history) -> Optional[str]:
+    """R-824f: نوع آخر وسائط ولّدها النظام («تم إنشاء الفيديو/الصورة») — تعديل الفيديو يبقى فيديو."""
+    for t in reversed(list(history or [])):
+        if isinstance(t, dict) and t.get("role") == "assistant":
+            c = str(t.get("content") or "")
+            if _PROMPT_LINE.search(c):
+                return "video" if "تم إنشاء الفيديو" in c or ".mp4" in c else "image"
+    return None
+
+
 def target_lang_in(text: str, default: Optional[str] = None) -> Optional[str]:
     low = _norm(text).lower()
     for name, code in _LANG_NAMES.items():
