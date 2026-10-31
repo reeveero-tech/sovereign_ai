@@ -317,3 +317,17 @@ def test_unanswered_detected_despite_sentiment_suffix():
     assert _is_unanswered(base)
     assert _is_unanswered(base + " (مشاعرك: إيجابية)")
     assert not _is_unanswered("جواب حقيقي")
+
+
+def test_duration_adjectives_not_in_subject():
+    """ثبت حيًا: «فيديو قصير عن الغروب» صار وصفه «Short on sunset» وعنوانه «قصير عن…»."""
+    assert ms.detect("اصنع فيديو قصير عن غروب الشمس على البحر")["subject"] == "غروب الشمس على البحر"
+    r = ms.detect("make a short video about sunset")
+    assert r["kind"] == "video" and r["subject"] == "sunset"
+
+
+def test_cloud_output_markdown_becomes_plain_text():
+    """الواجهة تعرض نصًا خامًا آمنًا ⇒ رموز Markdown لا تظهر حرفيًا، والاستشهادات تبقى."""
+    out = cloud_brain.plain("- **الحمية منخفضة** نص [3].\n> **ما يفتقد**\n## عنوان\n---\nنهاية")
+    assert "**" not in out and "##" not in out and not out.startswith("-")
+    assert "• الحمية منخفضة نص [3]." in out and "[3]" in out

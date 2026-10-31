@@ -66,6 +66,19 @@ def _min_interval() -> float:
         return 45.0
 
 
+def plain(text: str) -> str:
+    """R-824e: الواجهة تعرض نصًا خامًا (بلا innerHTML) ⇒ رموز Markdown تظهر حرفيًا («**عنوان**») —
+    تحويل للنص المقروء: عريض/مائل/عناوين/اقتباس ⇒ نص، والنقاط ⇒ «•»، والاستشهادات [n] كما هي."""
+    t = str(text or "").replace("\r\n", "\n")
+    t = re.sub(r"\*\*(.+?)\*\*|__(.+?)__", lambda m: m.group(1) or m.group(2), t)
+    t = re.sub(r"(?m)^\s{0,3}#{1,6}\s+", "", t)
+    t = re.sub(r"(?m)^\s{0,3}>\s?", "", t)
+    t = re.sub(r"(?m)^(\s*)[-*+]\s+", lambda m: m.group(1) + "• ", t)
+    t = re.sub(r"(?m)^\s*(?:-{3,}|\*{3,}|_{3,})\s*$", "", t)
+    t = re.sub(r"(?m)[ \t]+$", "", t)
+    return re.sub(r"\n{3,}", "\n\n", t).strip()
+
+
 def chat(system: str, user: str, history=None, max_tokens: int = 1400) -> Optional[str]:
     """نداء واحد — نص المساعد أو None (معطّل/محدود المعدل/فشل)."""
     global _NEXT_ALLOWED, _LAST
@@ -108,7 +121,7 @@ def chat(system: str, user: str, history=None, max_tokens: int = 1400) -> Option
             _NEXT_ALLOWED = time.time() + _min_interval()
             if isinstance(content, str) and content.strip():
                 _LAST = {"result": "ok", "error": None, "model": data.get("model") or model(), "at": time.time()}
-                return content.strip()
+                return plain(content)
             _LAST = {"result": "error", "error": "empty", "model": model(), "at": time.time()}
             return None
         except Exception as e:  # TOLERATED: طبقة صياغة اختيارية — الحتمي يبقى

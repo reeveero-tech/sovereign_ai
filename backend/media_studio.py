@@ -44,8 +44,10 @@ _IMG_NOUNS = (r"(?:صور[ةه]?|صوره|رسم[ةه]?|رسمه|لوح[ةه]|ت
               r"بطاق[ةه]|غلاف|خلفي[ةه]|أيقون[ةه]|ايقون[ةه]|انفوجرافيك|إنفوجرافيك|image|picture|photo|"
               r"illustration|logo|poster|banner|wallpaper|icon|drawing|artwork|flyer|cover)")
 _VID_NOUNS = r"(?:فيديو|فديو|مقطع|انيميشن|أنيميشن|رسوم متحركة|موشن|video|clip|animation|reel)"
-_DETECT_IMG = re.compile(_VERBS + r"\s+(?:لي\s+|لنا\s+|me\s+|us\s+)?(?:an?\s+|ال)?" + _IMG_NOUNS, re.I)
-_DETECT_VID = re.compile(_VERBS + r"\s+(?:لي\s+|لنا\s+|me\s+|us\s+)?(?:an?\s+|ال)?" + _VID_NOUNS, re.I)
+# R-824e: صفة إنجليزية قبل الاسم («make a short video») — العربية تأتي بالصفة بعده وتُزال من الموضوع
+_EN_ADJ = r"(?:(?:short|quick|brief|small|long|nice|beautiful|professional|cool|simple|modern)\s+)?"
+_DETECT_IMG = re.compile(_VERBS + r"\s+(?:لي\s+|لنا\s+|me\s+|us\s+)?(?:an?\s+|ال)?" + _EN_ADJ + _IMG_NOUNS, re.I)
+_DETECT_VID = re.compile(_VERBS + r"\s+(?:لي\s+|لنا\s+|me\s+|us\s+)?(?:an?\s+|ال)?" + _EN_ADJ + _VID_NOUNS, re.I)
 _BARE = re.compile(r"^(?:" + _IMG_NOUNS + "|" + _VID_NOUNS + r")\s+(?:لـ|ل|عن|of|for)\s*(?=\S)", re.I)
 # فعل الرسم وحده يعني صورة: «ارسم قطة في حديقة» / «draw a cat»
 _DRAW = re.compile(r"^(?:ارسم|أرسم|إرسم|draw|paint|sketch|illustrate)\s+(?:لي\s+|لنا\s+|me\s+|us\s+)?(?=\S)", re.I)
@@ -113,6 +115,9 @@ def detect(text: str, history=None) -> Optional[Dict[str, Any]]:
         is_vid = bool(re.search(_VID_NOUNS, t, re.I))
     m = _DETECT_VID.search(t) if is_vid else (_DETECT_IMG.search(t) or _BARE.match(t) or _DRAW.match(t))
     subject = t[m.end():] if m else t
+    # R-824e: صفات المدة/الحجم بعد الاسم ليست موضوعًا («فيديو قصير عن الغروب» ⇒ «الغروب»)
+    subject = re.sub(r"^\s*(?:قصيرة?|قصيرًا|قصيرا|طويلة?|طويلًا|طويلا|سريعة?|صغيرة?|جميلة?|احترافية?|"
+                     r"short|quick|brief|long|nice|beautiful|professional)\b\s*", "", subject, flags=re.I)
     subject = re.sub(r"^\s*(?:an?\s+|the\s+)?(?:لـ|ل(?=\S)|عن|يوضح|توضح|تبين|يبين|فيها|فيه|بها|of|for|about|showing|with)?\s*",
                      "", subject, flags=re.I).strip(" :،,.؟?")
     if _NOT_MEDIA.match(subject):
