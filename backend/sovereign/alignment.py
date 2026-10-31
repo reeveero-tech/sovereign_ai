@@ -581,6 +581,8 @@ class SovereignAlignment:
         
         # كشف الانحرافات
         new_violations = self.detect_violations()
+        # R-817 إحياء: عدد الانتهاكات الجديدة في هذه الدورة يُعاد في الحالة
+        new_violations_count = len(new_violations) if isinstance(new_violations, (list, tuple)) else 0
         active_violations = len([v for v in self.violations if not v.corrected])
         
         # توليد إشارات التصحيح
@@ -617,6 +619,7 @@ class SovereignAlignment:
                 "alignment_score": self.alignment_score,
                 "alignment_level": self.alignment_level,
                 "active_violations": active_violations,
+                "new_violations": new_violations_count,
                 "correction_signals": len(correction_signals)
             }
         )

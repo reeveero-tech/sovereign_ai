@@ -39,6 +39,11 @@ from collections import deque
 import traceback
 
 # TOLERATED: optional modules unavailable — degraded mode, not crash (R-680d)
+# R-817 (إحياء الاستيرادات العلوية): هذا القالب لا يُلقي الاستيرادات في العدم —
+# بل يسجّل توافر كل وحدة عند التحميل. الطرق أدناه تستورد محليًا داخل try/except
+# لتفادي الانهيار، وهذا السجل يمنح الطبقة العليا رؤية أي الوحدات حية فعلًا.
+_MODULE_AVAILABILITY: Dict[str, bool] = {}
+_MODULE_FACTORIES: Dict[str, Any] = {}
 try:
     from memory.core import get_core
     from memory.dynamic import get_dynamic_memory
@@ -62,8 +67,57 @@ try:
     from sovereign.directives import get_sovereign_directives
     from sovereign.controller import get_sovereign_controller
     from quantum.quantum_controller import get_quantum_controller
+    # الإحياء الحقيقي: كل دالة استيراد تُسجَّل بالاسم في سجل المصانع —
+    # وجودها هنا هو الغرض من الاستيراد العلوي (توافر + تشخيص + مرجع حي)
+    _MODULE_FACTORIES.update({
+        "memory.core": get_core,
+        "memory.dynamic": get_dynamic_memory,
+        "memory.store": get_store,
+        "memory.biological.instincts": get_instincts,
+        "memory.biological.drives": get_drives,
+        "memory.biological.archetypes": get_archetypes,
+        "consciousness.field": get_consciousness_field,
+        "consciousness.identity_core": get_identity_core,
+        "consciousness.self_model": get_self_model,
+        "consciousness.awareness": get_awareness_engine,
+        "consciousness.attention_engine": get_attention_engine,
+        "consciousness.introspection": get_introspection_engine,
+        "predictive.predictive_engine": get_predictive_engine,
+        "predictive.predictive_controller": get_predictive_controller,
+        "predictive.predictive_risk_manager": get_predictive_risk_manager,
+        "simulation.simulation_controller": get_simulation_controller,
+        "simulation.simulation_analyzer": get_simulation_analyzer,
+        "sovereign.will": get_sovereign_will,
+        "sovereign.alignment": get_sovereign_alignment,
+        "sovereign.directives": get_sovereign_directives,
+        "sovereign.controller": get_sovereign_controller,
+        "quantum.quantum_controller": get_quantum_controller,
+    })
+    _MODULE_AVAILABILITY.update({name: True for name in _MODULE_FACTORIES})
 except ImportError:
-    pass
+    for _missing in (
+        "memory.core", "memory.dynamic", "memory.store",
+        "memory.biological.instincts", "memory.biological.drives",
+        "memory.biological.archetypes", "consciousness.field",
+        "consciousness.identity_core", "consciousness.self_model",
+        "consciousness.awareness", "consciousness.attention_engine",
+        "consciousness.introspection", "predictive.predictive_engine",
+        "predictive.predictive_controller", "predictive.predictive_risk_manager",
+        "simulation.simulation_controller", "simulation.simulation_analyzer",
+        "sovereign.will", "sovereign.alignment", "sovereign.directives",
+        "sovereign.controller", "quantum.quantum_controller",
+    ):
+        _MODULE_AVAILABILITY.setdefault(_missing, False)
+
+
+def get_module_availability() -> Dict[str, bool]:
+    """خريطة توافر الوحدات الاختيارية عند تحميل المنسق — تُستخدم للتشخيص."""
+    return dict(_MODULE_AVAILABILITY)
+
+
+def get_module_factories() -> Dict[str, Any]:
+    """مصانع الوحدات المتاحة عند التحميل — مرجع حي للاستيرادات العلوية."""
+    return dict(_MODULE_FACTORIES)
 
 import logging
 logger = logging.getLogger(__name__)

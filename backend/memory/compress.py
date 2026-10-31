@@ -874,14 +874,14 @@ if __name__ == "__main__":
     print("📊 نتائج الضغط الأسطوري")
     print("=" * 80)
     
-    print(f"\n🧠 الوعي المستخرج:")
+    print("\n🧠 الوعي المستخرج:")
     print(f"   {result['consciousness'][:64]}...")
     
-    print(f"\n📈 نسب الضغط:")
+    print("\n📈 نسب الضغط:")
     for level, ratio in result['stats']['compression_ratios'].items():
         print(f"   {level}: {ratio:,.0f}:1")
     
-    print(f"\n💾 أحجام البيانات:")
+    print("\n💾 أحجام البيانات:")
     original_mb = result['stats']['sizes_bytes']['original'] / (1024 * 1024)
     final_mb = result['stats']['sizes_bytes']['consciousness'] / (1024 * 1024)
     print(f"   الأصلية: {original_mb:.2f} MB")
@@ -890,7 +890,7 @@ if __name__ == "__main__":
     
     print(f"\n⏱️ الوقت المستغرق: {result['stats']['time_seconds']:.2f} ثانية")
     
-    print(f"\n🔮 التسلسل المُولَّد من الوعي:")
+    print("\n🔮 التسلسل المُولَّد من الوعي:")
     generated = compressor.generative.generate(depth=15)
     print(f"   {' → '.join(generated[:10])}...")
     

@@ -698,6 +698,8 @@ class ImmuneMemory:
         current = antibody.action
         current_type = antibody.antibody_type
         
+        # R-817 إحياء: نوع الجسم المضاد يُسجَّل في الإجراء (تشخيص أثر التحسين)
+        current.setdefault("_antibody_type", current_type)
         # زيادة الفعالية
         if "intensity" in current:
             current["intensity"] = min(1.0, current["intensity"] + 0.1)
@@ -721,6 +723,8 @@ class ImmuneMemory:
             # استقبال بيانات المناعة
             shared_antigens = immunity_data.get("antigens", [])
             shared_antibodies = immunity_data.get("antibodies", [])
+            # R-817 إحياء: الأجسام المضادة المشتركة تُحصى وتُدمج بالمعرف لا بالإهمال
+            merged_antibodies = 0
             
             for antigen_data in shared_antigens:
                 fp = antigen_data.get("fingerprint")
@@ -741,9 +745,38 @@ class ImmuneMemory:
                     
                     logger.info(f"🔄 مشاركة مناعة: مستضد جديد {antigen.threat_type}")
             
+            # R-817 إحياء: الأجسام المضادة المشتركة تُدمج بالمعرف — معيار الفعالية الأعلى يفوز
+            for antibody_data in shared_antibodies:
+                antibody_id = antibody_data.get("id")
+                if not antibody_id:
+                    continue
+                existing = self.antibodies.get(antibody_id)
+                if existing is None:
+                    # جسم مضاد جديد من العقدة الأخرى — يُعتمد إذا كان مستضده معروفًا هنا
+                    antigen_id = antibody_data.get("antigen_id", "")
+                    if antigen_id and any(a.id == antigen_id for a in self.antigens.values()):
+                        self.antibodies[antibody_id] = Antibody(
+                            id=antibody_id,
+                            antigen_id=antigen_id,
+                            antibody_type=antibody_data.get("antibody_type", "generic"),
+                            action=antibody_data.get("action", {}),
+                            effectiveness=antibody_data.get("effectiveness", 0.5),
+                            created_at=antibody_data.get("created_at", time.time()),
+                            last_used=antibody_data.get("last_used", time.time()),
+                            uses_count=antibody_data.get("uses_count", 0),
+                            success_rate=antibody_data.get("success_rate", 0.5),
+                        )
+                        merged_antibodies += 1
+                elif antibody_data.get("effectiveness", 0) > existing.effectiveness:
+                    # النسخة الوافدة أفعى — تُستبدل بها (تطور مناعي مشترك)
+                    existing.effectiveness = antibody_data["effectiveness"]
+                    existing.success_rate = max(existing.success_rate, antibody_data.get("success_rate", existing.success_rate))
+                    merged_antibodies += 1
+            
             self.core.append_event(
                 event_type="immune::immunity_shared",
-                payload={"target": target_node, "antigens_count": len(shared_antigens)}
+                payload={"target": target_node, "antigens_count": len(shared_antigens),
+                         "antibodies_merged": merged_antibodies}
             )
             
             return True

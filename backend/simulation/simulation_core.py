@@ -353,8 +353,11 @@ class SimulationCore:
         runs_count = run.parameters.get("runs", 100)
         
         # الحصول على السيناريو
+        # R-817 إحياء: حالة السيناريوهات تُمرر للجري (عددها المتاح للمحاكاة)
         scenarios_status = self.scenarios.get_scenario_status()
         scenarios = self.scenarios.get_scenarios()
+        run.parameters.setdefault("scenarios_available", len(scenarios))
+        run.parameters.setdefault("scenarios_last_updated", scenarios_status.get("last_updated", 0))
         
         target_scenario = None
         for s in scenarios:
@@ -710,7 +713,7 @@ class SimulationCore:
                 recommendations.append({
                     "action": f"الاستعداد لسيناريو {scenario}",
                     "priority": "متوسطة",
-                    "reason": f"مخاطر عالية في هذا السيناريو",
+                    "reason": "مخاطر عالية في هذا السيناريو",
                     "confidence": data.get("avg_risk", 0)
                 })
         

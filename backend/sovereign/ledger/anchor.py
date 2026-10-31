@@ -210,6 +210,7 @@ class LedgerAnchor:
                     f"anchor_sig_v2|{batch_start}|{batch_end}|{len(batch_lines)}|"
                     f"{merkle_root}|{key_id}"
                 )
+                # R-817 إحياء: الصيغة المتوقعة تُعاد في رسالة الرفض (تشخيص للمستدعي)
                 # لا نستطيع التوقيع هنا (لا مفتاح) — نطلب من المستدعي
                 # أن يُوقّع بالصيغة v2. لكن للتوافق، نُسجل الصيغة v2
                 # و نتحقق أن signature يُطابق الصيغة
@@ -226,8 +227,8 @@ class LedgerAnchor:
             # إذا لم يُمرر keyring، لا يمكن التحقق — نُرفض (fail-closed)
             if keyring is None:
                 logger.error(
-                    f"❌ R-664: anchor_batch: no KeyRing provided — "
-                    f"cannot verify signature (fail-closed)"
+                    "❌ R-664: anchor_batch: no KeyRing provided — "
+                    "cannot verify signature (fail-closed)"
                 )
                 return None
             _key_record = keyring.get_key(key_id) if key_id else None
@@ -250,8 +251,8 @@ class LedgerAnchor:
             ).hexdigest()
             if not _hmac_v2.compare_digest(_expected_sig, signature or ""):
                 logger.error(
-                    f"❌ R-664: anchor_batch: signature mismatch — "
-                    f"arbitrary signature REJECTED (fail-closed)"
+                    "❌ R-664: anchor_batch: signature mismatch — "
+                    "arbitrary signature REJECTED (fail-closed)"
                 )
                 return None
 
@@ -448,8 +449,8 @@ class LedgerAnchor:
                 event_count_from_anchor = anchor.get("event_count")
                 if event_count_from_anchor is None:
                     result["message"] = (
-                        f"anchor missing event_count — structural failure "
-                        f"(cannot verify signature)"
+                        "anchor missing event_count — structural failure "
+                        "(cannot verify signature)"
                     )
                     return result
                 
@@ -484,8 +485,8 @@ class LedgerAnchor:
 
                 if not _hmac.compare_digest(expected_sig, anchor.get("signature", "")):
                     result["message"] = (
-                        f"anchor signature mismatch (v2): signature does not "
-                        f"cover merkle_root — possible tampering"
+                        "anchor signature mismatch (v2): signature does not "
+                        "cover merkle_root — possible tampering"
                     )
                     return result
                 result["signature_verified"] = True
@@ -513,8 +514,8 @@ class LedgerAnchor:
             else:
                 # v1 (قديم) — root_verified فقط (لا تحقق توقيع)
                 result["message"] = (
-                    f"root verified (v1 — signature not verified, "
-                    f"not trusted for cryptographic coverage)"
+                    "root verified (v1 — signature not verified, "
+                    "not trusted for cryptographic coverage)"
                 )
             
             # R-642: trusted = كل الشروط معًا

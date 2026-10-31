@@ -152,9 +152,9 @@ class TestAnchorRejectsArbitrarySignature:
         # يجب أن يُرفض — success = False (التوقيع فاشل، المرساة غير صالحة)
         # حتى لو كان الجذر صحيحًا، التوقيع العشوائي يُرفض
         assert success is False, (
-            f"verify_anchor must REJECT anchor with random signature — "
+            "verify_anchor must REJECT anchor with random signature — "
             f"but it returned success={success} (root_verified only). "
-            f"This means verify_anchor only checks root, not signature! "
+            "This means verify_anchor only checks root, not signature! "
             f"(message: {message})"
         )
         # الرسالة يجب أن تُشير إلى الرفض (وليس القبول)
@@ -193,7 +193,7 @@ class TestAnchorRejectsArbitrarySignature:
         success = result[0]
         message = result[1]
         assert success is False, (
-            f"verify_anchor must REJECT signature from DIFFERENT key — "
+            "verify_anchor must REJECT signature from DIFFERENT key — "
             f"but returned success={success} (message: {message})"
         )
 
@@ -221,7 +221,7 @@ class TestAnchorRejectsArbitrarySignature:
         success = result[0]
         message = result[1]
         assert success is False, (
-            f"verify_anchor must REJECT signature in WRONG FORMAT — "
+            "verify_anchor must REJECT signature in WRONG FORMAT — "
             f"but returned success={success} (message: {message})"
         )
 
@@ -243,7 +243,7 @@ class TestAnchorRejectsArbitrarySignature:
         success = result[0]
         message = result[1]
         assert success is False, (
-            f"verify_anchor must REJECT anchor WITHOUT signature — "
+            "verify_anchor must REJECT anchor WITHOUT signature — "
             f"but returned success={success} (message: {message})"
         )
 
@@ -261,7 +261,7 @@ class TestAnchorRejectsArbitrarySignature:
         success = result[0]
         message = result[1]
         assert success is False, (
-            f"verify_anchor must REJECT EMPTY signature — "
+            "verify_anchor must REJECT EMPTY signature — "
             f"but returned success={success} (message: {message})"
         )
 
@@ -279,7 +279,7 @@ class TestAnchorRejectsArbitrarySignature:
         success = result[0]
         message = result[1]
         assert success is False, (
-            f"verify_anchor must REJECT NULL signature — "
+            "verify_anchor must REJECT NULL signature — "
             f"but returned success={success} (message: {message})"
         )
 
@@ -305,7 +305,7 @@ class TestAnchorRejectsArbitrarySignature:
         message = result[1]
         # الجذر مختلف — root_verified = False → success = False
         assert success is False, (
-            f"verify_anchor must REJECT reused signature with DIFFERENT root — "
+            "verify_anchor must REJECT reused signature with DIFFERENT root — "
             f"but returned success={success} (message: {message})"
         )
 
@@ -336,9 +336,9 @@ class TestAnchorRejectsArbitrarySignature:
 
         # يجب أن يُرفض (يُعيد None) — لا يقبل توقيعًا تعسفيًا
         assert result is None, (
-            f"anchor_batch must REJECT arbitrary signature — "
-            f"but it created an anchor with fake signature. "
-            f"This means arbitrary signatures are accepted!"
+            "anchor_batch must REJECT arbitrary signature — "
+            "but it created an anchor with fake signature. "
+            "This means arbitrary signatures are accepted!"
         )
 
     def test_10_anchor_batch_accepts_valid_signature(self, tmp_path):
@@ -362,9 +362,9 @@ class TestAnchorRejectsArbitrarySignature:
 
         # يجب أن ينجح (يُعيد المرساة) — التوقيع الصحيح يُقبل
         assert result is not None, (
-            f"anchor_batch must ACCEPT valid signature — "
-            f"but it returned None. This means the protection "
-            f"is too strict (breaks valid signatures)!"
+            "anchor_batch must ACCEPT valid signature — "
+            "but it returned None. This means the protection "
+            "is too strict (breaks valid signatures)!"
         )
         assert result["anchor_id"], "anchor must have anchor_id"
         assert result["sig_format"] == "v2"
@@ -389,9 +389,9 @@ class TestAnchorRejectsArbitrarySignature:
 
         # يجب أن يُرفض (يُعيد None) — لا keyring = لا تحقق = رفض
         assert result is None, (
-            f"anchor_batch without keyring must be REJECTED (fail-closed) — "
-            f"but it created an anchor. This means arbitrary signatures "
-            f"are accepted when no keyring is provided!"
+            "anchor_batch without keyring must be REJECTED (fail-closed) — "
+            "but it created an anchor. This means arbitrary signatures "
+            "are accepted when no keyring is provided!"
         )
 
     def test_12_random_signature_base64url_43_chars_rejected(self, tmp_path):
@@ -415,7 +415,7 @@ class TestAnchorRejectsArbitrarySignature:
         success = result[0]
         message = result[1]
         assert success is False, (
-            f"verify_anchor must REJECT 43-char base64url random signature — "
+            "verify_anchor must REJECT 43-char base64url random signature — "
             f"but returned success={success} (message: {message})"
         )
 
@@ -431,7 +431,7 @@ class TestAnchorRejectsArbitrarySignature:
         success = result[0]
         message = result[1]
         assert success is True, (
-            f"verify_anchor must ACCEPT valid anchor — "
+            "verify_anchor must ACCEPT valid anchor — "
             f"but returned success={success} (message: {message})"
         )
         # التفاصيل أيضاً (root + signature + trusted)

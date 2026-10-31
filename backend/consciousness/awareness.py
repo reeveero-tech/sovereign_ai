@@ -409,9 +409,10 @@ class AwarenessEngine:
         potential_items = self.collect_potential_items()
         
         # دمج مع العناصر النشطة الحالية
+        # R-817 إحياء: مجموعة المعرفات الموجودة تُستخدم فعلًا في فحص الدمج
         existing_ids = set(self.active_items.keys())
         for item in potential_items:
-            if item.id not in self.active_items:
+            if item.id not in existing_ids:
                 self.active_items[item.id] = item
             else:
                 # تحديث الأولوية

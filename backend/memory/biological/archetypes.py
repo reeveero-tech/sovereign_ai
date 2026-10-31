@@ -636,7 +636,7 @@ class CognitiveArchetypes:
                     to_archetype=current_dominant,
                     timestamp=time.time(),
                     magnitude=magnitude,
-                    reason=f"shift_in_dominant_pattern"
+                    reason="shift_in_dominant_pattern"
                 )
                 transitions.append(transition)
                 self.transitions.append(transition)
@@ -877,6 +877,8 @@ class CognitiveArchetypes:
         result = {
             "archetype_level": self.archetype_level,
             "dominant_archetype": dominant,
+            # R-817 إحياء: احتمالات النماذج تُعاد في الحالة (كانت تُحسب وتُهمل)
+            "archetype_probabilities": probabilities,
             "coherence": self.calculate_coherence(),
             "complexity": self.calculate_complexity(),
             "top_archetypes": sorted(

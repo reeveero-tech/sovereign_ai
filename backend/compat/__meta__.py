@@ -12,6 +12,7 @@
 # إزالة واضح. الاختبار test_compat_sunset_criteria.py يفشل بدونها.
 
 from datetime import datetime, timezone
+from pathlib import Path
 
 # وقت إنشاء طبقة التوافق (أول التزام: 97ea6f1 — 2026-10-14)
 _COMPAT_LAYER_CREATED = "2026-10-14T00:00:00Z"

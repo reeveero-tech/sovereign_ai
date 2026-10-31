@@ -978,13 +978,13 @@ if __name__ == "__main__":
     cmd1 = introspection.register_command("query", "ما هي حالة النظام الحالية؟", priority=8)
     cmd2 = introspection.register_command("directive", "قم بتحسين سرعة الاستجابة", priority=9)
     cmd3 = introspection.register_command("request", "أريد تقريراً عن الذاكرة", priority=7)
-    print(f"   تم تسجيل 3 أوامر")
+    print("   تم تسجيل 3 أوامر")
     
     # 2) تنفيذ أوامر
     print("\n✅ تنفيذ أوامر السيد...")
     introspection.execute_command(cmd1, "النظام يعمل بكفاءة عالية، الصحة المعرفية 85%", quality=0.9)
     introspection.execute_command(cmd2, "تم تحسين سرعة الاستجابة بنسبة 25%", quality=0.85)
-    print(f"   تم تنفيذ أمرين")
+    print("   تم تنفيذ أمرين")
     
     # 3) تغذية راجعة
     print("\n📝 استلام تغذية راجعة...")

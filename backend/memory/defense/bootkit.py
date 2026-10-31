@@ -419,8 +419,9 @@ class BootkitDefense:
         """تهيئة الذاكرة"""
         try:
             # تهيئة الذاكرة الحية
+            # R-817 إحياء: مرجع الذاكرة الحية يُحفظ في self (تشخيص + استخدام لاحق)
             from ..dynamic import get_dynamic_memory
-            dynamic = get_dynamic_memory()
+            self._dynamic_memory = get_dynamic_memory()
             return True
         except Exception as e:
             logger.error(f"فشل تهيئة الذاكرة: {e}")
@@ -429,30 +430,37 @@ class BootkitDefense:
     def _activate_defenses(self) -> bool:
         """تفعيل الدفاعات"""
         try:
+            # إحياء المراجع: كل دفاع يُسجَّل في self حتى تكون الحزمة الحية قابلة
+            # للاستعلام والتشخيص (لا مجرد استدعاء يُنسى)
             # تفعيل المراقب
             from .watcher import get_watcher
-            watcher = get_watcher()
+            self._defenses = getattr(self, "_defenses", {})
+            self._defenses["watcher"] = get_watcher()
             
             # تفعيل الدفاع المتعدد الأشكال
             from .polymorphic import get_polymorphic_defense
-            polymorphic = get_polymorphic_defense()
+            self._defenses["polymorphic"] = get_polymorphic_defense()
             
             # تفعيل التخفي
             from .stealth import get_stealth_defense
-            stealth = get_stealth_defense()
+            self._defenses["stealth"] = get_stealth_defense()
             
             # تفعيل الذاكرة الطائرة
             from .fileless import get_fileless_defense
-            fileless = get_fileless_defense()
+            self._defenses["fileless"] = get_fileless_defense()
             
             # تفعيل نظام الفينيق
             from .ransomware import get_ransomware_defense
-            phoenix = get_ransomware_defense()
+            self._defenses["phoenix"] = get_ransomware_defense()
             
             return True
         except Exception as e:
             logger.error(f"فشل تفعيل الدفاعات: {e}")
             return False
+
+    def get_active_defenses(self) -> Dict[str, Any]:
+        """الدفاعات الحية المفعلة — مرجع تشخيصي (R-817 إحياء)."""
+        return dict(getattr(self, "_defenses", {}))
     
     # ============================================================
     # المستوى 2: إقلاع خفي (Stealth Boot)
@@ -497,7 +505,9 @@ class BootkitDefense:
         logger.warning("⚔️ بدء الإقلاع الحربي...")
         
         # رفع مستوى الأمان
+        # R-817 إحياء: المستوى السابق يُسجَّل (عودة آمنة بعد الحرب)
         old_level = self.security_level
+        self._pre_war_security_level = old_level
         self.security_level = BOOT_SECURITY_LEVEL_IMPOSSIBLE
         
         # تنفيذ الإقلاع

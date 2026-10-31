@@ -152,7 +152,7 @@ def test_all_consumers_migrated():
 
     assert not violations, (
         "استخدامات مباشرة غير موسومة لـSOVEREIGN_KEY خارج وحدة الاشتقاق "
-        f"(يجب migrate أو وسم LEGACY-ROOT-KEY read-only):\n" + "\n".join(violations)
+        "(يجب migrate أو وسم LEGACY-ROOT-KEY read-only):\n" + "\n".join(violations)
     )
 
 # ---------- جولة التصحيح (اعتراض المراجع الختامي): مسار المخزن + بصمة الإقلاع ----------

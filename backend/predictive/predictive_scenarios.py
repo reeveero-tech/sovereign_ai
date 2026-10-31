@@ -149,6 +149,10 @@ class PredictiveScenarioEngine:
         self.active_scenarios: List[Scenario] = []
         self.scenario_history: List[ScenarioSnapshot] = []
         self.triggered_warnings: List[Dict[str, Any]] = []
+        # R-817: إحصاءات وحالة محفوظة (تُستعاد من القرص في _load_state)
+        self.stats: Dict[str, Any] = {"generated": 0, "triggered": 0}
+        self.last_updated: float = 0.0
+        self.current_scenario_count: int = 0
         
         # حالة المحرك
         self.last_generated = []
@@ -249,10 +253,19 @@ class PredictiveScenarioEngine:
         risk_profile = predictive_status.get("risk_profile", {})
         opportunity_profile = predictive_status.get("opportunity_profile", {})
         
+        # إحياء الحالات المحسوبة: الإرادة والهوية والتأمل تعدّل احتمالات السيناريوهات
+        will_strength = min(1.0, will_status.get("will_strength", 1) / 4)
+        identity_coherence = identity_status.get("coherence_score", 0.5)
+        cognitive_health = introspection_status.get("cognitive_health", 0.7)
+        
         # ========================================
         # 1. سيناريو النمو (Growth Scenario)
         # ========================================
         growth_prob = opportunity_profile.get("growth_opportunity", 0.5)
+        # النمو يتطلب إرادة قوية وهوية متماسكة وصحة معرفية
+        growth_prob = min(1.0, growth_prob * (0.5 + 0.5 * will_strength)
+                          * (0.6 + 0.4 * identity_coherence)
+                          * (0.5 + 0.5 * cognitive_health))
         scenarios.append(Scenario(
             id=f"scen_growth_{int(time.time()*1000)}_{secrets.token_hex(4)}",
             name="النمو المتسارع",
@@ -294,6 +307,9 @@ class PredictiveScenarioEngine:
         # 2. سيناريو الاستقرار (Stability Scenario)
         # ========================================
         stability_prob = opportunity_profile.get("stability_opportunity", 0.5)
+        # الاستقرار يعتمد على تماسك الهوية والإرادة
+        stability_prob = min(1.0, stability_prob * (0.6 + 0.4 * identity_coherence)
+                             * (0.6 + 0.4 * will_strength))
         scenarios.append(Scenario(
             id=f"scen_stability_{int(time.time()*1000)}_{secrets.token_hex(4)}",
             name="الاستقرار والتوازن",
@@ -497,7 +513,19 @@ class PredictiveScenarioEngine:
         # ========================================
         # 7. سيناريو المسار الذهبي (Golden Path)
         # ========================================
-        golden_prob = min(growth_prob, stability_prob) * 0.7
+        # إحياء خريطة المستقبل: المسار الذهبي يتطلب نمو معرفة واستقرار هوية
+        # وجودة خدمة — المتوسط الهندسي للثلاثة يعدّل احتماله
+        golden_path_map = {
+            "knowledge_growth": future_map.get("knowledge_growth", 0.5),
+            "identity_stability": future_map.get("identity_stability", 0.5),
+            "service_quality": future_map.get("service_quality", 0.5),
+        }
+        golden_map_factor = (
+            (golden_path_map["knowledge_growth"]
+             * golden_path_map["identity_stability"]
+             * golden_path_map["service_quality"]) ** (1 / 3)
+        )
+        golden_prob = min(growth_prob, stability_prob) * 0.7 * (0.6 + 0.8 * golden_map_factor)
         scenarios.append(Scenario(
             id=f"scen_golden_{int(time.time()*1000)}_{secrets.token_hex(4)}",
             name="المسار الذهبي",
@@ -892,6 +920,11 @@ class PredictiveScenarioEngine:
             if SCENARIOS_STATE_FILE.exists():
                 with open(SCENARIOS_STATE_FILE, 'r', encoding='utf-8') as f:
                     state = json.load(f)
+                # R-817 إحياء: الحالة تُطبَّق فعلًا (إحصاءات وآخر تحديث)
+                if isinstance(state.get("stats"), dict):
+                    self.stats.update(state["stats"])
+                self.last_updated = float(state.get("last_updated", self.last_updated) or 0)
+                self.current_scenario_count = int(state.get("current_count", 0))
                 logger.info("📂 تم تحميل حالة السيناريوهات")
         except Exception as e:
             logger.error(f"خطأ في تحميل حالة السيناريوهات: {e}")
@@ -922,7 +955,9 @@ class PredictiveScenarioEngine:
             if SCENARIOS_HISTORY_FILE.exists():
                 with open(SCENARIOS_HISTORY_FILE, 'r', encoding='utf-8') as f:
                     data = json.load(f)
-                logger.info(f"📂 تم تحميل سجل السيناريوهات")
+                # R-817 إحياء: السجل يُطبَّق فعلًا (أحدث النتائج للتحليلات اللاحقة)
+                self.scenario_history = data if isinstance(data, list) else self.scenario_history
+                logger.info("📂 تم تحميل سجل السيناريوهات")
         except Exception as e:
             logger.error(f"خطأ في تحميل سجل السيناريوهات: {e}")
     

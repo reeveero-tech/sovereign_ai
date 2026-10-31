@@ -779,7 +779,7 @@ class QuantumFieldEngine:
         if constructive:
             narrative += f"🌊 **تداخل بنّاء** على {len(constructive)} مقياس\n"
         else:
-            narrative += f"📊 **لا تداخل كبير** مكتشف\n"
+            narrative += "📊 **لا تداخل كبير** مكتشف\n"
         
         # اتجاه الطاقة
         if len(self.field_energy_history) > 1:

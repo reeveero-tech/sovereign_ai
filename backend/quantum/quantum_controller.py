@@ -503,7 +503,7 @@ class QuantumController:
                     "action": "adjust_quantum_parameters",
                     "target": signal.data
                 },
-                reasoning=f"تحليل تلقائي للإشارات الكمومية",
+                reasoning="تحليل تلقائي للإشارات الكمومية",
                 confidence=signal.confidence,
                 timestamp=time.time(),
                 status="pending",
@@ -667,6 +667,19 @@ class QuantumController:
             total_signals_sent=self.stats["total_signals_sent"],
             narrative=narrative
         )
+        # إحياء القيم المحسوبة: القرار والتكاملات تُسجَّل في السرد والإحصاء ليكون لها أثر
+        if decision is not None:
+            snapshot.narrative = (
+                f"{narrative} | قرار كمومي ({decision.type}): {decision.reasoning}"
+            )
+        if predictive_integration:
+            self.stats["predictive_integrations"] = (
+                self.stats.get("predictive_integrations", 0) + 1
+            )
+        if sovereign_integration:
+            self.stats["sovereign_integrations"] = (
+                self.stats.get("sovereign_integrations", 0) + 1
+            )
         
         self.signal_history.append({"timestamp": snapshot.timestamp, "signals": len(new_signals)})
         

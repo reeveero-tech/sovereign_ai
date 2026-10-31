@@ -276,7 +276,7 @@ def build_reply(
     if intent_name == "greet":
         health = _health_label(sov.get("system_health", 0.8))
         events = mem.get("total_events", 0)
-        line = f"أهلاً بك. أنا الذكاء السيادي — جاهز لخدمتك."
+        line = "أهلاً بك. أنا الذكاء السيادي — جاهز لخدمتك."
         if events:
             line += f" سجلت {events} حدثاً في ذاكرتي، وصحة النظام {health}."
         if pred:

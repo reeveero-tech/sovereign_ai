@@ -713,11 +713,15 @@ class IntentionalForgetting:
         # توحيد من الكاش
         for key, item in list(self.dynamic.cache._items.items()):
             if item.score > 0.8:
+                # R-817 إحياء: الأثر يُحصى في الإحصاء (كان يُنشأ ويُهمل)
                 trace = self.create_memory_trace(
                     key,
                     str(item.value)[:200],
                     item.score
                 )
+                if trace is not None:
+                    consolidated["traces_created"] += 1
+                    consolidated["from_cache"] = consolidated.get("from_cache", 0) + 1
                 consolidated["traces_created"] += 1
                 consolidated["from_cache"] += 1
         

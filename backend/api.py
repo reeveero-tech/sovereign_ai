@@ -869,9 +869,9 @@ if __name__ == "__main__":
     print("\n" + "=" * 60)
     print("🌐 Sovereign AI API - وضع الاختبار المنفرد")
     print("=" * 60)
-    print(f"📖 API Docs: http://localhost:8001/api/docs")
-    print(f"🔌 WebSocket: ws://localhost:8001/api/ws")
-    print(f"🏥 Health: http://localhost:8001/api/health")
+    print("📖 API Docs: http://localhost:8001/api/docs")
+    print("🔌 WebSocket: ws://localhost:8001/api/ws")
+    print("🏥 Health: http://localhost:8001/api/health")
     print("⚠️ للتكامل مع الواجهة الكاملة، استخدم app.py")
     print("=" * 60 + "\n")
     

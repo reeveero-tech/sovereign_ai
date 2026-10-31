@@ -967,11 +967,13 @@ class DynamicMemory:
         )
         
         # 2) دفع إلى المؤقتة للمعالجة
+        # R-817 إحياء: معرف المخزن المؤقت يُسجَّل (تتبع أثر المعالجة)
         buffer_id = self.buffer.push(
             payload={"user_id": user_id, "text": text, "sensory_id": sensory_id},
             priority=priority,
             source="ingest"
         )
+        self._last_buffer_id = buffer_id
         
         # 3) إضافة مباشرة إلى العاملة (لأننا نعرف أنها مهمة)
         working_id = self.working.add(
