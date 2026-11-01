@@ -255,3 +255,19 @@ def test_language_without_snowball_stemmer_never_breaks_search():
     finally:
         ranking._SNOWBALL.pop("xx")
     assert w._terms("kütüphaneler", "tr")
+
+
+def test_untranslated_points_get_one_batch_translation_per_language(monkeypatch):
+    """من الاختبار الحي: إجابات فرعية استنفدت مهلتها قبل الترجمة ⇒ التقرير يترجم ما بقي دفعة واحدة لكل لغة."""
+    calls = []
+
+    def fake_tr(text, target, source="auto"):
+        calls.append(source)
+        return "\n".join(f"AR:{x}" for x in text.split("\n")), "fake"
+    monkeypatch.setattr(w, "translate", fake_tr)
+    pts = [{"text": "one", "lang": "en"}, {"text": "two\nlines", "lang": "en"}, {"text": "trois", "lang": "fr"},
+           {"text": "عربي", "lang": "ar"}, {"text": "done", "lang": "en", "translator": "google"},
+           {"text": "828 m", "lang": "en", "structured": True}]
+    dr._translate_points(pts, "ar")
+    assert [p["text"] for p in pts] == ["AR:one", "AR:two lines", "AR:trois", "عربي", "done", "828 m"]
+    assert sorted(calls) == ["en", "fr"]

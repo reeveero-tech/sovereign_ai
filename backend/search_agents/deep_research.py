@@ -209,7 +209,10 @@ def run(question: str, breadth: int = 3, depth: int = 2, target_lang: Optional[s
     # الجولة ٠: السؤال نفسه مع أول دفعة أسئلة فرعية — متوازية
     asked: List[str] = [question]
     level_qs = [s["q"] for s in pl["sub_questions"]]
-    with ThreadPoolExecutor(max_workers=1 + breadth) as pool:
+    # التزامن محدود (افتراضي ٢): من الاختبار الحي — ٤ إجابات متوازية على معالج الخادم المجاني تستنفد كل
+    # منها مهلتها قبل القراءة والترجمة؛ اثنتان معًا تُتمّ كل إجابة مراحلها كاملة
+    conc = max(1, min(int(_env_float("DEEP_RESEARCH_CONCURRENCY", 2)), 1 + breadth))
+    with ThreadPoolExecutor(max_workers=conc) as pool:
         per = max(15.0, min(40.0, deadline - time.monotonic() - 10))
         fut_main = pool.submit(_ask, question, per)
         futs = [(s, pool.submit(_ask, s["q"], per)) for s in pl["sub_questions"]]
@@ -229,7 +232,7 @@ def run(question: str, breadth: int = 3, depth: int = 2, target_lang: Optional[s
             break
         t1 = time.monotonic()
         per = max(12.0, min(35.0, deadline - time.monotonic() - 8))
-        with ThreadPoolExecutor(max_workers=len(follow)) as pool:
+        with ThreadPoolExecutor(max_workers=min(conc, len(follow))) as pool:
             for q, res in zip(follow, pool.map(lambda q_: _ask(q_, per), follow)):
                 sections.append({"question": q, "origin": "node-DeepResearch/open_deep_research (سد فجوة)",
                                  "aspect": q, "lang": "en", "result": res})
@@ -284,6 +287,7 @@ def run(question: str, breadth: int = 3, depth: int = 2, target_lang: Optional[s
             out_sections.append({"title": s["title"], "question": s["question"], "origin": s["origin"],
                                  "points": pts, "elapsed_seconds": s["result"].get("elapsed_seconds")})
     all_pts = summary + [p for s in out_sections for p in s["points"]]
+    _translate_points(all_pts, user_lang)
     # farfalle related_queries: أسئلة ذات صلة = زوايا STORM لم تُبحث + فجوات المُقيِّم المتبقية، بلغة السائل
     related = [q for q in list(dict.fromkeys((pl.get("spare") or []) + ev["gaps"])) if q not in asked][:5]
     if related and pl.get("en_q") and user_lang != "en" and time.monotonic() < deadline + 5:
@@ -306,6 +310,26 @@ def run(question: str, breadth: int = 3, depth: int = 2, target_lang: Optional[s
                    "← مُقيِّم node-DeepResearch (حسم/حداثة/تعدد/اكتمال/أرقام) وسد الفجوات بأسئلة متابعة "
                    "(open_deep_research) ← تقرير بأقسام ومصادر موحّدة — بلا نموذج لغوي"),
     }
+
+
+def _translate_points(points: List[Dict[str, Any]], user_lang: str) -> None:
+    """نقطة بقيت بلغتها (انتهت مهلة إجابتها قبل الترجمة) ⇒ ترجمة دفعية واحدة لكل لغة، والأصل محفوظ في original."""
+    import world_search as w
+    groups: Dict[str, List[Dict[str, Any]]] = {}
+    for p in points:
+        if p.get("lang") and p["lang"] != user_lang and not p.get("translator") and not p.get("structured"):
+            groups.setdefault(p["lang"], []).append(p)
+
+    def _one(item):
+        lang, pts = item
+        joined, name = w.translate("\n".join(re.sub(r"\s+", " ", p["text"]) for p in pts), user_lang, lang)
+        lines = joined.split("\n") if name else []
+        if len(lines) == len(pts):
+            for p, t in zip(pts, lines):
+                p["text"], p["translator"] = t.strip(), name
+    if groups:
+        with ThreadPoolExecutor(max_workers=len(groups)) as pool:
+            list(pool.map(_one, groups.items()))
 
 
 def format_report(res: Dict[str, Any]) -> str:
