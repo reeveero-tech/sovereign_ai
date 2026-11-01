@@ -295,11 +295,22 @@ def scholarly_query(en_q: str) -> str:
     return " ".join(out) if len(out) >= 2 else keyword_query(en_q, "en")
 
 
+_QUALIFIED_HEADS = {"vitamin", "hepatitis", "type", "omega", "plan", "class", "grade", "group", "blood", "phase",
+                    "فيتامين", "التهاب", "نوع"}
+
+
 def keyword_query(text: str, lang: str) -> str:
     seen, out = set(), []
+    prev = ""
     for raw in re.findall(r"[\w\u0600-\u06FF]+", str(text or "")):
         low = raw.lower()
-        if low in (_STOP.get(lang, set()) | _STOP["en"]) or len(low) < 3 or low.isdigit():
+        # R-828d: المعرّف القصير بعد اسم مفهوم جزء من المفهوم — «vitamin D» ليست «vitamin» (كانت تجلب B12)،
+        # و«iPhone 16»/«Windows 11»/«type 2»/«5G» تبقى بأرقامها
+        qualifier = bool(re.fullmatch(r"\d+[a-z]|[a-z]\d+", low)) or (
+            bool(prev) and prev not in _STOP["en"] and prev not in _STOP.get(lang, set()) and (
+                (len(raw) == 1 and (raw.isupper() or prev in _QUALIFIED_HEADS)) or (low.isdigit() and len(low) <= 4)))
+        prev = low if len(low) >= 3 and not low.isdigit() else ""
+        if not qualifier and (low in (_STOP.get(lang, set()) | _STOP["en"]) or len(low) < 3 or low.isdigit()):
             continue
         if low not in seen:
             seen.add(low)
@@ -1248,9 +1259,20 @@ def _run_parallel(jobs: List[Tuple[str, Any, tuple]], deadline: float) -> Tuple[
     «تجاوز المهلة» ويُترك خيطه يكمل في الخلفية دون أن يحجز الجواب.
     """
     results, status = {}, {}
+    # R-828d: مزود فشل ٣ مرات متتالية يُوقف ١٠ دقائق (مكافحة روبوتات/429/503 ثابتة) فلا يحجز خيطًا ولا مهلة،
+    # ثم يُجرَّب من جديد تلقائيًا؛ والمرجعيات (إجابات مباشرة/ويكي بيانات/MedlinePlus/ويكيبيديا) تبدأ أولًا
+    now = time.time()
+    live = []
+    for job in jobs:
+        n_, t_ = _BREAKER.get(job[0], (0, 0.0))
+        if _breaker_on() and n_ >= _BREAKER_TRIPS and now - t_ < _BREAKER_COOLDOWN:
+            status[job[0]] = f"متوقف مؤقتًا: فشل {n_} مرات متتالية"
+        else:
+            live.append(job)
+    jobs = sorted(live, key=lambda j: 0 if j[0].startswith(_PRIORITY_PREFIXES) else 1)
     if not jobs:
         return results, status
-    ex = ThreadPoolExecutor(max_workers=min(24, max(1, len(jobs))))
+    ex = ThreadPoolExecutor(max_workers=min(40, max(1, len(jobs))))
     futs = {ex.submit(fn, *args): name for name, fn, args in jobs}
     try:
         for f in as_completed(futs, timeout=max(1.0, deadline - time.monotonic())):
@@ -1258,8 +1280,10 @@ def _run_parallel(jobs: List[Tuple[str, Any, tuple]], deadline: float) -> Tuple[
             try:
                 results[name] = f.result()
                 status[name] = f"ok ({len(results[name]) if isinstance(results[name], list) else 1})"
+                _BREAKER.pop(name, None)
             except Exception as e:  # TOLERATED: مزود واحد يفشل لا يسقط البحث — يُعلن
                 status[name] = f"فشل: {type(e).__name__}: {str(e)[:80]}"
+                _BREAKER[name] = (_BREAKER.get(name, (0, 0.0))[0] + 1, time.time())
     except Exception:  # TOLERATED: انتهاء الميزانية — ما لم يكتمل يُعلن
         for f, name in futs.items():
             status.setdefault(name, "تجاوز المهلة")
@@ -1270,12 +1294,27 @@ def _run_parallel(jobs: List[Tuple[str, Any, tuple]], deadline: float) -> Tuple[
 
 
 _LAST_STATUS: Dict[str, Dict[str, Any]] = {}
+_BREAKER: Dict[str, Tuple[int, float]] = {}
+_BREAKER_TRIPS = 3
+_BREAKER_COOLDOWN = 600.0
+_PRIORITY_PREFIXES = ("instant-", "wikidata", "medlineplus", "bing", "wikipedia-", "worldbank",
+                      "quran", "youtube")
+
+
+def _breaker_on() -> bool:
+    """قاطع الدائرة مفعّل افتراضيًا؛ يُعطَّل في الاختبارات (التي تحاكي الأعطال عمدًا) أو بـ WORLD_SEARCH_BREAKER=false."""
+    if os.getenv("PYTEST_CURRENT_TEST") and not os.getenv("WORLD_SEARCH_BREAKER_TEST"):
+        return False
+    return str(os.getenv("WORLD_SEARCH_BREAKER", "true")).strip().lower() != "false"
 
 
 def engine_status() -> Dict[str, Any]:
     """حالة محرك البحث: آخر نتيجة لكل مزود (من عمليات حقيقية) + حالة الفهرس الذاتي."""
     import search_index
+    paused = {k: {"failures": n, "since": int(t)} for k, (n, t) in _BREAKER.items()
+              if n >= _BREAKER_TRIPS and time.time() - t < _BREAKER_COOLDOWN}
     return {"enabled": enabled(), "languages": search_langs(), "providers_last_run": dict(_LAST_STATUS),
+            "providers_paused": paused,  # R-828d: قاطع الدائرة — ظاهر للمالك
             "index": search_index.status(),
             "providers": ["bing", "bing-news", "google-news", "wikipedia-*", "wikidata", "pubmed",
                           "europepmc", "openalex", "stackoverflow", "hackernews", "index",

@@ -468,3 +468,36 @@ def test_r828d_medlineplus_labelled_as_official_medical_reference():
     cred, label = w.credibility("https://medlineplus.gov/anemia.html", True)
     assert cred == 1.0 and "مرجع طبي رسمي" in label
     assert w.credibility("https://doi.org/10.1/x", True)[1] == "بحث علمي محكّم"
+
+
+def test_r828d_keyword_query_keeps_concept_qualifiers():
+    assert w.keyword_query("What are the symptoms of vitamin D deficiency", "en") == "symptoms vitamin D deficiency"
+    assert w.keyword_query("Compare iPhone 16 and Galaxy S25", "en") == "Compare iPhone 16 Galaxy S25"
+    assert w.keyword_query("What is 5G", "en") == "5G"
+    assert w.keyword_query("I am a teacher", "en") == "teacher"
+
+
+def test_r828d_breaker_pauses_repeated_failures_and_priority_first(monkeypatch):
+    monkeypatch.setenv("WORLD_SEARCH_BREAKER_TEST", "1")
+    monkeypatch.setattr(w, "_BREAKER", {})
+    calls = []
+
+    def bad():
+        calls.append("bad")
+        raise RuntimeError("bot challenge")
+
+    for _ in range(3):
+        w._run_parallel([("dead", bad, ())], time.monotonic() + 5)
+    _, st = w._run_parallel([("dead", bad, ()), ("ok", lambda: [1], ())], time.monotonic() + 5)
+    assert len(calls) == 3 and st["dead"].startswith("متوقف مؤقتًا") and st["ok"] == "ok (1)"
+    assert w._BREAKER["dead"][0] == 3
+    monkeypatch.setattr(w, "_BREAKER", {"dead": (3, time.time() - 601)})  # بعد التبريد يُجرَّب من جديد
+    w._run_parallel([("dead", bad, ())], time.monotonic() + 5)
+    assert len(calls) == 4
+    order = []
+    w._run_parallel([("lemmy", lambda: order.append("lemmy") or [], ()),
+                     ("medlineplus", lambda: order.append("medlineplus") or [], ())], time.monotonic() + 5)
+    assert set(order) == {"lemmy", "medlineplus"}
+    jobs = sorted([("lemmy", 0, ()), ("medlineplus", 0, ()), ("instant-weather", 0, ())],
+                  key=lambda j: 0 if j[0].startswith(w._PRIORITY_PREFIXES) else 1)
+    assert [j[0] for j in jobs][-1] == "lemmy"
