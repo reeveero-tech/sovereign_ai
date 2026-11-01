@@ -251,7 +251,7 @@ def _terms(text: str, lang: str) -> List[str]:
     return out
 
 
-_SNOWBALL_LANGS = {"ru", "it", "pt", "tr", "nl", "sv", "da", "fi", "hu", "no", "nb", "ro"}
+_SNOWBALL_LANGS = {"ru", "it", "pt", "nl", "sv", "da", "fi", "hu", "no", "nb", "ro"}
 
 
 def _stem(t: str) -> str:
@@ -1503,7 +1503,9 @@ def answer(question: str, target_lang: Optional[str] = None, budget: Optional[fl
     # R-826: الإجابات المباشرة (صرف/ذهب/عملات رقمية/طقس/وقت) + المنصات (YouTube/GitHub/كتب/نقاشات/قرآن/Baidu…)
     jobs = sp.instant_jobs(intent, question, en_q, user_lang) + jobs
     jobs += sp.platform_jobs(intent, queries, user_lang, keyword_query, scholarly_query)
+    phases = {"plan": round(time.monotonic() - t0, 2)}  # R-829: توقيت كل مرحلة — يُكشف أي بطء بمكانه
     sres, providers = _run_parallel(jobs, min(deadline, time.monotonic() + 14.0))
+    phases["search"] = round(time.monotonic() - t0, 2)
     providers = {k: v for k, v in providers.items() if not (k == "owner-provider" and v.startswith("ok (0"))}
 
     # ٣) المصادر + قراءة أعلى صفحات الويب
@@ -1560,6 +1562,7 @@ def answer(question: str, target_lang: Optional[str] = None, budget: Optional[fl
         if not s.get("text"):
             s["text"] = s.get("snippet") or ""
 
+    phases["read"] = round(time.monotonic() - t0, 2)
     # ٤) المرشحات والتقييم
     from search_agents import ranking
     q_all = list(dict.fromkeys(t for ts in qterms.values() for t in ts))
@@ -1642,6 +1645,7 @@ def answer(question: str, target_lang: Optional[str] = None, budget: Optional[fl
         chosen = [c for c in chosen if c.get("score", 0) >= 0.5
                   and (age_days(sources[c["source_idx"]].get("published")) or (999 if live else 0)) <= 7][:3]
 
+    phases["evaluate"] = round(time.monotonic() - t0, 2)
     # ٥) الترجمة إلى لغة السائل
     for c in chosen:
         if c["lang"] == user_lang:
@@ -1794,6 +1798,7 @@ def answer(question: str, target_lang: Optional[str] = None, budget: Optional[fl
         "points": points, "sources": cited, "sources_considered": len(sources),
         "candidates_evaluated": len(candidates), "providers": providers,
         "translators": translators_used, "elapsed_seconds": round(time.monotonic() - t0, 2),
+        "phases": phases,
         "error": None if (points or news or platforms) else "لم يُعثر على جمل ذات صلة كافية في المصادر المتاحة",
         "method": ("تمييز المطلوب (نوع السؤال والدولة والعملة) ← إجابات مباشرة حية (صرف/ذهب/عملات رقمية/طقس/وقت) ← "
                    "بحث متعدد المزودات واللغات (Bing وأخبار Bing/Google وويكيبيديا وويكي بيانات والأبحاث "

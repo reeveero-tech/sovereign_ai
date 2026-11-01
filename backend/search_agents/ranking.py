@@ -4,7 +4,7 @@
   الجواب كثيرًا ما يقع في منتصف الصفحة. الترتيب الأصلي يُحفظ (السياق يبقى مقروءًا).
 - rank_passages: ترتيب مجمّع المقاطع في البحث العميق بـ bm25s (طريقة Lucene) — نفس معادلة
   gpt-researcher context/lexical.py لتصفية السياق بلا نموذج.
-- stem: جذوع Snowball من whoosh لكل لغة تدعمها (روسي/إيطالي/برتغالي/تركي/هولندي/سويدي…) —
+- stem: جذوع Snowball من whoosh لكل لغة تدعمها (روسي/إيطالي/برتغالي/هولندي/سويدي…) —
   اللغات التي لم يكن لها جذع في المحرك.
 """
 
@@ -13,7 +13,8 @@ from typing import Callable, List, Optional, Sequence
 from . import vendored
 
 # رمز اللغة ← اسم Snowball في whoosh.lang
-_SNOWBALL = {"ru": "russian", "it": "italian", "pt": "portuguese", "tr": "turkish", "nl": "dutch",
+# (whoosh-reloaded 3.0 لا تحوي التركية — لغة بلا جذع ⇒ الكلمة كما هي، لا استثناء يكسر البحث)
+_SNOWBALL = {"ru": "russian", "it": "italian", "pt": "portuguese", "nl": "dutch",
              "sv": "swedish", "da": "danish", "fi": "finnish", "hu": "hungarian", "no": "norwegian",
              "nb": "norwegian", "ro": "romanian", "fr": "french", "es": "spanish", "de": "german",
              "en": "english"}
@@ -30,8 +31,8 @@ def stem(token: str, lang: str) -> str:
         whoosh = vendored.load("whoosh")
         if whoosh is None:
             return token
-        from whoosh.lang import stemmer_for_language
-        fn = stemmer_for_language(name)
+        from whoosh.lang import has_stemmer, stemmer_for_language
+        fn = stemmer_for_language(name) if has_stemmer(name) else (lambda x: x)
         _STEMMERS[name] = fn
     return fn(token)
 

@@ -27,7 +27,7 @@ _CAPS: Dict[str, Dict[str, Any]] = {
     "xhluca/bm25s": {"mode": _R, "module": "search_agents.ranking",
                      "capability": "BM25 (Lucene) لترتيب مقاطع البحث العميق"},
     "Sygil-Dev/whoosh-reloaded": {"mode": _R, "module": "search_agents.ranking",
-                                  "capability": "جذوع Snowball لـ ١٥ لغة (روسي/إيطالي/برتغالي/تركي…) في مطابقة الكلمات"},
+                                  "capability": "جذوع Snowball لـ ١١ لغة بلا جذع سابق (روسي/إيطالي/برتغالي/هولندي/سويدي…) في مطابقة الكلمات"},
     # ---- خوارزميات منقولة ----
     "mat-1/metasearch2": {"mode": _P, "module": "search_agents.metasearch",
                           "reference": "src/engines/ranking.rs",

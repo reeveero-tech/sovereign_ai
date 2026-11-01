@@ -244,3 +244,14 @@ def test_vendor_sync_masks_private_addresses_hist02():
     import json
     man = json.loads((root / "third_party" / "MANIFEST.json").read_text())
     assert not vs._load_ip_guard().scan_text(json.dumps(man))
+
+
+def test_language_without_snowball_stemmer_never_breaks_search():
+    """من الاختبار الحي R-829: whoosh بلا جذع تركي ⇒ NoStemmer كسر كل سؤال يبحث بالتركية. لغة بلا جذع = الكلمة كما هي."""
+    assert ranking.stem("kütüphaneler", "tr") == "kütüphaneler"
+    ranking._SNOWBALL["xx"] = "klingon"  # اسم لا تعرفه whoosh
+    try:
+        assert ranking.stem("qapla", "xx") == "qapla"
+    finally:
+        ranking._SNOWBALL.pop("xx")
+    assert w._terms("kütüphaneler", "tr")

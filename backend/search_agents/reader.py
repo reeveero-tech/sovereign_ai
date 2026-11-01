@@ -16,8 +16,10 @@ def extract(html: str, url: Optional[str] = None) -> Optional[Dict[str, Any]]:
     tf = vendored.load("trafilatura")
     if tf is None or not html or "<" not in html[:2000]:
         return None
-    raw = tf.extract(html, url=url, output_format="json", with_metadata=True, include_comments=False,
-                     include_tables=True, deduplicate=True)
+    # fast=True: خوارزمية trafilatura وحدها بلا بدائل readability/justext — المعالج في الخادم المجاني
+    # ضعيف وكل صفحة تمر تحت قفل GIL؛ والمدخل يُقص عند 1.5MB (المتن في أول الصفحة عادة)
+    raw = tf.extract(html[:1_500_000], url=url, output_format="json", with_metadata=True, include_comments=False,
+                     include_tables=True, deduplicate=True, fast=True)
     if not raw:
         return None
     data = json.loads(raw)
