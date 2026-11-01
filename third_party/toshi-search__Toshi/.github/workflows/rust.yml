@@ -1,0 +1,59 @@
+name: toshi-push
+
+on: [push]
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os:
+          - macOS-latest
+          - ubuntu-latest
+          - windows-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Install Rust & Tools
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+          components: clippy, rustfmt
+      - name: Check Source
+        uses: actions-rs/cargo@v1
+        with:
+          command: check
+          args: --all
+      - name: Check Fmt
+        uses: actions-rs/cargo@v1
+        if: matrix.os != 'windows-latest'
+        with:
+          command: fmt
+          args: --all -- --check
+      - name: Run Clippy
+        uses: actions-rs/cargo@v1
+        with:
+          command: clippy
+      - name: Run Tests
+        uses: actions-rs/cargo@v1
+        with:
+          command: test
+          args: --package 'toshi' --package 'toshi-server' --package 'toshi-types'
+      - uses: actions-rs/toolchain@v1
+        if: matrix.os == 'ubuntu-latest'
+        with:
+          toolchain: nightly
+          override: true
+      - uses: actions-rs/cargo@v1
+        if: matrix.os == 'ubuntu-latest'
+        with:
+          command: test
+          args: --no-fail-fast --package 'toshi' --package 'toshi-server' --package 'toshi-types'
+        env:
+          CARGO_INCREMENTAL: '0'
+          RUSTFLAGS: '-Zprofile -Ccodegen-units=1 -Cinline-threshold=0 -Clink-dead-code -Coverflow-checks=off -Cpanic=abort -Zpanic_abort_tests'
+          RUSTDOCFLAGS: '-Zprofile -Ccodegen-units=1 -Cinline-threshold=0 -Clink-dead-code -Coverflow-checks=off -Cpanic=abort -Zpanic_abort_tests'
+      - uses: actions-rs/grcov@v0.1
+        if: matrix.os == 'ubuntu-latest'
+      - uses: codecov/codecov-action@v1
+        if: matrix.os == 'ubuntu-latest'

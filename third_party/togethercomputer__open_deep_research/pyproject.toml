@@ -1,0 +1,68 @@
+[project]
+name = "together-open-deep-research"
+version = "0.1.0"
+authors = [{ name = "Your Name", email = "your.email@example.com" }]
+description = "Together Open Deep Research"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "pydantic",
+    "litellm",
+    "datasets",
+    "commonmark",
+    "xhtml2pdf",
+    "pypandoc",
+    "pandoc",
+    "filelock",
+    "together>=1.3.5",
+    "pandas>=1.5.0",
+    "tavily-python>=0.5.1",
+    "tenacity>=9.0.0",
+    "pymdown-extensions>=10.14.3",
+    "smolagents>=1.13.0",
+    "langgraph>=0.3.29",
+    "langchain-together>=0.3.0",
+    "langchain>=0.3.23",
+    "gradio>=5.25.0",
+]
+
+[project.optional-dependencies]
+dev = []
+with-open-deep-research = ["open-deep-research"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["apollo"]
+
+[tool.ruff]
+line-length = 130
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
+fixable = ["ALL"]
+unfixable = []
+
+[tool.ruff.format]
+quote-style = "double"
+line-ending = "auto"
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["E501"]
+"src/artemis/tests/*" = ["E501"]
+[tool.pytest.ini_options]
+pythonpath = ["."]
+
+[tool.poetry.dependencies]
+pytest = "^7.0.0"
+pytest-asyncio = "^0.18.0"
+
+[dependency-groups]
+dev = ["ruff>=0.11.2"]
+
+[tool.uv]
+# gradio caps pillow<13, but all pillow CRITICAL/HIGH advisories are fixed only in 13.0.0
+override-dependencies = ["pillow>=13.0.0"]

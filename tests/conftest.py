@@ -198,3 +198,10 @@ def _guard_session_ledger_key_hygiene():
         "أو KeyRotation بلا ledger_path — استخدم مسارات tmp_path صريحة."
     )
 
+
+
+@pytest.fixture(autouse=True)
+def _r829_no_live_metasearch(monkeypatch):
+    """R-829: محركات ddgs (Google/Brave/Yandex…) شبكة حية — الاختبارات محكمة العزل كبقية المزودات؛
+    اختبار يريدها يفعّلها صراحة (WORLD_SEARCH_DDGS=true) مع محرك وهمي."""
+    monkeypatch.setenv("WORLD_SEARCH_DDGS", "false")

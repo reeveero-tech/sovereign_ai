@@ -1,0 +1,154 @@
+# =============================================================================
+# Deep Researcher Agent Blueprint - Docker Compose
+# =============================================================================
+#
+# Services:
+#   deep-researcher-agent - Backend API server
+#   frontend               - Next.js UI (deep-researcher-blueprint-ui)
+#   postgres               - PostgreSQL for jobs and checkpoints
+#
+# Build targets (backend only):
+#   dev     - Development build (includes CLI)
+#   release - Production build (web only, validates env vars)
+#
+# Usage:
+#   # Build locally (default)
+#   cd deploy/compose
+#   docker compose --env-file ../.env -f docker-compose.yaml up -d --build
+#   BUILD_TARGET=release docker compose --env-file ../.env -f docker-compose.yaml up -d --build
+#
+#   # Use pre-built images from registry (skip --build)
+#   BACKEND_IMAGE=nvcr.io/nvidia/blueprint/aiq-agent:2.2.0 \
+#   FRONTEND_IMAGE=nvcr.io/nvidia/blueprint/aiq-frontend:2.2.0 \
+#   docker compose --env-file ../.env -f docker-compose.yaml up -d
+#
+# Frontend image:
+#   The frontend is built from frontends/ui/deploy/Dockerfile.
+#
+# =============================================================================
+
+services:
+  deep-researcher-agent:
+    image: ${BACKEND_IMAGE:-nvcr.io/nvidia/blueprint/aiq-agent:2.2.0}
+    build:
+      context: ../..
+      dockerfile: deploy/Dockerfile
+      target: ${BUILD_TARGET:-dev}
+    container_name: deep-researcher-agent
+    env_file:
+      - ../.env
+    environment:
+      - APP_ENV=${APP_ENV:-production}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      # Database config (with Docker defaults)
+      - NAT_JOB_STORE_DB_URL=${NAT_JOB_STORE_DB_URL:-postgresql+asyncpg://deep_researcher:deep_researcher_dev@postgres:5432/deep_researcher_jobs}
+      - DEEP_RESEARCHER_CHECKPOINT_DB=${DEEP_RESEARCHER_CHECKPOINT_DB:-postgresql://deep_researcher:deep_researcher_dev@postgres:5432/deep_researcher_checkpoints}
+      - DEEP_RESEARCHER_SUMMARY_DB=${DEEP_RESEARCHER_SUMMARY_DB:-postgresql+psycopg://deep_researcher:deep_researcher_dev@postgres:5432/deep_researcher_jobs}
+      # LlamaIndex persistence (used by config_web_default_llamaindex.yml)
+      - DEEP_RESEARCHER_CHROMA_DIR=${DEEP_RESEARCHER_CHROMA_DIR:-/app/data/chroma_data}
+      # Server config
+      # LlamaIndex (default)
+      - CONFIG_FILE=${BACKEND_CONFIG:-/app/configs/config_web_default_llamaindex.yml}
+      - HOST=0.0.0.0
+      - PORT=8000
+      # Upload validation (keep aligned with the frontend)
+      - FILE_UPLOAD_ACCEPTED_TYPES=${FILE_UPLOAD_ACCEPTED_TYPES:-.pdf,.docx,.txt,.md}
+      - FILE_UPLOAD_MAX_SIZE_MB=${FILE_UPLOAD_MAX_SIZE_MB:-100}
+      - FILE_UPLOAD_MAX_FILE_COUNT=${FILE_UPLOAD_MAX_FILE_COUNT:-10}
+      # Default-on deep-research admission control
+      - DEEP_RESEARCHER_MAX_DEEP_RESEARCH_INPUT_CHARS=${DEEP_RESEARCHER_MAX_DEEP_RESEARCH_INPUT_CHARS:-32768}
+      - DEEP_RESEARCHER_MAX_ACTIVE_DEEP_RESEARCH_JOBS_PER_PRINCIPAL=${DEEP_RESEARCHER_MAX_ACTIVE_DEEP_RESEARCH_JOBS_PER_PRINCIPAL:-5}
+      - DEEP_RESEARCHER_MAX_ACTIVE_DEEP_RESEARCH_JOBS_GLOBAL=${DEEP_RESEARCHER_MAX_ACTIVE_DEEP_RESEARCH_JOBS_GLOBAL:-50}
+      - DEEP_RESEARCHER_MAX_DEEP_RESEARCH_SUBMISSIONS_PER_MINUTE=${DEEP_RESEARCHER_MAX_DEEP_RESEARCH_SUBMISSIONS_PER_MINUTE:-20}
+      # RAG config
+      # - RAG_SERVER_URL=${RAG_SERVER_URL:-https://rag-backend}
+      # - RAG_INGEST_URL=${RAG_INGEST_URL:-https://rag-ingest}
+      # Dask worker config
+      - DASK_NWORKERS=${DASK_NWORKERS:-1}
+      - DASK_NTHREADS=${DASK_NTHREADS:-4}
+      # Optional: bound per-worker memory (Dask spills/restarts above this)
+      # - DASK_MEMORY_LIMIT=${DASK_MEMORY_LIMIT:-}
+      # Optional: recycle workers after this many seconds to drop accumulated state
+      # - DASK_LIFETIME=${DASK_LIFETIME:-}
+      # Optional (default true): set to "false" to let workers exit gracefully without respawning
+      # - DASK_LIFETIME_RESTART=${DASK_LIFETIME_RESTART:-}
+    ports:
+      - "${PORT:-8000}:8000"
+    volumes:
+      - ../../configs:/app/configs:ro
+      - deep-researcher-data:/app/data
+    networks:
+      - deep-researcher-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  frontend:
+    image: ${FRONTEND_IMAGE:-nvcr.io/nvidia/blueprint/aiq-frontend:2.2.0}
+    build:
+      context: ../../frontends/ui
+      dockerfile: deploy/Dockerfile
+    container_name: deep-researcher-blueprint-ui
+    environment:
+      - REQUIRE_AUTH=${REQUIRE_AUTH:-false}
+      - BACKEND_URL=${BACKEND_URL:-http://deep-researcher-agent:8000}
+      - FILE_UPLOAD_ACCEPTED_TYPES=${FILE_UPLOAD_ACCEPTED_TYPES:-.pdf,.docx,.txt,.md}
+      - FILE_UPLOAD_MAX_SIZE_MB=${FILE_UPLOAD_MAX_SIZE_MB:-100}
+      - FILE_UPLOAD_MAX_FILE_COUNT=${FILE_UPLOAD_MAX_FILE_COUNT:-10}
+      - FILE_EXPIRATION_CHECK_INTERVAL_HOURS=${FILE_EXPIRATION_CHECK_INTERVAL_HOURS:-}
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    networks:
+      - deep-researcher-network
+    depends_on:
+      - deep-researcher-agent
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.1'
+          memory: 256M
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: deep-researcher-postgres
+    environment:
+      POSTGRES_USER: deep_researcher
+      POSTGRES_PASSWORD: deep_researcher_dev
+      POSTGRES_DB: deep_researcher_jobs
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
+    networks:
+      - deep-researcher-network
+    stdin_open: true
+    tty: true
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 4G
+        reservations:
+          cpus: '1'
+          memory: 2G
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U deep_researcher -d deep_researcher_jobs && pg_isready -U deep_researcher -d deep_researcher_checkpoints"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  deep-researcher-data:
+    driver: local
+  postgres-data:
+    driver: local
+networks:
+  deep-researcher-network:
+    driver: bridge

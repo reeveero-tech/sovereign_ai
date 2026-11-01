@@ -1,0 +1,111 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: Build ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            archive: tar
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-musl
+            archive: tar
+            musl: true
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            archive: tar
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            archive: tar
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            archive: zip
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Install musl tools
+        if: matrix.musl == true
+        run: sudo apt-get update && sudo apt-get install -y musl-tools
+
+      - name: Setup Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: release-${{ matrix.target }}
+
+      - name: Build binary
+        run: cargo build --locked --release --features=bin --target ${{ matrix.target }}
+
+      - name: Package binary
+        if: matrix.archive == 'tar'
+        shell: bash
+        run: |
+          mkdir -p dist
+          tar -C target/${{ matrix.target }}/release -czf dist/tinysearch-${{ github.ref_name }}-${{ matrix.target }}.tar.gz tinysearch
+
+      - name: Package binary
+        if: matrix.archive == 'zip'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force dist
+          Compress-Archive -Path target/${{ matrix.target }}/release/tinysearch.exe -DestinationPath dist/tinysearch-${{ github.ref_name }}-${{ matrix.target }}.zip
+
+      - name: Upload binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: tinysearch-${{ matrix.target }}
+          path: dist/*
+          if-no-files-found: error
+
+  publish:
+    name: Publish crate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Publish to crates.io
+        run: cargo publish --locked
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+
+  release:
+    name: Publish GitHub release
+    needs: [build, publish]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download binaries
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true

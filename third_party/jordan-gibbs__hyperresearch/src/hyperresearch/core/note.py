@@ -1,0 +1,196 @@
+"""Note file operations — read, write, list from disk."""
+
+from __future__ import annotations
+
+import hashlib
+import re
+from datetime import UTC, datetime
+from pathlib import Path
+
+from hyperresearch.core.frontmatter import parse_frontmatter, render_note
+from hyperresearch.core.patterns import (
+    WIKI_LINK_RE,
+    is_valid_wiki_link_target,
+    strip_code,
+)
+from hyperresearch.models.note import Note, NoteMeta, slugify
+
+# Summary prefix that marks a resolver-minted stub (`repair --stub`,
+# `graph stub`). Both minting sites write `summary="Stub for [[<id>]]"` and
+# sideline the file under research/temp/. The summary is the marker the
+# rankers key on: it survives `repair`'s enrich pass (which only fills EMPTY
+# summaries), needs no vault context to test from a bare DB connection, and
+# self-clears the moment a human rewrites the summary — i.e. when the stub
+# stops being a stub. `notes.type` cannot carry it without a schema
+# migration (CHECK constraint). See issue #93.
+STUB_SUMMARY_PREFIX = "Stub for [["
+
+
+def stub_summary(note_id: str) -> str:
+    """The summary a resolver-minted stub carries (see STUB_SUMMARY_PREFIX)."""
+    return f"{STUB_SUMMARY_PREFIX}{note_id}]]"
+
+
+def read_note(file_path: Path, vault_root: Path) -> Note:
+    """Read a markdown file and parse into a Note."""
+    raw_bytes = file_path.read_bytes()
+    content_hash = hashlib.sha256(raw_bytes).hexdigest()
+    content = raw_bytes.decode("utf-8-sig")  # Handles BOM
+    meta, body = parse_frontmatter(content)
+    # parse_frontmatter hands the whole content back as the body when it found
+    # no frontmatter it could parse; a file that opens with a delimiter all the
+    # same has one, broken or half-written. A file without one is not broken.
+    frontmatter_broken = body == content and re.match(r"---[ \t]*\r?\n", content) is not None
+
+    rel_path = file_path.relative_to(vault_root).as_posix()
+
+    # Derive ID from filename if not set in frontmatter
+    id_declared = bool(meta.id)
+    if not id_declared:
+        meta.id = slugify(file_path.stem)
+
+    # Extract outgoing wiki links, filtering citation footnotes and URLs
+    cleaned = strip_code(body)
+    raw_links = (m.group(1).strip().rstrip("\\") for m in WIKI_LINK_RE.finditer(cleaned))
+    outgoing = list(dict.fromkeys(
+        ref for ref in raw_links if is_valid_wiki_link_target(ref)
+    ))
+
+    # Word count (simple split)
+    word_count = len(body.split())
+
+    return Note(
+        meta=meta,
+        body=body,
+        path=rel_path,
+        frontmatter_broken=frontmatter_broken,
+        id_declared=id_declared,
+        content_hash=content_hash,
+        word_count=word_count,
+        outgoing_links=outgoing,
+    )
+
+
+def _collision_id(base: str, counter: int) -> str:
+    """Collision suffix that keeps the id a fixed point of slugify().
+
+    Appending "-<n>" to a slug that already sits on a slugify() length cap
+    makes an id the next frontmatter parse re-slugifies back UNDER the cap:
+    the suffix falls off, the note collapses into the base id, sync refuses
+    the duplicate id, and the sources insert dies on its foreign key,
+    leaving an orphan .md file (verbumetecclesia fetches, 2026-07-23).
+    Trim the base so base+suffix fits both the 80-char and 200-byte caps,
+    then slugify once so the disk id equals its own re-parse.
+    """
+    suffix = f"-{counter}"
+    trimmed = base[: 80 - len(suffix)]
+    while len(trimmed.encode("utf-8")) + len(suffix.encode("utf-8")) > 200:
+        trimmed = trimmed[:-1]
+    return slugify(f"{trimmed.rstrip('-')}{suffix}")
+
+
+def indexed_note_ids(conn) -> set[str]:
+    """Every id the notes table holds, for ``write_note(taken_ids=...)``."""
+    return {row["id"] for row in conn.execute("SELECT id FROM notes")}
+
+
+def write_note(
+    notes_dir: Path,
+    title: str,
+    body: str = "",
+    *,
+    note_id: str | None = None,
+    tags: list[str] | None = None,
+    status: str = "draft",
+    note_type: str = "note",
+    parent: str | None = None,
+    source: str | None = None,
+    summary: str | None = None,
+    tier: str | None = None,
+    content_type: str | None = None,
+    extra_frontmatter: dict | None = None,
+    taken_ids: set[str] | None = None,
+) -> Path:
+    """Create a new note file on disk. Returns the file path.
+
+    Args:
+        notes_dir: The directory to write into (e.g. vault.notes_dir).
+        tier: Epistemic role — ground_truth|institutional|practitioner|commentary|unknown.
+        content_type: Artifact kind — paper|docs|article|blog|forum|dataset|policy|code|book|transcript|review|unknown.
+        extra_frontmatter: Additional fields to set on NoteMeta (e.g. source_domain, fetched_at).
+        taken_ids: Ids to skip even when no file of that name exists, such as
+            the ids already in the notes table. A note keeps its id when its
+            file is renamed (`note mv`), so `<id>.md` can be free on disk while
+            the id is not; a note written there is refused by sync as an id
+            collision.
+    """
+    # The id must be a fixed point of the slugifier. NoteMeta.ensure_slug
+    # already slugifies the FRONTMATTER id, so an unslugified note_id here
+    # made the filename diverge from the note's own frontmatter: callers that
+    # pass broken-link text verbatim (cli/graph.py stub, cli/repair.py) wrote
+    # literal filenames like `! -f "$KERNELDESTINATION".md`, and a `../`
+    # shaped ref resolved to a path outside the vault. slugify strips path
+    # separators and shell metacharacters and never returns an empty string,
+    # so the filename below is always safe.
+    nid = slugify(note_id) if note_id else slugify(title)
+    kwargs: dict = dict(
+        title=title,
+        id=nid,
+        tags=tags or [],
+        status=status,
+        type=note_type,
+        parent=parent,
+        source=source,
+        summary=summary,
+        tier=tier,
+        content_type=content_type,
+        created=datetime.now(UTC),
+    )
+    if extra_frontmatter:
+        kwargs.update(extra_frontmatter)
+    meta = NoteMeta(**kwargs)
+
+    # Determine output path, avoid collisions. Vault layout is FLAT —
+    # `parent:` lives in frontmatter (DB-indexed) but does NOT drive the
+    # filesystem path. Nested dirs hurt Windows MAX_PATH, hide notes from
+    # simple `research/notes/*.md` globs, and conflict with the shared-
+    # vault ensemble design where sub-runs need flat listings.
+    target_dir = notes_dir
+    target_dir.mkdir(parents=True, exist_ok=True)
+
+    file_path = target_dir / f"{nid}.md"
+    counter = 2
+    taken = taken_ids or set()
+    while file_path.exists() or meta.id in taken:
+        candidate = _collision_id(nid, counter)
+        file_path = target_dir / f"{candidate}.md"
+        meta.id = candidate
+        counter += 1
+
+    content = render_note(meta, body)
+    file_path.write_text(content, encoding="utf-8")
+    return file_path
+
+
+def strip_markdown(text: str) -> str:
+    """Strip markdown formatting to plain text for FTS indexing."""
+    text = strip_code(text)
+    text = re.sub(r"^#{1,6}\s+", "", text, flags=re.MULTILINE)
+    text = re.sub(r"\*{1,3}([^*]+)\*{1,3}", r"\1", text)
+    text = re.sub(r"_{1,3}([^_]+)_{1,3}", r"\1", text)
+    text = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", text)
+    text = re.sub(r"\[\[([^\]|]+)\|([^\]]+)\]\]", r"\2", text)
+    text = re.sub(r"\[\[([^\]]+)\]\]", r"\1", text)
+    text = re.sub(r"!\[([^\]]*)\]\([^)]+\)", r"\1", text)
+    # Only spans that START like markup are tags: `<` followed by a tag-name
+    # letter, `/` plus a letter (closing tag), `!` (comment, doctype) or `?`
+    # (processing instruction). `<[^>]+>` also ate numeric comparisons, so a
+    # datasheet's `<22.5 V DC ... UIN >23.5 V` was indexed as `23.5 V` and the
+    # search text showed a different threshold from the note. A `<` followed
+    # by a letter still opens a span, so `a<b and c>d` is removed as before.
+    # A closing `>` is still required: an unterminated tag survives into
+    # body_plain whole, which tests/test_serve/test_xss.py asserts as its
+    # premise.
+    text = re.sub(r"<(?:/?[A-Za-z]|!|\?)[^>]*>", "", text)
+    text = re.sub(r"\s+", " ", text)
+    return text.strip()

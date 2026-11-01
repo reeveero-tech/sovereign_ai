@@ -1,0 +1,427 @@
+"""SSRF-safe HTTP helper for outbound fetches.
+
+Centralizes the network egress used by web providers and the image
+downloader. Every request:
+
+- Validates the URL scheme (http/https only).
+- Resolves the hostname and refuses any address that is private,
+  loopback, link-local, multicast, reserved, or unspecified — so an
+  attacker page cannot trick a fetcher into reaching `169.254.169.254`
+  (cloud metadata), `127.0.0.1`, RFC1918, or `file://`.
+- Follows redirects MANUALLY, re-validating each hop against the same
+  gate.
+- Streams the response into a fixed-size buffer so a hostile server
+  cannot exhaust memory with an infinite or zip-bombed body.
+
+The address check is BEST-EFFORT against DNS rebinding: the gate
+resolves the hostname to validate it, but httpx re-resolves at connect
+time, so a low-TTL record that flips between the two lookups can still
+reach a private address. Closing that window needs the validated IP
+pinned into the actual connection, which httpx does not support without
+a custom transport; the residual risk is accepted and documented here.
+
+Returns a small :class:`SafeResponse` dataclass instead of an
+``httpx.Response`` so callers don't depend on httpx internals.
+"""
+
+from __future__ import annotations
+
+import ipaddress
+import re
+import socket
+from dataclasses import dataclass, field
+from urllib.parse import urlparse
+
+import httpx
+import idna
+
+_ALLOWED_SCHEMES = frozenset({"http", "https"})
+
+DEFAULT_TIMEOUT = 30.0
+DEFAULT_MAX_REDIRECTS = 5
+DEFAULT_USER_AGENT = "hyperresearch/0.1"
+
+# Caller-intent size caps. Pick the smallest that fits the body type;
+# the gate refuses anything larger. These are the DEFAULTS — callers with
+# a FetchSettings in scope should pass its max_html_bytes / max_pdf_bytes
+# / max_image_bytes fields instead, which are user-configurable and
+# mirror these values.
+MAX_BYTES_HTML = 10 * 1024 * 1024
+MAX_BYTES_PDF = 25 * 1024 * 1024
+MAX_BYTES_IMAGE = 2 * 1024 * 1024
+
+
+class SafeHTTPError(Exception):
+    """The SSRF gate refused this request, or the response exceeded a limit."""
+
+
+class CertVerificationError(SafeHTTPError):
+    """TLS certificate verification failed and verification is required.
+
+    Raised distinctly so callers can surface the refusal (and its
+    ``pdf_verify_tls = false`` or ``browser_verify_tls = false`` opt-out,
+    depending on the lane) instead of treating it like any
+    other failed fetch — in particular, a cert-refused URL must never be
+    retried through a lane that ignores TLS errors.
+    """
+
+
+@dataclass
+class SafeResponse:
+    """Minimal response wrapper. Avoids leaking httpx types to callers."""
+
+    url: str
+    status_code: int
+    headers: dict[str, str]
+    content: bytes = field(repr=False)
+
+    @property
+    def text(self) -> str:
+        charset = "utf-8"
+        ct = self.headers.get("content-type", "")
+        if "charset=" in ct.lower():
+            charset = ct.lower().split("charset=", 1)[1].split(";", 1)[0].strip() or "utf-8"
+        try:
+            return self.content.decode(charset, errors="replace")
+        except LookupError:
+            return self.content.decode("utf-8", errors="replace")
+
+
+# Carrier-grade NAT (RFC 6598). Not covered by any ipaddress is_* property
+# (checked through 3.11.9), yet never a public destination.
+_CGNAT_NET = ipaddress.ip_network("100.64.0.0/10")
+# 6to4 (RFC 3056): a 2002:AABB:CCDD::/48 prefix embeds the IPv4 address
+# A.B.C.D, so 2002:7f00:1:: is loopback wearing an IPv6 coat. The transport
+# is deprecated and rarely routed, but the ipaddress module does not flag it
+# and the embedded address is what matters.
+_6TO4_NET = ipaddress.ip_network("2002::/16")
+
+
+def _is_blocked_ip(ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
+    # Classify IPv4-mapped IPv6 (::ffff:a.b.c.d) by its embedded IPv4, which
+    # is where the OS sends the connection. The ipaddress is_* properties do
+    # not agree on mapped addresses across interpreters: on 3.11 and 3.13 a
+    # mapped CGNAT address passes every property, and the CGNAT check below
+    # only looks at version-4 addresses, so it was allowed; on 3.12 every
+    # mapped address reports is_reserved, so even a mapped public address
+    # was refused. Unmapping first gives the same answer everywhere.
+    ip = getattr(ip, "ipv4_mapped", None) or ip
+    if ip.version == 6 and ip in _6TO4_NET:
+        packed = int(ip) >> 80 & 0xFFFFFFFF
+        return _is_blocked_ip(ipaddress.IPv4Address(packed))
+    return (
+        ip.is_private
+        or ip.is_loopback
+        or ip.is_link_local
+        or ip.is_multicast
+        or ip.is_reserved
+        or ip.is_unspecified
+        or (ip.version == 4 and ip in _CGNAT_NET)
+    )
+
+
+def _normalize_hostname(host: str) -> str:
+    """Canonical form for allowlist matching: lowercase, ACE, no trailing dot.
+
+    A trailing dot marks the name as absolute: the same host as the bare name
+    whenever the resolver looks that up as absolute, but a different string
+    to an exact match. IDN hosts arrive as unicode or punycode depending on
+    who typed them. Allowlist matching must not depend on which spelling the
+    URL or the config file used.
+
+    A non-ASCII name goes through idna.encode, the IDNA 2008 encoder httpx
+    applies to a URL host, so it becomes the name httpx would connect to
+    (labels split on the full stops U+3002, U+FF0E and U+FF61 as well as
+    "."), and a name httpx would refuse in a URL raises idna.IDNAError. The
+    stdlib "idna" codec is IDNA 2003 and maps some characters away: it
+    encodes "straße" as "strasse", a different, separately registrable name
+    from the "xn--strae-oqa" that httpx connects to. Matching through that
+    codec would let an allowlist entry for one admit the other.
+    """
+    host = host.lower()
+    if not host.isascii():
+        host = idna.encode(host).decode("ascii")
+    return host.rstrip(".")
+
+
+def _resolve(host: str) -> list[ipaddress.IPv4Address | ipaddress.IPv6Address]:
+    try:
+        return [ipaddress.ip_address(host.strip("[]"))]
+    except ValueError:
+        pass
+    try:
+        infos = socket.getaddrinfo(host, None)
+    except (UnicodeError, OSError) as exc:
+        # gaierror is an OSError. UnicodeError covers names the IDNA codec
+        # rejects while getaddrinfo encodes them (a 300-character label, for
+        # one). Anything but SafeHTTPError escapes the batch fetch path's
+        # per-URL handler and fails the whole batch on one hostile hostname.
+        raise SafeHTTPError(f"DNS lookup failed for {host!r}: {exc}") from exc
+    addrs: list[ipaddress.IPv4Address | ipaddress.IPv6Address] = []
+    for info in infos:
+        try:
+            addrs.append(ipaddress.ip_address(info[4][0]))
+        except (ValueError, IndexError):
+            continue
+    return addrs
+
+
+def _parse_allowlist(
+    entries: tuple[str, ...] | list[str],
+) -> tuple[frozenset[str], list[ipaddress.IPv4Network | ipaddress.IPv6Network]]:
+    """Split ``allow_private_hosts`` entries into hostnames and networks.
+
+    An entry that parses as an IP network (a bare address counts as a
+    /32 or /128) matches by resolved address; anything else matches the
+    URL hostname after both are normalized (case, trailing root dot,
+    IDN/punycode spelling). A malformed entry raises
+    :class:`SafeHTTPError` naming it — silently ignoring one would turn
+    a typo into a lockout that looks like an SSRF refusal.
+    """
+    hostnames: set[str] = set()
+    networks: list[ipaddress.IPv4Network | ipaddress.IPv6Network] = []
+    for entry in entries:
+        entry = entry.strip()
+        if not entry:
+            continue
+        try:
+            # Brackets are URL notation for an IPv6 literal ("[::1]"); the
+            # network types reject them, so parse the address inside.
+            networks.append(ipaddress.ip_network(entry.strip("[]"), strict=False))
+        except ValueError:
+            if "/" in entry:  # meant as a CIDR, but malformed
+                raise SafeHTTPError(
+                    f"invalid allow_private_hosts entry {entry!r}: not a valid CIDR"
+                ) from None
+            if "%" in entry:
+                # Only a scoped IPv6 literal (fe80::1%eth0) legitimately
+                # carries '%', and those parsed as networks above. As a
+                # hostname the entry could never match.
+                raise SafeHTTPError(
+                    f"invalid allow_private_hosts entry {entry!r}: '%' is only "
+                    "valid as an IPv6 scope id on an address literal"
+                )
+            if ":" in entry:
+                # host:port. URL hostnames never carry the port, so the entry
+                # would become a hostname that can never match: a silent dead
+                # entry that looks like an SSRF refusal of the user's mirror.
+                raise SafeHTTPError(
+                    f"invalid allow_private_hosts entry {entry!r}: entries are "
+                    "hostnames or CIDRs; drop the port"
+                )
+            try:
+                hostnames.add(_normalize_hostname(entry))
+            except UnicodeError as exc:  # idna.IDNAError is a UnicodeError
+                # httpx refuses this host in a URL, so the entry could never
+                # match: the same silent dead entry as above.
+                raise SafeHTTPError(
+                    f"invalid allow_private_hosts entry {entry!r}: not a valid "
+                    f"IDNA hostname ({exc})"
+                ) from None
+    return frozenset(hostnames), networks
+
+
+# What urlparse strips from the start of a URL (urllib.parse's
+# _WHATWG_C0_CONTROL_OR_SPACE, a private name).
+_C0_CONTROL_OR_SPACE = "".join(chr(c) for c in range(0x20)) + " "
+
+# A host label the WHATWG URL parser reads as an IPv4 number: all decimal
+# digits, or 0x/0X plus hex digits (the "ends in a number" check).
+_WHATWG_NUMERIC_LABEL_RE = re.compile(r"[0-9]+|0[xX][0-9a-fA-F]*")
+
+
+def _check_parser_agreement(stripped_url: str, hostname: str) -> None:
+    """Refuse URLs whose host a WHATWG parser (Chromium) reads differently.
+
+    The gate learns the host from urlparse and httpx, which follow RFC 3986.
+    The crawl4ai lane hands the URL to Chromium, which follows the WHATWG URL
+    standard, so any spelling the two families disagree on lets the gate
+    check one host while the browser connects to another. Such URLs are
+    refused outright; a legitimate page never needs them.
+
+    ``stripped_url`` is the URL with leading C0 controls and spaces removed;
+    ``hostname`` is httpx's raw host for it.
+    """
+    # For http(s) WHATWG treats "\" exactly like "/": it ends the authority.
+    # RFC 3986 parsers keep it as an ordinary character, so for
+    # "http://127.0.0.1\@evil.com/" they report host evil.com while Chromium
+    # connects to 127.0.0.1. Scan the raw authority as the RFC parsers delimit
+    # it (from after "//" to the first "/", "?" or "#"); a backslash there is
+    # a disagreement. One after that point is in the path, query or fragment
+    # under both readings and cannot move the host, so it stays allowed.
+    rest = stripped_url.partition(":")[2]
+    if rest.startswith("//"):
+        authority = re.split(r"[/?#]", rest[2:], maxsplit=1)[0]
+        if "\\" in authority:
+            raise SafeHTTPError(
+                f"refusing URL {stripped_url!r}: backslash in the authority "
+                "(browsers read it as '/', which changes the host)"
+            )
+    if ":" in hostname:
+        # IPv6 literal. WHATWG parses it as an address with no percent
+        # decoding, and the address gate classifies the same literal.
+        return
+    # WHATWG percent-decodes the host ("127.0.0.%31" is 127.0.0.1 to
+    # Chromium); httpx and getaddrinfo take "%" literally.
+    if "%" in hostname:
+        raise SafeHTTPError(
+            f"refusing URL {stripped_url!r}: percent-encoded hostname {hostname!r} "
+            "(browsers decode it to a different host)"
+        )
+    # WHATWG parses a host whose last label is numeric as an IPv4 address in
+    # its own grammar (octal, hex, fewer than four parts: "0x7f.1",
+    # "2130706433"), while getaddrinfo's treatment of those forms varies by
+    # platform and can fall through to DNS. Only the canonical dotted quad,
+    # which every parser reads the same way, is let through.
+    labels = hostname.split(".")
+    if len(labels) > 1 and labels[-1] == "":
+        labels.pop()
+    if _WHATWG_NUMERIC_LABEL_RE.fullmatch(labels[-1]):
+        try:
+            ipaddress.IPv4Address(hostname)
+        except ValueError:
+            raise SafeHTTPError(
+                f"refusing URL {stripped_url!r}: non-canonical numeric host "
+                f"{hostname!r} (browsers parse it as an IPv4 address)"
+            ) from None
+
+
+def check_url(url: str, allow_private_hosts: tuple[str, ...] = ()) -> None:
+    """Validate the URL is safe to fetch. Raises :class:`SafeHTTPError`.
+
+    ``allow_private_hosts`` (the ``[fetch]`` config field of the same name)
+    lists hostnames or CIDRs that are fetchable despite resolving to
+    private/reserved addresses — self-hosted mirrors, intranet wikis.
+    Scheme and DNS checks still apply to allowlisted hosts.
+
+    Best-effort: validation resolves the hostname here, but the connection
+    made afterwards re-resolves it (see the module docstring on DNS
+    rebinding).
+    """
+    try:
+        parsed = urlparse(url)
+        hostname = parsed.hostname
+    except ValueError as exc:
+        # urlparse raises ValueError for some malformed netlocs: unbalanced
+        # IPv6 brackets give "Invalid IPv6 URL". A bare ValueError escapes
+        # the batch fetch path's SafeHTTPError-only per-URL handler.
+        raise SafeHTTPError(f"refusing unparseable URL {url!r}: {exc}") from exc
+    if parsed.scheme.lower() not in _ALLOWED_SCHEMES:
+        raise SafeHTTPError(
+            f"refusing URL with scheme {parsed.scheme!r}; only http/https are allowed"
+        )
+    if not hostname:
+        raise SafeHTTPError(f"refusing URL with no hostname: {url!r}")
+    # Check the name the connection will look up, not urlparse's spelling of
+    # it. httpx sends an IDN host in its IDNA 2008 ASCII form, while
+    # getaddrinfo encodes a non-ASCII name with the stdlib "idna" codec (IDNA
+    # 2003), which maps some characters away: "straße" would be looked up as
+    # "strasse", a different name from the "xn--strae-oqa" httpx connects to.
+    #
+    # urlparse drops leading C0 controls and spaces (the WHATWG rule); httpx
+    # reads " http://host/" as a relative URL with no host. Strip the same
+    # characters so both parsers see one host, and refuse a URL httpx still
+    # finds no host in rather than look up an empty name.
+    stripped = url.lstrip(_C0_CONTROL_OR_SPACE)
+    try:
+        hostname = httpx.URL(stripped).raw_host.decode("ascii")
+    except (httpx.InvalidURL, UnicodeError) as exc:
+        # UnicodeError: httpx cannot encode a lone surrogate in the path,
+        # query or fragment, which is what a non-UTF-8 byte in a command-line
+        # argument becomes. InvalidURL also covers tabs, newlines and other
+        # control characters anywhere in the URL, which WHATWG would strip
+        # or percent-encode.
+        raise SafeHTTPError(f"refusing unparseable URL {url!r}: {exc}") from exc
+    if not hostname:
+        raise SafeHTTPError(f"refusing URL with no hostname: {url!r}")
+    _check_parser_agreement(stripped, hostname)
+    allowed_hosts, allowed_nets = _parse_allowlist(allow_private_hosts)
+    if _normalize_hostname(hostname) in allowed_hosts:
+        return
+    addrs = _resolve(hostname)
+    if not addrs:
+        raise SafeHTTPError(f"refusing URL {url!r}: hostname did not resolve")
+    for addr in addrs:
+        if _is_blocked_ip(addr) and not any(
+            addr.version == net.version and addr in net for net in allowed_nets
+        ):
+            raise SafeHTTPError(
+                f"refusing URL {url!r}: hostname {hostname} resolves to "
+                f"non-public address {addr}"
+            )
+
+
+def safe_get(
+    url: str,
+    *,
+    max_bytes: int,
+    timeout: float = DEFAULT_TIMEOUT,
+    max_redirects: int = DEFAULT_MAX_REDIRECTS,
+    headers: dict[str, str] | None = None,
+    verify: bool | str = True,
+    allow_private_hosts: tuple[str, ...] = (),
+    transport: httpx.BaseTransport | None = None,
+) -> SafeResponse:
+    """GET ``url`` with SSRF + size protection.
+
+    ``max_bytes`` is required so callers consciously pick a cap. Pass the
+    matching ``FetchSettings`` field when one is in scope, or a
+    ``MAX_BYTES_*`` constant otherwise.
+
+    ``allow_private_hosts`` is threaded into the per-hop URL checks, so a
+    redirect landing on an allowlisted private host is honored the same
+    way a direct fetch of it would be.
+
+    ``transport`` is a test seam: it lets the suite exercise the redirect
+    revalidation and size-cap logic against ``httpx.MockTransport``
+    without opening sockets. Production callers must leave it None.
+    """
+    if max_bytes <= 0:
+        raise ValueError("max_bytes must be > 0")
+
+    request_headers = {"User-Agent": DEFAULT_USER_AGENT}
+    if headers:
+        request_headers.update(headers)
+
+    current_url = url
+    with httpx.Client(
+        follow_redirects=False, timeout=timeout, verify=verify, transport=transport
+    ) as client:
+        for _ in range(max_redirects + 1):
+            check_url(current_url, allow_private_hosts)
+            declared = None
+            with client.stream("GET", current_url, headers=request_headers) as resp:
+                if resp.is_redirect:
+                    location = resp.headers.get("location")
+                    if not location:
+                        return _materialize(resp, b"", current_url)
+                    current_url = str(httpx.URL(current_url).join(location))
+                    continue
+
+                declared = resp.headers.get("content-length")
+                if declared and declared.isdigit() and int(declared) > max_bytes:
+                    raise SafeHTTPError(
+                        f"refusing response from {current_url!r}: "
+                        f"Content-Length {declared} exceeds cap {max_bytes}"
+                    )
+
+                body = bytearray()
+                for chunk in resp.iter_bytes():
+                    body.extend(chunk)
+                    if len(body) > max_bytes:
+                        raise SafeHTTPError(
+                            f"refusing response from {current_url!r}: "
+                            f"body exceeds cap {max_bytes} bytes"
+                        )
+                return _materialize(resp, bytes(body), current_url)
+
+    raise SafeHTTPError(f"too many redirects (>{max_redirects}) starting at {url!r}")
+
+
+def _materialize(resp: httpx.Response, body: bytes, final_url: str) -> SafeResponse:
+    return SafeResponse(
+        url=final_url,
+        status_code=resp.status_code,
+        headers={k.lower(): v for k, v in resp.headers.items()},
+        content=body,
+    )

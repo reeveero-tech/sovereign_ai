@@ -223,9 +223,21 @@ def fetch(url: str, timeout=None):
     title, text = _html_to_text(text_raw)
     if not text:
         text = text_raw[:max_bytes]  # نص خام إن لم يكن HTML
+    # R-829: متن الصفحة وتاريخ نشرها بـ trafilatura المسحوبة (third_party/adbar__trafilatura) — تفصل المقال عن
+    # القوائم والإعلانات؛ المحوِّل أعلاه يبقى احتياطًا حين لا تجد متنًا
+    main = None
+    if "html" in ctype:
+        from search_agents import reader
+        try:
+            main = reader.extract(text_raw, current)
+        except Exception as exc:  # TOLERATED: صفحة تكسر المستخرج ⇒ نص المحوِّل الاحتياطي، والسبب يُسجَّل
+            logger.warning("R-829: trafilatura فشلت على %s: %s", current[:120], exc)
+    if main:
+        text, title = main["text"], main["title"] or title
     return {"url": current, "title": title[:200],
             "text": text[:max_bytes], "content_type": ctype,
-            "bytes": len(body)}
+            "bytes": len(body), "published": (main or {}).get("date"),
+            "extractor": "trafilatura" if main else "html_to_text"}
 
 
 def summarize(text: str):

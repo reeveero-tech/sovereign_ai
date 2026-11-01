@@ -1,0 +1,15 @@
+agent:
+  type: deep_researcher
+  max_steps: 2
+  max_queries: 5
+  max_sources: 40
+  max_completion_tokens: 8192
+  user_timeout: 30.0
+  interactive: true
+  use_cache: true
+  remove_thinking_tags: true
+  debug_file_path: ""
+  planning_model: "together_ai/Qwen/Qwen2.5-72B-Instruct-Turbo"
+  summarization_model: "together_ai/meta-llama/Llama-3.3-70B-Instruct-Turbo"
+  json_model: "together_ai/meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo"
+  answer_model:  "together_ai/deepseek-ai/DeepSeek-V3"

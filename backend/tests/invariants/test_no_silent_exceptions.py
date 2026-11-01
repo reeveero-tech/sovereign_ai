@@ -34,6 +34,9 @@ for p in [str(_REPO_ROOT), str(_BACKEND_DIR)]:
 
 # المجلدات المستثناة من الفحص
 EXCLUDED_DIRS = {
+    # R-829: كود المشاريع مفتوحة المصدر المسحوبة كما هو عند commit محدد (بصمة شجرة في MANIFEST.json) —
+    # تعديله يكسر النسخة؛ كود الربط في backend/search_agents يُفحص كاملًا (test_third_party_vendored)
+    "third_party/",
     "tests/",
     "backend/tests/",
     "archive/",

@@ -1,0 +1,19 @@
+[package]
+name    = "toshi-proto"
+version = "0.1.0"
+authors = ["Stephen Carman <shcarman@gmail.com>"]
+description = "A full text search engine based on Tantivy"
+repository = "https://github.com/toshi-search/Toshi"
+license = "MIT"
+edition = "2021"
+build = "build.rs"
+
+[build-dependencies]
+tonic-build = "^0.6"
+
+[dependencies]
+tonic = "^0.6"
+bytes = "^1"
+prost = "^0.9"
+prost-types = "^0.9"
+prost-derive = "^0.9"

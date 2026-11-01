@@ -2706,6 +2706,11 @@ def _brain_unreachable_now() -> bool:
         return False
 
 
+# R-829: طلب بحث عميق صريح في المحادثة («بحث عميق: …»/«ابحث بعمق عن …»/«deep research: …»)
+_DEEP_RESEARCH = re.compile(r"^\s*(?:بحث\s+عميق|ابحث\s+بعمق(?:\s+عن)?|deep\s+research)\s*[:：،,-]?\s*(.*)$",
+                            re.I | re.S)
+
+
 def _world_answer_for_chat(text: str, raw: bool = False):
     """R-823: البحث العالمي عبر السجل (أثر TOOL_INVOKED موقّع) — (الرد، الحالة) أو None إن لم يُتح."""
     try:
@@ -2851,6 +2856,16 @@ def _chat_answer_without_brain(text: str, history, resolved: Dict[str, Any]):
         if g:
             return (g["text"] + f"\n\n— صياغة: نموذج سحابي احتياطي ({g['model']}) لأن العقل الأساسي غير متصل.",
                     "cloud_brain_general", ["العقل السحابي الاحتياطي"])
+    deep = _DEEP_RESEARCH.match(str(resolved.get("original") or text or ""))
+    if deep and world_search.enabled():  # R-829: «بحث عميق: …» ⇒ وكيل البحث العميق عبر السجل (أثر موقّع)
+        from tool_registry import get_registry
+        out = get_registry().invoke("world.deep_research", caller="chat",
+                                    inputs={"question": deep.group(1).strip() or text})
+        res = out.get("result") or {}
+        if out.get("ok") and res.get("ok"):
+            import search_agents.deep_research as dr
+            return note + dr.format_report(res), "brain_unreachable_world_search", [
+                "بحث عميق: تخطيط ← أسئلة فرعية ← تقييم وسد فجوات (وكلاء مفتوحة المصدر منقولة)"]
     world = _world_answer_for_chat(text, raw=True)
     if world is not None and world.get("ok"):
         tools.append("بحث عالمي متعدد اللغات (بلا نموذج لغوي)")
@@ -3150,6 +3165,17 @@ def _register_real_tools() -> None:
         inputs={"question": "السؤال بأي لغة", "target_lang": "لغة الجواب (اختياري — لغة السؤال افتراضيًا)"},
         outputs="points[]/sources[]/providers/method",
         handler=lambda question, target_lang=None: __import__("world_search").answer(question, target_lang)))
+    registry.register(ToolSpec(
+        name="world.deep_research",
+        description=("R-829: بحث عميق بخوارزميات وكلاء مفتوحة المصدر (MindSearch/STORM/gpt-researcher/dzhng/"
+                     "node-DeepResearch/open_deep_research) — تخطيط أسئلة فرعية ← بحث عالمي متوازٍ بعرض/عمق ← "
+                     "تقييم الاكتمال وسد الفجوات ← تقرير بأقسام ومصادر موحّدة، بلا نموذج لغوي"),
+        inputs={"question": "السؤال بأي لغة", "breadth": "عدد الأسئلة الفرعية (١-٥، افتراضي ٣)",
+                "depth": "مستويات التعمق (١-٣، افتراضي ٢)", "target_lang": "لغة التقرير (اختياري)"},
+        outputs="summary/sections[]/evaluation/sources[]/related[]/rounds",
+        handler=lambda question, breadth=3, depth=2, target_lang=None: __import__(
+            "search_agents.deep_research").deep_research.run(question, int(breadth or 3), int(depth or 2),
+                                                             target_lang)))
     registry.register(ToolSpec(
         name="search.status",
         description=("R-825: حالة محرك البحث — آخر نتيجة حقيقية لكل مزود (Bing/الأخبار/ويكيبيديا/الأبحاث/…) "

@@ -1,0 +1,118 @@
+name: Tests
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v7
+    - uses: actions/setup-python@v7
+      with:
+        python-version: "3.13"
+    - name: Install uv
+      uses: astral-sh/setup-uv@v10.2.0
+      with:
+        enable-cache: true
+        cache-dependency-glob: pyproject.toml
+    - name: Install dependencies
+      run: uv pip install --system -e ".[dev]"
+    - name: Lint and format check
+      run: |
+        ruff check .
+        ruff format --check --diff .
+
+  build:
+
+    runs-on: ${{ matrix.os }}
+    # bound the live-network tests, which could otherwise hang for GitHub's 6h default
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest]
+        # https://github.com/actions/python-versions/blob/main/versions-manifest.json
+        python-version: ["3.10", "3.12", "3.14"]
+        minimal: [true, false]
+        include:
+          # custom OS / Python combinations (minimal dependencies)
+          - os: macos-latest
+            python-version: "3.11"
+            minimal: true
+          - os: windows-latest
+            python-version: "3.11"
+            minimal: true
+          - os: ubuntu-latest
+            python-version: "3.13"
+            minimal: false
+          - os: ubuntu-latest
+            python-version: "3.15"
+            minimal: true
+
+    steps:
+    # package setup
+    - uses: actions/checkout@v7
+
+    # Python and uv setup
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v7
+      with:
+        python-version: ${{ matrix.python-version }}
+        # 3.15 is a release candidate until its final release
+        allow-prereleases: true
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v10.2.0
+      with:
+        enable-cache: true
+        cache-dependency-glob: pyproject.toml
+
+    - name: Install packages required by pycurl
+      if: ${{ !matrix.minimal }}
+      run: |
+        sudo apt-get update
+        sudo apt-get install libcurl4-gnutls-dev libgnutls28-dev
+
+    - name: Install dependencies
+      run: uv pip install --system -e ".[dev${{ !matrix.minimal && ',all' || '' }}]"
+
+    - name: Type checking
+      if: ${{ !matrix.minimal && matrix.python-version == '3.13' }}
+      run: |
+        mypy -p trafilatura
+
+    - name: Test with pytest
+      # coverage only in the cell that uploads it
+      run: python -m pytest ${{ !matrix.minimal && matrix.python-version == '3.13' && '--cov=./ --cov-report=xml' || '' }}
+
+    - name: Evaluation quality gate
+      # deterministic given the corpus; one cell is enough, no need for the whole matrix
+      if: ${{ !matrix.minimal && matrix.python-version == '3.13' }}
+      run: |
+        python tests/eval_gate.py
+
+    - name: Test docs
+      # version matches .readthedocs.yaml
+      if: ${{ !matrix.minimal && matrix.python-version == '3.13' }}
+      run: |
+        uv pip install --system -e ".[docs]"
+        python -m pytest docs/docs_tests.py
+
+    # coverage
+    - name: Upload coverage to Codecov
+      if: ${{ !matrix.minimal && matrix.python-version == '3.13' }}
+      uses: codecov/codecov-action@v7
+      env:
+        CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+      with:
+        fail_ci_if_error: true
+        files: ./coverage.xml
+        verbose: true

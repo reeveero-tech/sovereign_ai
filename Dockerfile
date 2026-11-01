@@ -18,6 +18,8 @@ RUN apt-get update \
 
 # نسخ الاعتماديات الموحدة
 COPY requirements.txt .
+# R-829: محركات/أدوات البحث المسحوبة كاملة تُثبَّت من نسختها في third_party/ (لا من PyPI)
+COPY third_party/ third_party/
 RUN pip install --no-cache-dir -r requirements.txt
 
 # نسخ الكود

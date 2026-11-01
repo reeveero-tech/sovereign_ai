@@ -1,0 +1,3 @@
+agent:
+  type: base_llm
+  model: "together_ai/Qwen/Qwen2.5-72B-Instruct-Turbo"

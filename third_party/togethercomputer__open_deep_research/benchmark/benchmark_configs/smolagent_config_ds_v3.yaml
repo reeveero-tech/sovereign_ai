@@ -1,0 +1,7 @@
+agent:
+  type: smolagents
+  model: together_ai/deepseek-ai/DeepSeek-V3
+  tools:
+    - TavilySearch:
+        params:
+          include_raw: false

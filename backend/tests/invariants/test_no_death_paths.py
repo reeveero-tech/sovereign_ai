@@ -47,6 +47,7 @@ EXIT_ALLOWED_ENTRY_POINTS = {
     "main.py",
     "scripts/verify_operational_auth.py",
     "scripts/verify_new_key.py",
+    "scripts/vendor_sync.py",  # R-829: CLI مزامنة third_party/ — رمز الخروج 0 = نجاح المزامنة
     # R-814b: سكربتات فحص المنشور الحي — رمز الخروج 0/1/2 عقدها مع سير
     # verify-live.yml (خلل الفحص ≠ نجاح)؛ تختبرها pytest كسلوك عمليات مستقلة
     "tools/live_check_brain.py",
@@ -83,6 +84,8 @@ def _iter_runnable_files():
             continue
         if parts & EXCLUDE_PARTS:
             continue
+        if rel.parts[0] == "third_party":
+            continue  # R-829: كود طرف ثالث غير معدَّل — يتحقق منه test_third_party_vendored (ترخيص+إصدار+بصمة)
         if path.name == Path(__file__).name:
             continue
         yield rel, path
@@ -252,7 +255,8 @@ def test_entry_point_allowlist_is_honest():
 def test_excluded_dirs_contain_no_runnable_code():
     """نزاهة الاستثناءات: كل مجلد مستثنى (غير مجلد الحارس) صفري .py."""
     for part in EXCLUDE_PARTS - {"tests"}:
-        excluded_py = list(_REPO_ROOT.rglob(f"{part}/**/*.py"))
+        excluded_py = [p for p in _REPO_ROOT.rglob(f"{part}/**/*.py")
+                       if p.relative_to(_REPO_ROOT).parts[0] != "third_party"]  # R-829: انظر test_third_party_vendored
         assert not excluded_py, (
             f"المجلد المستثنى «{part}» يحوي ملفات Python قابلة للتشغيل "
             f"({[str(p) for p in excluded_py[:3]]}) — إما تُفحص أو يوثق "

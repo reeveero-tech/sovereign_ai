@@ -53,6 +53,8 @@ def test_no_mock_outside_tests():
             "guardian/data/emergency",
         ]):
             continue
+        if rel.replace("\\", "/").startswith("third_party/"):
+            continue  # R-829: كود طرف ثالث غير معدَّل — يتحقق منه test_third_party_vendored
 
         # المجلدات المسموح بها
         if any(rel.startswith(d) for d in ALLOWED_DIRS):
@@ -103,6 +105,8 @@ def test_no_stub_placeholders_in_production():
             "guardian/data/emergency",
         ]):
             continue
+        if rel.replace("\\", "/").startswith("third_party/"):
+            continue  # R-829: كود طرف ثالث غير معدَّل — يتحقق منه test_third_party_vendored
 
         if any(rel.startswith(d) for d in ALLOWED_DIRS):
             continue

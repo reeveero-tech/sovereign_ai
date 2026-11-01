@@ -252,7 +252,7 @@
     </div></section>
     <section class="view" id="view-connect"><div class="pad">
       <div class="card"><h2>بحث في الويب</h2>
-        <div class="row"><input type="text" id="sQ" placeholder="سؤال البحث" style="flex:1"><button class="btn pri" id="sBtn">بحث</button><button class="btn" id="aBtn" title="إجابة مقيّمة من مصادر العالم بكل اللغات مترجمة ومستشهدة (world.answer)">إجابة موثقة</button><button class="btn" id="rBtn" title="بحث عميق متعدد المصادر عبر research.run">بحث عميق</button><button class="btn" id="stBtn" title="حالة مزودات محرك البحث والفهرس الذاتي (search.status)">حالة المحرك</button></div>
+        <div class="row"><input type="text" id="sQ" placeholder="سؤال البحث" style="flex:1"><button class="btn pri" id="sBtn">بحث</button><button class="btn" id="aBtn" title="إجابة مقيّمة من مصادر العالم بكل اللغات مترجمة ومستشهدة (world.answer)">إجابة موثقة</button><button class="btn" id="rBtn" title="بحث عميق: أسئلة فرعية ← بحث عالمي متوازٍ ← تقييم الاكتمال وسد الفجوات ← تقرير (world.deep_research)">بحث عميق</button><button class="btn" id="stBtn" title="حالة مزودات محرك البحث والفهرس الذاتي (search.status)">حالة المحرك</button></div>
         <div class="small muted" style="margin-top:6px">محرك البحث: Bing وأخبار Bing/Google وويكيبيديا وويكي بيانات وPubMed وOpenAlex وStack Overflow وفهرس ذاتي ينمو مع كل بحث.</div>
         <div id="sList" class="srch" hidden></div>
         <pre id="sOut" hidden></pre></div>
@@ -999,7 +999,37 @@
   $("aBtn").addEventListener("click", function () { var q = $("sQ").value.trim(); if (!q) return; var b = searchList($("sList")); b.textContent = "جارٍ البحث في مصادر العالم وتقييمها…"; tool("world.answer", { question: q }).then(renderAnswer).catch(function (e) { $("sList").textContent = e.message; }); });
   $("sQ").addEventListener("keydown", function (e) { if (e.key === "Enter") $("aBtn").click(); });
   $("stBtn").addEventListener("click", function () { $("sList").hidden = true; show($("sOut"), "جارٍ الفحص…"); tool("search.status", {}).then(function (r) { show($("sOut"), resultText(r)); }).catch(function (e) { show($("sOut"), e.message); }); });
-  $("rBtn").addEventListener("click", function () { var q = $("sQ").value.trim(); if (!q) return; $("sList").hidden = true; show($("sOut"), "بحث عميق جارٍ… (قد يستغرق دقائق)"); tool("research.run", { goal: q }).then(function (r) { show($("sOut"), resultText(r)); }).catch(function (e) { show($("sOut"), e.message); }); });
+  // R-829: البحث العميق — وكلاء مفتوحة المصدر منقولة (تخطيط ← أسئلة فرعية ← تقييم وسد فجوات ← تقرير)
+  function renderDeep(r) {
+    var box = searchList($("sList"));
+    if (!r || r.ok === false) { box.appendChild(el("div", "muted", "فشل: " + ((r && r.error) || "خطأ"))); return; }
+    var o = r.result || {};
+    if (!o.ok) { box.appendChild(el("div", "muted", o.error || "لا نقاط موثقة كافية")); return; }
+    var pl = o.plan || {};
+    box.appendChild(el("div", "small muted", (o.sections || []).length + " قسمًا · " + (o.sources || []).length + " مصدرًا · عمق " + (o.depth_reached || 1) + " · " + (o.elapsed_seconds || 0) + " ث" + (pl.wikipedia_article ? " · زوايا من مقال «" + pl.wikipedia_article + "»" : "")));
+    var item = function (p) { var row = el("div", "srch-item"); row.appendChild(el("span", null, p.text + " [" + p.source + "]")); return row; };
+    box.appendChild(el("h3", null, "الخلاصة"));
+    (o.summary || []).forEach(function (p) { box.appendChild(item(p)); });
+    (o.news || []).slice(0, 4).forEach(function (n) { var row = el("div", "srch-item"); row.appendChild(link(n.url, n.title + " [" + n.source + "]")); box.appendChild(row); });
+    (o.sections || []).forEach(function (sec) {
+      box.appendChild(el("h3", null, sec.title));
+      box.appendChild(el("div", "small muted", "منشأ السؤال: " + sec.origin));
+      sec.points.slice(0, 4).forEach(function (p) { box.appendChild(item(p)); });
+    });
+    var ev = o.evaluation || {}, names = { definitive: "الحسم", freshness: "الحداثة", plurality: "التعدد", completeness: "الاكتمال", numbers: "اتساق الأرقام" };
+    if (ev.checks) {
+      box.appendChild(el("h3", null, "تقييم الاكتمال"));
+      Object.keys(ev.checks).forEach(function (k) { var c = ev.checks[k]; box.appendChild(el("div", "small", (c.pass ? "✓ " : "✗ ") + (names[k] || k) + " — " + c.reason)); });
+    }
+    if ((o.related || []).length) {
+      box.appendChild(el("h3", null, "أسئلة ذات صلة"));
+      o.related.forEach(function (q) { var b = el("button", "btn", q); b.addEventListener("click", function () { $("sQ").value = q; $("rBtn").click(); }); box.appendChild(b); });
+    }
+    box.appendChild(el("h3", null, "المصادر"));
+    (o.sources || []).forEach(function (src) { var row = el("div", "srch-item small"); row.appendChild(el("span", null, "[" + src.n + "] ")); row.appendChild(link(src.url, src.title || src.url)); row.appendChild(el("span", "muted", " — " + (src.credibility_label || ""))); box.appendChild(row); });
+    box.appendChild(el("div", "small muted", o.method || ""));
+  }
+  $("rBtn").addEventListener("click", function () { var q = $("sQ").value.trim(); if (!q) return; var b = searchList($("sList")); b.textContent = "بحث عميق جارٍ: تخطيط الأسئلة الفرعية ثم البحث والتقييم… (حتى دقيقتين)"; tool("world.deep_research", { question: q }).then(renderDeep).catch(function (e) { $("sList").textContent = e.message; }); });
   var lastFetched = "";
   function isRepo(u) { return /github\.com\//i.test(u) || /^[\w.-]+\/[\w.-]+$/.test(u); }
   $("uBtn").addEventListener("click", function () {

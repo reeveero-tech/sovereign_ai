@@ -1,0 +1,10 @@
+{
+  "name": "MiniSearch",
+  "entryPoints": ["src/MiniSearch.ts", "src/SearchableMap/SearchableMap.ts"],
+  "out": "docs",
+  "excludePrivate": true,
+  "excludeProtected": true,
+  "excludeInternal": true,
+  "excludeExternals": true,
+  "plugin": ["typedoc-plugin-rename-defaults"]
+}

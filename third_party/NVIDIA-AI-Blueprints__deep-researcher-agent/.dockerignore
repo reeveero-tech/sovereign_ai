@@ -1,0 +1,103 @@
+# =============================================================================
+# Deep Researcher Agent Blueprint - Docker Ignore
+# =============================================================================
+# This file controls what enters the Docker build context.
+# .gitignore has NO effect on Docker builds — only .dockerignore does.
+# =============================================================================
+
+# ---- Secrets & Environment (CRITICAL) ----
+.env
+.env.*
+**/.env
+**/.env.*
+!.env.example
+!**/.env.example
+**/certs/
+
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+*.egg
+.eggs/
+build/
+dist/
+sdist/
+wheels/
+.installed.cfg
+MANIFEST
+
+# ---- Virtual Environments ----
+.venv/
+venv/
+ENV/
+env/
+
+# ---- Git ----
+.git/
+.gitignore
+.gitmodules
+
+# ---- IDE ----
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# ---- Testing ----
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.ruff_cache/
+tests/
+
+# ---- Documentation (not needed at runtime) ----
+*.md
+!README.md
+!mcp/README.md
+!sources/knowledge_layer/README.md
+!sources/tavily_web_search/README.md
+!src/deep_researcher_agent/agents/deep_researcher/skills/**/SKILL.md
+docs/
+license_report.pdf
+
+# ---- CI/CD & Deployment (not needed inside image) ----
+.gitlab-ci.yml
+.github/
+.pre-commit-config.yaml*
+deploy/Dockerfile
+deploy/compose/
+deploy/helm/
+deploy/*.sh
+deploy/*.md
+deploy/.env*
+!deploy/.env.example
+
+# ---- Data & Databases (runtime-generated) ----
+*.db
+*.sqlite
+*.db-*
+*.log
+logs/
+
+# ---- Scratch / Temp ----
+scratch/
+tmp/
+temp/
+*.tmp
+*.pid
+*.seed
+*.pid.lock
+
+# ---- External / Submodules ----
+external/
+
+# ---- Evaluation outputs ----
+frontends/benchmarks/*/results/
+frontends/benchmarks/*/aggregated_results_*/
+frontends/benchmarks/*/analysis/

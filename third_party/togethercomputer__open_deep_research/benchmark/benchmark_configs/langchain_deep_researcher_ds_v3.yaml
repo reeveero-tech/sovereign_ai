@@ -1,0 +1,8 @@
+agent:
+  type: langchain_deep_researcher
+  search_api: "tavily"
+  planner_provider: "together"
+  planner_model: "deepseek-ai/DeepSeek-V3"
+  writer_provider: "together"
+  writer_model: "deepseek-ai/DeepSeek-V3"
+  max_search_depth: 2

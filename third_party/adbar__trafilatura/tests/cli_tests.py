@@ -1,0 +1,899 @@
+"""
+Unit tests for the command-line interface.
+"""
+
+import gzip
+import io
+import logging
+import os
+import random
+import re
+import subprocess
+import sys
+from contextlib import redirect_stdout
+from os import path
+from pathlib import Path
+from tempfile import gettempdir
+from unittest.mock import patch
+
+import pytest
+from courlan import UrlStore
+
+from trafilatura import cli, cli_utils, settings, spider
+from trafilatura.downloads import Response, add_to_compressed_dict, fetch_response, fetch_url
+from trafilatura.utils import LANGID_FLAG
+
+logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
+RESOURCES_DIR = path.join(path.abspath(path.dirname(__file__)), "resources")
+
+
+def test_random_filenames_leave_callers_random_state_unchanged(tmp_path):
+    """Generating a filename must not advance the caller's random state."""
+    state = random.getstate()
+    cli_utils.get_writable_path(str(tmp_path), ".txt")
+    assert random.getstate() == state
+
+
+pytestmark = pytest.mark.usefixtures("mock_network")
+
+settings.MAX_FILES_PER_DIRECTORY = 1
+
+
+def test_parser(tmp_path):
+    """test argument parsing for the command-line interface"""
+    testargs = ["", "-fvv", "--xmltei", "--no-tables", "-u", "https://www.example.org"]
+    args = cli.parse_args(testargs[1:])
+    assert args.fast is True
+    assert args.verbose == 2
+    assert args.tables is False
+    assert args.xmltei is True
+    assert args.URL == "https://www.example.org"
+    args = cli.map_args(args)
+    assert args.output_format == "xmltei"
+    testargs = ["", "--output-format", "csv", "--no-tables", "-u", "https://www.example.org"]
+    args = cli.parse_args(testargs[1:])
+    assert args.fast is False
+    assert args.verbose == 0
+    assert args.output_format == "csv"
+    assert args.tables is False
+    # test args mapping
+    testargs = ["", "--markdown"]
+    args = cli.parse_args(testargs[1:])
+    args = cli.map_args(args)
+    assert args.output_format == "markdown"
+    # precision + recall accepted at parse time; Extractor warns and recall wins
+    args = cli.parse_args(["--xml", "--no-comments", "--precision", "--recall"])
+    args = cli.map_args(args)
+    assert args.output_format == "xml"
+    assert args.comments is False
+    assert args.precision is True
+    assert args.recall is True
+    assert settings.args_to_extractor(args).focus == "recall"
+    args.xml, args.csv = False, True
+    args = cli.map_args(args)
+    assert args.output_format == "csv"
+    args.csv, args.json = False, True
+    args = cli.map_args(args)
+    assert args.output_format == "json"
+    testargs = ["", "--only-with-metadata"]
+    args = cli.parse_args(testargs[1:])
+    args = cli.map_args(args)
+    assert args.only_with_metadata is True
+    # process_args
+    args.input_dir = str(tmp_path)
+    args.verbose = 1
+    args.blacklist = path.join(RESOURCES_DIR, "list-discard.txt")
+    cli.process_args(args)
+    assert len(args.blacklist) == 3
+    # filter
+    testargs = [
+        "",
+        "-i",
+        "resources/list-discard.txt",
+        "--url-filter",
+        "test1",
+        "test2",
+        "-vvv",
+    ]
+    args = cli.parse_args(testargs[1:])
+    assert args.input_file == "resources/list-discard.txt"
+    assert args.url_filter == ["test1", "test2"]
+    args.input_file = path.join(RESOURCES_DIR, "list-discard.txt")
+    args.blacklist = path.join(RESOURCES_DIR, "list-discard.txt")
+    f = io.StringIO()
+    with redirect_stdout(f):
+        cli.process_args(args)
+    assert len(f.getvalue()) == 0
+    # input directory
+    testargs = ["", "--input-dir", str(tmp_path)]
+    args = cli.parse_args(testargs[1:])
+    f = io.StringIO()
+    with redirect_stdout(f):
+        cli.process_args(args)
+    assert len(f.getvalue()) == 0
+    # version
+    testargs = ["", "--version"]
+    with pytest.raises(SystemExit) as e, redirect_stdout(f):
+        args = cli.parse_args(testargs[1:])
+    assert e.type is SystemExit
+    assert e.value.code == 0
+    assert re.match(r"Trafilatura [0-9]\.[0-9]+\.[0-9] - Python [0-9]\.[0-9]+\.[0-9]", f.getvalue())
+
+
+def test_parse_args_honors_argument():
+    "Regression: parse_args must parse its argument list, not sys.argv."
+    # no sys.argv patching: the old code ignored the parameter and read sys.argv
+    args = cli.parse_args(["--xml", "-u", "https://example.org"])
+    assert args.xml is True
+    assert args.URL == "https://example.org"
+
+
+def test_keep_dirs_requires_output_dir():
+    "--keep-dirs without -o must exit with an error."
+    with pytest.raises(SystemExit):
+        cli.parse_args(["--keep-dirs"])
+
+
+@pytest.mark.parametrize(
+    "extra_args",
+    [[], ["--keep-dirs"], ["--input-dir", "input"], ["--crawl"], ["--probe"]],
+    ids=["stdin", "keep-dirs", "local-files", "crawl", "probe"],
+)
+def test_url_filenames_reject_incompatible_inputs(extra_args, capsys):
+    with pytest.raises(SystemExit) as exc:
+        cli.parse_args(["--name-from-url", "-o", "output", *extra_args])
+    assert exc.value.code == 2
+    assert "--name-from-url requires" in capsys.readouterr().err
+
+
+def test_url_filenames_require_output_dir(capsys):
+    with pytest.raises(SystemExit) as exc:
+        cli.parse_args(["--name-from-url", "-u", "https://example.org/"])
+    assert exc.value.code == 2
+    assert "--name-from-url requires" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize(
+    "url, prefix",
+    [
+        ("https://www.example.com/page3", "www.example.com_page3-"),
+        ("https://user:password@example.com/a%20b?q=secret", "example.com_a_b-"),
+        ("https://example.com/../../CON:a?b=1", "example.com_.._.._CON_a-"),
+        ("https://example.com/" + "x" * 500, "example.com_"),
+        ("https://example.com/中文", "example.com-"),
+        ("https://例子.测试/中文", "-"),
+    ],
+    ids=["readable", "credentials-and-query", "unsafe-characters", "long-path", "unicode", "empty-prefix"],
+)
+def test_url_filenames_are_portable(url, prefix):
+    filename = cli_utils.generate_url_filename(url)
+    assert filename.startswith(prefix)
+    assert re.fullmatch(r"[A-Za-z0-9._-]*-[a-f0-9]{16}", filename)
+    assert len(filename) <= 137
+    assert filename == cli_utils.generate_url_filename(url)
+
+
+def test_url_filename_blake2b_suffix():
+    assert cli_utils.generate_url_filename("https://www.example.com/page3") == "www.example.com_page3-67eb6bd757a48a52"
+
+
+@pytest.mark.parametrize(
+    "urls",
+    [
+        ("https://example.com/a/b", "https://example.com/a_b"),
+        ("https://example.com/page?a=1", "https://example.com/page?a=2"),
+        ("http://example.com/page", "https://example.com/page"),
+        ("https://example.com/Page", "https://example.com/page"),
+        ("https://example.com/" + "x" * 500 + "a", "https://example.com/" + "x" * 500 + "b"),
+    ],
+    ids=["sanitized-path", "query", "scheme", "case-insensitive-filesystem", "truncated-path"],
+)
+def test_url_filenames_distinguish_urls(urls):
+    assert cli_utils.generate_url_filename(urls[0]).lower() != cli_utils.generate_url_filename(urls[1]).lower()
+
+
+@pytest.mark.parametrize("backup", [False, True], ids=["extraction", "paired-backup"])
+@pytest.mark.parametrize("counter", [-1, 0], ids=["flat-directory", "counter-directory"])
+def test_url_filenames_write_results(tmp_path, backup, counter):
+    output_dir, backup_dir = tmp_path / "output", tmp_path / "backup"
+    args = cli.parse_args(["--name-from-url", "-o", str(output_dir), "-u", "https://example.org/", "--json"])
+    if backup:
+        args.backup_dir = str(backup_dir)
+    options = settings.args_to_extractor(args)
+    html = Path(RESOURCES_DIR, "httpbin_sample.html").read_text(encoding="utf-8")
+    urls = ["https://example.org/a/b", "https://example.org/a_b"]
+    for url in urls:
+        options.url = url
+        assert cli_utils.process_result(html, args, counter, options) == (counter + 1 if counter >= 0 else -1)
+    files = sorted(output_dir.rglob("*.json"))
+    assert len(files) == 2
+    assert all(file.name.startswith("example.org_a_b-") for file in files)
+    assert all("Availing himself" in file.read_text(encoding="utf-8") for file in files)
+    assert all(file.parent == (output_dir if counter < 0 else output_dir / "1") for file in files)
+    if backup:
+        for file in files:
+            archive = backup_dir / file.relative_to(output_dir).with_suffix(".html.gz")
+            with gzip.open(archive, "rt", encoding="utf-8") as saved:
+                assert saved.read() == html
+
+
+@pytest.mark.parametrize("batch", [False, True], ids=["single-url", "url-list"])
+def test_url_filenames_cli_download(tmp_path, batch):
+    args_list = ["--name-from-url", "-o", str(tmp_path / "output")]
+    if batch:
+        input_file = tmp_path / "urls.txt"
+        input_file.write_text("https://example.org/\nhttps://httpbun.com/html\n", encoding="utf-8")
+        args_list.extend(["-i", str(input_file)])
+    else:
+        args_list.extend(["-u", "https://example.org/"])
+    cli.process_args(cli.parse_args(args_list))
+    files = list((tmp_path / "output").rglob("*.txt"))
+    assert len(files) == (2 if batch else 1)
+    assert any(file.name.startswith("example.org-") for file in files)
+    if batch:
+        assert any(file.name.startswith("httpbun.com_html-") for file in files)
+    assert all("Availing himself" in file.read_text(encoding="utf-8") for file in files)
+
+
+def test_url_filenames_ignored_for_list(capsys):
+    args = cli.parse_args(["--name-from-url", "--list", "-u", "https://example.org/", "-o", "output"])
+    assert "name_from_url" in capsys.readouterr().err
+    cli.process_args(args)
+    assert capsys.readouterr().out.strip() == "https://example.org/"
+
+
+def test_list_ignores_extraction_opts(capsys):
+    "--list warns about extraction/format options that have no effect in list mode."
+    cli.parse_args(["--list", "--json"])
+    err = capsys.readouterr().err
+    assert "--list only prints URLs" in err
+    assert "output_format" in err
+
+
+def test_args_to_extractor_kwargs():
+    "args_to_extractor must propagate fast, images, links, comments, tables to Extractor."
+    args = cli.parse_args(["--fast", "--images", "--links", "--no-comments", "--no-tables"])
+    options = settings.args_to_extractor(args)
+    assert options.fast is True
+    assert options.images is True
+    assert options.links is True
+    assert options.comments is False
+    assert options.tables is False
+
+
+def test_climain(capfd):
+    """test arguments and main CLI entrypoint"""
+    # exit status required: 0
+    # Windows platforms
+    if os.name == "nt":
+        trafilatura_bin = path.join(sys.prefix, "Scripts", "trafilatura")
+    # other platforms
+    else:
+        trafilatura_bin = "trafilatura"
+    # help display
+    assert subprocess.run([trafilatura_bin, "--help"], check=True).returncode == 0
+    # piped input
+    empty_input = b"<html><body><article>" + b"<p>ABC</p>" * 100 + b"</article></body></html>"
+    result = subprocess.run([trafilatura_bin], input=empty_input, check=True)
+    assert result.returncode == 0
+    captured = capfd.readouterr()
+    assert captured.out.strip().endswith("ABC")
+    # input directory walking and processing
+    env = os.environ.copy()
+    if os.name == "nt":
+        # Force encoding to utf-8 for Windows (seem to be a problem only in GitHub Actions)
+        env["PYTHONIOENCODING"] = "utf-8"
+    assert subprocess.run([trafilatura_bin, "--input-dir", RESOURCES_DIR], env=env, check=True).returncode == 0
+    # compressed file
+    with open(path.join(RESOURCES_DIR, "webpage.html.gz"), "rb") as inputf:
+        compressed_input = inputf.read()
+    assert subprocess.run([trafilatura_bin], input=compressed_input, check=True).returncode == 0
+    captured = capfd.readouterr()
+    assert captured.out.strip().endswith("in deep-red West Virginia.")
+
+
+def test_input_type():
+    """test input type errors"""
+    testfile = "docs/trafilatura-demo.gif"
+    testargs = ["", "-u", "http"]
+    with patch.object(sys, "argv", testargs):
+        assert cli.main() is None
+    testargs = ["", "-v"]
+    args = cli.parse_args(testargs[1:])
+    with open(testfile, "rb") as f:
+        teststring = f.read(1024)
+    assert cli.examine(teststring, args) is None
+    assert cli.examine([1, 2, 3], args) is None
+    testfile = "docs/usage.rst"
+    with open(testfile, encoding="utf-8") as f:
+        teststring = f.read()
+    assert cli.examine(teststring, args) is None
+    # test file list
+    assert 10 <= len(list(cli_utils.generate_filelist(RESOURCES_DIR))) <= 21
+
+
+def test_cli_stdin():
+    "Input read directly from STDIN when no URL/file/dir is given."
+    testargs = ["", "-v"]
+    args = cli.parse_args(testargs[1:])
+    html = b"<html><body><article>" + b"<p>Piped paragraph content.</p>" * 5 + b"</article></body></html>"
+    f = io.StringIO()
+    with patch("sys.stdin") as mock_stdin, redirect_stdout(f):
+        mock_stdin.buffer.read.return_value = html
+        cli.process_args(args)
+    assert "Piped paragraph content." in f.getvalue()
+
+
+def test_cli_examine_error(monkeypatch, capsys):
+    "examine() swallows extraction errors and reports them on stderr."
+    testargs = ["", "-v"]
+    args = cli.parse_args(testargs[1:])
+
+    def _boom(*args, **kwargs):
+        raise RuntimeError("kaboom")
+
+    monkeypatch.setattr(cli_utils, "extract", _boom)
+    html = "<html><body><article><p>" + "content " * 20 + "</p></article></body></html>"
+    assert cli.examine(html, args) is None
+    assert "kaboom" in capsys.readouterr().err
+
+
+def test_sysoutput():
+    """test command-line output with respect to CLI arguments"""
+    testargs = ["", "--csv", "-o", "/root/forbidden/"]
+    args = cli.parse_args(testargs[1:])
+    filepath, destdir = cli_utils.determine_output_path(args, args.output_dir, "")
+    assert len(filepath) >= 10
+    assert filepath.endswith(".csv")
+    assert destdir == "/root/forbidden/"
+    # doesn't work the same on Windows
+    if os.name != "nt":
+        assert cli_utils.check_outputdir_status(args.output_dir) is False
+    else:
+        assert cli_utils.check_outputdir_status(args.output_dir) is True
+    testargs = ["", "--xml", "-o", "/tmp/you-touch-my-tralala"]
+    args = cli.parse_args(testargs[1:])
+    assert cli_utils.check_outputdir_status(args.output_dir) is True
+    # test fileslug for name
+    filepath, destdir = cli_utils.determine_output_path(args, args.output_dir, "", new_filename="AAZZ")
+    assert filepath.endswith("AAZZ.xml")
+    # test json output
+    args2 = args
+    args2.xml, args2.json = False, True
+    args2 = cli.map_args(args2)
+    filepath2, destdir2 = cli_utils.determine_output_path(args, args.output_dir, "", new_filename="AAZZ")
+    assert filepath2.endswith("AAZZ.json")
+    assert "you-touch-my-tralala" in destdir2
+    # test html output
+    args2.json, args2.html = False, True
+    args2 = cli.map_args(args2)
+    filepath2, _ = cli_utils.determine_output_path(args, args.output_dir, "", new_filename="AAZZ")
+    assert filepath2.endswith("AAZZ.html")
+    # test directory counter
+    # doesn't work the same on Windows
+    if os.name != "nt":
+        assert cli_utils.determine_counter_dir("testdir", 0) == "testdir/1"
+    else:
+        assert cli_utils.determine_counter_dir("testdir", 0) == "testdir\\1"
+    # test file writing
+    testargs = ["", "--markdown", "-o", "/dev/null/", "-b", "/dev/null/"]
+    args = cli.parse_args(testargs[1:])
+    result = "DADIDA"
+    cli_utils.write_result(result, args)
+    args.output_dir = gettempdir()
+    args.backup_dir = None
+    cli_utils.write_result(result, args)
+    # process with backup directory and no counter
+    options = settings.args_to_extractor(args)
+    assert options.format == "markdown"
+    assert options.formatting is True
+    assert cli_utils.process_result("DADIDA", args, -1, options) == -1
+
+    # with counter
+    with open(path.join(RESOURCES_DIR, "httpbin_sample.html"), encoding="utf-8") as f:
+        teststring = f.read()
+    assert cli_utils.process_result(teststring, args, 1, options) == 2
+
+    # test keeping dir structure
+    testargs = ["", "-i", "myinputdir/", "-o", "test/", "--keep-dirs"]
+    args = cli.parse_args(testargs[1:])
+    filepath, destdir = cli_utils.determine_output_path(args, "testfile.txt", "")
+    assert filepath == path.join("test", "testfile.txt")
+    # test hash as output file name
+    assert args.keep_dirs is True
+    args.keep_dirs = False
+    filepath, destdir = cli_utils.determine_output_path(args, "testfile.txt", "")
+    assert filepath == "test/uOHdo6wKo4IK0pkL.txt"
+
+
+def test_download():
+    """test page download and command-line interface"""
+    assert cli_utils._define_exit_code([], 0) == 0
+    assert cli_utils._define_exit_code(["a"], 1) == 126
+    assert cli_utils._define_exit_code(["a"], 2) == 1
+
+    testargs = ["", "-v"]
+    args = cli.parse_args(testargs[1:])
+    assert cli.examine(None, args) is None
+    assert cli.examine(" ", args) is None
+    assert cli.examine("0" * int(10e7), args) is None
+    url = "https://httpbun.com/html"
+    teststring = fetch_url(url)
+    assert teststring is not None
+    assert cli.examine(teststring, args, url) is not None
+    # test exit code for faulty URLs
+    testargs = ["", "-u", "https://1234.yz/"]
+    args = cli.parse_args(testargs[1:])
+    with pytest.raises(SystemExit) as e:
+        cli.process_args(args)
+    assert e.type is SystemExit
+    assert e.value.code == 126
+
+
+# @patch('trafilatura.settings.MAX_FILES_PER_DIRECTORY', 1)
+def test_cli_pipeline():
+    """test command-line processing pipeline"""
+    # Force encoding to utf-8 for Windows in future processes spawned by multiprocessing.Pool
+    os.environ["PYTHONIOENCODING"] = "utf-8"
+
+    # test URL listing
+    testargs = ["", "--list"]
+    args = cli.parse_args(testargs[1:])
+    assert cli_utils.url_processing_pipeline(args, UrlStore()) == 0
+
+    # test inputlist + blacklist
+    testargs = ["", "-i", path.join(RESOURCES_DIR, "list-process.txt")]
+    args = cli.parse_args(testargs[1:])
+    my_urls = cli_utils.load_input_urls(args)
+    assert my_urls is not None
+    assert len(my_urls) == 3
+    testargs = [
+        "",
+        "-i",
+        path.join(RESOURCES_DIR, "list-process.txt"),
+        "--blacklist",
+        path.join(RESOURCES_DIR, "list-discard.txt"),
+        "--archived",
+    ]
+    args = cli.parse_args(testargs[1:])
+    assert args.blacklist is not None
+    url_store = add_to_compressed_dict(my_urls, args.blacklist, None, None)
+    cli_utils.url_processing_pipeline(args, url_store)
+    # test blacklist and empty dict
+    args.blacklist = cli_utils.load_blacklist(args.blacklist)
+    assert len(args.blacklist) == 3
+    url_store = add_to_compressed_dict(my_urls, args.blacklist, None, None)
+    cli_utils.url_processing_pipeline(args, url_store)
+    # test backup
+    testargs = ["", "--backup-dir", "/tmp/"]
+    args = cli.parse_args(testargs[1:])
+    cli_utils.archive_html("00Test", args)
+    # test date-based exclusion
+    testargs = ["", "--output-format", "xml", "--only-with-metadata"]
+    args = cli.parse_args(testargs[1:])
+    with open(path.join(RESOURCES_DIR, "httpbin_sample.html"), encoding="utf-8") as f:
+        teststring = f.read()
+    assert cli.examine(teststring, args) is None
+    testargs = ["", "--output-format", "xml", "--only-with-metadata", "--precision"]
+    args = cli.parse_args(testargs[1:])
+    with open(path.join(RESOURCES_DIR, "httpbin_sample.html"), encoding="utf-8") as f:
+        teststring = f.read()
+    assert cli.examine(teststring, args) is None
+    # test JSON output
+    testargs = ["", "--output-format", "json", "--recall"]
+    args = cli.parse_args(testargs[1:])
+    with open(path.join(RESOURCES_DIR, "httpbin_sample.html"), encoding="utf-8") as f:
+        teststring = f.read()
+    assert cli.examine(teststring, args) is not None
+    # sitemaps: tested in --explore
+    testargs = [
+        "",
+        "--sitemap",
+        "https://sitemaps.org/sitemap.xml",
+        "--list",
+        "--parallel",
+        "1",
+    ]
+    args = cli.parse_args(testargs[1:])
+    f = io.StringIO()
+    with redirect_stdout(f):
+        cli.process_args(args)
+    assert f.getvalue().strip().endswith("https://www.sitemaps.org/zh_TW/terms.html")
+    # CLI options
+    testargs = ["", "--links", "--images"]
+    args = cli.parse_args(testargs[1:])
+    with open(path.join(RESOURCES_DIR, "http_sample.html"), encoding="utf-8") as f:
+        teststring = f.read()
+    result = cli.examine(teststring, args)
+    assert "[link](testlink.html)" in result
+    assert "test.jpg" in result
+    # HTML format as option
+    testargs = ["", "--html"]
+    args = cli.parse_args(testargs[1:])
+    result = cli.examine(teststring, args)
+    assert result.startswith("<html")
+    assert result.endswith("</html>")
+
+
+def test_input_files_with_bom(tmp_path):
+    urls = tmp_path / "urls.txt"
+    urls.write_bytes(b"\xef\xbb\xbfhttps://example.org/a\nhttps://example.org/b\n")
+    args = cli.parse_args(["-i", str(urls)])
+    assert cli_utils.load_input_urls(args) == ["https://example.org/a", "https://example.org/b"]
+    blacklist = tmp_path / "blacklist.txt"
+    blacklist.write_bytes(b"\xef\xbb\xbfhttps://example.org/a\n")
+    assert cli_utils.load_blacklist(str(blacklist)) == {"example.org/a"}
+
+
+def test_file_processing_continues_after_error(tmp_path, caplog):
+    source = tmp_path / "inputs"
+    source.mkdir()
+    missing = source / "missing.html"
+    try:
+        missing.symlink_to(tmp_path / "missing-target.html")
+    except OSError as error:
+        pytest.skip(f"Cannot create symlink on this system {error}")
+    valid = source / "page.html"
+    valid.write_bytes(Path(RESOURCES_DIR, "httpbin_sample.html").read_bytes())
+    output = tmp_path / "output"
+    args = cli.parse_args(["--input-dir", str(source), "--output-dir", str(output), "--parallel", "1", "--fast"])
+    with pytest.raises(SystemExit) as error:
+        cli.process_args(args)
+    assert error.value.code == 1
+    assert f"Cannot process file {missing}" in caplog.text
+    results = list(output.rglob("*.txt"))
+    assert len(results) == 1
+    assert "blacksmith" in results[0].read_text(encoding="utf-8")
+    options = settings.args_to_extractor(args)
+    assert str(missing) in cli_utils._process_file(str(missing), args, -1, options)
+    assert cli_utils._process_file(str(valid), args, -1, options) is None
+
+
+def test_missing_input_directory_is_logged(tmp_path, caplog):
+    source = tmp_path / "missing"
+    args = cli.parse_args(["--input-dir", str(source), "--parallel", "1"])
+    with pytest.raises(SystemExit) as error:
+        cli.process_args(args)
+    assert error.value.code == 1
+    assert repr(str(source)) in caplog.text
+
+
+def test_unreadable_directory_does_not_skip_readable_files(tmp_path, caplog, monkeypatch):
+    source = tmp_path / "inputs"
+    blocked = source / "blocked"
+    blocked.mkdir(parents=True)
+    readable = source / "readable"
+    readable.mkdir()
+    (readable / "page.html").write_bytes(Path(RESOURCES_DIR, "httpbin_sample.html").read_bytes())
+    scandir = os.scandir
+
+    def deny_blocked(directory):
+        if directory == str(blocked):
+            raise PermissionError(13, "Permission denied", directory)
+        return scandir(directory)
+
+    monkeypatch.setattr(os, "scandir", deny_blocked)
+    output = tmp_path / "output"
+    args = cli.parse_args(["--input-dir", str(source), "--output-dir", str(output), "--parallel", "1", "--fast"])
+    with pytest.raises(SystemExit) as error:
+        cli.process_args(args)
+    assert error.value.code == 1
+    assert repr(str(blocked)) in caplog.text
+    results = list(output.rglob("*.txt"))
+    assert len(results) == 1
+    assert "blacksmith" in results[0].read_text(encoding="utf-8")
+
+
+def test_pipeline_excludes_nested_destinations(tmp_path, monkeypatch):
+    from concurrent.futures import ThreadPoolExecutor
+
+    for name in ("original.html", "output/old.txt", "backup/page.html", "other/page.html"):
+        target = tmp_path / name
+        target.parent.mkdir(exist_ok=True)
+        target.write_text("input")
+    monkeypatch.chdir(tmp_path)
+    args = cli.parse_args(
+        ["--input-dir", ".", "--output-dir", "output/../output", "--backup-dir", "backup", "--parallel", "1"]
+    )
+    seen = []
+    monkeypatch.setattr(cli_utils, "ProcessPoolExecutor", ThreadPoolExecutor)
+    monkeypatch.setattr(cli_utils, "_process_file", lambda filename, **kwargs: seen.append(Path(filename).as_posix()))
+    assert cli_utils.file_processing_pipeline(args) == 0
+    assert set(seen) == {"original.html", "other/page.html"}
+
+
+@pytest.mark.parametrize("alias_input", [False, True])
+def test_directory_alias_excludes_nested_destination(tmp_path, alias_input):
+    source = tmp_path / "input"
+    output = source / "output"
+    output.mkdir(parents=True)
+    original = source / "page.html"
+    original.write_text("input")
+    (output / "old.txt").write_text("output")
+    alias = tmp_path / "alias"
+    try:
+        alias.symlink_to(source if alias_input else output, target_is_directory=True)
+    except OSError as error:
+        pytest.skip(f"Cannot create symlink on this system {error}")
+    input_dir, output_dir = (alias, output) if alias_input else (source, alias)
+    assert list(cli_utils.generate_filelist(str(input_dir), exclude_dirs=(str(output_dir),))) == [
+        str(input_dir / original.name)
+    ]
+
+
+def test_file_processing(tmp_path):
+    "Test file processing pipeline on actual directories."
+    backup = settings.MAX_FILES_PER_DIRECTORY
+    settings.MAX_FILES_PER_DIRECTORY = 0
+
+    # dry-run file processing pipeline
+    testargs = ["", "--parallel", "1", "--input-dir", str(tmp_path)]
+    args = cli.parse_args(testargs[1:])
+    cli_utils.file_processing_pipeline(args)
+    # file processing pipeline on resources/
+    args.input_dir = RESOURCES_DIR
+    cli_utils.file_processing_pipeline(args)
+    # test manually
+    for f in cli_utils.generate_filelist(args.input_dir):
+        cli_utils.file_processing(f, args)
+    options = settings.args_to_extractor(args)
+    args.output_dir = "/dev/null"
+    for f in cli_utils.generate_filelist(args.input_dir):
+        cli_utils.file_processing(f, args, options=options)
+
+    settings.MAX_FILES_PER_DIRECTORY = backup
+
+
+def test_cli_config_file():
+    "Test if the configuration file is loaded correctly from the CLI."
+    testargs = ["", "--input-dir", "/dev/null", "--config-file", "newsettings.cfg"]
+    args = cli.parse_args(testargs[1:])
+    with open(path.join(RESOURCES_DIR, "httpbin_sample.html"), encoding="utf-8") as f:
+        teststring = f.read()
+    args.config_file = path.join(RESOURCES_DIR, args.config_file)
+    options = settings.args_to_extractor(args)
+    assert cli.examine(teststring, args, options=options) is None
+
+
+def test_input_filtering():
+    """test internal functions to filter urls"""
+    testargs = [""]
+    args = cli.parse_args(testargs[1:])
+
+    # load dictionary
+    args.input_file = path.join(RESOURCES_DIR, "list-process.txt")
+    url_store = cli.load_input_dict(args)
+    assert len(url_store.find_known_urls("https://httpbin.org")) == 3
+    args.input_file = path.join(RESOURCES_DIR, "list-process.txt")
+    args.blacklist = {"httpbin.org/status/404"}
+    url_store = cli.load_input_dict(args)
+    assert len(url_store.find_known_urls("https://httpbin.org")) == 2
+
+    # deduplication and filtering
+    inputlist = [
+        "https://example.org/1",
+        "https://example.org/2",
+        "https://example.org/2",
+        "https://example.org/3",
+        "https://example.org/4",
+        "https://example.org/5",
+        "https://example.org/6",
+    ]
+    args.blacklist = {"example.org/1", "example.org/3", "example.org/5"}
+    url_store = add_to_compressed_dict(inputlist, blacklist=args.blacklist)
+    assert url_store.find_known_urls("https://example.org") == [
+        "https://example.org/2",
+        "https://example.org/4",
+        "https://example.org/6",
+    ]
+
+    # URL in blacklist
+    args.input_file = path.join(RESOURCES_DIR, "list-process.txt")
+    my_urls = cli_utils.load_input_urls(args)
+    my_blacklist = cli_utils.load_blacklist(path.join(RESOURCES_DIR, "list-discard.txt"))
+    url_store = add_to_compressed_dict(my_urls, blacklist=my_blacklist)
+    assert len(url_store.dump_urls()) == 0
+    # other method
+    args.input_file = path.join(RESOURCES_DIR, "list-process.txt")
+    args.blacklist = path.join(RESOURCES_DIR, "list-discard.txt")
+    args.blacklist = cli_utils.load_blacklist(args.blacklist)
+    url_store = cli_utils.load_input_dict(args)
+    assert len(url_store.dump_urls()) == 0
+
+    # URL filter
+    args.input_file = path.join(RESOURCES_DIR, "list-process.txt")
+    my_urls = cli_utils.load_input_urls(args)
+    url_store = add_to_compressed_dict(my_urls, blacklist=None, url_filter=["status"], url_store=None)
+    assert len(url_store.urldict) == 1
+    url_store = add_to_compressed_dict(my_urls, blacklist=None, url_filter=["teststring"], url_store=None)
+    assert len(url_store.urldict) == 0
+    url_store = add_to_compressed_dict(my_urls, blacklist=None, url_filter=["status", "teststring"], url_store=None)
+    assert len(url_store.urldict) == 1
+
+    # malformed URLs
+    url_store = add_to_compressed_dict(["123345", "https://www.example.org/1"])
+    assert len(url_store.urldict) == 1
+
+    # double URLs
+    args.input_file = path.join(RESOURCES_DIR, "redundant-urls.txt")
+    my_urls = cli_utils.load_input_urls(args)
+    url_store = add_to_compressed_dict(my_urls)
+    assert len(url_store.find_known_urls("https://example.org")) == 1
+
+    # filter before exploration
+    input_store = add_to_compressed_dict(["https://example.org/1", "https://sitemaps.org/test"])
+    input_urls = ["https://example.org", "http://sitemaps.org/", "https://test.info/"]
+    url_store = cli_utils.build_exploration_dict(input_store, input_urls, args)
+    assert url_store.get_known_domains() == ["https://test.info"]
+
+
+def test_crawling():
+    "Test crawling and exploration functions."
+
+    testargs = ["", "--crawl", ""]
+    args = cli.parse_args(testargs[1:])
+    cli_utils.cli_crawler(args)
+
+    testargs = ["", "--crawl", " "]
+    args = cli.parse_args(testargs[1:])
+    cli_utils.cli_crawler(args)
+
+    testargs = ["", "--crawl", "https://httpbun.com/html"]
+    args = cli.parse_args(testargs[1:])
+    f = io.StringIO()
+    with redirect_stdout(f):
+        cli.process_args(args)
+    assert f.getvalue() == "https://httpbun.com/html\n"
+
+    spider.URL_STORE = UrlStore(compressed=False, strict=False)
+    # links permitted
+    testargs = [
+        "",
+        "--crawl",
+        "https://httpbun.com/links/1/1",
+        "--list",
+        "--parallel",
+        "1",
+    ]
+    args = cli.parse_args(testargs[1:])
+    f = io.StringIO()
+    with redirect_stdout(f):
+        cli_utils.cli_crawler(args)
+    # possibly a bug on Github actions, should be 2 URLs
+    assert f.getvalue() in (
+        "https://httpbun.com/links/1/1\nhttps://httpbun.com/links/1/0\n",
+        "https://httpbun.com/links/1/1\n",
+    )
+    spider.URL_STORE = UrlStore(compressed=False, strict=False)
+    # 0 links permitted
+    args.crawl = "https://httpbun.com/links/4/4"
+    f = io.StringIO()
+    with redirect_stdout(f):
+        cli_utils.cli_crawler(args, n=0)
+    ## should be 6 (5 URLs as output), possibly a bug on Actions CI/CD
+    assert len(f.getvalue().split("\n")) in (2, 6)
+    spider.URL_STORE = UrlStore(compressed=False, strict=False)
+
+    # responses from an unregistered base (e.g. cross-host redirect) are skipped
+    spider.URL_STORE = UrlStore(compressed=False, strict=False)
+    start = fetch_response("https://httpbun.com/links/2/2")
+    extra = [
+        ("https://stray.example/", Response(b"<html><body><a href='/x'>x</a></body></html>", 200, "https://stray.example/")),
+        (start.url, start),
+    ]
+    real_downloads = cli_utils.buffered_response_downloads
+
+    def with_stray(bufferlist, threads, options=None):
+        while extra:
+            yield extra.pop()
+        yield from real_downloads(bufferlist, threads, options=options)
+
+    args = cli.parse_args(["--crawl", "https://httpbun.com/links/2/2", "--list"])
+    with patch.object(cli_utils, "buffered_response_downloads", with_stray), redirect_stdout(io.StringIO()):
+        with patch.object(cli_utils.LOGGER, "warning") as mock_warning:
+            cli_utils.cli_crawler(args)
+    mock_warning.assert_called_once_with("no crawl parameters for %s", "https://stray.example/")
+    assert "https://httpbun.com/links/2/0" in spider.URL_STORE.find_known_urls("https://httpbun.com")
+    assert not spider.URL_STORE.find_known_urls("https://stray.example")
+    spider.URL_STORE = UrlStore(compressed=False, strict=False)
+
+    # Exploration (Sitemap + Crawl)
+    testargs = ["", "--explore", "https://httpbun.com/html", "--list"]
+    args = cli.parse_args(testargs[1:])
+    f = io.StringIO()
+    with redirect_stdout(f):
+        cli.process_args(args)
+    assert f.getvalue().strip() == "https://httpbun.com/html"
+
+
+def test_blacklist_discovered_urls(tmp_path):
+    "The blacklist also applies to the URLs found by feeds, sitemaps and the crawler."
+    blacklist = tmp_path / "blacklist.txt"
+    blacklist.write_text(
+        "https://example.org/drop\nhttps://httpbun.com/links/2/0/\nhttps://httpbun.com/html\n", encoding="utf-8"
+    )
+
+    for option, function in (("--feed", "find_feed_urls"), ("--sitemap", "sitemap_search")):
+        args = cli.parse_args([option, "https://example.org/", "--list", "-b", str(blacklist)])
+        f = io.StringIO()
+        found = ["https://example.org/drop", "https://example.org/keep"]
+        with patch.object(cli_utils, function, return_value=found), redirect_stdout(f):
+            cli.process_args(args)
+        assert f.getvalue() == "https://example.org/keep\n"
+
+    # links followed by the crawler
+    spider.URL_STORE = UrlStore(compressed=False, strict=False)
+    args = cli.parse_args(["--explore", "https://httpbun.com/links/2/2", "--list", "-b", str(blacklist)])
+    f = io.StringIO()
+    with redirect_stdout(f):
+        cli.process_args(args)
+    assert "https://httpbun.com/links/2/1" in f.getvalue()
+    assert "https://httpbun.com/links/2/0" not in f.getvalue()
+
+    # start URL of a crawl
+    spider.URL_STORE = UrlStore(compressed=False, strict=False)
+    args = cli.parse_args(["--crawl", "https://httpbun.com/html", "--list", "-b", str(blacklist)])
+    f = io.StringIO()
+    with redirect_stdout(f):
+        cli.process_args(args)
+    assert f.getvalue().strip() == ""
+    spider.URL_STORE = UrlStore(compressed=False, strict=False)
+
+
+def test_probing():
+    "Test webpage probing functions."
+    url = "https://example.org/"
+    conf = path.join(RESOURCES_DIR, "zerolength.cfg")
+    testargs = ["", "--probe", url, "--target-language", "de", "--config-file", conf]
+    args = cli.parse_args(testargs[1:])
+
+    f = io.StringIO()
+    with redirect_stdout(f):
+        cli.process_args(args)
+    if LANGID_FLAG:
+        assert f.getvalue().strip() == ""
+        args.target_language = "en"
+        f2 = io.StringIO()
+        with redirect_stdout(f2):
+            cli.process_args(args)
+        assert f2.getvalue().strip() == url
+    else:
+        assert f.getvalue().strip() == url
+
+
+@pytest.mark.parametrize("relative_input", [False, True])
+def test_keep_dirs_local_batch(tmp_path, monkeypatch, relative_input):
+    """Kept paths stay relative to the input directory, beneath the output directory."""
+    input_dir = tmp_path / "input"
+    output_dir = tmp_path / "output"
+    monkeypatch.chdir(tmp_path)
+    input_arg = Path("input") if relative_input else input_dir
+    args = cli.parse_args(["--input-dir", str(input_arg), "--output-dir", str(output_dir), "--keep-dirs"])
+    for relative_path in (Path("article.html"), Path("nested", "article.txt")):
+        output_path, destination_dir = cli_utils.determine_output_path(args, str(input_arg / relative_path), "")
+        expected = output_dir / relative_path.with_suffix(".txt")
+        assert output_path == str(expected)
+        assert destination_dir == str(expected.parent)
+
+
+@pytest.mark.parametrize("output_format", ["html", "xml"])
+def test_keep_dirs_never_overwrites_input_file(tmp_path, caplog, monkeypatch, output_format):
+    """An input file whose output path is the file itself is skipped with an error, the rest is written."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    source = tmp_path / "in"
+    (source / "nested").mkdir(parents=True)
+    html = Path(RESOURCES_DIR, "httpbin_sample.html").read_bytes()
+    clashing = source / f"a.{output_format}"
+    clashing.write_bytes(html)
+    (source / "nested" / "b.htm").write_bytes(html)
+    args = cli.parse_args(
+        ["--input-dir", str(source), "-o", str(source), "--keep-dirs", f"--{output_format}", "--parallel", "1", "--fast"]
+    )
+    # run the workers in-process so that their log records reach caplog
+    monkeypatch.setattr(cli_utils, "ProcessPoolExecutor", ThreadPoolExecutor)
+    assert cli_utils.file_processing_pipeline(args) == 0
+    assert clashing.read_bytes() == html
+    assert f"Skipping {clashing}: the output path would overwrite the input file" in caplog.text
+    written = source / "nested" / f"b.{output_format}"
+    assert "blacksmith" in written.read_text(encoding="utf-8")

@@ -1,0 +1,24 @@
+[workspace]
+resolver = "3"
+members = [
+    "seekstorm",
+    "seekstorm_server",
+    "seekstorm_mcp_server",
+    "seekstorm_client"
+]
+
+[workspace.lints.rust]
+missing_docs = "warn"
+unused_import_braces = "warn"
+trivial_casts = "warn"
+trivial_numeric_casts = "warn"
+unused_qualifications = "warn"
+
+[profile.release]
+lto = true
+opt-level = 3
+debug = false
+debug-assertions = false
+panic = "abort"
+overflow-checks = false
+strip = "debuginfo"

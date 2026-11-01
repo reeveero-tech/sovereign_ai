@@ -1,0 +1,7 @@
+agent:
+  type: smolagents
+  model: together_ai/meta-llama/Llama-4-Maverick-17B-128E-Instruct-FP8
+  tools:
+    - TavilySearch:
+        params:
+          include_raw: false

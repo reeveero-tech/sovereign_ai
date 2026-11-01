@@ -242,8 +242,16 @@ def _terms(text: str, lang: str) -> List[str]:
             continue
         if lang == "ar":
             t = re.sub(r"^(?:وال|بال|كال|فال|لل|ال|و)(?=\w{3,})", "", t)
-        out.append(_stem(t) if lang in ("en", "fr", "es", "de") else t)
+        if lang in ("en", "fr", "es", "de"):
+            t = _stem(t)
+        elif lang in _SNOWBALL_LANGS:  # R-829: جذوع Snowball من whoosh المسحوبة (روسي/إيطالي/برتغالي/تركي…)
+            from search_agents import ranking
+            t = ranking.stem(t, lang)
+        out.append(t)
     return out
+
+
+_SNOWBALL_LANGS = {"ru", "it", "pt", "tr", "nl", "sv", "da", "fi", "hu", "no", "nb", "ro"}
 
 
 def _stem(t: str) -> str:
@@ -874,6 +882,18 @@ def _p_bing(q: str, lang: str) -> List[Dict[str, Any]]:
     return out[:10]
 
 
+def _p_ddgs(engine: str):
+    """R-829: محرك عالمي عبر ddgs المسحوبة (third_party/deedy5__ddgs) — نتائج غير مطابقة تُرفض كـ Bing."""
+    from search_agents import metasearch
+
+    def _p(q: str, lang: str) -> List[Dict[str, Any]]:
+        out = metasearch.search(engine, q, lang)
+        if out and not results_match_query(out, q, lang):
+            raise RuntimeError(f"ddgs-{engine}: نتائج غير مطابقة للسؤال — رُفضت")
+        return out
+    return _p
+
+
 def results_match_query(results: List[Dict[str, Any]], q: str, lang: str, min_ratio: float = 0.3) -> bool:
     """حارس جودة: محرك مقيَّد قد يعيد صفحات لا علاقة لها بالسؤال (سياحة لسؤال حمية) —
     إن لم يحمل ٣٠٪ من النتائج على الأقل مصطلحًا من السؤال تُرفض الدفعة كلها."""
@@ -1326,7 +1346,10 @@ def engine_status() -> Dict[str, Any]:
                           "instant-crypto", "instant-weather", "instant-time",
                           # R-827
                           "instant-stat (World Bank)", "archive", "naver"],
-            "detectable_languages": sorted(LANG_NAMES_AR)}
+            "detectable_languages": sorted(LANG_NAMES_AR),
+            # R-829: وكلاء ومحركات مفتوحة المصدر المسحوبة في third_party/ وحالة تحميلها الفعلية
+            "ddgs_engines": [f"ddgs-{e}" for e in __import__("search_agents.metasearch").metasearch.engines()],
+            "open_source": __import__("search_agents").status()}
 
 
 def search_results(query: str, max_results: int = 10) -> Dict[str, Any]:
@@ -1368,10 +1391,12 @@ def search_results(query: str, max_results: int = 10) -> Dict[str, Any]:
             "results": merged[:max_results], "providers": status, "fresh": fresh}
 
 
-def answer(question: str, target_lang: Optional[str] = None) -> Dict[str, Any]:
-    """سؤال بأي لغة ⇒ أفضل إجابة مقيّمة من مصادر العالم مترجمة إلى لغة السائل. بلا نموذج لغوي."""
+def answer(question: str, target_lang: Optional[str] = None, budget: Optional[float] = None) -> Dict[str, Any]:
+    """سؤال بأي لغة ⇒ أفضل إجابة مقيّمة من مصادر العالم مترجمة إلى لغة السائل. بلا نموذج لغوي.
+
+    budget (R-829): ميزانية بالثواني لهذا السؤال — البحث العميق يوزع ميزانيته على أسئلته الفرعية."""
     t0 = time.monotonic()
-    budget = _env_float("WORLD_SEARCH_BUDGET_SECONDS", 40.0)
+    budget = float(budget) if budget else _env_float("WORLD_SEARCH_BUDGET_SECONDS", 40.0)
     deadline = t0 + budget
     question = str(question or "").strip()[:600]
     if not question:
@@ -1455,6 +1480,13 @@ def answer(question: str, target_lang: Optional[str] = None) -> Dict[str, Any]:
     if user_lang != web_lang:
         jobs.append((f"duckduckgo-{user_lang}", _p_duckduckgo, (keyword_query(core, user_lang), user_lang)))
     jobs.append(("marginalia", _p_marginalia, (web_q, web_lang)))
+    from search_agents import metasearch
+    if metasearch.enabled():  # R-829: محركات العالم عبر ddgs — كل محرك مزود مستقل بقاطع دائرة خاص
+        for eng in metasearch.engines():
+            jobs.append((f"ddgs-{eng}", _p_ddgs(eng), (web_q, web_lang)))
+        if user_lang != web_lang:
+            for eng in metasearch.engines()[:2]:
+                jobs.append((f"ddgs-{eng}-{user_lang}", _p_ddgs(eng), (user_q, user_lang)))
     if en_q and not no_sch:
         jobs.append(("europepmc", _p_europepmc, (scholarly_query(en_q), "en")))
         jobs.append(("pubmed", _p_pubmed, (scholarly_query(en_q), "en")))
@@ -1489,8 +1521,16 @@ def answer(question: str, target_lang: Optional[str] = None) -> Dict[str, Any]:
                 cred, label = 0.95, "بيانات مباشرة"
             sources.append({**r, "cred": cred, "cred_label": label})
     # R-825: ترتيب القراءة = موثوقية + مكافأة ترتيب محرك البحث (أعلى نتائج Bing) + للآني: أخبار Bing
+    # R-829: دمج metasearch2 (third_party/mat-1__metasearch2/src/engines/ranking.rs) — رابط تتفق عليه محركات
+    # الويب العامة (Bing وGoogle وBrave وYandex…) بمراتب عالية يُقرأ أولًا
+    fused = metasearch.fuse([(n_, sres.get(n_) or []) for n_ in order
+                             if n_.startswith(("bing", "ddgs-")) and "news" not in n_])
+
     def _read_priority(s_):
         bonus = 0.0
+        fz = fused.get(s_.get("url"))
+        if fz:
+            bonus += 0.1 * min(2, len(fz["engines"]) - 1) + 0.1 * min(1.0, fz["score"])
         if str(s_.get("provider", "")).startswith("bing") and s_.get("rank", 99) < 4:
             bonus += 0.3 - 0.05 * s_.get("rank", 0)
         if fresh and s_.get("news"):
@@ -1506,6 +1546,8 @@ def answer(question: str, target_lang: Optional[str] = None) -> Dict[str, Any]:
     def _read(src):
         import web_tools
         page = web_tools.fetch(src["url"], timeout=8.0)
+        if page.get("published") and not src.get("published"):
+            src["published"] = parse_date(page["published"])  # R-829: تاريخ النشر من trafilatura/htmldate
         return (page.get("text") or "")[:60000]
     if web_to_read and time.monotonic() < deadline - 6:
         pres, pstat = _run_parallel([(s["url"], _read, (s,)) for s in web_to_read],
@@ -1519,6 +1561,8 @@ def answer(question: str, target_lang: Optional[str] = None) -> Dict[str, Any]:
             s["text"] = s.get("snippet") or ""
 
     # ٤) المرشحات والتقييم
+    from search_agents import ranking
+    q_all = list(dict.fromkeys(t for ts in qterms.values() for t in ts))
     candidates = []
     for idx, s in enumerate(sources):
         if fresh and s.get("news") and s.get("text") == s.get("title"):
@@ -1531,7 +1575,10 @@ def answer(question: str, target_lang: Optional[str] = None) -> Dict[str, Any]:
         cred = s["cred"]
         if fresh and (s.get("provider", "").startswith("wikipedia") or s.get("scholarly")):
             cred = round(cred * 0.7, 3)  # الآني: الموسوعة والأبحاث لا تعرف سعر اليوم
-        texts = sentences(s["text"])[:60]
+        # R-829: أصلح ٦٠ جملة بـ BM25Okapi (rank_bm25 المسحوبة) بدل أول ٦٠ — الجواب قد يقع في منتصف الصفحة
+        s_lang = s.get("lang") or user_lang
+        texts = ranking.top_sentences(sentences(s["text"]), qterms.get(s_lang) or q_all,
+                                      lambda x, _l=s_lang: _terms(x, _l), 60)
         if s.get("snippet") and s.get("text") != s.get("snippet"):
             texts = sentences(s["snippet"])[:2] + texts  # مقتطف المحرك غالبًا أدق جملة
         for sent in dict.fromkeys(texts):

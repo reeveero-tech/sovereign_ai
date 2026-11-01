@@ -43,6 +43,9 @@ SCRIPT_ENTRY_POINTS = {
     "tests/helpers/fake_mcp_server.py",
     "scripts/verify_new_key.py",
     "scripts/verify_operational_auth.py",
+    # R-829: أداة سحب المشاريع مفتوحة المصدر إلى third_party/ — CLI يشغّله المالك/المطوّر لتحديث النسخ
+    # (python3 scripts/vendor_sync.py)؛ يحمّله tests/test_r829_search_agents.py للتحقق من بصمة الشجرة
+    "scripts/vendor_sync.py",
     # GS-3 (قرار المالك د.٣): نواة حارس العناوين — CLI يشغّله .githooks/pre-commit
     # (`--staged`)، ويُحمَّل في tests/test_private_ip_guard_ipv6.py بـ spec_from_file_location
     "tools/private_ip_guard.py",
@@ -109,6 +112,10 @@ def _get_live_python_files() -> list:
             return True
         # النطاق المؤجل بأمر المالك (OWNER_REQUIRED البند ٤) — بادئة مثبتة
         if rel.startswith("guardian/data/emergency/"):
+            return True
+        # R-829: كود طرف ثالث مدمج بنسخته الأصلية غير المعدّلة — يتحقق منه test_third_party_vendored
+        # (كل مشروع مسجّل بترخيص متساهل وإصدار وبصمة شجرة، ومربوط بقدرة في محرك البحث)
+        if rel.startswith("third_party/"):
             return True
         return False
 
