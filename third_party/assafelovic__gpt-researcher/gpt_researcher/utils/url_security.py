@@ -12,7 +12,7 @@ address are allowed. This blocks:
 * Local filesystem paths (no scheme/host), which some document loaders would
   otherwise read directly from disk (arbitrary local file read).
 * Requests to private, loopback, link-local, reserved or otherwise internal
-  addresses (e.g. ``127.0.0.1``, ``10.0.0.0/8`` and the ``169.254.169.254``
+  addresses (e.g. ``127.0.0.1``, ``10.0.0.x/8`` and the ``169.254.169.254``
   cloud metadata endpoint).
 
 Operators who intentionally scrape internal or self-hosted resources can opt out

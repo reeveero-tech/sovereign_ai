@@ -1595,15 +1595,15 @@ mod tests {
     #[test]
     fn test_multi_terms_final_key_order() -> crate::Result<()> {
         let keys = [
-            IntermediateKey::IpAddr("::ffff:10.0.0.2".parse().unwrap()),
-            IntermediateKey::IpAddr("::ffff:10.0.0.10".parse().unwrap()),
+            IntermediateKey::IpAddr("::ffff:10.0.0.x".parse().unwrap()),
+            IntermediateKey::IpAddr("::ffff:10.0.0.x".parse().unwrap()),
             IntermediateKey::Str("0".to_string()),
             IntermediateKey::Bool(false),
             IntermediateKey::I64(-1),
             IntermediateKey::U64(2),
             IntermediateKey::F64(1.5),
         ];
-        let expected = ["0", "10.0.0.10", "10.0.0.2", "-1", "false", "2", "1.5"];
+        let expected = ["0", "10.0.0.x", "10.0.0.x", "-1", "false", "2", "1.5"];
         for order in ["asc", "desc"] {
             let req = serde_json::from_value(json!({
                 "terms": [{"field": "value"}],

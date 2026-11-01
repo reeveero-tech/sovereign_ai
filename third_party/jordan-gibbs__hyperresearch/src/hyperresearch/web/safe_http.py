@@ -194,7 +194,7 @@ def _parse_allowlist(
                     f"invalid allow_private_hosts entry {entry!r}: not a valid CIDR"
                 ) from None
             if "%" in entry:
-                # Only a scoped IPv6 literal (fe80::1%eth0) legitimately
+                # Only a scoped IPv6 literal (fexx::1%eth0) legitimately
                 # carries '%', and those parsed as networks above. As a
                 # hostname the entry could never match.
                 raise SafeHTTPError(

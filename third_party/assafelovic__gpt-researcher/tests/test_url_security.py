@@ -47,12 +47,12 @@ def test_rejects_non_http_and_local_paths(url):
         "http://127.0.0.1/",                                   # loopback
         "http://localhost.localdomain/",                        # resolves to loopback
         "http://169.254.169.254/latest/meta-data/",             # cloud metadata
-        "http://10.0.0.5/internal",                             # private /8
-        "http://192.168.1.1/admin",                             # private /16
-        "http://172.16.0.10/",                                  # private /12
+        "http://10.0.0.x/internal",                             # private /8
+        "http://192.168.1.x/admin",                             # private /16
+        "http://172.16.0.x/",                                  # private /12
         "http://0.0.0.0/",                                      # unspecified
         "http://[::1]/",                                         # IPv6 loopback
-        "http://[fd00::1]/",                                     # IPv6 unique-local
+        "http://[fdxx::1]/",                                     # IPv6 unique-local
     ],
 )
 def test_rejects_internal_addresses(url):
@@ -70,7 +70,7 @@ def test_allows_public_ip():
 
 def test_blocks_host_resolving_to_private_ip(monkeypatch):
     def fake_getaddrinfo(host, *args, **kwargs):
-        return [(socket.AF_INET, socket.SOCK_STREAM, 0, "", ("10.1.2.3", 0))]
+        return [(socket.AF_INET, socket.SOCK_STREAM, 0, "", ("10.1.2.x", 0))]
 
     monkeypatch.setattr(socket, "getaddrinfo", fake_getaddrinfo)
     with pytest.raises(UnsafeURLError):
@@ -87,6 +87,6 @@ def test_allow_private_argument_bypasses_check():
 
 def test_allow_private_env_var_bypasses_check(monkeypatch):
     monkeypatch.setenv("ALLOW_PRIVATE_URLS", "true")
-    assert is_safe_url("http://192.168.0.10/") is True
+    assert is_safe_url("http://192.168.0.x/") is True
     monkeypatch.setenv("ALLOW_PRIVATE_URLS", "false")
-    assert is_safe_url("http://192.168.0.10/") is False
+    assert is_safe_url("http://192.168.0.x/") is False

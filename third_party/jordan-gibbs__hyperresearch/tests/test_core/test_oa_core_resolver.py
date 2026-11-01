@@ -484,7 +484,7 @@ class TestUrlGate:
         id is theirs, and the gate is cheap."""
         _stub_legacy(monkeypatch, {})
         core_calls = _stub_core(monkeypatch, {"search/works": _search_hit(), "/works/": _work()})
-        monkeypatch.setattr(socket, "getaddrinfo", lambda h, p: [(2, 1, 6, "", ("10.0.0.5", 0))])
+        monkeypatch.setattr(socket, "getaddrinfo", lambda h, p: [(2, 1, 6, "", ("10.0.0.x", 0))])
         _stub_pdf(monkeypatch, None)
         original = _result(ABSTRACT)
         out, loc = oa.recover_full_text(vault, None, "https://p/x", DOI, original)

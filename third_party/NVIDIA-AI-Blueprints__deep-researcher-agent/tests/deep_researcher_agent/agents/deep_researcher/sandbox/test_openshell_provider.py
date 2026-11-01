@@ -362,7 +362,7 @@ def test_allowlist_rejects_hostless_endpoints(host: str | None) -> None:
         _validate_policy_network(policy, mode="blocked", allow=())
 
 
-@pytest.mark.parametrize("cidr", ["0.0.0.0/0", "10.0.0.0/8", "::/0", "2001:db8::/32"])
+@pytest.mark.parametrize("cidr", ["0.0.0.0/0", "10.0.0.x/8", "::/0", "2001:db8::/32"])
 def test_allowlist_rejects_allowed_ip_overrides(cidr: str) -> None:
     policy = {
         "network_policies": {

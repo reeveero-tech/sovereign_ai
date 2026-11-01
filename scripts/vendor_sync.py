@@ -11,6 +11,9 @@
    أي ملف > 2MB، ومجلدات صفحات اختبار ضخمة (CORPUS_DIRS). كل ملف مستثنى يُسجَّل في MANIFEST.json
    بمساره وحجمه وبصمته sha256 — يمكن استرجاعه حرفيًا من المستودع الأصلي عند ذلك الإصدار.
 4) تكتب third_party/MANIFEST.json: المستودع، الترخيص، الإصدار، الدور في محرك البحث، عدد الملفات، المستثنى.
+5) أمر المالك HIST-02 (لا عنوان شبكة داخلية في أي ملف متتبع، بلا استثناء): كل عنوان يطابق
+   tools/private_ip_guard.py في الأصل يُقنَّع (10.0.0.x / fexx::1) ويُسجَّل في «masked» بالسطر والنوع وبصمة
+   الملف الأصلي — العنوان الأصلي لا يُكتب في أي مكان. ملف ثنائي يحوي عنوانًا يوقف المزامنة لقرار يدوي.
 
 الاستخدام:  GH_TOKEN=... python scripts/vendor_sync.py [owner/repo ...]
 """
@@ -122,6 +125,32 @@ def tree_sha256(target: Path) -> str:
     return h.hexdigest()
 
 
+def _load_ip_guard():
+    """نواة حارس العناوين (tools/private_ip_guard.py) — المصدر الوحيد لأنماط HIST-02."""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("private_ip_guard", ROOT / "tools" / "private_ip_guard.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def mask_private_addresses(text: str):
+    """أمر المالك HIST-02 (لا عنوان شبكة داخلية في أي ملف متتبع، بلا استثناء): كل عنوان يطابق الحارس
+    في الأصل يُقنَّع — IPv4 آخر مقطع ⇒ x (الصيغة المقنعة المعتمدة)، IPv6 آخر خانتين من المقطع الأول ⇒ xx.
+    لا يُكتب العنوان الأصلي في أي مكان (ولا في البيان) — يُسجَّل السطر والنوع والقيمة المقنعة فقط."""
+    guard = _load_ip_guard()
+    hits = []
+    for _ in range(10):  # التقنيع قد يكشف تطابقًا متداخلًا — جولات حتى لا يبقى شيء (كل جولة تقنّع كل المطابقات)
+        found = guard.scan_text(text)
+        if not found:
+            return text, sorted(hits, key=lambda h: h["line"])
+        for kind, pos, val in sorted(found, key=lambda f: -f[1]):  # من الآخر كي لا تنزاح المواضع
+            masked = val.rsplit(".", 1)[0] + ".x" if kind == "ipv4" else val[:2] + "xx" + val[4:]
+            hits.append({"line": text[:pos].count("\n") + 1, "kind": kind, "masked": masked})
+            text = text[:pos] + masked + text[pos + len(val):]
+    raise RuntimeError("تقنيع العناوين لم يستقر بعد ١٠ جولات")
+
+
 def sync_one(repo: str, category: str, license_: str, role: str, work: Path) -> dict:
     token = os.getenv("GH_TOKEN") or os.getenv("GITHUB_TOKEN") or ""
     url = f"https://{'x-access-token:' + token + '@' if token else ''}github.com/{repo}.git"
@@ -134,7 +163,7 @@ def sync_one(repo: str, category: str, license_: str, role: str, work: Path) -> 
     # أمر المالك «يمنع الحذف»: إعادة المزامنة تكتب فوق الملفات ولا تحذف؛ ما اختفى من الأصل يُسجَّل «stale»
     before = {q.relative_to(target).as_posix() for q in target.rglob("*")
               if q.is_file() and not _generated(target, q)} if target.exists() else set()
-    kept, kept_bytes, skipped, seen = 0, 0, [], set()
+    kept, kept_bytes, skipped, seen, masked = 0, 0, [], set(), []
     for src in sorted(clone.rglob("*")):
         rel = src.relative_to(clone).as_posix()
         if rel == ".git" or rel.startswith(".git/") or not src.is_file() or src.is_symlink():
@@ -148,11 +177,23 @@ def sync_one(repo: str, category: str, license_: str, role: str, work: Path) -> 
         seen.add(rel)
         dst.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(src, dst)
+        raw = src.read_bytes()
+        try:
+            text = raw.decode("utf-8")
+        except UnicodeDecodeError:
+            text = None
+        if text is not None:
+            new, hits = mask_private_addresses(text)
+            if hits:
+                dst.write_text(new, encoding="utf-8", newline="")
+                masked.append({"path": rel, "original_sha256": hashlib.sha256(raw).hexdigest(), "hits": hits})
+        elif _load_ip_guard().scan_text(raw.decode(errors="ignore")):
+            raise RuntimeError(f"{repo}/{rel}: ملف ثنائي يحوي عنوانًا داخليًا — لا يُقنَّع آليًا، قرار يدوي")
         kept += 1
         kept_bytes += size
     return {"repo": repo, "url": f"https://github.com/{repo}", "commit": commit, "category": category,
             "license": license_, "role_ar": role, "path": f"third_party/{target.name}", "files": kept,
-            "bytes": kept_bytes, "tree_sha256": tree_sha256(target), "excluded": skipped,
+            "bytes": kept_bytes, "tree_sha256": tree_sha256(target), "excluded": skipped, "masked": masked,
             "stale": sorted(before - seen), "synced_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
 
 

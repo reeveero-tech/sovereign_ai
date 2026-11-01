@@ -812,7 +812,7 @@ class TestAuthMiddlewareInternal:
         scope = _http_scope(
             "/health",
             host=b"api.public.example",
-            extra_headers=[(b"x-forwarded-for", b"203.0.113.10, 10.0.0.1")],
+            extra_headers=[(b"x-forwarded-for", b"203.0.113.10, 10.0.0.x")],
         )
         with (
             patch.dict(

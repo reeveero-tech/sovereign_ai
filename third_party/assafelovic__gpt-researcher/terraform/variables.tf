@@ -99,13 +99,13 @@ variable "additional_tags" {
 }
 
 variable "enable_gg_vpn_access" {
-  description = "Allow access from GG VPN network (192.168.158.0/24)"
+  description = "Allow access from GG VPN network (192.168.158.x/24)"
   type        = bool
   default     = true
 }
 
 variable "enable_internal_vpc_access" {
-  description = "Allow access from internal VPC network (192.168.144.0/23)"
+  description = "Allow access from internal VPC network (192.168.144.x/23)"
   type        = bool
   default     = true
 }
@@ -117,7 +117,7 @@ variable "custom_access_cidr_blocks" {
 
   validation {
     condition     = alltrue([for cidr in var.custom_access_cidr_blocks : can(cidrhost(cidr, 0))])
-    error_message = "All values must be valid CIDR blocks (e.g., 10.0.0.0/8)."
+    error_message = "All values must be valid CIDR blocks (e.g., 10.0.0.x/8)."
   }
 }
 

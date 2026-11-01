@@ -550,7 +550,7 @@ class CoordMatcher(WrappingMatcher):
         # V-twin search library, described in the paper "V-Twin: A Lightweight
         # Engine for Interactive Use".
         #
-        # http://citeseerx.ist.psu.edu/viewdoc/summary?doi=10.1.1.56.1916
+        # http://citeseerx.ist.psu.edu/viewdoc/summary?doi=10.1.1.x.1916
 
         # score - document score using the current weighting function
         # matching - number of matching terms in the current document

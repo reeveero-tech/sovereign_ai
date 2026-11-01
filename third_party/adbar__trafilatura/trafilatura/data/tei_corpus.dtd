@@ -1571,7 +1571,7 @@ mode (s|w|sw|ws|m|x) "x"  >
 <!ATTLIST choice
  %att.global.attributes;
  %att.cmc.attributes; >
-<!--doc:(cited quotation) contains a quotation from some other document, together with a bibliographic reference to its source. In a dictionary it may contain an example text with at least one occurrence of the word form, used in the sense being described, or a translation of the headword, or an example. [3.3.3. Quotation 4.3.1. Grouped Texts 10.3.5.1. Examples] -->
+<!--doc:(cited quotation) contains a quotation from some other document, together with a bibliographic reference to its source. In a dictionary it may contain an example text with at least one occurrence of the word form, used in the sense being described, or a translation of the headword, or an example. [3.3.3. Quotation 4.3.1. Grouped Texts 10.3.5.x. Examples] -->
 <!ELEMENT cit (%model.biblLike;|_DUMMY_model.egLike|_DUMMY_model.entryPart|%model.global;|%model.graphicLike;|%model.ptrLike;|%model.attributable;|pc|q)+>
 <!ATTLIST cit xmlns CDATA "http://www.tei-c.org/ns/1.0">
 <!ATTLIST cit
@@ -2592,7 +2592,7 @@ calendar CDATA  #IMPLIED >
  %att.global.attributes;
  %att.declarable.attributes;
 method (silent|markup) "silent"  >
-<!--doc:(note) contains a note or annotation. [3.9.1. Notes and Simple Annotation 2.2.6. The Notes Statement 3.12.2.8. Notes and Statement of Language 10.3.5.4. Notes within Entries] -->
+<!--doc:(note) contains a note or annotation. [3.9.1. Notes and Simple Annotation 2.2.6. The Notes Statement 3.12.2.8. Notes and Statement of Language 10.3.5.x. Notes within Entries] -->
 <!ELEMENT note %macro.specialPara;>
 <!ATTLIST note xmlns CDATA "http://www.tei-c.org/ns/1.0">
 <!ATTLIST note

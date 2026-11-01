@@ -155,11 +155,11 @@ Shkapenyuk, V., & Suel, T. (2002). Design and implementation of a high-performan
 
 ..
     <https://onlinelibrary.wiley.com/doi/pdf/10.1002/spe.587>`_
-    <http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.33.1540&rep=rep1&type=pdf>`_
-    <https://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.101.5295&rep=rep1&type=pdf>`_
-    <https://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.29.3140&rep=rep1&type=pdf>`_
+    <http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.x.1540&rep=rep1&type=pdf>`_
+    <https://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.x.5295&rep=rep1&type=pdf>`_
+    <https://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.x.3140&rep=rep1&type=pdf>`_
     <https://dl.acm.org/doi/abs/10.1561/1500000017>`_
-    <https://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.13.4762&rep=rep1&type=pdf>`_
+    <https://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.x.4762&rep=rep1&type=pdf>`_
 
 .. seealso::
     `Download web pages <downloads.html>`_, `URL management <url-management.html>`_

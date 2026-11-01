@@ -29,7 +29,7 @@ class FetchSettings:
     max_pdf_bytes: int = 25 * 1024 * 1024
     max_image_bytes: int = 2 * 1024 * 1024
     # SSRF-gate escape hatch: hostnames (exact, case-insensitive) or IP
-    # networks in CIDR form ("10.8.0.0/16", "192.168.1.20") that may be
+    # networks in CIDR form ("10.8.0.x/16", "192.168.1.x") that may be
     # fetched even though they resolve to private/reserved addresses —
     # for self-hosted mirrors and intranet sources. Empty by default:
     # adding an entry is an explicit act by someone who controls the

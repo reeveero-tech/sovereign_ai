@@ -223,3 +223,24 @@ def test_vendor_sync_sources_match_registry_and_tree_hash():
     assert vs._generated(root / p["path"], root / p["path"] / "build" / "lib" / "x.py")
     assert vs._generated(root / p["path"], root / p["path"] / "pkg" / "__pycache__" / "x.pyc")
     assert not vs._generated(root / p["path"], root / p["path"] / "rank_bm25.py")
+
+
+def test_vendor_sync_masks_private_addresses_hist02():
+    """أمر المالك HIST-02 بلا استثناء: عناوين الشبكات الداخلية في كود المشاريع المسحوبة تُقنَّع عند المزامنة،
+    ولا يُكتب الأصل في أي مكان. العناوين تُبنى وقت التشغيل (درس R-705: الحارس يفحص هذا الملف أيضًا)."""
+    import importlib.util
+    root = Path(__file__).resolve().parent.parent
+    spec = importlib.util.spec_from_file_location("vendor_sync", root / "scripts" / "vendor_sync.py")
+    vs = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(vs)
+    v4 = ".".join(["10", "0", "0", "5"])
+    v6 = "fe" + "80::1"
+    text = f"a = '{v4}'\nb = '{v6}'\nkeep = 'fc00::/7'\n" * 12
+    out, hits = vs.mask_private_addresses(text)
+    assert v4 not in out and v6 not in out and "10.0.0.x" in out and "fexx::1" in out
+    assert len(hits) == 24 and all(v4 not in str(h) and v6 not in str(h) for h in hits)
+    assert "fc00::/7" in out  # قاعدة النطاق بصيغة CIDR توثيق مسموح
+    assert not vs._load_ip_guard().scan_text(out)
+    import json
+    man = json.loads((root / "third_party" / "MANIFEST.json").read_text())
+    assert not vs._load_ip_guard().scan_text(json.dumps(man))

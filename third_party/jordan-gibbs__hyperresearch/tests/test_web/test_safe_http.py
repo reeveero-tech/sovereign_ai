@@ -45,16 +45,16 @@ def test_check_url_rejects_no_hostname():
     [
         "http://127.0.0.1/",
         "http://127.1.2.3/",
-        "http://10.0.0.1/",
-        "http://10.255.255.255/",
-        "http://172.16.0.1/",
-        "http://172.31.255.254/",
-        "http://192.168.1.1/",
+        "http://10.0.0.x/",
+        "http://10.255.255.x/",
+        "http://172.16.0.x/",
+        "http://172.31.255.x/",
+        "http://192.168.1.x/",
         "http://169.254.169.254/latest/meta-data/",  # AWS IMDS
         "http://0.0.0.0/",
         "http://[::1]/",
-        "http://[fe80::1]/",
-        "http://[fc00::1]/",
+        "http://[fexx::1]/",
+        "http://[fcxx::1]/",
     ],
 )
 def test_check_url_rejects_private_and_loopback_ips(url):
@@ -78,7 +78,7 @@ def test_check_url_dns_resolved_private_rejected():
     """Hostnames that resolve to private addresses are refused — even when
     the literal looks public."""
     with patch("hyperresearch.web.safe_http.socket.getaddrinfo") as gai:
-        gai.return_value = [(socket.AF_INET, None, None, "", ("10.0.0.5", 0))]
+        gai.return_value = [(socket.AF_INET, None, None, "", ("10.0.0.x", 0))]
         with pytest.raises(SafeHTTPError, match="non-public address"):
             check_url("http://example.com/x")
 
@@ -88,7 +88,7 @@ def test_check_url_dns_resolved_mixed_any_private_rejected():
     with patch("hyperresearch.web.safe_http.socket.getaddrinfo") as gai:
         gai.return_value = [
             (socket.AF_INET, None, None, "", ("8.8.8.8", 0)),
-            (socket.AF_INET, None, None, "", ("10.0.0.5", 0)),
+            (socket.AF_INET, None, None, "", ("10.0.0.x", 0)),
         ]
         with pytest.raises(SafeHTTPError, match="non-public address"):
             check_url("http://example.com/x")
@@ -413,7 +413,7 @@ def test_check_url_allows_cgnat_neighbors(url):
     "url",
     [
         "http://[2002:7f00:1::]/",        # 127.0.0.1
-        "http://[2002:c0a8:101::]/",      # 192.168.1.1
+        "http://[2002:c0a8:101::]/",      # 192.168.1.x
         "http://[2002:a9fe:a9fe::]/",     # 169.254.169.254, cloud metadata
         "http://[2002:6440:1::]/",        # 100.64.0.1, CGNAT
     ],
@@ -442,7 +442,7 @@ def test_check_url_allows_6to4_wrapping_public_ipv4():
 @pytest.mark.parametrize(
     "url",
     [
-        "http://[::ffff:10.0.0.1]/",
+        "http://[::ffff:10.0.0.x]/",
         "http://[::ffff:169.254.169.254]/",  # mapped cloud metadata
         "http://[::ffff:100.64.0.1]/",  # mapped CGNAT: allowed on 3.11 and 3.13
     ],
@@ -465,34 +465,34 @@ def test_check_url_allows_ipv4_mapped_public():
 
 def test_allowlist_cidr_admits_private_address():
     with patch("hyperresearch.web.safe_http.socket.getaddrinfo") as gai:
-        gai.return_value = [(socket.AF_INET, None, None, "", ("10.0.0.5", 0))]
-        check_url("http://mirror.example/x", allow_private_hosts=("10.0.0.0/8",))
+        gai.return_value = [(socket.AF_INET, None, None, "", ("10.0.0.x", 0))]
+        check_url("http://mirror.example/x", allow_private_hosts=("10.0.0.x/8",))
 
 
 def test_allowlist_cidr_is_not_a_blanket_waiver():
     """Allowlisting one private network must not admit OTHER private space."""
     with patch("hyperresearch.web.safe_http.socket.getaddrinfo") as gai:
-        gai.return_value = [(socket.AF_INET, None, None, "", ("192.168.1.5", 0))]
+        gai.return_value = [(socket.AF_INET, None, None, "", ("192.168.1.x", 0))]
         with pytest.raises(SafeHTTPError, match="non-public address"):
-            check_url("http://mirror.example/x", allow_private_hosts=("10.0.0.0/8",))
+            check_url("http://mirror.example/x", allow_private_hosts=("10.0.0.x/8",))
 
 
 def test_allowlist_bare_ip_entry_admits_exactly_one_host():
-    check_url("http://192.168.1.20/wiki", allow_private_hosts=("192.168.1.20",))
+    check_url("http://192.168.1.x/wiki", allow_private_hosts=("192.168.1.x",))
     with pytest.raises(SafeHTTPError, match="non-public address"):
-        check_url("http://192.168.1.21/wiki", allow_private_hosts=("192.168.1.20",))
+        check_url("http://192.168.1.x/wiki", allow_private_hosts=("192.168.1.x",))
 
 
 def test_allowlist_hostname_admits_by_name_case_insensitively():
     with patch("hyperresearch.web.safe_http.socket.getaddrinfo") as gai:
-        gai.return_value = [(socket.AF_INET, None, None, "", ("10.0.0.5", 0))]
+        gai.return_value = [(socket.AF_INET, None, None, "", ("10.0.0.x", 0))]
         check_url("http://Papers.INTERNAL/x", allow_private_hosts=("papers.internal",))
 
 
 def test_allowlist_hostname_is_exact_not_a_suffix_match():
     """``papers.internal`` must not admit ``evil-papers.internal``."""
     with patch("hyperresearch.web.safe_http.socket.getaddrinfo") as gai:
-        gai.return_value = [(socket.AF_INET, None, None, "", ("10.0.0.5", 0))]
+        gai.return_value = [(socket.AF_INET, None, None, "", ("10.0.0.x", 0))]
         with pytest.raises(SafeHTTPError, match="non-public address"):
             check_url(
                 "http://evil-papers.internal/x",
@@ -510,19 +510,19 @@ def test_allowlist_malformed_cidr_is_a_loud_error():
     failure mode looks exactly like an SSRF refusal of the mirror it was
     supposed to admit."""
     with pytest.raises(SafeHTTPError, match="invalid allow_private_hosts"):
-        check_url("http://8.8.8.8/", allow_private_hosts=("10.0.0.0/33",))
+        check_url("http://8.8.8.8/", allow_private_hosts=("10.0.0.x/33",))
 
 
 def test_safe_get_redirect_to_allowlisted_private_host_is_followed():
     """The allowlist is threaded into per-hop revalidation: a public host
     redirecting onto an allowlisted mirror is followed, not refused."""
     transport = _transport({
-        "/start": httpx.Response(302, headers={"location": "http://192.168.1.20/paper"}),
+        "/start": httpx.Response(302, headers={"location": "http://192.168.1.x/paper"}),
         "/paper": httpx.Response(200, content=b"mirror content"),
     })
     resp = safe_get(
         "http://8.8.8.8/start", max_bytes=1024, transport=transport,
-        allow_private_hosts=("192.168.1.20",),
+        allow_private_hosts=("192.168.1.x",),
     )
     assert resp.content == b"mirror content"
 
@@ -548,7 +548,7 @@ def test_safe_get_redirect_to_allowlisted_private_host_is_followed():
 )
 def test_allowlist_hostname_matches_dns_equivalent_spelling(url, entry):
     with patch("hyperresearch.web.safe_http.socket.getaddrinfo") as gai:
-        gai.return_value = [(socket.AF_INET, None, None, "", ("10.0.0.5", 0))]
+        gai.return_value = [(socket.AF_INET, None, None, "", ("10.0.0.x", 0))]
         check_url(url, allow_private_hosts=(entry,))
 
 
@@ -564,7 +564,7 @@ def test_allowlist_hostname_does_not_match_idna2003_mapping(url, entry):
     httpx sends "xn--strae-oqa": two separately registrable names. An entry
     for one must not admit the other."""
     with patch("hyperresearch.web.safe_http.socket.getaddrinfo") as gai:
-        gai.return_value = [(socket.AF_INET, None, None, "", ("10.0.0.5", 0))]
+        gai.return_value = [(socket.AF_INET, None, None, "", ("10.0.0.x", 0))]
         with pytest.raises(SafeHTTPError, match="non-public address"):
             check_url(url, allow_private_hosts=(entry,))
 
@@ -575,13 +575,13 @@ def test_allowlist_entry_with_ideographic_full_stop_names_the_dotted_host():
     entry = "mirror\u3002internal"
     one_label = "xn--" + entry.encode("punycode").decode("ascii")
     with patch("hyperresearch.web.safe_http.socket.getaddrinfo") as gai:
-        gai.return_value = [(socket.AF_INET, None, None, "", ("10.0.0.5", 0))]
+        gai.return_value = [(socket.AF_INET, None, None, "", ("10.0.0.x", 0))]
         check_url("http://mirror.internal/x", allow_private_hosts=(entry,))
         with pytest.raises(SafeHTTPError, match="non-public address"):
             check_url(f"http://{one_label}/x", allow_private_hosts=(entry,))
 
 
-@pytest.mark.parametrize("entry", ["fe80::1%eth0", "[fe80::1%eth0]"])
+@pytest.mark.parametrize("entry", ["fexx::1%eth0", "[fexx::1%eth0]"])
 def test_allowlist_scoped_ipv6_entry_parses_as_its_address(entry):
     """A scoped entry is an address, not a hostname, and matches by address
     bits whatever the scope."""
@@ -592,16 +592,16 @@ def test_allowlist_scoped_ipv6_entry_parses_as_its_address(entry):
     hostnames, networks = _parse_allowlist((entry,))
     assert hostnames == frozenset()
     assert len(networks) == 1
-    assert ipaddress.ip_address("fe80::1") in networks[0]
+    assert ipaddress.ip_address("fexx::1") in networks[0]
 
 
 def test_allowlist_scoped_ipv6_url_allowed_by_bracketed_scoped_entry():
-    check_url("http://[fe80::1%eth0]/x", allow_private_hosts=("[fe80::1%eth0]",))
+    check_url("http://[fexx::1%eth0]/x", allow_private_hosts=("[fexx::1%eth0]",))
 
 
 def test_scoped_ipv6_url_refused_without_entry():
     with pytest.raises(SafeHTTPError, match="non-public address"):
-        check_url("http://[fe80::1%eth0]/x")
+        check_url("http://[fexx::1%eth0]/x")
 
 
 def test_allowlist_percent_in_non_address_entry_is_a_loud_error():
@@ -713,7 +713,7 @@ def test_check_url_unencodable_url_raises_safe_error(url):
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("entry", ["192.168.1.20:8443", "mirror.internal:8443"])
+@pytest.mark.parametrize("entry", ["192.168.1.x:8443", "mirror.internal:8443"])
 def test_allowlist_entry_with_port_is_a_loud_error(entry):
     """A host:port entry would otherwise become a hostname that can never
     match (URL hostnames carry no port): a silent dead entry presenting as
@@ -736,7 +736,7 @@ def test_check_url_strips_leading_whitespace_as_urlparse_does(url):
     check_url(url)
 
 
-@pytest.mark.parametrize("url", [" http://127.0.0.1/", "\x0bhttp://10.0.0.1/"])
+@pytest.mark.parametrize("url", [" http://127.0.0.1/", "\x0bhttp://10.0.0.x/"])
 def test_check_url_leading_whitespace_still_ip_gated(url):
     with pytest.raises(SafeHTTPError, match="non-public address"):
         check_url(url)

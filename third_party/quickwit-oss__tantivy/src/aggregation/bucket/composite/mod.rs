@@ -1229,10 +1229,10 @@ mod tests {
             let ipv4 = |ip: &str| ip.parse::<Ipv4Addr>().unwrap().to_ipv6_mapped();
             let ipv6 = |ip: &str| ip.parse::<Ipv6Addr>().unwrap();
             let mut index_writer = index.writer_with_num_threads(1, 20_000_000)?;
-            index_writer.add_document(doc!(ip_field => ipv4("192.168.1.1")))?;
-            index_writer.add_document(doc!(ip_field => ipv4("10.0.0.1")))?;
-            index_writer.add_document(doc!(ip_field => ipv4("192.168.1.1")))?; // duplicate
-            index_writer.add_document(doc!(ip_field => ipv4("172.16.0.1")))?;
+            index_writer.add_document(doc!(ip_field => ipv4("192.168.1.x")))?;
+            index_writer.add_document(doc!(ip_field => ipv4("10.0.0.x")))?;
+            index_writer.add_document(doc!(ip_field => ipv4("192.168.1.x")))?; // duplicate
+            index_writer.add_document(doc!(ip_field => ipv4("172.16.0.x")))?;
             index_writer.add_document(doc!(ip_field => ipv6("2001:db8::1")))?;
             index_writer.add_document(doc!(ip_field => ipv6("::1")))?; // localhost
             index_writer.add_document(doc!())?;
@@ -1248,9 +1248,9 @@ mod tests {
             ]),
             json!([
                 {"key": {"ip_addr": "::1"}, "doc_count": 1},
-                {"key": {"ip_addr": "10.0.0.1"}, "doc_count": 1},
-                {"key": {"ip_addr": "172.16.0.1"}, "doc_count": 1},
-                {"key": {"ip_addr": "192.168.1.1"}, "doc_count": 2},
+                {"key": {"ip_addr": "10.0.0.x"}, "doc_count": 1},
+                {"key": {"ip_addr": "172.16.0.x"}, "doc_count": 1},
+                {"key": {"ip_addr": "192.168.1.x"}, "doc_count": 2},
                 {"key": {"ip_addr": "2001:db8::1"}, "doc_count": 2}
             ]),
         );

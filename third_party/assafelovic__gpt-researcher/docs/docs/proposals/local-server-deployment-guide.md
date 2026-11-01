@@ -546,8 +546,8 @@ location / {
 
 ```nginx
 location / {
-    allow 192.168.1.0/24;   # 内网
-    allow 10.0.0.0/8;       # VPN
+    allow 192.168.1.x/24;   # 内网
+    allow 10.0.0.x/8;       # VPN
     deny all;
     # ... 代理配置
 }

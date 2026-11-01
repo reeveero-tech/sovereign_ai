@@ -1,6 +1,6 @@
 {
  "schema": 1,
- "policy_ar": "(قابلة للإعادة — تحديث أي مشروع إلى أحدث إصدار بأمر واحد):\n1) تستنسخ كل مستودع في SOURCES بعمق 1 وتسجّل رقم الإصدار (commit) الدقيق.\n2) تنسخ **كل** ملفات الكود والأدوات والإعدادات والنصوص إلى third_party/<owner>__<repo>/ بلا .git.\n3) تستثني فقط ما لا يصلح داخل مستودع كود: وسائط ثقيلة (فيديو/صور متحركة/أرشيفات/PDF/خطوط > 200KB)،\n   أي ملف > 2MB، ومجلدات صفحات اختبار ضخمة (CORPUS_DIRS). كل ملف مستثنى يُسجَّل في MANIFEST.json\n   بمساره وحجمه وبصمته sha256 — يمكن استرجاعه حرفيًا من المستودع الأصلي عند ذلك الإصدار.\n4) تكتب third_party/MANIFEST.json: المستودع، الترخيص، الإصدار، الدور في محرك البحث، عدد الملفات، المستثنى.",
+ "policy_ar": "(قابلة للإعادة — تحديث أي مشروع إلى أحدث إصدار بأمر واحد):\n1) تستنسخ كل مستودع في SOURCES بعمق 1 وتسجّل رقم الإصدار (commit) الدقيق.\n2) تنسخ **كل** ملفات الكود والأدوات والإعدادات والنصوص إلى third_party/<owner>__<repo>/ بلا .git.\n3) تستثني فقط ما لا يصلح داخل مستودع كود: وسائط ثقيلة (فيديو/صور متحركة/أرشيفات/PDF/خطوط > 200KB)،\n   أي ملف > 2MB، ومجلدات صفحات اختبار ضخمة (CORPUS_DIRS). كل ملف مستثنى يُسجَّل في MANIFEST.json\n   بمساره وحجمه وبصمته sha256 — يمكن استرجاعه حرفيًا من المستودع الأصلي عند ذلك الإصدار.\n4) تكتب third_party/MANIFEST.json: المستودع، الترخيص، الإصدار، الدور في محرك البحث، عدد الملفات، المستثنى.\n5) أمر المالك HIST-02 (لا عنوان شبكة داخلية في أي ملف متتبع، بلا استثناء): كل عنوان يطابق\n   tools/private_ip_guard.py في الأصل يُقنَّع (10.0.0.x / fexx::1) ويُسجَّل في «masked» بالسطر والنوع وبصمة\n   الملف الأصلي — العنوان الأصلي لا يُكتب في أي مكان. ملف ثنائي يحوي عنوانًا يوقف المزامنة لقرار يدوي.",
  "projects": [
   {
    "repo": "assafelovic/gpt-researcher",
@@ -12,7 +12,7 @@
    "path": "third_party/assafelovic__gpt-researcher",
    "files": 822,
    "bytes": 10874477,
-   "tree_sha256": "779ca620dfb921185dd3447c5694cc248f141ea8bfddd718e1693a571a72b76e",
+   "tree_sha256": "134cb94a99c44bcf432532e86f4335b5a390934f9c894b7e8dcb402d4a64d2ef",
    "excluded": [
     {
      "path": "docs/blog/2024-05-19-gptr-langgraph/blog-langgraph.jpeg",
@@ -129,8 +129,99 @@
      "reason": "size>2MB"
     }
    ],
+   "masked": [
+    {
+     "path": "docs/docs/proposals/local-server-deployment-guide.md",
+     "original_sha256": "0cf168acc4f993ffcfbe48c5b8e32bb2ec75cd5deaffdaccde45fb500d295031",
+     "hits": [
+      {
+       "line": 549,
+       "kind": "ipv4",
+       "masked": "192.168.1.x"
+      },
+      {
+       "line": 550,
+       "kind": "ipv4",
+       "masked": "10.0.0.x"
+      }
+     ]
+    },
+    {
+     "path": "gpt_researcher/utils/url_security.py",
+     "original_sha256": "c263ac45bd5f26adaca42b57880daca58041756a5748c65a2581602cb4eeba9e",
+     "hits": [
+      {
+       "line": 15,
+       "kind": "ipv4",
+       "masked": "10.0.0.x"
+      }
+     ]
+    },
+    {
+     "path": "terraform/variables.tf",
+     "original_sha256": "0b9ced594ba9e24956ba5322b04aa1c60722323b40d166b576d40a9d5f725372",
+     "hits": [
+      {
+       "line": 102,
+       "kind": "ipv4",
+       "masked": "192.168.158.x"
+      },
+      {
+       "line": 108,
+       "kind": "ipv4",
+       "masked": "192.168.144.x"
+      },
+      {
+       "line": 120,
+       "kind": "ipv4",
+       "masked": "10.0.0.x"
+      }
+     ]
+    },
+    {
+     "path": "tests/test_url_security.py",
+     "original_sha256": "563cecffea739057f3f0353007c20c566e62ca423ff29d2bbc9e30449d62ec2f",
+     "hits": [
+      {
+       "line": 50,
+       "kind": "ipv4",
+       "masked": "10.0.0.x"
+      },
+      {
+       "line": 51,
+       "kind": "ipv4",
+       "masked": "192.168.1.x"
+      },
+      {
+       "line": 52,
+       "kind": "ipv4",
+       "masked": "172.16.0.x"
+      },
+      {
+       "line": 55,
+       "kind": "ula",
+       "masked": "fdxx::1"
+      },
+      {
+       "line": 73,
+       "kind": "ipv4",
+       "masked": "10.1.2.x"
+      },
+      {
+       "line": 90,
+       "kind": "ipv4",
+       "masked": "192.168.0.x"
+      },
+      {
+       "line": 92,
+       "kind": "ipv4",
+       "masked": "192.168.0.x"
+      }
+     ]
+    }
+   ],
    "stale": [],
-   "synced_at": "2026-11-01T21:30:01Z"
+   "synced_at": "2026-11-01T22:17:37Z"
   },
   {
    "repo": "stanford-oval/storm",
@@ -169,8 +260,9 @@
      "reason": "media>200KB"
     }
    ],
+   "masked": [],
    "stale": [],
-   "synced_at": "2026-11-01T21:30:01Z"
+   "synced_at": "2026-11-01T22:17:37Z"
   },
   {
    "repo": "langchain-ai/open_deep_research",
@@ -203,8 +295,9 @@
      "reason": "size>2MB"
     }
    ],
+   "masked": [],
    "stale": [],
-   "synced_at": "2026-11-01T21:30:01Z"
+   "synced_at": "2026-11-01T22:17:37Z"
   },
   {
    "repo": "dzhng/deep-research",
@@ -218,8 +311,9 @@
    "bytes": 137472,
    "tree_sha256": "982c47c6004800d414ac6c1d4897bf2b3e83a2e0401c2d6dc3ca561d3a46084f",
    "excluded": [],
+   "masked": [],
    "stale": [],
-   "synced_at": "2026-11-01T21:30:01Z"
+   "synced_at": "2026-11-01T22:17:37Z"
   },
   {
    "repo": "jina-ai/node-DeepResearch",
@@ -270,8 +364,9 @@
      "reason": "size>2MB"
     }
    ],
+   "masked": [],
    "stale": [],
-   "synced_at": "2026-11-01T21:30:01Z"
+   "synced_at": "2026-11-01T22:17:38Z"
   },
   {
    "repo": "InternLM/MindSearch",
@@ -292,8 +387,9 @@
      "reason": "size>2MB"
     }
    ],
+   "masked": [],
    "stale": [],
-   "synced_at": "2026-11-01T21:30:02Z"
+   "synced_at": "2026-11-01T22:17:38Z"
   },
   {
    "repo": "huggingface/smolagents",
@@ -314,8 +410,9 @@
      "reason": "media>200KB"
     }
    ],
+   "masked": [],
    "stale": [],
-   "synced_at": "2026-11-01T21:30:02Z"
+   "synced_at": "2026-11-01T22:17:38Z"
   },
   {
    "repo": "togethercomputer/open_deep_research",
@@ -329,8 +426,9 @@
    "bytes": 948052,
    "tree_sha256": "845111de30eebc3a36233ce2e935f6b52b167c28625217e2bdaf5a04e20ec592",
    "excluded": [],
+   "masked": [],
    "stale": [],
-   "synced_at": "2026-11-01T21:30:02Z"
+   "synced_at": "2026-11-01T22:17:38Z"
   },
   {
    "repo": "mshumer/OpenDeepResearcher",
@@ -344,8 +442,9 @@
    "bytes": 44297,
    "tree_sha256": "2873f78edc235b2bb5bc1df7498f728699aa199fcd7e3c773564c0178dd74c0d",
    "excluded": [],
+   "masked": [],
    "stale": [],
-   "synced_at": "2026-11-01T21:30:02Z"
+   "synced_at": "2026-11-01T22:17:38Z"
   },
   {
    "repo": "zamalali/DeepGit",
@@ -359,8 +458,9 @@
    "bytes": 846123,
    "tree_sha256": "55893e0630e94f5dbfea840b34033eabcd9edcb889d3f52be7f8b5395480a486",
    "excluded": [],
+   "masked": [],
    "stale": [],
-   "synced_at": "2026-11-01T21:30:02Z"
+   "synced_at": "2026-11-01T22:17:38Z"
   },
   {
    "repo": "MiroMindAI/MiroThinker",
@@ -429,8 +529,9 @@
      "reason": "media>200KB"
     }
    ],
+   "masked": [],
    "stale": [],
-   "synced_at": "2026-11-01T21:30:02Z"
+   "synced_at": "2026-11-01T22:17:38Z"
   },
   {
    "repo": "SkyworkAI/DeepResearchAgent",
@@ -481,8 +582,9 @@
      "reason": "media>200KB"
     }
    ],
+   "masked": [],
    "stale": [],
-   "synced_at": "2026-11-01T21:30:02Z"
+   "synced_at": "2026-11-01T22:17:40Z"
   },
   {
    "repo": "NVIDIA-AI-Blueprints/deep-researcher-agent",
@@ -494,7 +596,7 @@
    "path": "third_party/NVIDIA-AI-Blueprints__deep-researcher-agent",
    "files": 1088,
    "bytes": 13707053,
-   "tree_sha256": "5a3c98b465b995f00f36814d4af5248c56cdace31e4ae411e0ec3f9e2d973334",
+   "tree_sha256": "7b0a54a847339319ba9f7d3bac780e43ddd9d3ce3d83f24f45d13fbbe5d53092",
    "excluded": [
     {
      "path": "docs/assets/DeepResearcher-arch-light.png",
@@ -515,8 +617,48 @@
      "reason": "size>2MB"
     }
    ],
+   "masked": [
+    {
+     "path": "frontends/deep_researcher_api/tests/test_auth.py",
+     "original_sha256": "6c12b4dc20a784915349aa3bbd29fa77cf5ac59c3a70a1b5f9c0d19ff2c1741e",
+     "hits": [
+      {
+       "line": 815,
+       "kind": "ipv4",
+       "masked": "10.0.0.x"
+      }
+     ]
+    },
+    {
+     "path": "tests/deep_researcher_agent/agents/deep_researcher/sandbox/test_openshell_provider.py",
+     "original_sha256": "dc62cedaba8f76b81509841cbdb7619f449d10308b9d7c7cd5997b11713c5cd7",
+     "hits": [
+      {
+       "line": 365,
+       "kind": "ipv4",
+       "masked": "10.0.0.x"
+      }
+     ]
+    },
+    {
+     "path": "tests/deep_researcher_agent/common/test_citation_verification.py",
+     "original_sha256": "f9a500ca21a6baacf70f880a8d8371f848a3f26b09812f424b90d6bb07fa6c91",
+     "hits": [
+      {
+       "line": 1419,
+       "kind": "ipv4",
+       "masked": "192.168.1.x"
+      },
+      {
+       "line": 1421,
+       "kind": "ipv4",
+       "masked": "192.168.1.x"
+      }
+     ]
+    }
+   ],
    "stale": [],
-   "synced_at": "2026-11-01T21:30:02Z"
+   "synced_at": "2026-11-01T22:17:41Z"
   },
   {
    "repo": "jordan-gibbs/hyperresearch",
@@ -528,7 +670,7 @@
    "path": "third_party/jordan-gibbs__hyperresearch",
    "files": 275,
    "bytes": 3058163,
-   "tree_sha256": "98e2cf6ad042d814a1b5a2cb729e0af879e0aae4aea01be0c722cd726cb7a999",
+   "tree_sha256": "03f2109932623e8f4d7ac5385b2bb903b3898010d34332205f32c9d1e7193141",
    "excluded": [
     {
      "path": "assets/how-it-works.gif",
@@ -537,8 +679,277 @@
      "reason": "size>2MB"
     }
    ],
+   "masked": [
+    {
+     "path": "src/hyperresearch/core/config.py",
+     "original_sha256": "e25a9fd67d6d5adf10f7c13db8b3cabe293998b7904531b0f85a426861779311",
+     "hits": [
+      {
+       "line": 32,
+       "kind": "ipv4",
+       "masked": "192.168.1.x"
+      },
+      {
+       "line": 32,
+       "kind": "ipv4",
+       "masked": "10.8.0.x"
+      }
+     ]
+    },
+    {
+     "path": "src/hyperresearch/web/safe_http.py",
+     "original_sha256": "ac361f475cca373c8f0424d5237f068ab632821689815c94ff054ce26a1f7ed4",
+     "hits": [
+      {
+       "line": 197,
+       "kind": "link_local",
+       "masked": "fexx::1"
+      }
+     ]
+    },
+    {
+     "path": "tests/test_core/test_oa_core_resolver.py",
+     "original_sha256": "0d47a08e3b285f5db56b641dee9ed8cd3deddb944b6abb5def6f368dee1032ee",
+     "hits": [
+      {
+       "line": 487,
+       "kind": "ipv4",
+       "masked": "10.0.0.x"
+      }
+     ]
+    },
+    {
+     "path": "tests/test_core/test_oa_recovery.py",
+     "original_sha256": "5989c6c11cc9bfa6b39b44e6b88dd1abc8bdab3a96d4491b3f018d8a12e18637",
+     "hits": [
+      {
+       "line": 97,
+       "kind": "ipv4",
+       "masked": "10.0.0.x"
+      },
+      {
+       "line": 109,
+       "kind": "ipv4",
+       "masked": "10.0.0.x"
+      }
+     ]
+    },
+    {
+     "path": "tests/test_web/test_fetch_settings.py",
+     "original_sha256": "6a6c9ebeabe5a33f04eeee418630983f22796d650d842759743a0901d8a854e1",
+     "hits": [
+      {
+       "line": 128,
+       "kind": "ipv4",
+       "masked": "10.8.0.x"
+      },
+      {
+       "line": 130,
+       "kind": "ipv4",
+       "masked": "10.8.0.x"
+      }
+     ]
+    },
+    {
+     "path": "tests/test_web/test_final_url_recheck.py",
+     "original_sha256": "c0620676f70434a37ae5471848599bff8fcd0e08b5509cafd57c46bb0a6ef954",
+     "hits": [
+      {
+       "line": 133,
+       "kind": "ipv4",
+       "masked": "192.168.1.x"
+      },
+      {
+       "line": 134,
+       "kind": "ipv4",
+       "masked": "192.168.1.x"
+      }
+     ]
+    },
+    {
+     "path": "tests/test_web/test_safe_http.py",
+     "original_sha256": "b9c62e4e1f9d626611d4f6420f6f468c0a743e425d63a39c4247c1a0a69fc7d3",
+     "hits": [
+      {
+       "line": 48,
+       "kind": "ipv4",
+       "masked": "10.0.0.x"
+      },
+      {
+       "line": 49,
+       "kind": "ipv4",
+       "masked": "10.255.255.x"
+      },
+      {
+       "line": 50,
+       "kind": "ipv4",
+       "masked": "172.16.0.x"
+      },
+      {
+       "line": 51,
+       "kind": "ipv4",
+       "masked": "172.31.255.x"
+      },
+      {
+       "line": 52,
+       "kind": "ipv4",
+       "masked": "192.168.1.x"
+      },
+      {
+       "line": 56,
+       "kind": "link_local",
+       "masked": "fexx::1"
+      },
+      {
+       "line": 57,
+       "kind": "ula",
+       "masked": "fcxx::1"
+      },
+      {
+       "line": 81,
+       "kind": "ipv4",
+       "masked": "10.0.0.x"
+      },
+      {
+       "line": 91,
+       "kind": "ipv4",
+       "masked": "10.0.0.x"
+      },
+      {
+       "line": 416,
+       "kind": "ipv4",
+       "masked": "192.168.1.x"
+      },
+      {
+       "line": 445,
+       "kind": "ipv4",
+       "masked": "10.0.0.x"
+      },
+      {
+       "line": 468,
+       "kind": "ipv4",
+       "masked": "10.0.0.x"
+      },
+      {
+       "line": 469,
+       "kind": "ipv4",
+       "masked": "10.0.0.x"
+      },
+      {
+       "line": 475,
+       "kind": "ipv4",
+       "masked": "192.168.1.x"
+      },
+      {
+       "line": 477,
+       "kind": "ipv4",
+       "masked": "10.0.0.x"
+      },
+      {
+       "line": 481,
+       "kind": "ipv4",
+       "masked": "192.168.1.x"
+      },
+      {
+       "line": 481,
+       "kind": "ipv4",
+       "masked": "192.168.1.x"
+      },
+      {
+       "line": 483,
+       "kind": "ipv4",
+       "masked": "192.168.1.x"
+      },
+      {
+       "line": 483,
+       "kind": "ipv4",
+       "masked": "192.168.1.x"
+      },
+      {
+       "line": 488,
+       "kind": "ipv4",
+       "masked": "10.0.0.x"
+      },
+      {
+       "line": 495,
+       "kind": "ipv4",
+       "masked": "10.0.0.x"
+      },
+      {
+       "line": 513,
+       "kind": "ipv4",
+       "masked": "10.0.0.x"
+      },
+      {
+       "line": 520,
+       "kind": "ipv4",
+       "masked": "192.168.1.x"
+      },
+      {
+       "line": 525,
+       "kind": "ipv4",
+       "masked": "192.168.1.x"
+      },
+      {
+       "line": 551,
+       "kind": "ipv4",
+       "masked": "10.0.0.x"
+      },
+      {
+       "line": 567,
+       "kind": "ipv4",
+       "masked": "10.0.0.x"
+      },
+      {
+       "line": 578,
+       "kind": "ipv4",
+       "masked": "10.0.0.x"
+      },
+      {
+       "line": 584,
+       "kind": "link_local",
+       "masked": "fexx::1"
+      },
+      {
+       "line": 584,
+       "kind": "link_local",
+       "masked": "fexx::1"
+      },
+      {
+       "line": 595,
+       "kind": "link_local",
+       "masked": "fexx::1"
+      },
+      {
+       "line": 599,
+       "kind": "link_local",
+       "masked": "fexx::1"
+      },
+      {
+       "line": 599,
+       "kind": "link_local",
+       "masked": "fexx::1"
+      },
+      {
+       "line": 604,
+       "kind": "link_local",
+       "masked": "fexx::1"
+      },
+      {
+       "line": 716,
+       "kind": "ipv4",
+       "masked": "192.168.1.x"
+      },
+      {
+       "line": 739,
+       "kind": "ipv4",
+       "masked": "10.0.0.x"
+      }
+     ]
+    }
+   ],
    "stale": [],
-   "synced_at": "2026-11-01T21:30:02Z"
+   "synced_at": "2026-11-01T22:17:41Z"
   },
   {
    "repo": "kidzik/web-research-agent",
@@ -552,8 +963,9 @@
    "bytes": 28376,
    "tree_sha256": "029e223a09222c936fd23f1fb58057251a6fb0702f4111d0167a558dbec7916b",
    "excluded": [],
+   "masked": [],
    "stale": [],
-   "synced_at": "2026-11-01T21:30:02Z"
+   "synced_at": "2026-11-01T22:17:41Z"
   },
   {
    "repo": "Alibaba-NLP/DeepResearch",
@@ -565,7 +977,7 @@
    "path": "third_party/Alibaba-NLP__DeepResearch",
    "files": 276,
    "bytes": 5403866,
-   "tree_sha256": "1049f01d4b12f6b11da9dcd6dbaac1be73cb1db1217cf963a64c6a65d5fd2a98",
+   "tree_sha256": "41672b800befbba3a75da25050600cf1b05eeb89d3f2b889e926e63cb8634a76",
    "excluded": [
     {
      "path": "Agent/AgentFounder/assets/data_scaling.png",
@@ -988,8 +1400,54 @@
      "reason": "media>200KB"
     }
    ],
+   "masked": [
+    {
+     "path": "WebAgent/WebWatcher/infer/docker_env/requirements.txt",
+     "original_sha256": "a146daf1d2eff2f7d7a621f50f1695c0ef43ed8dc1374635622ff3d93e4a83ac",
+     "hits": [
+      {
+       "line": 162,
+       "kind": "ipv4",
+       "masked": "10.3.7.x"
+      }
+     ]
+    },
+    {
+     "path": "WebAgent/WebWatcher/infer/vl_search_r1/qwen-agent-o1_search/qwen_agent/utils/utils.py",
+     "original_sha256": "37ab7c37b0977b89b212083d39781d6a85ef450cea72b505a38a129f68b1cd4d",
+     "hits": [
+      {
+       "line": 55,
+       "kind": "ipv4",
+       "masked": "10.255.255.x"
+      }
+     ]
+    },
+    {
+     "path": "inference/file_tools/utils.py",
+     "original_sha256": "3ab90cfd911b8c288f7d80745acd8c77fb2001c8410df5959b9adee459125f18",
+     "hits": [
+      {
+       "line": 55,
+       "kind": "ipv4",
+       "masked": "10.255.255.x"
+      }
+     ]
+    },
+    {
+     "path": "requirements.txt",
+     "original_sha256": "ca7259b194d9f6dab1c6ece5a9f17e9dc7ca4d6ad14cfe4fdfcfcfab1f4afcee",
+     "hits": [
+      {
+       "line": 96,
+       "kind": "ipv4",
+       "masked": "10.3.7.x"
+      }
+     ]
+    }
+   ],
    "stale": [],
-   "synced_at": "2026-11-01T21:30:03Z"
+   "synced_at": "2026-11-01T22:17:42Z"
   },
   {
    "repo": "rashadphz/farfalle",
@@ -1010,8 +1468,9 @@
      "reason": "media>200KB"
     }
    ],
+   "masked": [],
    "stale": [],
-   "synced_at": "2026-11-01T21:30:03Z"
+   "synced_at": "2026-11-01T22:17:42Z"
   },
   {
    "repo": "ItzCrazyKns/Vane",
@@ -1056,8 +1515,9 @@
      "reason": "media>200KB"
     }
    ],
+   "masked": [],
    "stale": [],
-   "synced_at": "2026-11-01T21:30:03Z"
+   "synced_at": "2026-11-01T22:17:43Z"
   },
   {
    "repo": "mckaywrigley/clarity-ai",
@@ -1071,8 +1531,9 @@
    "bytes": 518745,
    "tree_sha256": "3a76d8cb0e95d0c35d4638bacba7c7ceaf50e5331b1e01233d37d4993d06aecf",
    "excluded": [],
+   "masked": [],
    "stale": [],
-   "synced_at": "2026-11-01T21:30:03Z"
+   "synced_at": "2026-11-01T22:17:43Z"
   },
   {
    "repo": "dorianbrown/rank_bm25",
@@ -1086,8 +1547,9 @@
    "bytes": 30643,
    "tree_sha256": "bbac38f4f1f82d6539d261ff30ad01534edcb60c72e98b002f704c7b09d2438a",
    "excluded": [],
+   "masked": [],
    "stale": [],
-   "synced_at": "2026-11-01T21:30:03Z"
+   "synced_at": "2026-11-01T22:17:43Z"
   },
   {
    "repo": "xhluca/bm25s",
@@ -1108,36 +1570,9 @@
      "reason": "size>2MB"
     }
    ],
-   "stale": [
-    "bm25s.egg-info/PKG-INFO",
-    "bm25s.egg-info/SOURCES.txt",
-    "bm25s.egg-info/dependency_links.txt",
-    "bm25s.egg-info/entry_points.txt",
-    "bm25s.egg-info/requires.txt",
-    "bm25s.egg-info/top_level.txt",
-    "build/lib/bm25s/__init__.py",
-    "build/lib/bm25s/cli.py",
-    "build/lib/bm25s/hf.py",
-    "build/lib/bm25s/high_level/__init__.py",
-    "build/lib/bm25s/high_level/setup.py",
-    "build/lib/bm25s/mcp/__init__.py",
-    "build/lib/bm25s/mcp/server.py",
-    "build/lib/bm25s/numba/__init__.py",
-    "build/lib/bm25s/numba/retrieve_utils.py",
-    "build/lib/bm25s/numba/selection.py",
-    "build/lib/bm25s/scoring.py",
-    "build/lib/bm25s/selection.py",
-    "build/lib/bm25s/stopwords.py",
-    "build/lib/bm25s/terminal/__init__.py",
-    "build/lib/bm25s/tokenization.py",
-    "build/lib/bm25s/utils/__init__.py",
-    "build/lib/bm25s/utils/beir.py",
-    "build/lib/bm25s/utils/benchmark.py",
-    "build/lib/bm25s/utils/corpus.py",
-    "build/lib/bm25s/utils/json_functions.py",
-    "build/lib/bm25s/version.py"
-   ],
-   "synced_at": "2026-11-01T21:30:03Z"
+   "masked": [],
+   "stale": [],
+   "synced_at": "2026-11-01T22:17:43Z"
   },
   {
    "repo": "Sygil-Dev/whoosh-reloaded",
@@ -1149,139 +1584,23 @@
    "path": "third_party/Sygil-Dev__whoosh-reloaded",
    "files": 270,
    "bytes": 3302864,
-   "tree_sha256": "85ec3c5b7a2575bc213d5767d37057290b91b3154c82a9446915d9544cff0af0",
+   "tree_sha256": "c96631084c19907ae44bbb3a65ce602553aed22f28c91902e52bbb40627700ad",
    "excluded": [],
-   "stale": [
-    "build/lib/whoosh/__init__.py",
-    "build/lib/whoosh/analysis/__init__.py",
-    "build/lib/whoosh/analysis/acore.py",
-    "build/lib/whoosh/analysis/analyzers.py",
-    "build/lib/whoosh/analysis/filters.py",
-    "build/lib/whoosh/analysis/intraword.py",
-    "build/lib/whoosh/analysis/morph.py",
-    "build/lib/whoosh/analysis/ngrams.py",
-    "build/lib/whoosh/analysis/tokenizers.py",
-    "build/lib/whoosh/automata/__init__.py",
-    "build/lib/whoosh/automata/fsa.py",
-    "build/lib/whoosh/automata/fst.py",
-    "build/lib/whoosh/automata/glob.py",
-    "build/lib/whoosh/automata/lev.py",
-    "build/lib/whoosh/automata/reg.py",
-    "build/lib/whoosh/classify.py",
-    "build/lib/whoosh/codec/__init__.py",
-    "build/lib/whoosh/codec/base.py",
-    "build/lib/whoosh/codec/memory.py",
-    "build/lib/whoosh/codec/plaintext.py",
-    "build/lib/whoosh/codec/whoosh2.py",
-    "build/lib/whoosh/codec/whoosh3.py",
-    "build/lib/whoosh/collectors.py",
-    "build/lib/whoosh/columns.py",
-    "build/lib/whoosh/externalsort.py",
-    "build/lib/whoosh/fields.py",
-    "build/lib/whoosh/filedb/__init__.py",
-    "build/lib/whoosh/filedb/compound.py",
-    "build/lib/whoosh/filedb/fileindex.py",
-    "build/lib/whoosh/filedb/filepostings.py",
-    "build/lib/whoosh/filedb/filereading.py",
-    "build/lib/whoosh/filedb/filestore.py",
-    "build/lib/whoosh/filedb/filetables.py",
-    "build/lib/whoosh/filedb/filewriting.py",
-    "build/lib/whoosh/filedb/gae.py",
-    "build/lib/whoosh/filedb/misc.py",
-    "build/lib/whoosh/filedb/pools.py",
-    "build/lib/whoosh/filedb/structfile.py",
-    "build/lib/whoosh/formats.py",
-    "build/lib/whoosh/highlight.py",
-    "build/lib/whoosh/idsets.py",
-    "build/lib/whoosh/index.py",
-    "build/lib/whoosh/lang/__init__.py",
-    "build/lib/whoosh/lang/dmetaphone.py",
-    "build/lib/whoosh/lang/isri.py",
-    "build/lib/whoosh/lang/lovins.py",
-    "build/lib/whoosh/lang/morph_en.py",
-    "build/lib/whoosh/lang/paicehusk.py",
-    "build/lib/whoosh/lang/phonetic.py",
-    "build/lib/whoosh/lang/porter.py",
-    "build/lib/whoosh/lang/porter2.py",
-    "build/lib/whoosh/lang/snowball/__init__.py",
-    "build/lib/whoosh/lang/snowball/bases.py",
-    "build/lib/whoosh/lang/snowball/danish.py",
-    "build/lib/whoosh/lang/snowball/dutch.py",
-    "build/lib/whoosh/lang/snowball/english.py",
-    "build/lib/whoosh/lang/snowball/finnish.py",
-    "build/lib/whoosh/lang/snowball/french.py",
-    "build/lib/whoosh/lang/snowball/german.py",
-    "build/lib/whoosh/lang/snowball/hungarian.py",
-    "build/lib/whoosh/lang/snowball/italian.py",
-    "build/lib/whoosh/lang/snowball/norwegian.py",
-    "build/lib/whoosh/lang/snowball/portugese.py",
-    "build/lib/whoosh/lang/snowball/romanian.py",
-    "build/lib/whoosh/lang/snowball/russian.py",
-    "build/lib/whoosh/lang/snowball/spanish.py",
-    "build/lib/whoosh/lang/snowball/swedish.py",
-    "build/lib/whoosh/lang/stopwords.py",
-    "build/lib/whoosh/lang/wordnet.py",
-    "build/lib/whoosh/legacy.py",
-    "build/lib/whoosh/matching/__init__.py",
-    "build/lib/whoosh/matching/binary.py",
-    "build/lib/whoosh/matching/combo.py",
-    "build/lib/whoosh/matching/mcore.py",
-    "build/lib/whoosh/matching/wrappers.py",
-    "build/lib/whoosh/multiproc.py",
-    "build/lib/whoosh/qparser/__init__.py",
-    "build/lib/whoosh/qparser/common.py",
-    "build/lib/whoosh/qparser/dateparse.py",
-    "build/lib/whoosh/qparser/default.py",
-    "build/lib/whoosh/qparser/plugins.py",
-    "build/lib/whoosh/qparser/syntax.py",
-    "build/lib/whoosh/qparser/taggers.py",
-    "build/lib/whoosh/query/__init__.py",
-    "build/lib/whoosh/query/compound.py",
-    "build/lib/whoosh/query/nested.py",
-    "build/lib/whoosh/query/positional.py",
-    "build/lib/whoosh/query/qcolumns.py",
-    "build/lib/whoosh/query/qcore.py",
-    "build/lib/whoosh/query/ranges.py",
-    "build/lib/whoosh/query/spans.py",
-    "build/lib/whoosh/query/terms.py",
-    "build/lib/whoosh/query/wrappers.py",
-    "build/lib/whoosh/reading.py",
-    "build/lib/whoosh/scoring.py",
-    "build/lib/whoosh/searching.py",
-    "build/lib/whoosh/sorting.py",
-    "build/lib/whoosh/spelling.py",
-    "build/lib/whoosh/support/__init__.py",
-    "build/lib/whoosh/support/base85.py",
-    "build/lib/whoosh/support/bench.py",
-    "build/lib/whoosh/support/bitstream.py",
-    "build/lib/whoosh/support/bitvector.py",
-    "build/lib/whoosh/support/charset.py",
-    "build/lib/whoosh/support/levenshtein.py",
-    "build/lib/whoosh/support/pyparsing.py",
-    "build/lib/whoosh/support/relativedelta.py",
-    "build/lib/whoosh/support/unicode.py",
-    "build/lib/whoosh/system.py",
-    "build/lib/whoosh/util/__init__.py",
-    "build/lib/whoosh/util/cache.py",
-    "build/lib/whoosh/util/filelock.py",
-    "build/lib/whoosh/util/loading.py",
-    "build/lib/whoosh/util/numeric.py",
-    "build/lib/whoosh/util/numlists.py",
-    "build/lib/whoosh/util/testing.py",
-    "build/lib/whoosh/util/text.py",
-    "build/lib/whoosh/util/times.py",
-    "build/lib/whoosh/util/varints.py",
-    "build/lib/whoosh/util/versions.py",
-    "build/lib/whoosh/writing.py",
-    "src/Whoosh_Reloaded.egg-info/PKG-INFO",
-    "src/Whoosh_Reloaded.egg-info/SOURCES.txt",
-    "src/Whoosh_Reloaded.egg-info/dependency_links.txt",
-    "src/Whoosh_Reloaded.egg-info/requires.txt",
-    "src/Whoosh_Reloaded.egg-info/top_level.txt",
-    "src/Whoosh_Reloaded.egg-info/zip-safe",
-    "src/whoosh/__pycache__/__init__.cpython-311.pyc"
+   "masked": [
+    {
+     "path": "src/whoosh/matching/wrappers.py",
+     "original_sha256": "b66a15861451b4d767760786744979db6d16f390b487d3e894e49456869a4a12",
+     "hits": [
+      {
+       "line": 553,
+       "kind": "ipv4",
+       "masked": "10.1.1.x"
+      }
+     ]
+    }
    ],
-   "synced_at": "2026-11-01T21:30:03Z"
+   "stale": [],
+   "synced_at": "2026-11-01T22:17:43Z"
   },
   {
    "repo": "deedy5/ddgs",
@@ -1295,46 +1614,9 @@
    "bytes": 167058,
    "tree_sha256": "8f061446d6bb148e2b61fb0de2b8f4578aea08ddc3d1b42b29dc6c0966e466d5",
    "excluded": [],
-   "stale": [
-    "build/lib/ddgs/__init__.py",
-    "build/lib/ddgs/api_server/__init__.py",
-    "build/lib/ddgs/api_server/api.py",
-    "build/lib/ddgs/api_server/mcp.py",
-    "build/lib/ddgs/base.py",
-    "build/lib/ddgs/cli.py",
-    "build/lib/ddgs/ddgs.py",
-    "build/lib/ddgs/engines/__init__.py",
-    "build/lib/ddgs/engines/annasarchive.py",
-    "build/lib/ddgs/engines/bing.py",
-    "build/lib/ddgs/engines/bing_images.py",
-    "build/lib/ddgs/engines/bing_news.py",
-    "build/lib/ddgs/engines/brave.py",
-    "build/lib/ddgs/engines/duckduckgo.py",
-    "build/lib/ddgs/engines/duckduckgo_images.py",
-    "build/lib/ddgs/engines/duckduckgo_news.py",
-    "build/lib/ddgs/engines/duckduckgo_videos.py",
-    "build/lib/ddgs/engines/google.py",
-    "build/lib/ddgs/engines/grokipedia.py",
-    "build/lib/ddgs/engines/mojeek.py",
-    "build/lib/ddgs/engines/startpage.py",
-    "build/lib/ddgs/engines/wikipedia.py",
-    "build/lib/ddgs/engines/yahoo.py",
-    "build/lib/ddgs/engines/yahoo_news.py",
-    "build/lib/ddgs/engines/yandex.py",
-    "build/lib/ddgs/exceptions.py",
-    "build/lib/ddgs/http_client.py",
-    "build/lib/ddgs/py.typed",
-    "build/lib/ddgs/results.py",
-    "build/lib/ddgs/similarity.py",
-    "build/lib/ddgs/utils.py",
-    "ddgs.egg-info/PKG-INFO",
-    "ddgs.egg-info/SOURCES.txt",
-    "ddgs.egg-info/dependency_links.txt",
-    "ddgs.egg-info/entry_points.txt",
-    "ddgs.egg-info/requires.txt",
-    "ddgs.egg-info/top_level.txt"
-   ],
-   "synced_at": "2026-11-01T21:30:03Z"
+   "masked": [],
+   "stale": [],
+   "synced_at": "2026-11-01T22:17:43Z"
   },
   {
    "repo": "benbusby/whoogle-search",
@@ -1355,8 +1637,9 @@
      "reason": "media>200KB"
     }
    ],
+   "masked": [],
    "stale": [],
-   "synced_at": "2026-11-01T21:30:03Z"
+   "synced_at": "2026-11-01T22:17:43Z"
   },
   {
    "repo": "mat-1/metasearch2",
@@ -1370,8 +1653,9 @@
    "bytes": 327057,
    "tree_sha256": "639aff392b12076cf734628025b4850a4578a412017bbcacc5a6d8ea5bdf6b4f",
    "excluded": [],
+   "masked": [],
    "stale": [],
-   "synced_at": "2026-11-01T21:30:03Z"
+   "synced_at": "2026-11-01T22:17:43Z"
   },
   {
    "repo": "quickwit-oss/tantivy",
@@ -1383,7 +1667,7 @@
    "path": "third_party/quickwit-oss__tantivy",
    "files": 621,
    "bytes": 8431911,
-   "tree_sha256": "0cdab140814ffb9ec7b0d41fe33b8b45ed326f21608b0f7ed23970bef937ad90",
+   "tree_sha256": "ee7e490b21128997636bc8da38615c9d346ba8a9f9f3b227924f9841e5d7fee4",
    "excluded": [
     {
      "path": "benches/gh.json",
@@ -1398,8 +1682,210 @@
      "reason": "size>2MB"
     }
    ],
+   "masked": [
+    {
+     "path": "examples/ip_field.rs",
+     "original_sha256": "510aec5207b1ff17038a6e7ab0ca03e5a130e98090de66a23c9f86bd4eb10e5e",
+     "hits": [
+      {
+       "line": 34,
+       "kind": "ipv4",
+       "masked": "192.168.0.x"
+      },
+      {
+       "line": 42,
+       "kind": "ipv4",
+       "masked": "192.168.0.x"
+      },
+      {
+       "line": 71,
+       "kind": "ipv4",
+       "masked": "192.168.0.x"
+      },
+      {
+       "line": 71,
+       "kind": "ipv4",
+       "masked": "192.168.0.x"
+      },
+      {
+       "line": 77,
+       "kind": "ipv4",
+       "masked": "192.168.1.x"
+      },
+      {
+       "line": 77,
+       "kind": "ipv4",
+       "masked": "192.168.0.x"
+      },
+      {
+       "line": 82,
+       "kind": "ipv4",
+       "masked": "192.168.1.x"
+      },
+      {
+       "line": 83,
+       "kind": "ipv4",
+       "masked": "192.168.1.x"
+      },
+      {
+       "line": 88,
+       "kind": "ipv4",
+       "masked": "192.168.1.x"
+      },
+      {
+       "line": 89,
+       "kind": "ipv4",
+       "masked": "192.168.1.x"
+      },
+      {
+       "line": 97,
+       "kind": "ipv4",
+       "masked": "192.168.0.x"
+      }
+     ]
+    },
+    {
+     "path": "src/aggregation/bucket/composite/mod.rs",
+     "original_sha256": "7e1de3d793bb40e458efd46ea8c95f97201c365c94eee0b667c8ee59081c99ec",
+     "hits": [
+      {
+       "line": 1232,
+       "kind": "ipv4",
+       "masked": "192.168.1.x"
+      },
+      {
+       "line": 1233,
+       "kind": "ipv4",
+       "masked": "10.0.0.x"
+      },
+      {
+       "line": 1234,
+       "kind": "ipv4",
+       "masked": "192.168.1.x"
+      },
+      {
+       "line": 1235,
+       "kind": "ipv4",
+       "masked": "172.16.0.x"
+      },
+      {
+       "line": 1251,
+       "kind": "ipv4",
+       "masked": "10.0.0.x"
+      },
+      {
+       "line": 1252,
+       "kind": "ipv4",
+       "masked": "172.16.0.x"
+      },
+      {
+       "line": 1253,
+       "kind": "ipv4",
+       "masked": "192.168.1.x"
+      }
+     ]
+    },
+    {
+     "path": "src/aggregation/bucket/multi_terms/mod.rs",
+     "original_sha256": "d67a016b9d047040fc2c87a6b4eaea0549d97db69460ab49e84684b10fc9d04b",
+     "hits": [
+      {
+       "line": 1598,
+       "kind": "ipv4",
+       "masked": "10.0.0.x"
+      },
+      {
+       "line": 1599,
+       "kind": "ipv4",
+       "masked": "10.0.0.x"
+      },
+      {
+       "line": 1606,
+       "kind": "ipv4",
+       "masked": "10.0.0.x"
+      },
+      {
+       "line": 1606,
+       "kind": "ipv4",
+       "masked": "10.0.0.x"
+      }
+     ]
+    },
+    {
+     "path": "src/aggregation/bucket/term_agg/mod.rs",
+     "original_sha256": "74334275c042c3b99f64814e20788e54c8e75a22643633773b468b6954ca4d61",
+     "hits": [
+      {
+       "line": 3740,
+       "kind": "ipv4",
+       "masked": "192.168.0.x"
+      },
+      {
+       "line": 3746,
+       "kind": "ipv4",
+       "masked": "192.168.0.x"
+      },
+      {
+       "line": 3750,
+       "kind": "ipv4",
+       "masked": "192.168.0.x"
+      },
+      {
+       "line": 3754,
+       "kind": "ipv4",
+       "masked": "192.168.0.x"
+      },
+      {
+       "line": 3759,
+       "kind": "ipv4",
+       "masked": "192.168.0.x"
+      },
+      {
+       "line": 3770,
+       "kind": "ipv4",
+       "masked": "192.168.0.x"
+      },
+      {
+       "line": 3773,
+       "kind": "ipv4",
+       "masked": "192.168.0.x"
+      },
+      {
+       "line": 3836,
+       "kind": "ipv4",
+       "masked": "192.168.0.x"
+      },
+      {
+       "line": 3838,
+       "kind": "ipv4",
+       "masked": "192.168.0.x"
+      },
+      {
+       "line": 3840,
+       "kind": "ipv4",
+       "masked": "192.168.0.x"
+      }
+     ]
+    },
+    {
+     "path": "src/schema/schema.rs",
+     "original_sha256": "9246e35990e60b5648436ae8f69eeca146075744aa1004e5ab121a17e0937e04",
+     "hits": [
+      {
+       "line": 656,
+       "kind": "ipv4",
+       "masked": "192.168.0.x"
+      },
+      {
+       "line": 661,
+       "kind": "ipv4",
+       "masked": "192.168.0.x"
+      }
+     ]
+    }
+   ],
    "stale": [],
-   "synced_at": "2026-11-01T21:30:04Z"
+   "synced_at": "2026-11-01T22:17:44Z"
   },
   {
    "repo": "toshi-search/Toshi",
@@ -1413,8 +1899,9 @@
    "bytes": 286795,
    "tree_sha256": "fd3041af4ddf388b7b3c3daa922ab77d7ac6ce054e53eb240e89374aed116d06",
    "excluded": [],
+   "masked": [],
    "stale": [],
-   "synced_at": "2026-11-01T21:30:04Z"
+   "synced_at": "2026-11-01T22:17:44Z"
   },
   {
    "repo": "tinysearch/tinysearch",
@@ -1428,8 +1915,9 @@
    "bytes": 869374,
    "tree_sha256": "d614b495fed351b8e6fcad0ef03c1483d7f137ad265d9f27509b399a22c8e84e",
    "excluded": [],
+   "masked": [],
    "stale": [],
-   "synced_at": "2026-11-01T21:30:04Z"
+   "synced_at": "2026-11-01T22:17:44Z"
   },
   {
    "repo": "SeekStorm/SeekStorm",
@@ -1552,8 +2040,9 @@
      "reason": "media>200KB"
     }
    ],
+   "masked": [],
    "stale": [],
-   "synced_at": "2026-11-01T21:30:04Z"
+   "synced_at": "2026-11-01T22:17:44Z"
   },
   {
    "repo": "lucaong/minisearch",
@@ -1567,8 +2056,9 @@
    "bytes": 2827789,
    "tree_sha256": "699cab0d149a3d86857b1f70f0dfaf5814673e550cbc12cd53ca196a07485c3e",
    "excluded": [],
+   "masked": [],
    "stale": [],
-   "synced_at": "2026-11-01T21:30:04Z"
+   "synced_at": "2026-11-01T22:17:45Z"
   },
   {
    "repo": "adbar/trafilatura",
@@ -1580,7 +2070,7 @@
    "path": "third_party/adbar__trafilatura",
    "files": 136,
    "bytes": 3300288,
-   "tree_sha256": "9964ead98b93e31c9198026c6858ccb4c1fbb07697c00aeb9915d722ec8e6904",
+   "tree_sha256": "792f525a8a4aeb8d34f9a3003ee38c40d8de5bffa605398c4f1d4b305fb7e9d9",
    "excluded": [
     {
      "path": "docs/trafilatura-demo.gif",
@@ -7805,40 +8295,78 @@
      "reason": "corpus"
     }
    ],
-   "stale": [
-    "build/lib/trafilatura/__init__.py",
-    "build/lib/trafilatura/baseline.py",
-    "build/lib/trafilatura/cli.py",
-    "build/lib/trafilatura/cli_utils.py",
-    "build/lib/trafilatura/core.py",
-    "build/lib/trafilatura/data/tei_corpus.dtd",
-    "build/lib/trafilatura/deduplication.py",
-    "build/lib/trafilatura/downloads.py",
-    "build/lib/trafilatura/external.py",
-    "build/lib/trafilatura/feeds.py",
-    "build/lib/trafilatura/htmlprocessing.py",
-    "build/lib/trafilatura/json_metadata.py",
-    "build/lib/trafilatura/justext_lite.py",
-    "build/lib/trafilatura/main_extractor.py",
-    "build/lib/trafilatura/meta.py",
-    "build/lib/trafilatura/metadata.py",
-    "build/lib/trafilatura/py.typed",
-    "build/lib/trafilatura/readability_lxml.py",
-    "build/lib/trafilatura/settings.cfg",
-    "build/lib/trafilatura/settings.py",
-    "build/lib/trafilatura/sitemaps.py",
-    "build/lib/trafilatura/spider.py",
-    "build/lib/trafilatura/utils.py",
-    "build/lib/trafilatura/xml.py",
-    "build/lib/trafilatura/xpaths.py",
-    "trafilatura.egg-info/PKG-INFO",
-    "trafilatura.egg-info/SOURCES.txt",
-    "trafilatura.egg-info/dependency_links.txt",
-    "trafilatura.egg-info/entry_points.txt",
-    "trafilatura.egg-info/requires.txt",
-    "trafilatura.egg-info/top_level.txt"
+   "masked": [
+    {
+     "path": "docs/crawls.rst",
+     "original_sha256": "0eb647caaec4543b9dad5d90c757f37955024ac9290ee8c6515e95e9c398282c",
+     "hits": [
+      {
+       "line": 158,
+       "kind": "ipv4",
+       "masked": "10.1.1.x"
+      },
+      {
+       "line": 159,
+       "kind": "ipv4",
+       "masked": "10.1.1.x"
+      },
+      {
+       "line": 160,
+       "kind": "ipv4",
+       "masked": "10.1.1.x"
+      },
+      {
+       "line": 162,
+       "kind": "ipv4",
+       "masked": "10.1.1.x"
+      }
+     ]
+    },
+    {
+     "path": "tests/downloads_tests.py",
+     "original_sha256": "6cb13c07a1f9c900774619dd87f93f2ebed2a15d9c283b5c51b62fc251a73cd3",
+     "hits": [
+      {
+       "line": 289,
+       "kind": "ipv4",
+       "masked": "10.0.0.x"
+      },
+      {
+       "line": 289,
+       "kind": "ipv4",
+       "masked": "10.0.0.x"
+      },
+      {
+       "line": 294,
+       "kind": "ipv4",
+       "masked": "10.0.0.x"
+      },
+      {
+       "line": 572,
+       "kind": "ipv4",
+       "masked": "10.0.0.x"
+      }
+     ]
+    },
+    {
+     "path": "trafilatura/data/tei_corpus.dtd",
+     "original_sha256": "501e7178ea91d27dae5d8ea2b68499952b0e96d223adad5433ca492ff8d71d97",
+     "hits": [
+      {
+       "line": 1574,
+       "kind": "ipv4",
+       "masked": "10.3.5.x"
+      },
+      {
+       "line": 2595,
+       "kind": "ipv4",
+       "masked": "10.3.5.x"
+      }
+     ]
+    }
    ],
-   "synced_at": "2026-11-01T21:30:04Z"
+   "stale": [],
+   "synced_at": "2026-11-01T22:17:45Z"
   },
   {
    "repo": "codelucas/newspaper",
@@ -9767,8 +10295,9 @@
      "reason": "corpus"
     }
    ],
+   "masked": [],
    "stale": [],
-   "synced_at": "2026-11-01T21:30:04Z"
+   "synced_at": "2026-11-01T22:17:45Z"
   }
  ]
 }

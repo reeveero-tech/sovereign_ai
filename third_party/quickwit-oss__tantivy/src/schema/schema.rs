@@ -653,12 +653,12 @@ mod tests {
 
         // testing ip address of every router in the world
         let doc_json = r#"{
-                "ip": "192.168.0.1"
+                "ip": "192.168.0.x"
         }"#;
         let doc = TantivyDocument::parse_json(&schema, doc_json).unwrap();
 
         let value: serde_json::Value = serde_json::from_str(&doc.to_json(&schema)).unwrap();
-        assert_eq!(value["ip"][0], "192.168.0.1");
+        assert_eq!(value["ip"][0], "192.168.0.x");
     }
 
     #[test]

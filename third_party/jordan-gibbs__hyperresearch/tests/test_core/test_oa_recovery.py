@@ -94,7 +94,7 @@ class TestCheckOaUrl:
         ok, reason = oa.check_oa_url("https://127.0.0.1/p.pdf")
         assert ok is False and "non-public address" in reason
 
-    @pytest.mark.parametrize("addr", ["::ffff:100.64.0.1", "2002:6440:1::", "::ffff:10.0.0.5"])
+    @pytest.mark.parametrize("addr", ["::ffff:100.64.0.1", "2002:6440:1::", "::ffff:10.0.0.x"])
     def test_rejects_wrapped_private_addresses(self, monkeypatch, addr):
         # Python 3.11 reports the first two as is_global. The fetch gate
         # unwraps them (#127); the OA gate has to agree with it (#138).
@@ -106,7 +106,7 @@ class TestCheckOaUrl:
         import httpx
 
         def fake_resolve(host, port):
-            ip = "10.0.0.5" if host == "internal.example.org" else "93.184.216.34"
+            ip = "10.0.0.x" if host == "internal.example.org" else "93.184.216.34"
             return [(2, 1, 6, "", (ip, 0))]
 
         monkeypatch.setattr(socket, "getaddrinfo", fake_resolve)

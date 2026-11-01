@@ -1416,9 +1416,9 @@ class TestSanitizeReport:
         assert len(result.shortened_urls_removed) == 1
 
     def test_ip_address_url_removed(self):
-        report = "Finding [1].\n\n## Sources\n[1] Suspicious: https://192.168.1.1/malware"
+        report = "Finding [1].\n\n## Sources\n[1] Suspicious: https://192.168.1.x/malware"
         result = sanitize_report(report)
-        assert "192.168.1.1" not in result.sanitized_report
+        assert "192.168.1.x" not in result.sanitized_report
         assert len(result.unsafe_urls_removed) == 1
 
     def test_legitimate_urls_preserved(self):

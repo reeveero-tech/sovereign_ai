@@ -125,6 +125,6 @@ class TestAllowPrivateHostsConfig:
 
         s = _build_section(
             FetchSettings,
-            {"allow_private_hosts": ["10.8.0.0/16", "mirror.internal"]},
+            {"allow_private_hosts": ["10.8.0.x/16", "mirror.internal"]},
         )
-        assert s.allow_private_hosts == ("10.8.0.0/16", "mirror.internal")
+        assert s.allow_private_hosts == ("10.8.0.x/16", "mirror.internal")

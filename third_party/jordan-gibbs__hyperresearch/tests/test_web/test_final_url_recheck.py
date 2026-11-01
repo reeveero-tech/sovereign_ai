@@ -130,8 +130,8 @@ def test_cross_host_private_final_url_is_refused():
 def test_final_url_recheck_honors_the_allowlist():
     provider._check_final_url(
         "http://8.8.8.8/start",
-        "http://192.168.1.20/paper",
-        FetchSettings(allow_private_hosts=("192.168.1.20",)),
+        "http://192.168.1.x/paper",
+        FetchSettings(allow_private_hosts=("192.168.1.x",)),
     )
 
 

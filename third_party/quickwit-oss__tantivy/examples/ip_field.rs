@@ -31,7 +31,7 @@ fn main() -> tantivy::Result<()> {
     let doc = TantivyDocument::parse_json(
         &schema,
         r#"{
-            "ip": "192.168.0.33",
+            "ip": "192.168.0.x",
             "event_type": "login"
         }"#,
     )?;
@@ -39,7 +39,7 @@ fn main() -> tantivy::Result<()> {
     let doc = TantivyDocument::parse_json(
         &schema,
         r#"{
-            "ip": "192.168.0.80",
+            "ip": "192.168.0.x",
             "event_type": "checkout"
         }"#,
     )?;
@@ -68,25 +68,25 @@ fn main() -> tantivy::Result<()> {
     let query_parser = QueryParser::for_index(&index, vec![event_type, ip]);
     {
         // Inclusive range queries
-        let query = query_parser.parse_query("ip:[192.168.0.80 TO 192.168.0.100]")?;
+        let query = query_parser.parse_query("ip:[192.168.0.x TO 192.168.0.x]")?;
         let count_docs = searcher.search(&*query, &TopDocs::with_limit(5).order_by_score())?;
         assert_eq!(count_docs.len(), 1);
     }
     {
         // Exclusive range queries
-        let query = query_parser.parse_query("ip:{192.168.0.80 TO 192.168.1.100]")?;
+        let query = query_parser.parse_query("ip:{192.168.0.x TO 192.168.1.x]")?;
         let count_docs = searcher.search(&*query, &TopDocs::with_limit(2).order_by_score())?;
         assert_eq!(count_docs.len(), 0);
     }
     {
-        // Find docs with IP addresses smaller equal 192.168.1.100
-        let query = query_parser.parse_query("ip:[* TO 192.168.1.100]")?;
+        // Find docs with IP addresses smaller equal 192.168.1.x
+        let query = query_parser.parse_query("ip:[* TO 192.168.1.x]")?;
         let count_docs = searcher.search(&*query, &TopDocs::with_limit(2).order_by_score())?;
         assert_eq!(count_docs.len(), 2);
     }
     {
-        // Find docs with IP addresses smaller than 192.168.1.100
-        let query = query_parser.parse_query("ip:[* TO 192.168.1.100}")?;
+        // Find docs with IP addresses smaller than 192.168.1.x
+        let query = query_parser.parse_query("ip:[* TO 192.168.1.x}")?;
         let count_docs = searcher.search(&*query, &TopDocs::with_limit(2).order_by_score())?;
         assert_eq!(count_docs.len(), 2);
     }
@@ -94,7 +94,7 @@ fn main() -> tantivy::Result<()> {
     // ### Exact Queries
     // Exact search on IPv4.
     {
-        let query = query_parser.parse_query("ip:192.168.0.80")?;
+        let query = query_parser.parse_query("ip:192.168.0.x")?;
         let count_docs = searcher.search(&*query, &Count)?;
         assert_eq!(count_docs, 1);
     }

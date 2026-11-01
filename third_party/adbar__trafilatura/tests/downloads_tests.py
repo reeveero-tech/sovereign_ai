@@ -286,12 +286,12 @@ def test_ssrf_protection():
     from trafilatura.downloads import _normalize_ip, _vet_peer
 
     assert _normalize_ip("127.0.0.1") == ipaddress.ip_address("127.0.0.1")
-    assert _normalize_ip("::ffff:10.0.0.1") == ipaddress.ip_address("10.0.0.1")
+    assert _normalize_ip("::ffff:10.0.0.x") == ipaddress.ip_address("10.0.0.x")
     assert _normalize_ip("::1") == ipaddress.ip_address("::1")
 
     # unit: _vet_peer
     with pytest.raises(OSError, match="SSRF protection"):
-        _vet_peer("10.0.0.1")
+        _vet_peer("10.0.0.x")
     _vet_peer("93.184.216.34")  # public: no exception
 
     # local server: the guard runs post-connect, so a live listener is needed
@@ -569,7 +569,7 @@ def test_pycurl_network(monkeypatch):
     assert rec[pycurl.PROTOCOLS] == pycurl.PROTO_HTTP | pycurl.PROTO_HTTPS
     assert pycurl.PRE_PROXY not in rec
     assert rec[pycurl.OPENSOCKETFUNCTION] is dl._ssrf_opensocket
-    monkeypatch.setenv("https_proxy", "http://10.0.0.5:3128")
+    monkeypatch.setenv("https_proxy", "http://10.0.0.x:3128")
     assert pycurl.OPENSOCKETFUNCTION not in options()
     monkeypatch.delenv("https_proxy")
     monkeypatch.setattr(dl, "PROXY_URL", "socks5://localhost:1080")

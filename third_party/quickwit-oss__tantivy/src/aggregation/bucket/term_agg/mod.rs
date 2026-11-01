@@ -3737,26 +3737,26 @@ mod tests {
 
             // --- Ingest documents (batch #1) ---
             writer.add_document(doc!(
-                host => "192.168.0.10",
+                host => "192.168.0.x",
                 tags => "nice",
                 fielda => "a",
                 fieldb => "b",
             ))?;
             writer.add_document(doc!(
-                host => "192.168.0.1",
+                host => "192.168.0.x",
                 tags => "nice",
             ))?;
             writer.add_document(doc!(
-                host => "192.168.0.11",
+                host => "192.168.0.x",
                 tags => "nice",
             ))?;
             writer.add_document(doc!(
-                host => "192.168.0.10",
+                host => "192.168.0.x",
                 tags => "nice",
                 tags => "cool",
             ))?;
             writer.add_document(doc!(
-                host => "192.168.0.1",
+                host => "192.168.0.x",
                 tags => "nice",
                 tags => "cool",
             ))?;
@@ -3767,10 +3767,10 @@ mod tests {
             writer.add_document(doc!())?;
             writer.add_document(doc!())?;
             writer.add_document(doc!(
-                host => "192.168.0.10",
+                host => "192.168.0.x",
             ))?;
             writer.add_document(doc!(
-                host => "192.168.0.10",
+                host => "192.168.0.x",
             ))?;
             writer.add_document(doc!())?;
 
@@ -3833,11 +3833,11 @@ mod tests {
 
         // hosts:
         let hosts = &agg_json["hosts"]["buckets"];
-        assert_eq!(hosts[0]["key"], "192.168.0.10");
+        assert_eq!(hosts[0]["key"], "192.168.0.x");
         assert_eq!(hosts[0]["doc_count"], 8);
-        assert_eq!(hosts[1]["key"], "192.168.0.1");
+        assert_eq!(hosts[1]["key"], "192.168.0.x");
         assert_eq!(hosts[1]["doc_count"], 4);
-        assert_eq!(hosts[2]["key"], "192.168.0.11");
+        assert_eq!(hosts[2]["key"], "192.168.0.x");
         assert_eq!(hosts[2]["doc_count"], 2);
         // Implementation currently reports error bounds/other count; ensure zero.
         assert_eq!(agg_json["hosts"]["doc_count_error_upper_bound"], 0);
