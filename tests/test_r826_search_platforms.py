@@ -395,3 +395,41 @@ def test_r828_stat_requires_country_mention(platform_world, monkeypatch):
     res = w.answer("معدل التضخم في مصر")
     texts = " ".join(p["text"] for p in res["points"])
     assert "مصر" in texts and "مع مرور الوقت" not in texts
+
+
+def test_r828_list_intent_and_medlineplus(monkeypatch):
+    a = sp.analyze("ما هي أعراض فقر الدم", "What are the symptoms of anemia", "ar")
+    assert a["answer_type"] == "list" and "scholarly" in a["kinds"]
+    assert sp.type_bonus("Symptoms include fatigue, pale skin, and dizziness", "list") == 1.0
+    xml = ('<nlmSearchResult><list><document rank="0" url="https://medlineplus.gov/anemia.html">'
+           '<content name="title">&lt;span&gt;Anemia&lt;/span&gt;</content>'
+           '<content name="FullSummary">&lt;p&gt;Symptoms include:&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Fatigue&lt;/li&gt;'
+           '&lt;li&gt;Dizziness&lt;/li&gt;&lt;/ul&gt;</content></document>'
+           '<document rank="1" url="https://medlineplus.gov/crohnsdisease.html"><content name="title">Crohn</content>'
+           '<content name="FullSummary">&lt;p&gt;Crohn text.&lt;/p&gt;</content></document></list></nlmSearchResult>')
+    _mock(monkeypatch, lambda req: httpx.Response(200, text=xml))
+    out = sp.p_medlineplus("symptoms anemia", "en")
+    assert [o["url"] for o in out] == ["https://medlineplus.gov/anemia.html"]
+    assert "Fatigue, Dizziness" in out[0]["text"]
+    names = [n for n, *_ in sp.platform_jobs(a, {"ar": "x", "en": "What are the symptoms of anemia"}, "ar",
+                                             w.keyword_query, w.scholarly_query)]
+    assert "medlineplus" in names
+
+
+def test_r828_weather_city_with_country(monkeypatch):
+    seen = []
+
+    def h(req):
+        seen.append(str(req.url))
+        return httpx.Response(200, json={"current_condition": [{"temp_C": "31", "weatherDesc": [{"value": "Severe sandstorm"}]}],
+                                         "weather": [{}], "nearest_area": [{"areaName": [{"value": "Riyadh"}]}]})
+    _mock(monkeypatch, h)
+    a = sp.analyze("طقس الرياض اليوم", "Riyadh weather today", "ar", True)
+    (name, fn, args), = sp.instant_jobs(a, "طقس الرياض اليوم", "Riyadh weather today", "ar")
+    fact = fn(*args)[0]["fact_text"]
+    assert "Riyadh%2CSaudi%20Arabia" in seen[0] and "عاصفة رملية شديدة" in fact
+
+
+def test_r828_citation_marks_removed():
+    out = w.sentences("اخترع ألكسندر جراهام بيل الهاتف عام 1876 وسجل براءة اختراعه[12] في الولايات المتحدة[citation needed].")
+    assert out and "[" not in out[0]

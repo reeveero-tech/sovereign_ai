@@ -269,6 +269,9 @@ _K = {
                  r"\bsymptoms?\b|\bdrugs?\b|\bcancer\b|\bdiabetes\b|\bphysics\b|\bchemistry\b|\bbiology\b",
     "religion": r"آية|اية|سورة|القرآن|قرآن|القران|\bquran\b|\bkoran\b|\bverse\b|\bsurah\b",
     "discussion": r"آراء|اراء|تجارب|تجربة|رأيكم|رايكم|نصيحة|\breviews?\b|\bopinions?\b|\bexperiences?\b|\badvice\b",
+    "list": r"(?<![\w])(?:ال)?(?:أعراض|اعراض|علامات|فوائد|أضرار|اضرار|أسباب|اسباب|أنواع|انواع|مميزات|عيوب|نصائح|"
+            r"مضاعفات|خصائص)(?![\w])|\bsymptoms?\b|\bsigns of\b|\bbenefits\b|\bcauses of\b|\btypes of\b|"
+            r"\badvantages\b|\bdisadvantages\b|\bside effects\b|\btips\b|\bcomplications\b",
     "weather": r"طقس|الطقس|درجة الحرارة|درجات الحرارة|حرارة الجو|أمطار|امطار|\bweather\b|\btemperature\b|\bforecast\b",
     "time": r"كم الساعة|الساعة الآن|الساعة كم|الوقت الآن في|التوقيت في|\bwhat time is it\b|\blocal time\b|\btime (?:now )?in\b",
 }
@@ -301,8 +304,9 @@ _KIND_AR = {"fresh": "آني", "tech": "تقني", "video": "فيديو", "howto
             "numeric": "رقم/كمية", "date": "تاريخ/زمن", "person": "شخص", "place": "مكان", "comparison": "مقارنة",
             "book": "كتب", "code": "كود/مستودعات", "scholarly": "علمي/صحي", "religion": "قرآن/دين",
             "discussion": "آراء وتجارب", "weather": "طقس", "time": "الوقت المحلي", "currency": "سعر صرف",
-            "metal": "سعر معدن", "crypto": "عملة رقمية", "stat": "إحصاء رسمي"}
-_TYPE_ORDER = ("comparison", "howto", "person", "date", "numeric", "place", "definition")
+            "metal": "سعر معدن", "crypto": "عملة رقمية", "stat": "إحصاء رسمي",
+            "list": "قائمة (أعراض/فوائد/أسباب/أنواع)"}
+_TYPE_ORDER = ("comparison", "list", "howto", "person", "date", "numeric", "place", "definition")
 _DIRECT = {"weather", "time", "currency", "metal", "crypto", "stat"}
 # R-827: مؤشرات البنك الدولي — رقم رسمي مؤرخ لكل دولة بدل جملة مقتبسة قد تكون قديمة
 WB_INDICATORS = (
@@ -387,6 +391,9 @@ _TB = {
     "place": re.compile(r"\b(?:located|lies|situated|capital|north|south|east|west)\b|يقع|تقع|عاصمة|شمال|جنوب|شرق|غرب", re.I),
     "howto": re.compile(r"\b(?:first|then|step|use|make sure|you can|you should)\b|أولاً|اولا|ثم|خطوة|يمكنك|يجب|استخدم", re.I),
     "comparison": re.compile(r"\b(?:than|whereas|while|unlike|compared|both|difference)\b|بينما|مقارنة|أكثر من|أقل من|بخلاف|كلاهما|الفرق", re.I),
+    # R-828: سؤال قائمة ⇒ جملة فيها تعداد (تشمل/مثل/include/such as أو فواصل متعددة)
+    "list": re.compile(r"\b(?:include|includes|including|such as|symptoms are|signs are)\b|تشمل|تتضمن|مثل|من بينها|"
+                       r"[^,،]+[,،][^,،]+[,،][^,،]+", re.I),
 }
 
 
@@ -555,6 +562,11 @@ _CAPITAL = {"SA": "Riyadh", "AE": "Abu Dhabi", "EG": "Cairo", "KW": "Kuwait City
             "PL": "Warsaw"}
 
 
+# الاسم الإنجليزي الكامل للدولة حيث الاسم المختصر في الجدول غامض لخدمة الطقس
+_COUNTRY_EN = {"SA": "Saudi Arabia", "AE": "United Arab Emirates", "US": "United States", "GB": "United Kingdom",
+               "KR": "South Korea", "PS": "Palestine", "CN": "China", "IN": "India", "JP": "Japan"}
+
+
 def _weather_place(question: str, en_q: str, regions: List[str]) -> Optional[str]:
     for rx, en_name in _CITY_AR_RX:  # المدينة العربية المذكورة أولًا (أدق من أي ترجمة)
         if rx.search(question or ""):
@@ -576,12 +588,19 @@ def _weather_place(question: str, en_q: str, regions: List[str]) -> Optional[str
 
 _WX_AR = {"sunny": "مشمس", "clear": "صافٍ", "partly cloudy": "غائم جزئيًا", "cloudy": "غائم", "overcast": "ملبد بالغيوم",
           "mist": "ضباب خفيف", "fog": "ضباب", "light rain": "مطر خفيف", "rain": "مطر", "heavy rain": "مطر غزير",
-          "patchy rain possible": "احتمال مطر متفرق", "thunder": "رعد", "haze": "غبار/عتمة", "dust": "غبار"}
+          "patchy rain possible": "احتمال مطر متفرق", "thunder": "رعد", "haze": "غبار/عتمة", "dust": "غبار",
+          "light drizzle": "رذاذ خفيف", "drizzle": "رذاذ", "patchy light drizzle": "رذاذ خفيف متفرق",
+          "moderate rain": "مطر معتدل", "light rain shower": "زخات مطر خفيفة", "patchy light rain": "مطر خفيف متفرق",
+          "thundery outbreaks possible": "احتمال عواصف رعدية", "moderate or heavy rain with thunder": "مطر رعدي",
+          "patchy light rain with thunder": "مطر خفيف مع رعد", "sand": "رمال", "sandstorm": "عاصفة رملية",
+          "blowing dust": "غبار متطاير", "severe sandstorm": "عاصفة رملية شديدة", "dust storm": "عاصفة غبارية",
+          "widespread dust": "غبار منتشر", "smoke": "دخان", "hot": "حار", "windy": "رياح نشطة", "light snow": "ثلج خفيف", "snow": "ثلج", "freezing fog": "ضباب متجمد"}
 
 
-def instant_weather(place: str, lang: str) -> List[Dict[str, Any]]:
+def instant_weather(place: str, lang: str, country: Optional[str] = None) -> List[Dict[str, Any]]:
+    loc = f"{place},{country}" if country and country.lower() not in place.lower() else place
     with _http(10.0, {"User-Agent": "curl/8"}) as c:
-        r = c.get(f"https://wttr.in/{quote(place)}", params={"format": "j1"})
+        r = c.get(f"https://wttr.in/{quote(loc)}", params={"format": "j1"})
         r.raise_for_status()
         d = r.json()
     cur = (d.get("current_condition") or [{}])[0]
@@ -678,7 +697,10 @@ def instant_jobs(intent: Dict[str, Any], question: str, en_q: Optional[str], lan
     if "weather" in k:
         place = _weather_place(question, en_q or "", intent["regions"])
         if place:
-            jobs.append(("instant-weather", instant_weather, (place, fact_lang)))
+            # R-828: «Riyadh» وحدها قد تُطابق بلدة أخرى (Verulam في جنوب أفريقيا) ⇒ المدينة + الدولة
+            cc = intent["regions"][0] if intent["regions"] else None
+            country = _COUNTRY_EN.get(cc) or (_BY_CODE[cc][5][0].title() if cc in _BY_CODE else None)
+            jobs.append(("instant-weather", instant_weather, (place, fact_lang, country)))
     if "time" in k and intent["regions"]:
         jobs.append(("instant-time", instant_time, (intent["regions"], fact_lang)))
     if "stat" in k and intent.get("stats"):
@@ -882,6 +904,43 @@ def p_naver(q: str, lang: str) -> List[Dict[str, Any]]:
         return parse_naver(r.text)
 
 
+def parse_medlineplus(xml_text: str, lang: str = "en") -> List[Dict[str, Any]]:
+    """MedlinePlus (المكتبة الوطنية الأمريكية للطب): ملخص صحي موثوق؛ القوائم <li> تصير تعدادًا بفواصل."""
+    import html as _h
+    out = []
+    for m in re.finditer(r'<document[^>]*url="([^"]+)"[^>]*>(.*?)</document>', xml_text or "", re.S):
+        url, body = m.group(1), m.group(2)
+
+        def field(name):
+            f = re.search(rf'<content name="{name}">(.*?)</content>', body, re.S)
+            return _h.unescape(f.group(1)) if f else ""
+        summ = field("FullSummary")
+        summ = re.sub(r"</li>\s*<li>", ", ", summ)
+        summ = re.sub(r"</?ul>|</?ol>", " ", summ)
+        summ = re.sub(r"</p>", ".\n", summ)
+        text = re.sub(r"\s+([,.:;?])", r"\1", re.sub(r"\.\s*\.", ".", _strip(summ)))
+        title = _strip(field("title"))
+        if not text:
+            continue
+        out.append({"title": f"{title} — MedlinePlus", "url": url, "snippet": text[:300], "text": text[:6000],
+                    "provider": "medlineplus", "lang": lang, "scholarly": True, "published": None})
+        if len(out) >= 3:
+            break
+    return out
+
+
+def p_medlineplus(q: str, lang: str) -> List[Dict[str, Any]]:
+    db = "healthTopicsSpanish" if lang == "es" else "healthTopics"
+    with _http(8.0) as c:
+        r = c.get("https://wsearch.nlm.nih.gov/ws/query", params={"db": db, "term": q, "retmax": 3})
+        r.raise_for_status()
+        docs = parse_medlineplus(r.text, "es" if lang == "es" else "en")
+    # الموضوع الصحي المطابق فقط (عنوانه يذكر مفهومًا من السؤال) — لا «داء كرون» لسؤال فقر الدم
+    terms = [t for t in re.findall(r"[a-záéíóúñ]{4,}", q.lower()) if t not in ("what", "symptoms", "symptom", "signs",
+                                                                           "causes", "treatment", "the", "about")]
+    return [d for d in docs if any(t[:5] in d["title"].lower() for t in terms)] or docs[:1]
+
+
 def p_lemmy(q: str, lang: str) -> List[Dict[str, Any]]:
     with _http(8.0) as c:
         r = c.get("https://lemmy.world/api/v3/search", params={"q": q, "type_": "Posts", "sort": "TopAll", "limit": 6})
@@ -988,6 +1047,8 @@ def platform_jobs(intent: Dict[str, Any], queries: Dict[str, str], user_lang: st
             sq = scholarly_query(en_q)
             jobs += [("crossref", p_crossref, (sq, "en")), ("arxiv", p_arxiv, (sq, "en")),
                      ("semanticscholar", p_semantic_scholar, (sq, "en"))]
+        if "scholarly" in k:  # صحي ⇒ الملخص الطبي الموثوق
+            jobs.append(("medlineplus", p_medlineplus, (ek, "en")))
         if "book" in k:
             jobs.append(("openlibrary", p_openlibrary, (ek, "en")))
             jobs.append(("archive", p_archive, (ek, "en", "texts")))

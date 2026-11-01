@@ -1107,10 +1107,13 @@ _BOILER = re.compile(r"cookie|subscribe|sign up|newsletter|all rights reserved|j
                      r"follow us|related articles|read more|read also|share this", re.I)
 
 
+_CITE_MARK = re.compile(r"\[(?:\d{1,4}|[a-z]|citation needed|بحاجة لمصدر|ملاحظة \d+)\]|\[\s*\d{1,4}\s*\]\s*\)?", re.I)
+
+
 def sentences(text: str) -> List[str]:
     out = []
     for s in re.split(r"(?<=[.!?؟。])\s+|\n+", str(text or "")):
-        s = " ".join(s.split())
+        s = " ".join(_CITE_MARK.sub("", s).split())  # R-828: علامات الاستشهاد [12] ليست من الجملة
         if 40 <= len(s) <= 330 and not _BOILER.search(s) and len(re.findall(r"[\w\u0600-\u06FF]", s)) > len(s) * 0.6:
             out.append(s)
     return out
@@ -1400,6 +1403,10 @@ def answer(question: str, target_lang: Optional[str] = None) -> Dict[str, Any]:
         jobs.append(("hackernews", _p_hackernews, (keyword_query(en_q, "en"), "en")))
     # R-826: الأبحاث المحكّمة لا تجيب سؤال صرف/طقس/وقت/آية/فيديو — حشو يضر الدقة ويستهلك الوقت
     no_sch = bool({"religion", "video", "currency", "metal", "crypto", "weather", "time", "stat"} & set(intent["kinds"]))
+    # R-828: الأبحاث المحكّمة للأسئلة العلمية/الصحية/العامة فقط — لا لمقارنة منتجات أو شخص أو تاريخ أو كود أو طريقة
+    if "scholarly" not in intent["kinds"] and (
+            intent["answer_type"] in ("comparison", "person", "date", "place", "howto") or "tech" in intent["kinds"]):
+        no_sch = True
     if en_q and not fresh and not no_sch:
         jobs.append(("openalex", _p_openalex, (scholarly_query(en_q), "en")))
     jobs.append(("duckduckgo", _p_duckduckgo, (web_q, web_lang)))
@@ -1531,8 +1538,10 @@ def answer(question: str, target_lang: Optional[str] = None) -> Dict[str, Any]:
                 s_.get("kind") in ("video", "verse", "book") for s_ in sources):
             chosen = []  # طُلب فيديو/آية ⇒ الفيديوهات/الآيات بنصها هي الجواب؛ جملة موسوعية عامة حشو
     if instants:  # الرقم الحي هو الجواب ⇒ الجمل المقتبسة سياق فقط (أقوى ٣، وحديثة إن كانت مؤرخة)
+        live = bool({"weather", "time", "currency", "metal", "crypto"} & set(intent["kinds"]))
+        # R-828: قيمة لحظية (طقس/صرف/ذهب) ⇒ السياق خبر حديث مؤرخ فقط؛ جملة موسوعية بلا تاريخ («سكان الرياض») حشو
         chosen = [c for c in chosen if c.get("score", 0) >= 0.5
-                  and (age_days(sources[c["source_idx"]].get("published")) or 0) <= 7][:3]
+                  and (age_days(sources[c["source_idx"]].get("published")) or (999 if live else 0)) <= 7][:3]
 
     # ٥) الترجمة إلى لغة السائل
     for c in chosen:
