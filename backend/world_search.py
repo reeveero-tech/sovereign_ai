@@ -1449,7 +1449,10 @@ def answer(question: str, target_lang: Optional[str] = None) -> Dict[str, Any]:
         return -(s_["cred"] + bonus)
     readable = [s_ for s_ in sources if (not s_.get("text") and not s_.get("platform"))
                 or (fresh and s_.get("provider") == "bing-news" and s_.get("rank", 99) < 3)]
-    web_to_read = sorted(readable, key=_read_priority)[:_env_int("WORLD_SEARCH_MAX_PAGES", 6)]
+    # R-828: الإجابة المباشرة نجحت (صرف/ذهب/طقس/وقت/إحصاء) ⇒ قراءة صفحتين فقط بنافذة أقصر — السرعة دون فقد الجواب
+    direct_hit = any(s_.get("instant") for s_ in sources) and bool(sp._DIRECT & set(intent["kinds"]))
+    max_pages = 2 if direct_hit else _env_int("WORLD_SEARCH_MAX_PAGES", 6)
+    web_to_read = sorted(readable, key=_read_priority)[:max_pages]
 
     def _read(src):
         import web_tools
@@ -1457,7 +1460,7 @@ def answer(question: str, target_lang: Optional[str] = None) -> Dict[str, Any]:
         return (page.get("text") or "")[:60000]
     if web_to_read and time.monotonic() < deadline - 6:
         pres, pstat = _run_parallel([(s["url"], _read, (s,)) for s in web_to_read],
-                                    min(deadline - 5, time.monotonic() + 12.0))
+                                    min(deadline - 5, time.monotonic() + (6.0 if direct_hit else 12.0)))
         for s in web_to_read:
             base = s.get("text") or ""
             s["text"] = ((base + "\n") if base and s["url"] in pres else "") + (pres.get(s["url"]) or base or s.get("snippet") or "")
@@ -1552,6 +1555,17 @@ def answer(question: str, target_lang: Optional[str] = None) -> Dict[str, Any]:
         kept_sets.append(ts)
         refined.append(c)
     chosen = [c for c in chosen if c in refined]
+    # R-828: تركيز الكيان — بعد الترجمة (بلغة السائل) يمكن التحقق من «عمّن تتكلم الجملة»
+    if regions and ("stat" in intent["kinds"] or local_focus):
+        # إحصاء/رقم عن دولة ⇒ الجملة التي لا تذكر الدولة (تعريف عام للتضخم، الاحتياطي الأمريكي) ليست جوابًا
+        chosen = [c for c in chosen if set(regions) & set(sp.detect_regions(c.get("translated") or "", c["text"],
+                                                                                c.get("pivot") or ""))]
+    if wd and wd.get("entity"):
+        ent_terms = set(_terms(wd["entity"], user_lang))
+        if ent_terms:  # الكيان المنظّم (برج خليفة) ⇒ جملة عن كيان آخر (برج جدة) تُستبعد
+            chosen = [c for c in chosen
+                      if ent_terms <= set(_terms(c.get("translated") or c["text"], user_lang))
+                      or ent_terms <= set(_terms(c["text"], c.get("lang") or user_lang))]
     # R-825: أحدث العناوين المطابقة (للأسئلة الآنية) — مؤرخة ومترجمة إلى لغة السائل
     asked_cur = intent["currencies"] if "currency" in intent["kinds"] else []
 

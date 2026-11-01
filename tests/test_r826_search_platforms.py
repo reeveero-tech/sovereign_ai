@@ -362,3 +362,36 @@ def test_r827_numeric_check():
     txt = w.format_reply({"ok": True, "points": [{"text": "x", "source": 1}], "sources": [], "news": [],
                           "numeric_check": ok, "languages": ["ar"], "question": "q", "method": "m"})
     assert "تحقق الأرقام" in txt
+
+
+# ---------------- R-828 ----------------
+def _wiki(sents):
+    return lambda q, lang: [{"title": "W", "url": f"https://{lang}.wikipedia.org/wiki/X{i}", "snippet": "", "text": t,
+                             "provider": f"wikipedia-{lang}", "lang": lang} for i, t in enumerate(sents)] \
+        if lang == "ar" else []
+
+
+def test_r828_entity_focus_drops_other_entity(platform_world, monkeypatch):
+    monkeypatch.setattr(w, "translate", lambda text, target, source="auto": (text, "fake"))
+    monkeypatch.setattr(sp, "platform_jobs", lambda *a, **k: [])
+    monkeypatch.setattr(w, "_p_wikidata", lambda q, lang: [{
+        "title": "برج خليفة — Wikidata Q12495", "url": "https://www.wikidata.org/wiki/Q12495", "snippet": "", "text": "",
+        "provider": "wikidata", "lang": "ar", "facts": [], "fact_text": "الارتفاع (برج خليفة): 828 م", "entity": "برج خليفة"}])
+    monkeypatch.setattr(w, "_p_wikipedia", _wiki([
+        "يبلغ ارتفاع برج خليفة 828 مترا وهو أطول برج في العالم منذ افتتاحه.",
+        "يبلغ ارتفاع برج جدة المخطط ألف متر وهو أطول برج في العالم عند اكتماله."]))
+    res = w.answer("كم يبلغ ارتفاع برج خليفة في العالم")
+    texts = " ".join(p["text"] for p in res["points"])
+    assert "برج جدة" not in texts and "828" in texts
+
+
+def test_r828_stat_requires_country_mention(platform_world, monkeypatch):
+    monkeypatch.setattr(w, "translate", lambda text, target, source="auto": (text, "fake"))
+    monkeypatch.setattr(sp, "platform_jobs", lambda *a, **k: [])
+    monkeypatch.setattr(sp, "instant_jobs", lambda *a, **k: [])
+    monkeypatch.setattr(w, "_p_wikipedia", _wiki([
+        "بلغ معدل التضخم السنوي في مصر نحو أربعة عشر بالمئة وفق البيانات الرسمية الأخيرة.",
+        "التضخم هو المعدل الذي ترتفع به أسعار السلع والخدمات مع مرور الوقت في الاقتصاد."]))
+    res = w.answer("معدل التضخم في مصر")
+    texts = " ".join(p["text"] for p in res["points"])
+    assert "مصر" in texts and "مع مرور الوقت" not in texts
