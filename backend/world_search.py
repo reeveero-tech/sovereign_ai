@@ -1399,7 +1399,7 @@ def answer(question: str, target_lang: Optional[str] = None) -> Dict[str, Any]:
         jobs.append(("stackoverflow", _p_stackexchange, (keyword_query(en_q, "en"), "en")))
         jobs.append(("hackernews", _p_hackernews, (keyword_query(en_q, "en"), "en")))
     # R-826: الأبحاث المحكّمة لا تجيب سؤال صرف/طقس/وقت/آية/فيديو — حشو يضر الدقة ويستهلك الوقت
-    no_sch = bool({"religion", "video", "currency", "metal", "crypto", "weather", "time"} & set(intent["kinds"]))
+    no_sch = bool({"religion", "video", "currency", "metal", "crypto", "weather", "time", "stat"} & set(intent["kinds"]))
     if en_q and not fresh and not no_sch:
         jobs.append(("openalex", _p_openalex, (scholarly_query(en_q), "en")))
     jobs.append(("duckduckgo", _p_duckduckgo, (web_q, web_lang)))
@@ -1524,8 +1524,8 @@ def answer(question: str, target_lang: Optional[str] = None) -> Dict[str, Any]:
     if any(s_.get("platform") for s_ in sources):
         # R-826: المنصة أجابت (فيديو/آية/مستودع) ⇒ الجملة المقتبسة تُرفق فقط إن غطت كل مفاهيم السؤال
         chosen = [c for c in chosen if c.get("coverage", 0) >= 0.99 and c.get("score", 0) >= 0.5]
-        if {"video", "religion"} & set(intent["kinds"]) and any(
-                s_.get("kind") in ("video", "verse") for s_ in sources):
+        if {"video", "religion", "book"} & set(intent["kinds"]) and any(
+                s_.get("kind") in ("video", "verse", "book") for s_ in sources):
             chosen = []  # طُلب فيديو/آية ⇒ الفيديوهات/الآيات بنصها هي الجواب؛ جملة موسوعية عامة حشو
     if instants:  # الرقم الحي هو الجواب ⇒ الجمل المقتبسة سياق فقط (أقوى ٣، وحديثة إن كانت مؤرخة)
         chosen = [c for c in chosen if c.get("score", 0) >= 0.5
