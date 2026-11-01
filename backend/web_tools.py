@@ -226,7 +226,7 @@ def fetch(url: str, timeout=None):
     # R-829: متن الصفحة وتاريخ نشرها بـ trafilatura المسحوبة (third_party/adbar__trafilatura) — تفصل المقال عن
     # القوائم والإعلانات؛ المحوِّل أعلاه يبقى احتياطًا حين لا تجد متنًا
     main = None
-    if "html" in ctype:
+    if "html" in ctype and os.getenv("WEB_TOOLS_TRAFILATURA", "true").strip().lower() != "false":
         from search_agents import reader
         try:
             main = reader.extract(text_raw, current)

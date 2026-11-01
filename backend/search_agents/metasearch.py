@@ -27,7 +27,10 @@ WEIGHTS = {"google": 1.05, "brave": 1.0, "bing": 1.0, "yandex": 0.9, "mojeek": 0
 
 
 def engines() -> List[str]:
-    raw = os.getenv("WORLD_SEARCH_DDGS_ENGINES", "google,brave,yandex,mojeek,yahoo,startpage")
+    """المحركات المفعّلة. الافتراضي yahoo وحده: من الاختبار الحي على Render (R-829c) Google/Yandex/Mojeek
+    تتجاوز المهلة وBrave/Startpage تعيد صفحة فارغة لعناوين مراكز البيانات — مزود لا يجيب يحبس مرحلة البحث
+    حتى مهلتها. بيئة أخرى (خادم منزلي/VPS) تفعّل البقية: WORLD_SEARCH_DDGS_ENGINES=google,brave,yandex,…"""
+    raw = os.getenv("WORLD_SEARCH_DDGS_ENGINES", "yahoo")
     return [e.strip().lower() for e in raw.split(",") if e.strip()]
 
 
@@ -39,7 +42,7 @@ def _clean(s: Any) -> str:
     return re.sub(r"\s+", " ", str(s or "")).strip()
 
 
-def search(engine: str, q: str, lang: str, max_results: int = 10, timeout: float = 7.0) -> List[Dict[str, Any]]:
+def search(engine: str, q: str, lang: str, max_results: int = 10, timeout: float = 5.0) -> List[Dict[str, Any]]:
     """نتائج محرك واحد عبر ddgs المسحوبة، بصيغة مزودات world_search."""
     ddgs = vendored.load("ddgs")
     if ddgs is None:
