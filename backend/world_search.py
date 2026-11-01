@@ -1529,11 +1529,21 @@ def answer(question: str, target_lang: Optional[str] = None) -> Dict[str, Any]:
         chosen = evaluate(candidates, qterms, _to_pivot, top_k=top_k, fresh_mode=fresh)
     wd = next((s_ for s_ in sources if s_.get("provider") == "wikidata"), None)
     instants = [s_ for s_ in sources if s_.get("instant")]
+    # R-828c: سؤال صحي/قائمة ⇒ ملخص MedlinePlus (المكتبة الوطنية الأمريكية للطب) هو المرجع المباشر،
+    # لا ملخصات أبحاث عن عيّنة مرضى بعينها
+    med_ref = next((s_ for s_ in sources if s_.get("provider") == "medlineplus"), None) \
+        if intent["answer_type"] in ("list", "definition") else None
+    if med_ref:
+        chosen = [c for c in chosen if c["source_idx"] != sources.index(med_ref)][:3]
     if wd:  # الحقيقة المنظّمة تجيب ⇒ لا يُرفق من الجمل إلا القوي جدًا (لا حشو)
         chosen = [c for c in chosen if c.get("score", 0) >= 0.75 and c.get("coverage", 0) >= 0.99][:3]
     if any(s_.get("platform") for s_ in sources):
         # R-826: المنصة أجابت (فيديو/آية/مستودع) ⇒ الجملة المقتبسة تُرفق فقط إن غطت كل مفاهيم السؤال
+        pre_platform = chosen
         chosen = [c for c in chosen if c.get("coverage", 0) >= 0.99 and c.get("score", 0) >= 0.5]
+        if not chosen and intent["answer_type"] == "comparison":
+            # R-828c: المقارنة تحتاج نصًا يوازن الطرفين — عناوين النقاشات وحدها ليست مقارنة
+            chosen = [c for c in pre_platform if c.get("coverage", 0) >= 0.66 and c.get("score", 0) >= 0.45][:3]
         if {"video", "religion", "book"} & set(intent["kinds"]) and any(
                 s_.get("kind") in ("video", "verse", "book") for s_ in sources):
             chosen = []  # طُلب فيديو/آية ⇒ الفيديوهات/الآيات بنصها هي الجواب؛ جملة موسوعية عامة حشو
@@ -1600,7 +1610,8 @@ def answer(question: str, target_lang: Optional[str] = None) -> Dict[str, Any]:
             tname = tname if out_t is not titles else None
         for d, t in zip(idxs, out_t):
             d["translated"], d["translator"] = t, tname
-    used_idx = [sources.index(x) for x in instants] + ([sources.index(wd)] if wd else [])
+    used_idx = [sources.index(x) for x in instants] + ([sources.index(med_ref)] if med_ref else []) \
+        + ([sources.index(wd)] if wd else [])
     for c in chosen:
         if c["source_idx"] not in used_idx:
             used_idx.append(c["source_idx"])
@@ -1628,6 +1639,17 @@ def answer(question: str, target_lang: Optional[str] = None) -> Dict[str, Any]:
                           "source": num[sources.index(wd)], "score": 1.0,
                           "relevance": 1.0, "agreement": 0.0, "credibility": wd["cred"],
                           "translator": "identity", "structured": True})
+    if med_ref:  # R-828c: المرجع الطبي الموثوق — أول ٣ جمل من ملخصه (القائمة تبقى تعدادًا) مترجمة
+        body = " ".join(sentences(med_ref.get("text") or "")[:4])[:900] or (med_ref.get("snippet") or "")
+        txt, tname = body, "identity"
+        if med_ref.get("lang") != user_lang and time.monotonic() < deadline - 1:
+            t_, n_ = translate(body, user_lang, med_ref.get("lang") or "en")
+            if n_:
+                txt, tname = t_, n_
+        points.insert(0, {"text": txt, "original": body, "lang": user_lang, "source": num[sources.index(med_ref)],
+                          "score": 1.0, "relevance": 1.0, "agreement": 0.0, "credibility": med_ref["cred"],
+                          "translator": tname, "structured": True, "instant": True, "authority": "medical",
+                          "provider": "medlineplus"})
     # R-826: الإجابة المباشرة الحية (سعر صرف/ذهب/عملة رقمية/طقس/وقت) قبل كل شيء
     for x in reversed(instants):
         txt, tname = x["fact_text"], "identity"
@@ -1789,7 +1811,8 @@ def format_reply(res: Dict[str, Any]) -> str:
     direct = [p for p in pts if p.get("instant")]
     rest = [p for p in pts if not p.get("instant")]
     if direct:
-        lines.append("الإجابة المباشرة (بيانات حية):")
+        lines.append("الإجابة المباشرة (مرجع طبي موثوق):" if all(p.get("authority") == "medical" for p in direct)
+                     else "الإجابة المباشرة (بيانات حية):")
         lines += [f"• {p['text']} [{p['source']}]" for p in direct]
         if rest:
             lines += ["", "من المصادر:"]

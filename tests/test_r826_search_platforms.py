@@ -433,3 +433,13 @@ def test_r828_weather_city_with_country(monkeypatch):
 def test_r828_citation_marks_removed():
     out = w.sentences("اخترع ألكسندر جراهام بيل الهاتف عام 1876 وسجل براءة اختراعه[12] في الولايات المتحدة[citation needed].")
     assert out and "[" not in out[0]
+
+
+def test_r828c_medlineplus_is_direct_medical_reference(monkeypatch):
+    res = {"ok": True, "method": "test", "question": "ما هي أعراض فقر الدم", "fresh": False, "intent": {"label_ar": "قائمة"},
+           "points": [{"text": "فقر الدم: الأعراض تشمل التعب والدوخة.", "source": 1, "instant": True,
+                       "authority": "medical"}, {"text": "جملة داعمة.", "source": 2}],
+           "sources": [{"n": 1, "title": "Anemia — MedlinePlus", "url": "https://medlineplus.gov/anemia.html", "credibility_label": "مرجع"},
+                       {"n": 2, "title": "x", "url": "https://e.org", "credibility_label": "عام"}]}
+    out = w.format_reply(res)
+    assert "الإجابة المباشرة (مرجع طبي موثوق):" in out and "بيانات حية" not in out

@@ -952,7 +952,7 @@
     if (o.intent && o.intent.label_ar) box.appendChild(el("div", "small muted", "فهمت المطلوب: " + o.intent.label_ar + (o.intent.regions_ar ? " — النطاق: " + o.intent.regions_ar : "")));
     var direct = (o.points || []).filter(function (p) { return p.instant; });
     if (direct.length) {
-      box.appendChild(el("h3", null, "الإجابة المباشرة (بيانات حية)"));
+      box.appendChild(el("h3", null, direct.every(function (p) { return p.authority === "medical"; }) ? "الإجابة المباشرة (مرجع طبي موثوق)" : "الإجابة المباشرة (بيانات حية)"));
       direct.forEach(function (p) { var row = el("div", "srch-item"); row.appendChild(el("strong", null, p.text + " [" + p.source + "]")); box.appendChild(row); });
     }
     (o.points || []).filter(function (p) { return !p.instant; }).forEach(function (p, i) {
