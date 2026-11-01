@@ -1283,7 +1283,8 @@ def _run_parallel(jobs: List[Tuple[str, Any, tuple]], deadline: float) -> Tuple[
                 _BREAKER.pop(name, None)
             except Exception as e:  # TOLERATED: مزود واحد يفشل لا يسقط البحث — يُعلن
                 status[name] = f"فشل: {type(e).__name__}: {str(e)[:80]}"
-                _BREAKER[name] = (_BREAKER.get(name, (0, 0.0))[0] + 1, time.time())
+                if "رُفضت" not in str(e):  # رفض جودة لنتائج سؤال بعينه ليس عطلًا في المزود ⇒ لا يُحسب
+                    _BREAKER[name] = (_BREAKER.get(name, (0, 0.0))[0] + 1, time.time())
     except Exception:  # TOLERATED: انتهاء الميزانية — ما لم يكتمل يُعلن
         for f, name in futs.items():
             status.setdefault(name, "تجاوز المهلة")
@@ -1626,6 +1627,15 @@ def answer(question: str, target_lang: Optional[str] = None) -> Dict[str, Any]:
             chosen = [c for c in chosen
                       if ent_terms <= set(_terms(c.get("translated") or c["text"], user_lang))
                       or ent_terms <= set(_terms(c["text"], c.get("lang") or user_lang))]
+        if intent["answer_type"] == "numeric":
+            # R-828e: الرقم المنظّم (828 م) هو الجواب ⇒ الجملة الداعمة تؤكد الرقم نفسه؛ «فندق بجوار برج خليفة»
+            # و«برج جدة سيتجاوز برج خليفة» ليستا تأكيدًا للارتفاع
+            wd_nums = {n.replace(",", "") for n in re.findall(r"\d[\d,]*(?:\.\d+)?", wd.get("fact_text") or "")
+                       if len(n.replace(",", "")) >= 2}
+            if wd_nums:
+                chosen = [c for c in chosen if any(
+                    n in (c.get("translated") or "").replace(",", "") or n in c["text"].replace(",", "")
+                    for n in wd_nums)]
     # R-825: أحدث العناوين المطابقة (للأسئلة الآنية) — مؤرخة ومترجمة إلى لغة السائل
     asked_cur = intent["currencies"] if "currency" in intent["kinds"] else []
 

@@ -935,13 +935,16 @@ def parse_medlineplus(xml_text: str, lang: str = "en") -> List[Dict[str, Any]]:
 def p_medlineplus(q: str, lang: str) -> List[Dict[str, Any]]:
     db = "healthTopicsSpanish" if lang == "es" else "healthTopics"
     with _http(8.0) as c:
-        r = c.get("https://wsearch.nlm.nih.gov/ws/query", params={"db": db, "term": q, "retmax": 3})
+        # R-828e: فهرس MedlinePlus يبحث بالموضوع — «symptoms» تضلله (أعادت «الأورام الليفية» لفيتامين د)
+        topic = " ".join(t for t in q.split() if t.lower() not in _GENERIC_Q) or q
+        r = c.get("https://wsearch.nlm.nih.gov/ws/query", params={"db": db, "term": topic, "retmax": 3})
         r.raise_for_status()
         docs = parse_medlineplus(r.text, "es" if lang == "es" else "en")
     # الموضوع الصحي المطابق فقط (عنوانه يذكر مفهومًا من السؤال) — لا «داء كرون» لسؤال فقر الدم
     terms = [t for t in re.findall(r"[a-záéíóúñ]{4,}", q.lower()) if t not in ("what", "symptoms", "symptom", "signs",
                                                                            "causes", "treatment", "the", "about")]
-    return [d for d in docs if any(t[:5] in d["title"].lower() for t in terms)] or docs[:1]
+    # R-828e: لا بديل عشوائي — موضوع لا يطابق العنوان («الأورام الليفية» لسؤال فيتامين د) أسوأ من غيابه
+    return [d for d in docs if any(t[:5] in d["title"].lower() for t in terms)]
 
 
 # R-828d: مفردات السؤال العامة لا تحدد الموضوع — المفهوم المحدد (فقر الدم/آيفون) هو ما يجب أن يذكره العنوان

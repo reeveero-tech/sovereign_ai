@@ -501,3 +501,28 @@ def test_r828d_breaker_pauses_repeated_failures_and_priority_first(monkeypatch):
     jobs = sorted([("lemmy", 0, ()), ("medlineplus", 0, ()), ("instant-weather", 0, ())],
                   key=lambda j: 0 if j[0].startswith(w._PRIORITY_PREFIXES) else 1)
     assert [j[0] for j in jobs][-1] == "lemmy"
+
+
+def test_r828e_medlineplus_topic_query_and_no_random_fallback(monkeypatch):
+    seen = []
+    xml = ('<nlmSearchResult><list><document rank="0" url="https://medlineplus.gov/uterinefibroids.html">'
+           '<content name="title">Uterine Fibroids</content><content name="FullSummary">x</content>'
+           '</document></list></nlmSearchResult>')
+
+    def h(req):
+        seen.append(req.url.params.get("term"))
+        return httpx.Response(200, text=xml)
+    _mock(monkeypatch, h)
+    assert sp.p_medlineplus("symptoms vitamin D deficiency", "en") == []
+    assert seen == ["vitamin D deficiency"]
+
+
+def test_r828e_breaker_ignores_quality_rejections(monkeypatch):
+    monkeypatch.setenv("WORLD_SEARCH_BREAKER_TEST", "1")
+    monkeypatch.setattr(w, "_BREAKER", {})
+
+    def rejected():
+        raise RuntimeError("bing: نتائج غير مطابقة للسؤال — رُفضت")
+    for _ in range(4):
+        _, st = w._run_parallel([("bing-ar", rejected, ())], time.monotonic() + 5)
+    assert st["bing-ar"].startswith("فشل") and "bing-ar" not in w._BREAKER
