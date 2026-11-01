@@ -968,6 +968,15 @@
         box.appendChild(row);
       });
     }
+    // R-827: تحقق الأرقام بين المصادر
+    var chk = o.numeric_check;
+    if (chk) {
+      var u = chk.unit === "#" ? "" : " " + chk.unit;
+      var fmt = function (v) { return Number(v).toLocaleString("ar-SA-u-nu-latn", { maximumFractionDigits: 2 }); };
+      box.appendChild(el("div", "small", chk.kind === "consensus"
+        ? "تحقق الأرقام: تتفق " + chk.sources.length + " مصادر [" + chk.sources.join("][") + "] على ≈ " + fmt(chk.value) + u
+        : "تنبيه: تتباين الأرقام بين المصادر (" + chk.values.map(function (x) { return fmt(x.value) + u + " [" + x.source + "]"; }).join("، ") + ")"));
+    }
     if ((o.platforms || []).length) {
       box.appendChild(el("h3", null, "من المنصات"));
       o.platforms.forEach(function (p) {

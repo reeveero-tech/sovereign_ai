@@ -301,9 +301,22 @@ _KIND_AR = {"fresh": "آني", "tech": "تقني", "video": "فيديو", "howto
             "numeric": "رقم/كمية", "date": "تاريخ/زمن", "person": "شخص", "place": "مكان", "comparison": "مقارنة",
             "book": "كتب", "code": "كود/مستودعات", "scholarly": "علمي/صحي", "religion": "قرآن/دين",
             "discussion": "آراء وتجارب", "weather": "طقس", "time": "الوقت المحلي", "currency": "سعر صرف",
-            "metal": "سعر معدن", "crypto": "عملة رقمية"}
+            "metal": "سعر معدن", "crypto": "عملة رقمية", "stat": "إحصاء رسمي"}
 _TYPE_ORDER = ("comparison", "howto", "person", "date", "numeric", "place", "definition")
-_DIRECT = {"weather", "time", "currency", "metal", "crypto"}
+_DIRECT = {"weather", "time", "currency", "metal", "crypto", "stat"}
+# R-827: مؤشرات البنك الدولي — رقم رسمي مؤرخ لكل دولة بدل جملة مقتبسة قد تكون قديمة
+WB_INDICATORS = (
+    ("NY.GDP.PCAP.CD", "نصيب الفرد من الناتج المحلي", "GDP per capita",
+     r"نصيب الفرد|دخل الفرد|متوسط دخل|\bper capita\b|\bgdp per\b"),
+    ("NY.GDP.MKTP.CD", "الناتج المحلي الإجمالي", "GDP",
+     r"الناتج المحلي|الناتج القومي|حجم الاقتصاد|\bgdp\b(?!\s+per)|size of (?:the )?economy"),
+    ("SP.POP.TOTL", "عدد السكان", "Population", r"عدد سكان|عدد السكان|سكانها|تعداد|\bpopulation\b"),
+    ("FP.CPI.TOTL.ZG", "معدل التضخم السنوي", "Inflation (annual %)", r"تضخم|التضخم|\binflation\b"),
+    ("SL.UEM.TOTL.ZS", "معدل البطالة", "Unemployment rate", r"بطالة|البطالة|\bunemployment\b"),
+    ("SP.DYN.LE00.IN", "متوسط العمر المتوقع", "Life expectancy", r"متوسط العمر|العمر المتوقع|\blife expectancy\b"),
+    ("AG.SRF.TOTL.K2", "المساحة", "Surface area", r"مساحة|مساحتها|\bsurface area\b|\bhow big is\b|\barea of\b"),
+)
+_WB_RX = [(c, a, e, re.compile(rx, re.I)) for c, a, e, rx in WB_INDICATORS]
 
 
 _LANG_CUR = {"ar": "SAR", "fr": "EUR", "de": "EUR", "es": "EUR", "it": "EUR", "pt": "EUR", "nl": "EUR", "el": "EUR",
@@ -337,6 +350,9 @@ def analyze(question: str, en_q: Optional[str], user_lang: str, fresh: bool = Fa
     if not regions and "currency" in kinds:  # «الدولار مقابل الريال» ⇒ النطاق دولة العملة المحلية (السعودية)
         regions = list(dict.fromkeys(c[0] for cur in currencies if cur not in ("USD", "EUR")
                                      for c in COUNTRIES if c[2] == cur))[:1]
+    stats = [code for code, _ar, _en, rx in _WB_RX if rx.search(both)] if regions else []
+    if stats:
+        kinds.append("stat")
     if _DIRECT & set(kinds) and "definition" in kinds:
         kinds.remove("definition")  # «ما هو سعر…/ما هي درجة الحرارة» طلب قيمة لا تعريف
     answer_type = next((t for t in _TYPE_ORDER if t in kinds), "general")
@@ -357,7 +373,7 @@ def analyze(question: str, en_q: Optional[str], user_lang: str, fresh: bool = Fa
             "region_langs": langs, "currencies": currencies, "metal": metal if "metal" in kinds else None,
             "crypto": crypto if "crypto" in kinds else None, "local_currency": local_cur,
             "se_sites": se_sites, "label_ar": label, "regions_ar": region_ar,
-            "location_terms": region_terms(regions)}
+            "location_terms": region_terms(regions), "stats": stats[:3]}
 
 
 # ---------- نوع الإجابة ⇒ مكافأة تقييم ----------
@@ -382,6 +398,9 @@ def type_bonus(text: str, answer_type: str) -> float:
 # ============================================================
 # ٤) الإجابات المباشرة (مصادر بيانات دقيقة)
 # ============================================================
+_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"
+
+
 def _http(timeout: float = 8.0, headers: Optional[Dict[str, str]] = None):
     import httpx
     return httpx.Client(timeout=timeout, follow_redirects=True, headers=headers or {})
@@ -601,6 +620,50 @@ def instant_time(codes: List[str], lang: str) -> List[Dict[str, Any]]:
     return out
 
 
+def _wb_value(code: str, v: float, lang: str) -> str:
+    if code in ("FP.CPI.TOTL.ZG", "SL.UEM.TOTL.ZS"):
+        return f"{v:.1f}٪" if lang == "ar" else f"{v:.1f}%"
+    if code == "SP.DYN.LE00.IN":
+        return f"{v:.1f} " + ("سنة" if lang == "ar" else "years")
+    if code == "AG.SRF.TOTL.K2":
+        return f"{v:,.0f} " + ("كم²" if lang == "ar" else "km²")
+    if code in ("NY.GDP.MKTP.CD", "NY.GDP.PCAP.CD"):
+        if v >= 1e12:
+            return f"{v / 1e12:,.2f} " + ("تريليون دولار" if lang == "ar" else "trillion USD")
+        if v >= 1e9:
+            return f"{v / 1e9:,.1f} " + ("مليار دولار" if lang == "ar" else "billion USD")
+        return f"{v:,.0f} " + ("دولار" if lang == "ar" else "USD")
+    return f"{v:,.0f}"
+
+
+def instant_worldbank(codes: List[str], indicators: List[str], lang: str) -> List[Dict[str, Any]]:
+    """أحدث قيمة غير فارغة لكل مؤشر (البنك الدولي، مؤرخة بسنتها)."""
+    out = []
+    names = {c: (a, e) for c, a, e, _ in WB_INDICATORS}
+    with _http(8.0) as c:
+        for cc in codes[:2]:
+            for ind in indicators[:3]:
+                r = c.get(f"https://api.worldbank.org/v2/country/{cc}/indicator/{ind}",
+                          params={"format": "json", "mrnv": 1, "per_page": 5})
+                r.raise_for_status()
+                body = r.json()
+                rows = body[1] if isinstance(body, list) and len(body) > 1 and body[1] else []
+                row = next((x for x in rows if x.get("value") is not None), None)
+                if not row:
+                    continue
+                yr, val = row.get("date"), float(row["value"])
+                cname = _BY_CODE[cc][4][0] if lang == "ar" and cc in _BY_CODE else (row.get("country") or {}).get("value", cc)
+                nm = names[ind][0] if lang == "ar" else names[ind][1]
+                fact = (f"{nm} في {cname}: {_wb_value(ind, val, lang)} (بيانات البنك الدولي لعام {yr})" if lang == "ar"
+                        else f"{nm} of {cname}: {_wb_value(ind, val, lang)} (World Bank data, {yr})")
+                out.append(_src("stat", f"World Bank — {names[ind][1]} — {cname}",
+                                f"https://data.worldbank.org/indicator/{ind}?locations={cc}", fact, lang,
+                                f"{yr}-12-31T00:00:00Z" if yr else None))
+    if not out:
+        raise RuntimeError("لا بيانات للمؤشر")
+    return out
+
+
 def instant_jobs(intent: Dict[str, Any], question: str, en_q: Optional[str], lang: str) -> List[Tuple[str, Any, tuple]]:
     """مهام الإجابات المباشرة المناسبة للنية (تُشغَّل متوازية مع البحث)."""
     jobs: List[Tuple[str, Any, tuple]] = []
@@ -618,6 +681,8 @@ def instant_jobs(intent: Dict[str, Any], question: str, en_q: Optional[str], lan
             jobs.append(("instant-weather", instant_weather, (place, fact_lang)))
     if "time" in k and intent["regions"]:
         jobs.append(("instant-time", instant_time, (intent["regions"], fact_lang)))
+    if "stat" in k and intent.get("stats"):
+        jobs.append(("instant-stat", instant_worldbank, (intent["regions"], intent["stats"], fact_lang)))
     return jobs
 
 
@@ -769,6 +834,54 @@ def p_openlibrary(q: str, lang: str) -> List[Dict[str, Any]]:
              "meta": str(d.get("first_publish_year") or "")} for d in docs if d.get("key")]
 
 
+def p_archive(q: str, lang: str, mediatype: str = "texts") -> List[Dict[str, Any]]:
+    """Internet Archive: كتب ووثائق ومحفوظات تاريخية (وأفلام وثائقية مع mediatype=movies)."""
+    with _http(9.0) as c:
+        r = c.get("https://archive.org/advancedsearch.php",
+                  params={"q": f"({q}) AND mediatype:{mediatype}", "fl[]": ["identifier", "title", "year", "creator",
+                                                                            "downloads"],
+                          "rows": 6, "sort[]": "downloads desc", "output": "json"})
+        r.raise_for_status()
+        docs = (r.json().get("response") or {}).get("docs") or []
+    out = []
+    for d in docs:
+        if not d.get("identifier"):
+            continue
+        cr = d.get("creator")
+        cr = "، ".join(cr[:2]) if isinstance(cr, list) else (cr or "")
+        out.append({"title": str(d.get("title") or d["identifier"]), "url": f"https://archive.org/details/{d['identifier']}",
+                    "snippet": "", "provider": "archive", "platform": "Internet Archive",
+                    "kind": "book" if mediatype == "texts" else "video", "lang": "en", "site": str(cr)[:80],
+                    "meta": " · ".join(x for x in (str(d.get("year") or ""), f"⬇ {d['downloads']:,}"
+                                                   if isinstance(d.get("downloads"), int) else "") if x),
+                    "published": None})
+    return out
+
+
+def parse_naver(html_text: str) -> List[Dict[str, Any]]:
+    """نتائج Naver الخارجية (الكورية): الروابط خارج نطاقات Naver بعناوين ذات معنى."""
+    out, seen = [], set()
+    for m in re.finditer(r'<a[^>]+href="(https?://[^"]+)"[^>]*>(.{0,400}?)</a>', html_text or "", re.S):
+        url = _strip(m.group(1))
+        if re.search(r"naver\.(?:com|net)|navercorp|pstatic\.net", url) or url in seen:
+            continue
+        title = _strip(m.group(2)).replace("새 창 열림", "").strip()
+        if len(title) < 6 or title.startswith("©"):
+            continue
+        seen.add(url)
+        out.append({"title": title[:200], "url": url, "snippet": "", "provider": "naver", "lang": "ko", "rank": len(out)})
+        if len(out) >= 8:
+            break
+    return out
+
+
+def p_naver(q: str, lang: str) -> List[Dict[str, Any]]:
+    with _http(9.0, {"User-Agent": _UA}) as c:
+        r = c.get("https://search.naver.com/search.naver", params={"where": "web", "query": q})
+        r.raise_for_status()
+        return parse_naver(r.text)
+
+
 def p_lemmy(q: str, lang: str) -> List[Dict[str, Any]]:
     with _http(8.0) as c:
         r = c.get("https://lemmy.world/api/v3/search", params={"q": q, "type_": "Posts", "sort": "TopAll", "limit": 6})
@@ -877,12 +990,17 @@ def platform_jobs(intent: Dict[str, Any], queries: Dict[str, str], user_lang: st
                      ("semanticscholar", p_semantic_scholar, (sq, "en"))]
         if "book" in k:
             jobs.append(("openlibrary", p_openlibrary, (ek, "en")))
+            jobs.append(("archive", p_archive, (ek, "en", "texts")))
+        if "video" in k and "howto" not in k:  # وثائقيات ومحفوظات مرئية
+            jobs.append(("archive-video", p_archive, (ek, "en", "movies")))
         if "discussion" in k or "comparison" in k:
             jobs.append(("lemmy", p_lemmy, (ek, "en")))
         for site in intent.get("se_sites") or []:
             if site in ("stackoverflow",):
                 continue
             jobs.append((f"stackexchange-{site}", p_stackexchange_site, (ek, site)))
+    if "ko" in queries:
+        jobs.append(("naver", p_naver, (keyword_query(queries["ko"], "ko"), "ko")))
     if "zh" in queries:
         jobs.append(("baidu", p_baidu, (keyword_query(queries["zh"], "zh"), "zh")))
     if "religion" in k and queries.get("ar"):

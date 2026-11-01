@@ -128,7 +128,7 @@ def query(terms: List[str], limit: int = 8, max_age_days: int = 3650) -> List[Di
 # ============================================================
 # ذاكرة الإجابات المؤقتة
 # ============================================================
-ENGINE_VERSION = "r826d"
+ENGINE_VERSION = "r827"
 
 
 def cache_key(question: str, lang: str) -> str:

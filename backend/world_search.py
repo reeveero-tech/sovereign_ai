@@ -1278,7 +1278,9 @@ def engine_status() -> Dict[str, Any]:
                           # R-826: المنصات والإجابات المباشرة
                           "youtube", "github", "crossref", "arxiv", "semanticscholar", "openlibrary", "lemmy",
                           "stackexchange-<site>", "baidu", "quran", "instant-currency", "instant-metal",
-                          "instant-crypto", "instant-weather", "instant-time"],
+                          "instant-crypto", "instant-weather", "instant-time",
+                          # R-827
+                          "instant-stat (World Bank)", "archive", "naver"],
             "detectable_languages": sorted(LANG_NAMES_AR)}
 
 
@@ -1642,6 +1644,8 @@ def answer(question: str, target_lang: Optional[str] = None) -> Dict[str, Any]:
         "intent": {"label_ar": intent["label_ar"], "answer_type": intent["answer_type"], "kinds": intent["kinds"],
                    "regions": regions, "regions_ar": intent["regions_ar"]},
         "instant": len(instants),
+        "numeric_check": numeric_check([p for p in points if not p.get("structured")])
+        if intent["answer_type"] == "numeric" and not instants else None,
         "index_used": sum(1 for i in used_idx if sources[i].get("provider") == "index"),
         "queries": queries, "languages_searched": sorted({s.get("lang") for s in sources if s.get("lang")}),
         "points": points, "sources": cited, "sources_considered": len(sources),
@@ -1675,6 +1679,66 @@ def _date_ar(iso: Optional[str]) -> str:
     if d < 7:
         return "منذ " + _n(int(d), "يوم", "يومين", "أيام", "يومًا")
     return str(iso)[:10]
+
+
+# R-827: تحقق الأرقام بين المصادر — إجماع أو تباين (حتمي، بلا نموذج)
+_DIGITS = str.maketrans("٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹٫٬", "01234567890123456789.,")
+_MULT = {"ألف": 1e3, "الف": 1e3, "thousand": 1e3, "مليون": 1e6, "ملايين": 1e6, "million": 1e6, "millions": 1e6,
+         "مليار": 1e9, "مليارات": 1e9, "billion": 1e9, "billions": 1e9, "تريليون": 1e12, "trillion": 1e12}
+_NUM_RX = re.compile(r"(?<![\w.,])(\d{1,3}(?:,\d{3})+|\d+(?:\.\d+)?)\s*(%|٪)?\s*([^\W\d_]+)?(?:\s+([^\W\d_]+))?")
+
+
+def extract_quantities(text: str) -> List[Tuple[float, str]]:
+    """(القيمة، الوحدة) من الجملة: «123 مليون نسمة» ⇒ (1.23e8، نسمة). السنوات المجردة تُستبعد."""
+    out = []
+    t = str(text or "").translate(_DIGITS)
+    for m in _NUM_RX.finditer(t):
+        raw, pct, w1, w2 = m.group(1), m.group(2), (m.group(3) or "").lower(), (m.group(4) or "").lower()
+        try:
+            v = float(raw.replace(",", ""))
+        except ValueError:  # TOLERATED: رقم غير قابل للتحويل ⇒ ليس كمية
+            continue
+        unit = "%" if pct else w1
+        if not pct and w1 in _MULT:
+            v *= _MULT[w1]
+            unit = w2 or "#"
+        elif not pct and 1800 <= v <= 2100 and "." not in raw and "," not in raw:
+            continue  # سنة لا كمية
+        if v == 0:
+            continue
+        out.append((v, re.sub(r"^(?:ال|و)", "", unit) or "#"))
+    return out
+
+
+def numeric_check(points: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    """يقارن الكمية الأولى لكل نقطة مع نظيراتها بالوحدة نفسها من مصادر مختلفة."""
+    vals = []
+    for p in points:
+        q = extract_quantities(p.get("text") or "")
+        if q:
+            vals.append((q[0][0], q[0][1], p["source"]))
+    by_unit: Dict[str, List[Tuple[float, int]]] = {}
+    for v, u, src in vals:
+        by_unit.setdefault(u, []).append((v, src))
+    best = None
+    for u, items in by_unit.items():
+        srcs = {s_ for _, s_ in items}
+        if len(srcs) < 2:
+            continue
+        for v0, _ in items:
+            agree = sorted({s_ for v, s_ in items if abs(v - v0) <= 0.03 * max(abs(v0), 1e-9)})
+            if len(agree) >= 2 and (best is None or len(agree) > len(best["sources"])):
+                best = {"kind": "consensus", "value": v0, "unit": u, "sources": agree}
+        if best is None:
+            lo, hi = min(items), max(items)
+            if hi[0] > 1.15 * lo[0]:
+                best = {"kind": "conflict", "unit": u,
+                        "values": [{"value": v, "source": s_} for v, s_ in sorted(items)][:4]}
+    return best
+
+
+def _qfmt(v: float) -> str:
+    return f"{v:,.0f}" if v >= 100 else f"{v:,.2f}".rstrip("0").rstrip(".")
 
 
 def format_reply(res: Dict[str, Any]) -> str:
@@ -1719,6 +1783,15 @@ def format_reply(res: Dict[str, Any]) -> str:
         for n in news:
             meta = " — ".join(x for x in (n.get("site") or "", _date_ar(n.get("published"))) if x)
             lines.append(f"• {n['title']} [{n['source']}]" + (f" ({meta})" if meta else ""))
+    chk = res.get("numeric_check")
+    if chk:  # R-827: هل تتفق المصادر على الرقم؟
+        unit = "" if chk["unit"] in ("#",) else f" {chk['unit']}"
+        if chk["kind"] == "consensus":
+            refs = "".join(f"[{x}]" for x in chk["sources"])
+            lines += ["", f"تحقق الأرقام: تتفق {len(chk['sources'])} مصادر {refs} على ≈ {_qfmt(chk['value'])}{unit}."]
+        else:
+            vs = "، ".join(f"{_qfmt(x['value'])}{unit} [{x['source']}]" for x in chk["values"])
+            lines += ["", f"تنبيه: تتباين الأرقام بين المصادر ({vs}) — الأرجح الأحدث والأوثق، وراجع المصادر."]
     plats = res.get("platforms") or []
     if plats:
         if pts or news:

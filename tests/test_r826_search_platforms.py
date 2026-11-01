@@ -311,3 +311,54 @@ def test_repo_titles_not_translated(platform_world, monkeypatch):
     monkeypatch.setattr(w, "translate", lambda text, target, source="auto": ("[tr] " + text, "fake"))
     res = w.answer("كم سعر الدولار مقابل الريال اليوم")
     assert res["platforms"][0]["title"] == "python-telegram-bot/python-telegram-bot"
+
+
+# ---------------- R-827 ----------------
+def test_r827_stat_intent_and_worldbank(monkeypatch):
+    a = sp.analyze("كم عدد سكان اليابان", "How many people live in Japan", "ar")
+    assert "stat" in a["kinds"] and a["stats"] == ["SP.POP.TOTL"]
+    assert sp.analyze("ما هو الناتج المحلي للسعودية", "What is the GDP of Saudi Arabia", "ar")["stats"] == ["NY.GDP.MKTP.CD"]
+    assert sp.analyze("كم عدد السكان", "population", "ar")["stats"] == []  # بلا دولة لا إحصاء
+    body = [{"page": 1}, [{"date": "2025", "value": None, "country": {"value": "Japan"}},
+                          {"date": "2024", "value": 123975371, "country": {"value": "Japan"}}]]
+    _mock(monkeypatch, lambda req: httpx.Response(200, json=body))
+    src = sp.instant_worldbank(["JP"], ["SP.POP.TOTL"], "ar")[0]
+    assert "123,975,371" in src["fact_text"] and "2024" in src["fact_text"] and src["provider"] == "instant-stat"
+    names = [n for n, *_ in sp.instant_jobs(a, "كم عدد سكان اليابان", None, "ar")]
+    assert "instant-stat" in names
+
+
+def test_r827_wb_value_format():
+    assert sp._wb_value("NY.GDP.MKTP.CD", 1.28e12, "ar") == "1.28 تريليون دولار"
+    assert sp._wb_value("FP.CPI.TOTL.ZG", 14.08, "en") == "14.1%"
+
+
+def test_r827_archive_and_naver(monkeypatch):
+    docs = {"response": {"docs": [{"identifier": "muq", "title": "Muqaddimah", "year": "1958", "creator": ["Ibn Khaldun"],
+                                   "downloads": 1200}]}}
+    _mock(monkeypatch, lambda req: httpx.Response(200, json=docs))
+    out = sp.p_archive("ibn khaldun", "en")
+    assert out[0]["url"] == "https://archive.org/details/muq" and out[0]["kind"] == "book"
+    html = ('<a href="https://www.visitseoul.net/">Visit Seoul 새 창 열림</a><a href="https://blog.naver.com/x">블로그 글 제목</a>'
+            '<a href="https://www.navercorp.com/">© NAVER Corp.</a><a href="https://news.example.kr/1">서울 여행 가이드 기사</a>')
+    got = sp.parse_naver(html)
+    assert [g["url"] for g in got] == ["https://www.visitseoul.net/", "https://news.example.kr/1"]
+    a = sp.analyze("أفضل كتب ابن خلدون", "Best books by Ibn Khaldun", "ar")
+    names = [n for n, *_ in sp.platform_jobs(a, {"ar": "x", "en": "Best books by Ibn Khaldun", "ko": "서울"}, "ar",
+                                             w.keyword_query, w.scholarly_query)]
+    assert "archive" in names and "naver" in names
+
+
+def test_r827_numeric_check():
+    assert w.extract_quantities("يبلغ عدد سكان اليابان 123.8 مليون نسمة عام 2024") == [(123800000.0, "نسمة")]
+    assert w.extract_quantities("التضخم ٣٫٥٪") == [(3.5, "%")]
+    ok = w.numeric_check([{"text": "عدد السكان 123.8 مليون نسمة", "source": 1},
+                          {"text": "يبلغ عدد السكان 124 مليون نسمة", "source": 2}])
+    assert ok["kind"] == "consensus" and ok["sources"] == [1, 2]
+    bad = w.numeric_check([{"text": "عدد السكان 100 مليون نسمة", "source": 1},
+                           {"text": "عدد السكان 140 مليون نسمة", "source": 2}])
+    assert bad["kind"] == "conflict"
+    assert w.numeric_check([{"text": "السكان 100 مليون نسمة", "source": 1}, {"text": "المساحة 377 ألف كم", "source": 2}]) is None
+    txt = w.format_reply({"ok": True, "points": [{"text": "x", "source": 1}], "sources": [], "news": [],
+                          "numeric_check": ok, "languages": ["ar"], "question": "q", "method": "m"})
+    assert "تحقق الأرقام" in txt
