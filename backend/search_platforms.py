@@ -265,6 +265,9 @@ _K = {
     "code": r"كود|برمجة|برمجي|مكتبة برمجية|مستودع|مفتوح المصدر|\bgithub\b|\brepo(?:sitory)?\b|\bsource code\b|"
             r"\bopen[- ]source\b|\blibrary\b|\bframework\b|\bsdk\b|\bapi\b",
     "scholarly": r"دراسة|دراسات|بحث علمي|أبحاث|ابحاث|علمي|مرض|علاج|دواء|أعراض|اعراض|صحة|سرطان|سكري|ضغط الدم|"
+                 r"(?<![\w])(?:ال)?(?:صداع|ألم|آلام|التهاب|عدوى|فيروس|حمى|حساسية|ربو|كوليسترول|فيتامين|سمنة|"
+                 r"أنيميا|قولون)(?![\w])|فقر الدم|\bmigraine\b|\bheadache\b|\bpain\b|\binfection\b|"
+                 r"\bvitamin\b|\ballergy\b|\basthma\b|\bfever\b|\banemia\b|\bcholesterol\b|"
                  r"\bstud(?:y|ies)\b|\bresearch\b|\bpapers?\b|\bevidence\b|\bclinical\b|\bdisease\b|\btreatment\b|"
                  r"\bsymptoms?\b|\bdrugs?\b|\bcancer\b|\bdiabetes\b|\bphysics\b|\bchemistry\b|\bbiology\b",
     "religion": r"آية|اية|سورة|القرآن|قرآن|القران|\bquran\b|\bkoran\b|\bverse\b|\bsurah\b",
@@ -941,6 +944,20 @@ def p_medlineplus(q: str, lang: str) -> List[Dict[str, Any]]:
     return [d for d in docs if any(t[:5] in d["title"].lower() for t in terms)] or docs[:1]
 
 
+# R-828d: مفردات السؤال العامة لا تحدد الموضوع — المفهوم المحدد (فقر الدم/آيفون) هو ما يجب أن يذكره العنوان
+_GENERIC_Q = {"what", "which", "when", "where", "does", "how", "best", "symptoms", "symptom", "signs", "causes",
+              "cause", "benefits", "benefit", "types", "type", "compare", "comparison", "versus", "between",
+              "difference", "treatment", "about", "with", "from", "that", "this", "learn", "fast", "good",
+              "advantages", "disadvantages", "tips", "risks", "effects", "side", "reasons", "review", "reviews"}
+
+
+def title_covers(title: str, q: str) -> bool:
+    """هل يذكر عنوان النقاش/السؤال كل المفاهيم المحددة في الاستعلام؟ (مطابقة بأول ٥ أحرف لتحمّل التصريف)"""
+    terms = [t for t in re.findall(r"[a-z0-9]{3,}", (q or "").lower()) if t not in _GENERIC_Q]
+    low = (title or "").lower()
+    return all(t[:5] in low for t in terms)
+
+
 def p_lemmy(q: str, lang: str) -> List[Dict[str, Any]]:
     with _http(8.0) as c:
         r = c.get("https://lemmy.world/api/v3/search", params={"q": q, "type_": "Posts", "sort": "TopAll", "limit": 6})
@@ -952,6 +969,8 @@ def p_lemmy(q: str, lang: str) -> List[Dict[str, Any]]:
         if not post.get("ap_id") and not post.get("id"):
             continue
         body = _strip(post.get("body") or "")
+        if not title_covers(post.get("name") or "", q):
+            continue  # R-828d: منشور لا يذكر موضوع السؤال (شريحة سامسونج 2nm لسؤال مقارنة الهواتف) ليس نقاشًا له
         out.append({"title": post.get("name") or "", "url": post.get("ap_id") or f"https://lemmy.world/post/{post['id']}",
                     "snippet": body[:300], "text": f"{post.get('name') or ''}. {body}"[:4000], "provider": "lemmy",
                     "platform": "Lemmy", "kind": "discussion", "lang": "en", "published": post.get("published"),
@@ -974,6 +993,8 @@ def p_stackexchange_site(q: str, site: str) -> List[Dict[str, Any]]:
             continue
         body = _strip(it.get("excerpt") or "")
         title = _strip(it.get("title") or "")
+        if not title_covers(title, q):
+            continue  # R-828d: «سم الثعبان» لسؤال أعراض فقر الدم — العنوان لا يذكر المفهوم ⇒ ليس جوابًا له
         out.append({"title": title, "url": f"https://{host}/q/{qid}" + (f"#{it['answer_id']}" if it.get("answer_id") else ""),
                     "snippet": body[:300], "text": f"{title}. {body}", "provider": f"stackexchange-{site}", "lang": "en",
                     "platform": "Stack Exchange", "kind": "qa", "site": host,

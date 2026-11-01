@@ -1081,6 +1081,8 @@ _TECH_COMMUNITY = ("stackoverflow.com", "stackexchange.com", "superuser.com", "s
 
 def credibility(url: str, scholarly: bool = False) -> Tuple[float, str]:
     host = (urlsplit(url).hostname or "").lower()
+    if host == "medlineplus.gov" or host.endswith(".medlineplus.gov"):  # R-828d: مرجع طبي رسمي لا «بحث محكّم»
+        return 1.0, "مرجع طبي رسمي (المكتبة الوطنية الأمريكية للطب)"
     if scholarly:
         return 1.0, "بحث علمي محكّم"
     if any(h in host for h in _HIGH) or re.search(r"\.(gov|edu|ac\.[a-z]{2}|gov\.[a-z]{2}|edu\.[a-z]{2})$", host):

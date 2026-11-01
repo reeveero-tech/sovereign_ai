@@ -443,3 +443,28 @@ def test_r828c_medlineplus_is_direct_medical_reference(monkeypatch):
                        {"n": 2, "title": "x", "url": "https://e.org", "credibility_label": "عام"}]}
     out = w.format_reply(res)
     assert "الإجابة المباشرة (مرجع طبي موثوق):" in out and "بيانات حية" not in out
+
+
+def test_r828d_health_terms_detected_without_false_positives():
+    assert "scholarly" in sp.analyze("ما أسباب الصداع النصفي", "", "ar")["kinds"]
+    assert "scholarly" in sp.analyze("أعراض الحساسية", "", "ar")["kinds"]
+    for q in ("عواصم العالم", "حملة تسويق", "عدد سكان العالم"):
+        assert "scholarly" not in sp.analyze(q, "", "ar")["kinds"], q
+
+
+def test_r828d_platform_titles_must_name_the_topic(monkeypatch):
+    assert not sp.title_covers("Is snake venom safe to drink?", "symptoms anemia")
+    assert sp.title_covers("How is anemia usually diagnosed?", "symptoms anemia")
+    assert sp.title_covers("How does OnePlus 13 compare with Samsung/iPhone?", "compare iphone samsung")
+    assert not sp.title_covers("Samsung 2nm node in mass production", "compare iphone samsung")
+    _mock(monkeypatch, lambda req: httpx.Response(200, json={"items": [
+        {"question_id": 1, "title": "Is snake venom safe?", "excerpt": "x"},
+        {"question_id": 2, "title": "How is anemia diagnosed?", "excerpt": "y"}]}))
+    assert [o["url"] for o in sp.p_stackexchange_site("symptoms anemia", "medicalsciences")] == \
+        ["https://medicalsciences.stackexchange.com/q/2"]
+
+
+def test_r828d_medlineplus_labelled_as_official_medical_reference():
+    cred, label = w.credibility("https://medlineplus.gov/anemia.html", True)
+    assert cred == 1.0 and "مرجع طبي رسمي" in label
+    assert w.credibility("https://doi.org/10.1/x", True)[1] == "بحث علمي محكّم"
