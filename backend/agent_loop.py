@@ -186,6 +186,9 @@ class CloudPlanner:
         # عقد JSON مقيّد — والاستخراج بـ _extract_json يصمد لو سبق النصَ شرح
         reply = cloud_brain.chat(_SYSTEM, user, max_tokens=PLANNER_MAX_TOKENS,
                                  json_mode=True)
+        if reply is None:  # R-833b: المزود المجاني متقلب (402/رد فارغ) — محاولة
+            reply = cloud_brain.chat(  # واحدة إضافية؛ حد المعدل يُنتظر داخل chat
+                _SYSTEM, user, max_tokens=PLANNER_MAX_TOKENS, json_mode=True)
         if reply is None:
             raise PlannerError("العقل السحابي الاحتياطي لم يرد (تعطل/حد معدل) — لا تخطيط")
         return _extract_json(reply)
@@ -439,5 +442,13 @@ def run_goal(goal: str, max_steps: int = 8) -> Dict[str, Any]:
     """
     from tool_registry import get_registry
     planner = FallbackPlanner(BrainPlanner(), CloudPlanner())
-    return AgentLoop(get_registry(), planner,
-                     max_steps=max(1, min(int(max_steps), 32))).run(goal)
+    steps = max(1, min(int(max_steps), 32))
+    max_seconds = 120.0
+    try:  # R-833b: العقل الأساسي متعذر (مزلاج R-821 مفتوح) ⇒ السحابي يخطط
+        import ollama_client  # وكل نداء ينتظر حد المعدل (~45ث للمزود المجاني) —
+        if ollama_client._brain_latch_open():  # الميزانية تتسع للخطوات وإلا ماتت
+            max_seconds = float(120 + 75 * steps)  # الجولة بجولتين لا ذنب التخطيط
+    except Exception:  # TOLERATED: المزلاج خيار صحة لا شرط تشغيل
+        pass
+    return AgentLoop(get_registry(), planner, max_steps=steps,
+                    max_seconds=max_seconds).run(goal)
