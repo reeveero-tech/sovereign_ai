@@ -794,6 +794,35 @@ def p_github(q: str, lang: str) -> List[Dict[str, Any]]:
              "meta": f"★ {it.get('stargazers_count', 0):,} · {it.get('language') or ''}".strip(" ·")} for it in items]
 
 
+def p_huggingface(q: str, lang: str) -> List[Dict[str, Any]]:
+    """R-837: نماذج ومجموعات بيانات HuggingFace — مصدر الذكاء الاصطناعي الحقيقي.
+
+    أمر المالك (من محادثة إنتاج رابعة): أسئلة الذكاء الاصطناعي تُبحث في مصادرها الحقيقية
+    (GitHub وHuggingFace) لا في ويكيبيديا وحدها. واجهة HuggingFace العامة بلا مفتاح.
+    """
+    out: List[Dict[str, Any]] = []
+    with _http(8.0) as c:
+        for kind, ep in (("model", "models"), ("dataset", "datasets")):
+            try:
+                r = c.get(f"https://huggingface.co/api/{ep}", params={"search": q, "limit": 4})
+                r.raise_for_status()
+                for it in r.json()[:4]:
+                    title = str(it.get("id") or it.get("modelId") or "").strip()
+                    if not title:
+                        continue
+                    dl, likes = it.get("downloads") or 0, it.get("likes") or 0
+                    tag = str(it.get("pipeline_tag") or "").strip()
+                    desc = _strip(it.get("description") or "")[:300] or tag
+                    out.append({
+                        "title": title, "url": f"https://huggingface.co/{'datasets/' if kind == 'dataset' else ''}{title}",
+                        "snippet": desc, "text": f"{title}: {desc}", "provider": "huggingface",
+                        "platform": "HuggingFace", "kind": kind, "lang": "en",
+                        "meta": f"❤ {likes:,} · ⬇ {int(dl):,}".strip()})
+            except Exception:  # TOLERATED: فشل مصدر واحد لا يُسقط البحث (نمط المزودات)
+                continue
+    return out
+
+
 def p_arxiv(q: str, lang: str) -> List[Dict[str, Any]]:
     with _http(10.0) as c:
         r = c.get("http://export.arxiv.org/api/query", params={"search_query": f"all:{q}", "max_results": 5,
@@ -1067,6 +1096,8 @@ def platform_jobs(intent: Dict[str, Any], queries: Dict[str, str], user_lang: st
         ek = keyword_query(en_q, "en")
         if "code" in k or ("tech" in k and "howto" not in k):
             jobs.append(("github", p_github, (ek, "en")))
+        if "tech" in k:  # R-837: الذكاء الاصطناعي ⇒ نماذج ومجموعات بيانات HuggingFace
+            jobs.append(("huggingface", p_huggingface, (ek, "en")))
         if "scholarly" in k and "fresh" not in k:
             sq = scholarly_query(en_q)
             jobs += [("crossref", p_crossref, (sq, "en")), ("arxiv", p_arxiv, (sq, "en")),
