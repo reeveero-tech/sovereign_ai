@@ -197,7 +197,22 @@ class ChatPlanner:
         # R-810/813: النموذج المختار للمحادثة يمر لكل نداء — لا انفصام بين الاختيار والاستدلال
         if self.model:
             kw.setdefault("model", self.model)
-        return chat(system, user, timeout=timeout, **kw)
+        reply = chat(system, user, timeout=timeout, **kw)
+        if reply is None:
+            # R-833: العقل الأساسي لم يرد (عقل LAN خلف شبكة خاصة لا تصلها السحابة)
+            # ⇒ العقل السحابي الاحتياطي يخطط ويجيب — المحادثة الوكيلة لا تموت
+            # بتعذر عقل واحد. فشله أيضًا ⇒ None كما كان (إعلان صادق في respond).
+            reply = self._cloud_call(system, user, **kw)
+        return reply
+
+    def _cloud_call(self, system: str, user: str, **kw) -> Optional[str]:
+        """R-833: نداء العقل السحابي بنص الطلب نفسه — json_mode يمر إن طُلب."""
+        import cloud_brain
+        if not cloud_brain.enabled():
+            return None
+        return cloud_brain.chat(system, user, history=self.history,
+                                max_tokens=int(kw.get("max_tokens") or 1400),
+                                json_mode=bool(kw.get("json_mode")))
 
     def _results(self, history: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         return [{"tool": h.get("tool"), "inputs": h.get("inputs"), "ok": h.get("ok"),
@@ -382,9 +397,17 @@ def respond(text: str, history: Optional[List[Dict[str, str]]] = None, *,
         from tool_registry import get_registry
         registry = get_registry()
     if chat_fn is None and not brain_enabled():
-        return {"reply": "العقل اللغوي غير مفعّل على هذا الخادم (OLLAMA_ENABLED/OLLAMA_MODEL) — "
-                         "لا أستطيع فهم الرسالة والإجابة عنها دونه.",
-                "status": "brain_disabled", "tools_used": [], "steps": []}
+        # R-833: العقل الأساسي معطل إعداديًا لكن السحابي الاحتياطي مفعّل ⇒
+        # المحادثة الوكيلة تعمل به (المخطط يعلن هويته) — لا موت بتعذر عقل واحد
+        try:
+            import cloud_brain
+            cloud_ok = cloud_brain.enabled()
+        except Exception:  # TOLERATED: بلا عقل سحابي يبقى الإعلان الصادق
+            cloud_ok = False
+        if not cloud_ok:
+            return {"reply": "العقل اللغوي غير مفعّل على هذا الخادم (OLLAMA_ENABLED/OLLAMA_MODEL) — "
+                             "لا أستطيع فهم الرسالة والإجابة عنها دونه.",
+                    "status": "brain_disabled", "tools_used": [], "steps": []}
     budget = float(max_seconds if max_seconds is not None else MAX_SECONDS)
     deadline = time.monotonic() + budget
     lessons = ""
