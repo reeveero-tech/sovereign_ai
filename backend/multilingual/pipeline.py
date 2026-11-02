@@ -133,6 +133,14 @@ class ConversationState:
             ent = self.table.entities.get(ent_id)
             if not ent:
                 return None
+            # R-838.4: كيان الرابط يُسمّى بالرابط نفسه في السؤال القائم بذاته —
+            # الأسطح العربية الممتصة (المشروع/المستودع/المرفق) تعريفٌ للحوار
+            # لا أسماء استبدال: «هل هو جاهز؟» يصبح «هل {الرابط} جاهز؟»
+            if ent.type == "url":
+                for surs in ent.surfaces.values():
+                    for s in surs:
+                        if "://" in s or s.startswith("http"):
+                            return s
             surs = ent.surfaces.get(lang) or ent.all_surfaces()
             return surs[0] if surs else None
 

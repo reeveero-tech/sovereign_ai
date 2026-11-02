@@ -14,7 +14,7 @@
 from __future__ import annotations
 
 import re
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from . import detector as _det
 from . import lexicon as _lex
@@ -22,6 +22,8 @@ from . import scripts as _sc
 
 # R-838: نمط الروابط — كيان URL كامل قبل التقطيع (المقطع يمزق الروابط)
 _URL_RE = re.compile(r"https?://[^\s،,؛;]+|www\.[^\s،,؛;]+")
+# R-838.4: اسم عربي معرف (الـ + جذر) — مرشح عطف البيان الملاصق للرابط
+_AR_DEF_NOUN_RE = re.compile(r"^ال[\u0600-\u06FF]{2,}$")
 
 # ---------------------------------------------------------------------------
 # جداول مورفولوجية
@@ -98,9 +100,20 @@ _EN_PRONOUNS: Dict[str, Dict[str, str]] = {
 
 _QUESTION_AR = {"ما", "ماذا", "ماهو", "ماهي", "من", "متى", "أين", "اين", "كيف",
                 "لماذا", "ليش", "ليه", "كم", "أي", "اي", "هل", "وش", "إيش", "ايش",
-                "مين"}
+                "مين",
+                # R-838.4: استفهامات لهجية مدمجة — «منهو منشؤه؟» جعلت «منهو»
+                # كيانًا ينافس الرابط على ضمير «استيراده» فوُلد توضيح وهمي
+                "منهو", "منو", "وين", "شنو", "امتى"}
 _QUESTION_EN = {"what", "who", "whom", "when", "where", "why", "how", "which",
                 "whose", "does", "do", "did", "is", "are", "can"}
+# R-838.4: أسماء خطابية بضمير المخاطب — «سؤالك/كلامك/جوابك» إشارة إلى
+# المحادثة نفسها (deixis) لا كيان جديد ينافس مرجع الحوار الحقيقي على
+# الضمائر اللاحقة (ثُبت حيًا: «لم أفهم سؤالك» ثم «منهو منشؤه؟» وَلَّد
+# توضيحًا وهميًا «بأيٍّ تقصد الرابط أم السؤال؟»)
+_DISCOURSE_DEICTIC_AR = {"سؤال", "جواب", "اجابة", "إجابة", "كلام", "رسالة",
+                         "طلب", "شرح", "توضيح", "فكرة", "كلمة", "جملة",
+                         "مثال", "رأي", "ملاحظة", "تعليق", "نص", "عنوان",
+                         "سطر", "فقرة", "صياغة", "معنى"}
 
 _REQUEST_AR = {"أعطني", "اعطني", "أعطي", "عطني", "اشرح", "وضح", "وضّح", "فصل",
                "فصّل", "لخص", "لخّص", "ترجم", "اكتب", "ابحث", "أنشئ", "انشئ",
@@ -193,6 +206,8 @@ _AR_VERB_ROOTS = (
     "عجب", "سكن", "طلب", "شكر", "وصف", "اهتم", "احترم", "استقبل", "استحق",
     "استمر", "استمتع", "استفاد", "استغرب", "دهش", "فرح", "حزن", "غضب",
     "خجل", "فخر", "افتخر", "انبهر", "بهر", "اشتاق", "افتقد", "احب",
+    # R-838.4: «ماذا تقصد؟»/«اريد» — أفعال شائعة كانت تصير كيانات تنافس
+    "قصد", "ريد",
 )
 _AR_VERB_INFLECTIONS = ("", "ت", "وا", "نا", "تم", "تما", "تن", "ات", "ها", "ه",
                         "هم", "هن", "هما", "كم", "كن", "ك", "ته", "تها", "تها", "ا")
@@ -273,6 +288,25 @@ class SemanticAnalyzer:
         urls = _URL_RE.findall(text)
         tokens = _sc.tokenize(_URL_RE.sub(" ", text))
 
+        # R-838.4: عطف البيان — الاسم المعرف الملاصق للرابط (قبله أو بعده
+        # مباشرة) ليس كيانًا منافسًا بل سطح آخر لكيان الرابط نفسه: «شرح مفصل
+        # عن المستودع <الرابط>» — «المستودع» والرابط مرجع واحد، ولا يولدان
+        # لاحقًا تنافسًا كاذبًا على الضمائر («بأيٍّ تقصد الرابط أم المستودع؟»
+        # — توضيح وهمي ثبت حيًا في إنتاج 2026-11-03)
+        url_alias_map: Dict[str, List[str]] = {}
+        for _m in _URL_RE.finditer(text):
+            _before = text[: _m.start()].rstrip()
+            if _before:
+                _w = _before.split()[-1]
+                if _AR_DEF_NOUN_RE.match(_w):
+                    url_alias_map.setdefault(_m.group(0), []).append(_w)
+            _after = text[_m.end():].lstrip()
+            if _after:
+                _w = _after.split()[0]
+                if _AR_DEF_NOUN_RE.match(_w):
+                    url_alias_map.setdefault(_m.group(0), []).append(_w)
+        _url_alias_tokens = {a for al in url_alias_map.values() for a in al}
+
         entities: List[Dict[str, Any]] = []
         references: List[Dict[str, Any]] = []
         ambiguities: List[Dict[str, Any]] = []
@@ -284,10 +318,13 @@ class SemanticAnalyzer:
                 "concept_key": None, "role": "object",
                 "gender": "unknown", "number": "sg", "definiteness": "def",
                 "pos": _u_pos,
+                # R-838.4: أسطح عطف البيان — تُستهلك في جدول الكيانات
+                "aliases": list(url_alias_map.get(_u) or []),
             })
 
         if _sc.has_arabic(text):
-            ar_entities, ar_refs, ar_amb = self._analyze_arabic(tokens, text)
+            ar_entities, ar_refs, ar_amb = self._analyze_arabic(
+                tokens, text, url_aliases=_url_alias_tokens)
             ar_refs, ar_amb = self._analyze_arabic_post(ar_refs, ar_entities, ar_amb)
             entities.extend(ar_entities)
             references.extend(ar_refs)
@@ -327,7 +364,8 @@ class SemanticAnalyzer:
         }
 
     # ------------------------------------------------------------------
-    def _analyze_arabic(self, tokens: List[str], text: str):
+    def _analyze_arabic(self, tokens: List[str], text: str,
+                        url_aliases: Optional[set] = None):
         entities: List[Dict[str, Any]] = []
         references: List[Dict[str, Any]] = []
         ambiguities: List[Dict[str, Any]] = []
@@ -474,7 +512,14 @@ class SemanticAnalyzer:
                 continue
 
             # ٧) اسم عربي عام (معرف أو نكرة أول ذكر — التنكير يخدم الإحالة لاحقًا)
-            if len(base) >= 3:
+            # R-838.4: الاسم المعرف الملاصق للرابط ليس كيانًا — عطف بيان
+            # يُستهلك سطحًا لكيان الرابط في جدول الكيانات
+            # R-838.4: الاسم الخطابي بضمير مخاطب («سؤالك») إشارة إلى المحادثة
+            # نفسها — ليس كيانًا ينافس مرجع الحوار الحقيقي على الضمائر
+            if tok.endswith("ك") and base in _DISCOURSE_DEICTIC_AR:
+                continue
+            if len(base) >= 3 and not (url_aliases and (base in url_aliases
+                                                        or tok in url_aliases)):
                 entities.append({
                     "surface": base, "lang": "ar", "type": "unknown",
                     "role": role_now, "pos": self._cur_pos,
