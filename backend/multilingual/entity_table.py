@@ -19,6 +19,17 @@ from typing import Dict, List, Optional
 from . import lexicon as _lex
 from . import scripts as _sc
 
+# R-838.4: أسماء «الأشياء» التي يحتملها الرابط — اسم معرف منها في حوار
+# فيه كيان رابط (مرساة الحوار) هو سطح لمرساة الرابط لا كيان منافس:
+# «ماهو المشروع؟» بعد رابط مستودع — «المشروع» والرابط مرجع واحد
+# (وإلا وُلد توضيح وهمي لاحقًا: «بأيٍّ تقصد الرابط أم المشروع؟»)
+_ANCHOR_NOUN_AR = {"مشروع", "مستودع", "مستودعات", "رابط", "روابط", "موقع",
+                   "مواقع", "ريبو", "حساب", "منظمة", "منظمات", "شركة",
+                   "شركات", "فريق", "فرق", "نظام", "أنظمة", "انظمة", "أداة",
+                   "ادوات", "أدوات", "مكتبة", "مكتبات", "تطبيق", "تطبيقات",
+                   "خدمة", "خدمات", "صفحة", "صفحات", "ملف", "ملفات", "كود",
+                   "برنامج", "برامج", "باقة", "حزمة", "مستند"}
+
 # هوامش قرار الإحالة
 AMBIGUITY_MARGIN = 0.15
 MIN_RESOLVE_CONFIDENCE = 0.35
@@ -104,6 +115,11 @@ class EntityTable:
 
         - الاسم المعروف بكيان قائم ⇒ تحديث البروز والحداثة لا كيان جديد.
         - مفتاح مفهوم مشترك (معجم) ⇒ نفس الكيان عبر اللغات.
+        - R-838.4: اسم معرف يدل على «الشيء» الذي يحتمله الرابط (المشروع/
+          المستودع/الريبو…) في حوار فيه كيان رابط ⇒ سطح لمرساة الرابط لا
+          كيان منافس: «ماهو المشروع؟» بعد ذكر رابط — «المشروع» والرابط
+          مرجع واحد، لا كيانان يولدان لاحقًا توضيحًا وهميًا على الضمائر
+          («منهو منشؤه؟» ⇐ «بأيٍّ تقصد الرابط أم المشروع؟»).
         """
         surface = ent_data.get("surface", "")
         lang = ent_data.get("lang", "unknown")
@@ -112,6 +128,16 @@ class EntityTable:
         ent = self._find_by_surface(surface)
         if ent is None and ck:
             ent = self._find_by_concept(ck)
+        if ent is None and surface.startswith("ال") and len(surface) > 4 \
+                and surface[2:] in _ANCHOR_NOUN_AR:
+            anchor = next((e for e in self.entities.values()
+                           if e.type == "url" and e.discourse_state != "deleted"
+                           and e.first_turn <= turn), None)
+            if anchor is not None:
+                ent = anchor
+                ent.surfaces.setdefault("ar", [])
+                if surface not in ent.surfaces["ar"]:
+                    ent.surfaces["ar"].append(surface)
         if ent is None:
             ent = Entity(id=f"e{self._next_id}", type=ent_data.get("type", "unknown"),
                          concept_key=ck)
@@ -123,6 +149,15 @@ class EntityTable:
         ent.surfaces.setdefault(lang, [])
         if surface not in ent.surfaces[lang]:
             ent.surfaces[lang].append(surface)
+        # R-838.4: أسطح عطف البيان — الاسم المعرف الملاصق للرابط (قبله أو
+        # بعده مباشرة في الرسالة نفسها) سطح آخر لكيان الرابط لا كيان منافس:
+        # «شرح مفصل عن المستودع <الرابط>» مرجع واحد، فلا يولد لاحقًا تنافس
+        # كاذب على الضمائر (توضيح وهمي «بأيٍّ تقصد الرابط أم المستودع؟»)
+        for alias in ent_data.get("aliases") or []:
+            if isinstance(alias, str) and alias:
+                ent.surfaces.setdefault("ar", [])
+                if alias not in ent.surfaces["ar"]:
+                    ent.surfaces["ar"].append(alias)
         # أسطح المعجم بكل اللغات (مرادفات عبر اللغات)
         if ck:
             for l, surs in _lex.all_langs_for(ck).items():
@@ -244,6 +279,12 @@ class EntityTable:
                 # وحده («المكتب» لا يفوز بـ«هو» على أحمد وخالد المتنافسين)
                 if getattr(ent, "definite", False):
                     score += 0.15 * min(1.0, ent.salience / 3.0)
+                # R-838.4: مرساة الحوار — كيان الرابط موضوع الحوار الصريح،
+                # والضمائر تفضل مركز الحوار (Centering) على المرشحين
+                # العرضيين («ما عمله؟» بعد رابط — «عمله» على المشروع لا على
+                # صفة عابرة مثل «مفصل» من «شرح مفصل»)
+                if ent.type == "url":
+                    score += 0.2
                 # ضمير حرف جر («عليه/فيها») أو مفعول متصل بفعل («راجعه»)
                 # ⇒ تفضيل الكيان الذي دوره مفعول (براغماتيا عربية)
                 if (ref.get("prep") or ref.get("attached_to") == "verb") \
