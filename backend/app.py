@@ -3449,14 +3449,26 @@ async def chat(message: ChatMessage, background_tasks: BackgroundTasks):
         if turn.role == "user" and enforce_input_safety(turn.content, is_sovereign=False) is not None:
             continue
         history.append({"role": turn.role, "content": turn.content})
-    # R-824 (أمر المالك: «المشروع ينسى سياق المحادثة»): المتابعة تُحل إلى سؤال مكتمل حتميًا —
-    # الجسر والبحث العالمي والوسائط ترى «كم عدد سكان اليابان» لا «وكم عدد سكانها» وحدها
+    # R-838 (المعمارية متعددة اللغات): النواة الدلالية — فهم من النص الأصلي بلا
+    # ترجمة وسيطة: كشف اللغة على مستوى المقطع، تقسيم تبديل الشيفرة، إطار دلالي
+    # (نية/كيانات/مراجع/علاقات خطابية)، جدول كيانات ومحرك إحالة (ضمائر منفصلة
+    # ومتصلة، حذف فاعل VSO، تعريف/تنكير، جمع/مثنى، أدوار فاعل/مفعول)، ذاكرة
+    # هرمية، واسترجاع عبر اللغات. التوافق العكسي محفوظ بالكامل: عقد
+    # {original, standalone, followup, kind} نفسه — والمحلل القديم R-824 صار
+    # احتياطًا لا مسارًا أساسيًا (خطة الترحيل في docs/MIGRATION_PLAN.md).
+    _semantic = None
     try:
-        import context_resolver
-        resolved = context_resolver.resolve(message.text, history)
-    except Exception as e:  # TOLERATED: بلا محلل ⇒ الرسالة كما هي (يُسجل)
-        logger.warning("R-824: تعذر حل السياق (%s)", type(e).__name__)
-        resolved = {"original": message.text, "standalone": message.text, "followup": False, "kind": "none"}
+        import multilingual
+        _semantic = multilingual.resolve(message.text, history)
+        resolved = _semantic
+    except Exception as e:  # TOLERATED: بلا نواة دلالية ⇒ المحلل القديم ثم الخام
+        logger.warning("R-838: تعذر المسار الدلالي (%s)", type(e).__name__)
+        try:
+            import context_resolver
+            resolved = context_resolver.resolve(message.text, history)
+        except Exception as e2:  # TOLERATED: بلا محلل ⇒ الرسالة كما هي (يُسجل)
+            logger.warning("R-824: تعذر حل السياق (%s)", type(e2).__name__)
+            resolved = {"original": message.text, "standalone": message.text, "followup": False, "kind": "none"}
     eff_text = resolved.get("standalone") or message.text
     _resolved_q = eff_text if resolved.get("followup") and resolved.get("kind") != "prev_op" else None
 
@@ -3591,6 +3603,28 @@ async def chat(message: ChatMessage, background_tasks: BackgroundTasks):
                                  "brain_unreachable_fallback",
                                  "brain_unreachable_world_search", "world_search",  # R-823: جواب مستشهد من مصادر حقيقية
                                  "cloud_brain_general")  # R-824: عقل سحابي احتياطي معلن في الرد
+    # R-838: المدقق بعد التوليد (قبل الإرسال) — كل ضمير في الرد مربوط بجدول
+    # الكيانات، لا كيان غير مثبت (هلوسة كيان)، واتساق لغة الرد مع لغة المستخدم.
+    # الفشل ⇒ إصلاح آمن (سؤال توضيح واحد) أو تسجيل في التتبع — لا رد مكسور
+    # يخرج صامتًا. المدقق مكمّل: فشله يُسجل ولا يمنع الرد (TOLERATED).
+    try:
+        if _semantic is not None and _semantic.get("state") is not None:
+            import multilingual as _ml
+            _st = _semantic["state"]
+            _val = _ml.validate_reply(
+                reply, _semantic.get("frame", {}), _st.table, _st.last_user_lang,
+                active_entity_ids=list(_st.table.entities.keys()))
+            if not _val.passed:
+                logger.warning("R-838: المدقق البعدي رصد (%s)",
+                               [i.code for i in _val.issues])
+                if _val.repaired_reply:
+                    reply = _val.repaired_reply
+            # غموض مؤثر من المحلل الدلالي (مرجحان متقاربان) ⇒ سؤال توضيح واحد
+            _clar = _semantic.get("clarification")
+            if _clar and reply and _clar not in reply:
+                reply = f"{reply}\n\n{_clar}"
+    except Exception as e:  # TOLERATED: التحقق مكمّل — فشله يُسجل ولا يسقط الرد
+        logger.warning("R-838: تعذر التحقق البعدي (%s)", type(e).__name__)
     return ChatResponse(
         reply=reply,
         status="ok" if (result.success and _agent_ok) else "error",
