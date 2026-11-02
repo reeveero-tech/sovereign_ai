@@ -79,8 +79,15 @@ def plain(text: str) -> str:
     return re.sub(r"\n{3,}", "\n\n", t).strip()
 
 
-def chat(system: str, user: str, history=None, max_tokens: int = 1400) -> Optional[str]:
-    """نداء واحد — نص المساعد أو None (معطّل/محدود المعدل/فشل)."""
+def chat(system: str, user: str, history=None, max_tokens: int = 1400,
+         json_mode: bool = False) -> Optional[str]:
+    """نداء واحد — نص المساعد أو None (معطّل/محدود المعدل/فشل).
+
+    R-833: json_mode=True يضيف response_format (كائن JSON) للطلب — لمخططي
+    الحلقة (CloudPlanner/ChatPlanner) الذين يريدون خطوة JSON مقيدة؛ إن رفض
+    المزود الصيغة (HTTP 400) يُعاد النداء بلاها (النظام يفرض JSON بالنص
+    ويستخرجه _extract_json) — لا فشل كامل لسبب تنسيقي.
+    """
     global _NEXT_ALLOWED, _LAST
     if not enabled():
         return None
@@ -103,12 +110,20 @@ def chat(system: str, user: str, history=None, max_tokens: int = 1400) -> Option
         headers = {"Content-Type": "application/json"}
         if _env("CLOUD_BRAIN_API_KEY"):
             headers["Authorization"] = "Bearer " + _env("CLOUD_BRAIN_API_KEY")
-        try:
+        def _post(body):
             import httpx
             timeout = float(_env("CLOUD_BRAIN_TIMEOUT_SECONDS", "60"))
             with httpx.Client(timeout=httpx.Timeout(timeout, connect=8.0)) as c:
-                r = c.post(_env("CLOUD_BRAIN_URL", DEFAULT_URL), headers=headers,
-                           json={"model": model(), "messages": msgs, "max_tokens": int(max_tokens)})
+                return c.post(_env("CLOUD_BRAIN_URL", DEFAULT_URL), headers=headers, json=body)
+
+        body = {"model": model(), "messages": msgs, "max_tokens": int(max_tokens)}
+        if json_mode:  # R-833: عقد JSON للمخططين — يُسقط عند رفض المزود (400)
+            body["response_format"] = {"type": "json_object"}
+        try:
+            r = _post(body)
+            if r.status_code == 400 and json_mode:
+                body.pop("response_format", None)
+                r = _post(body)
             if r.status_code in (402, 429):
                 m = _RETRY.search(r.text or "")
                 _NEXT_ALLOWED = time.time() + (int(m.group(1)) + 1 if m else _min_interval())

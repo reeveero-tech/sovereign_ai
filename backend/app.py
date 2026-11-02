@@ -2885,11 +2885,21 @@ def _chat_answer_without_brain(text: str, history, resolved: Dict[str, Any]):
 
 def _chat_agent_mode() -> bool:
     """R-789: المحادثة عبر حلقة الوكيل حين يكون العقل مفعّلًا (CHAT_AGENT_MODE=0 يعيد المسار
-    القديم صراحةً). بلا عقل يبقى المسار القائم كما هو."""
+    القديم صراحةً). بلا عقل يبقى المسار القائم كما هو.
+
+    R-833: العقل السحابي الاحتياطي مفعّل ⇒ وضع الوكيل متاح حتى مع تعذر العقل
+    الأساسي (المخطط السحابي يخطط) — لا موت المحادثة الوكيلة بتعذر عقل واحد.
+    """
     if str(os.getenv("CHAT_AGENT_MODE", "1")).strip().lower() in ("0", "false", "no", "off"):
         return False
     import chat_agent
-    return chat_agent.brain_enabled()
+    if chat_agent.brain_enabled():
+        return True
+    try:
+        import cloud_brain
+        return cloud_brain.enabled()
+    except Exception:  # TOLERATED: بلا عقل سحابي يبقى شرط العقل الأساسي
+        return False
 
 
 def _github_repo_tool(url: str = "", repo: str = "", **_ignored) -> str:
@@ -3480,7 +3490,15 @@ async def chat(message: ChatMessage, background_tasks: BackgroundTasks):
     direct_reply = None
     # R-822: العقل مفعّل لكن غير قابل للوصول (مزلاج R-821 مفتوح) ⇒ وضع الوكيل
     # لا يُجرَّب أصلًا — المحادثة تمر بالجسر الحتمي (أدوات حقيقية: GitHub/روابط/جرد)
-    _use_agent = _chat_agent_mode() and not _brain_unreachable_now()
+    # R-833: إلا إذا كان العقل السحابي الاحتياطي مفعّلًا — فيخطط هو (المخطط
+    # يعلن هويته) ولا تموت المحادثة الوكيلة بتعذر العقل الأساسي.
+    _cloud_brain_ok = False
+    try:
+        import cloud_brain
+        _cloud_brain_ok = cloud_brain.enabled()
+    except Exception:  # TOLERATED: بلا عقل سحابي يبقى السلوك الأصلي
+        pass
+    _use_agent = _chat_agent_mode() and (not _brain_unreachable_now() or _cloud_brain_ok)
 
     async def _run_bridge():
         try:

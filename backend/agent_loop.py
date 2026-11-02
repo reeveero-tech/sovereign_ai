@@ -151,6 +151,85 @@ class BrainPlanner:
         return _extract_json(reply)
 
 
+class CloudPlanner:
+    """R-833: مخطط العقل السحابي الاحتياطي (cloud_brain) — حين يتعذر العقل
+    الأساسي (Ollama على شبكة خاصة لا تصلها السحابة، أو انتهت مهلته).
+
+    نفس عقد BrainPlanner حرفيًا: JSON مقيّد بمخطط الخطوة وأسماء الأدوات
+    المسجلة فعلًا (لا اختراع أداة)، والتغذية الراجعة التصحيحية، والفشل
+    الصادق PlannerError لا تظاهر بالتخطيط. يعلن نفسه kind="cloud" في نتيجة
+    الجولة (planner) — لا انتحال اسم العقل الأساسي.
+    """
+
+    kind = "cloud"
+    accepts_feedback = True  # R-765: نفس آلية تصحيح الخطوات المرفوضة
+
+    def __init__(self, timeout: Optional[float] = None):
+        self.timeout = timeout  # مهلة نداء السحابة يضبطها cloud_brain نفسه
+
+    def next_step(self, goal: str, tools: List[Dict[str, Any]],
+                  history: List[Dict[str, Any]],
+                  feedback: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
+        import cloud_brain
+        if not cloud_brain.enabled():
+            raise PlannerError("العقل السحابي الاحتياطي معطل (CLOUD_BRAIN_ENABLED) — لا تخطيط")
+        catalog = [{"name": t["name"], "description": t.get("description", ""),
+                    "inputs": t.get("inputs", {})} for t in tools]
+        hist = [{"tool": h.get("tool"), "inputs": h.get("inputs"), "ok": h.get("ok"),
+                 "verified": h.get("verified"), "result": h.get("result"),
+                 "error": h.get("error")} for h in history]
+        payload = {"goal": goal, "tool_names": [t["name"] for t in tools],
+                   "tools": catalog, "history": hist}
+        if feedback:
+            payload["rejected"] = feedback
+        user = json.dumps(payload, ensure_ascii=False, default=str)[:12000]
+        # عقد JSON مقيّد — والاستخراج بـ _extract_json يصمد لو سبق النصَ شرح
+        reply = cloud_brain.chat(_SYSTEM, user, max_tokens=PLANNER_MAX_TOKENS,
+                                 json_mode=True)
+        if reply is None:
+            raise PlannerError("العقل السحابي الاحتياطي لم يرد (تعطل/حد معدل) — لا تخطيط")
+        return _extract_json(reply)
+
+
+class FallbackPlanner:
+    """R-833: العقل الأساسي أولًا فإن تعذر فالعقل السحابي الاحتياطي يخطط —
+    حلقة الوكيل لا تموت بتعذر عقل واحد (أمر المالك: تقوية الوكلاء وربطهم).
+
+    - فشل الأساسي بـ PlannerError (غير متاح/انتهت مهلته) ⇒ الاحتياطي يخطط.
+    - أي استثناء آخر يتصاعد كما هو — لا حجب خلل برمجي تحت مبرر الاحتياط.
+    - بعد أول قرار ناجح يثبت المخطط الفعلي لبقية الجولة (لا ارتجاج بين
+      مخططين في جولة واحدة) ويعلن kind الفعلي في نتيجة الجولة.
+    """
+
+    accepts_feedback = True
+
+    def __init__(self, primary, fallback):
+        self.primary = primary
+        self.fallback = fallback
+        self._active = None
+
+    @property
+    def kind(self) -> str:
+        if self._active is not None:
+            return getattr(self._active, "kind", "custom")
+        return (f"{getattr(self.primary, 'kind', '?')}"
+                f"+{getattr(self.fallback, 'kind', '?')}")
+
+    def next_step(self, goal: str, tools: List[Dict[str, Any]],
+                  history: List[Dict[str, Any]],
+                  feedback: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
+        if self._active is not None:
+            return self._active.next_step(goal, tools, history, feedback=feedback)
+        try:
+            step = self.primary.next_step(goal, tools, history, feedback=feedback)
+            self._active = self.primary
+            return step
+        except PlannerError:
+            step = self.fallback.next_step(goal, tools, history, feedback=feedback)
+            self._active = self.fallback
+            return step
+
+
 def verify(check: Dict[str, Any], invocation: Dict[str, Any]) -> bool:
     """٢.٢: هل الناتج يطابق الشرط؟ — لا خطوة تالية بلا فحص."""
     if not invocation.get("ok"):
@@ -331,6 +410,9 @@ class AgentLoop:
                     "failed_step": idx}
 
         res.update(status=status, **extra)
+        # R-833: هوية المخطط الفعلي عند النهاية — FallbackPlanner يعلن من خطط
+        # فعلًا (brain/cloud) بعد أول قرار، لا سلسلة الاحتمال عند البدء
+        res["planner"] = getattr(self.planner, "kind", res.get("planner") or "custom")
         res["rejected_steps"] = len(feedback)
         res["duration_s"] = round(self.clock() - start, 3)
         phase = {"completed": "finish", "cancelled": "cancelled"}.get(status, "stopped")
@@ -349,7 +431,13 @@ class AgentLoop:
 
 
 def run_goal(goal: str, max_steps: int = 8) -> Dict[str, Any]:
-    """مدخل أداة agent.run: العقل الحي مخططًا فوق السجل العام."""
+    """مدخل أداة agent.run: العقل الحي مخططًا فوق السجل العام.
+
+    R-833: فإن تعذر العقل الأساسي (عقل LAN خلف شبكة خاصة لا تصلها السحابة)
+    خطّط العقل السحابي الاحتياطي — أداة الوكيل لا تموت بتعذر عقل واحد،
+    وتُعلن هوية المخطط الفعلي في النتيجة (planner: brain أو cloud).
+    """
     from tool_registry import get_registry
-    return AgentLoop(get_registry(), BrainPlanner(),
+    planner = FallbackPlanner(BrainPlanner(), CloudPlanner())
+    return AgentLoop(get_registry(), planner,
                      max_steps=max(1, min(int(max_steps), 32))).run(goal)
