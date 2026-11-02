@@ -41,6 +41,8 @@ class Entity:
     last_role: str = "unknown"             # subject|object (للإحالة النحوية)
     # R-838: آخر ذكر (دور، موقع) — الإحالة لا تشير إلا لما قبلها
     last_mention: tuple = (-1, -1)
+    # R-838.1: معرف بـ«ال» — الضمير يحتاج مرجعًا معرفًا (مبدأ المعرفة)
+    definite: bool = False
     coreference_chain: List[Dict] = field(default_factory=list)
     provenance: Dict = field(default_factory=dict)  # {utterance_id, role, source}
 
@@ -141,6 +143,9 @@ class EntityTable:
             ent.type = ent_data["type"]
         if ent_data.get("role") in ("subject", "object"):
             ent.last_role = ent_data["role"]
+        # R-838.1: التعريف صفة دائمة — «المشروع» معرفة ولو ذُكرت نكرةً سابقًا
+        if ent_data.get("definiteness") == "def":
+            ent.definite = True
 
         ent.discourse_state = "active"
         ent.salience += 1.0
@@ -188,6 +193,18 @@ class EntityTable:
         مرشحان متقاربان ⇒ غموض مسجل لا اختيار صامت (بروتوكول 5.2 خطوة 5-6).
         """
         candidates: List[tuple] = []
+        # R-838.1: ضمائر المتكلم/المخاطب (ني/ك/نا/كم…) لا تنافس كيانات
+        # الجدول أبدًا — تعود على المتكلم أو المخاطب مباشرة. إسنادها لكيان
+        # (كما حدث إنتاجيًا: «واعطني» نافست «بتحليل» و«المشروع») خطأ تصاعدي:
+        # ربط خاطئ يرفع بروز الكيان الخاطف ويخطف الإحالات التالية.
+        if ref.get("person") in ("1", "2"):
+            out = dict(ref)
+            out["candidate_entity_ids"] = []
+            out["resolved_id"] = None
+            out["confidence"] = 0.9
+            out["ambiguous"] = False
+            out["resolved_to"] = "speaker" if ref.get("person") == "1" else "listener"
+            return out
         # R-838: اتجاه الإحالة — الضمير/الإشارة لا تشير إلا لكيان ذُكر قبلها
         # («هل هو جاهز للانتاج؟» — «للانتاج» بعد الضمير لا يخطفه). مرتان:
         # صارمة أولًا، وإن خلت فبلا فلتر الاتجاه (لا نقتل الحل كله).
@@ -207,16 +224,36 @@ class EntityTable:
                 if not self._agreement_ok(ent, ref):
                     continue
                 recency = 1.0 / (1 + max(0, self.turn - ent.last_turn))
+                # R-838.1: الحداثة داخل الدور الواحد موقعية — تُستبدل لا تُدمى
+                # (حداثة الدور 1.0 للجميع؛ الفاصل موقعه من الضمير):
+                # «بتحليل المشروع واستكشافه» — الضمير على المشروع المفعول
+                # المباشر الأقرب، لا على «بتحليل» الأبعد. والمذكور السابق
+                # مباشرة هو الافتراضي البراغماتي (+0.3).
+                _pos_bonus = 0.0
+                if ref_pos is not None and ent.last_mention \
+                        and ent.last_mention[0] == self.turn:
+                    _dist = ref_pos - ent.last_mention[1]
+                    if _dist > 0:
+                        recency = 1.0 / (1 + _dist)
+                        if _dist == 1:
+                            _pos_bonus = 0.3
                 sal = min(1.0, ent.salience / 5.0)
-                score = 0.45 * sal + 0.35 * recency + 0.2 * (0.6 if ent.discourse_state == "active" else 0.2)
+                score = 0.45 * sal + 0.35 * recency + 0.2 * (0.6 if ent.discourse_state == "active" else 0.2) + _pos_bonus
+                # R-838.1: المعرفة خير مرجع — لكن تزداد قيمتها بثراء الكيان في
+                # الخطاب (بروزه): نكرة حديثة لا تخطف الضمير بتعريفها اللغوي
+                # وحده («المكتب» لا يفوز بـ«هو» على أحمد وخالد المتنافسين)
+                if getattr(ent, "definite", False):
+                    score += 0.15 * min(1.0, ent.salience / 3.0)
                 # ضمير حرف جر («عليه/فيها») أو مفعول متصل بفعل («راجعه»)
                 # ⇒ تفضيل الكيان الذي دوره مفعول (براغماتيا عربية)
                 if (ref.get("prep") or ref.get("attached_to") == "verb") \
                         and ent.last_role == "object":
                     score += 0.5
                 # حذف الفاعل: الفاعل المحذوف وكيل — يُفضل الكيان الذي دوره فاعل
+                # R-838.1: عُزز 0.4→0.6 — مفعول مُخدوم حديثًا بضمير (بروز +1.5)
+                # لا يهزم استرجاع الفاعل («راجعه» فاعلها أحمد لا التقرير)
                 if ref.get("type") == "ellipsis" and ent.last_role == "subject":
-                    score += 0.4
+                    score += 0.6
                 # مرشح بضد الاسم المذكور صراحة في الإحالة (definite_np)
                 if ref.get("type") == "definite_np" and ref.get("surface_norm"):
                     if ref["surface_norm"] in {_sc.norm_for_match(s) for s in ent.all_surfaces()}:
