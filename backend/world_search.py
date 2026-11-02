@@ -1027,9 +1027,12 @@ _FRESH = re.compile(
     r"fiyat|haber|сегодня|сейчас|цена|новости|今天|现在|价格|新闻|今日|現在|価格|ニュース|오늘|지금|가격|뉴스|"
     r"\bhari ini\b|\bharga\b|امروز|قیمت|آج|قیمت", re.I)
 _TECH = re.compile(
-    r"برمج|كود|بايثون|جافا|خطأ برمجي|مكتبة|\b(?:python|javascript|typescript|java|rust|golang|c\+\+|c#|sql|"
+    r"برمج|كود|بايثون|جافا|خطأ برمجي|مكتبة|تكنولوج|تقني|ذكاء ?(?:ال)?اصطناع|ذكاءً اصطناعيً|روبوت|حاسوب|كمبيوتر|"
+    r"انترنت|إنترنت|شبك(?:ة|ات) عصبية|تعلم آلي|تعلم الآلة|نموذج لغوي|نماذج لغوية|سوفتوير|\bsoftware\b|"
+    r"\b(?:python|javascript|typescript|java|rust|golang|c\+\+|c#|sql|"
     r"api|bug|error|exception|library|framework|react|docker|kubernetes|linux|git|npm|pip|code|"
-    r"programming|compile|regex|llm|ai model|gpu)\b", re.I)
+    r"programming|compile|regex|llm|ai model|gpu|artificial intelligence|machine learning|"
+    r"deep learning|neural network|chatbot|hugging\s?face|openai|technology|tech)\b", re.I)
 
 
 def is_fresh(text: str) -> bool:
@@ -1341,7 +1344,7 @@ def engine_status() -> Dict[str, Any]:
                           "europepmc", "openalex", "stackoverflow", "hackernews", "index",
                           "duckduckgo", "marginalia", "owner-provider",
                           # R-826: المنصات والإجابات المباشرة
-                          "youtube", "github", "crossref", "arxiv", "semanticscholar", "openlibrary", "lemmy",
+                          "youtube", "github", "huggingface", "crossref", "arxiv", "semanticscholar", "openlibrary", "lemmy",
                           "stackexchange-<site>", "baidu", "quran", "instant-currency", "instant-metal",
                           "instant-crypto", "instant-weather", "instant-time",
                           # R-827
@@ -1802,7 +1805,7 @@ def answer(question: str, target_lang: Optional[str] = None, budget: Optional[fl
         "error": None if (points or news or platforms) else "لم يُعثر على جمل ذات صلة كافية في المصادر المتاحة",
         "method": ("تمييز المطلوب (نوع السؤال والدولة والعملة) ← إجابات مباشرة حية (صرف/ذهب/عملات رقمية/طقس/وقت) ← "
                    "بحث متعدد المزودات واللغات (Bing وأخبار Bing/Google وويكيبيديا وويكي بيانات والأبحاث "
-                   "المحكّمة وYouTube وGitHub وStack Exchange وLemmy وOpen Library وBaidu والقرآن الكريم والفهرس الذاتي) "
+                   "المحكّمة وYouTube وGitHub وHuggingFace وStack Exchange وLemmy وOpen Library وBaidu والقرآن الكريم والفهرس الذاتي) "
                    "← قراءة المصادر ← تقييم حتمي ("
                    + ("صلة ٤٠٪ + موثوقية ٢٥٪ + توافق ١٥٪ + حداثة ٢٠٪ — سؤال آني"
                       if fresh else "صلة BM25 وتغطية المفاهيم ٤٥٪ + موثوقية المصدر ٣٥٪ + توافق المصادر المستقلة ٢٠٪")

@@ -259,8 +259,13 @@ def _resolve_one(text: str, prev_standalone: Optional[str]) -> Dict[str, Any]:
         if new_ent and not any(_pron_word(w) or _pron_word_loose(w)
                                or w.strip("؟?!.،,") in _AR_PREP_PRON for w in new_ent.split()):
             if ent and ent in prev:
-                res.update(standalone=prev.replace(ent, new_ent, 1), followup=True, kind="entity_swap",
-                           entity=new_ent)
+                # R-837: ما بعد الكيان القديم وصفٌ له («سقوط طائرة **في فلوريدا**» ⇒ «في
+                # فلوريدا») لا ينتقل مع الكيان الجديد — التبديل يرث جوهر السؤال قبل الكيان
+                # فقط، فسؤال التكنولوجيا لا يبحث «في فلوريدا» وسؤال «باقي العالم» لا يرث
+                # موضوع الذكاء الاصطناعي السابق (من محادثة إنتاج رابعة أرسلها المالك).
+                head = prev[:prev.find(ent)].rstrip()
+                res.update(standalone=(f"{head} {new_ent}" if head else new_ent), followup=True,
+                           kind="entity_swap", entity=new_ent)
             else:
                 res.update(standalone=f"{prev} — {new_ent}", followup=True, kind="entity_swap", entity=new_ent)
             return res
