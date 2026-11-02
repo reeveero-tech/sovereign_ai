@@ -954,9 +954,11 @@ class TestRealInitSecurity:
         item["encrypted_payload"] = _json.dumps(envelope)
         sem_file.write_text(_json.dumps(items_data), encoding="utf-8")
         # إعادة فتح المخزن من القرص بعد التلاعب ثم القراءة المعتادة
-        store2 = self._make_real_store(tmp_path / "store_t", monkeypatch)
+        # R-831: العزل يوثق الرفض مرة واحدة لكل سجل عند التحميل (لا فيضان
+        # لكل query) — نلتقط توثيق الرفض من لحظة البناء نفسها
         caplog.clear()
         with caplog.at_level(logging.ERROR, logger="backend.memory.store"):
+            store2 = self._make_real_store(tmp_path / "store_t", monkeypatch)
             results = store2.query("semantic", min_importance=0.7)
         # 1) السجل المعدل مرفوض — لا يُعاد كبيانات سليمة
         accepted = [r for r in results
