@@ -51,6 +51,19 @@ _EN_PROPS = (
     "features", "uses", "weather", "climate", "economy", "flag", "cities", "borders", "religion",
 )
 _AR_PRON_SUFFIX = ("هما", "هم", "هن", "ها", "ه")
+# R-835: حرف جر + ضمير متصل («عليها/فيها/بها…») ⇒ الجار + الكيان السابق
+_AR_PREP_PRON = {
+    "عليها": "على", "عليه": "على", "عليهم": "على", "عليهما": "على",
+    "فيها": "في", "فيه": "في", "فيهم": "في", "فيهما": "في",
+    "بها": "ب", "به": "ب", "بهم": "ب", "بها": "ب",
+    "عنها": "عن", "عنه": "عن", "عنهم": "عن",
+    "منها": "من", "منه": "من", "منهم": "من",
+    "لها": "ل", "له": "ل", "لهم": "ل",
+    "إليها": "إلى", "اليها": "الى", "إليه": "إلى", "اليه": "الى",
+    "معها": "مع", "معه": "مع", "معهم": "مع",
+    "عندها": "عند", "عنده": "عند", "عند هم": "عند",
+    "حولها": "حول", "حوله": "حول",
+}
 _EN_PRONOUNS = {"it", "its", "they", "their", "them", "there", "he", "she", "his", "her", "this", "that"}
 # R-834: ضمائر فصل مستقلة تشير للكيان السابق («هل هو جاهز؟» — الهو/هي/هذا/ذلك)
 _BARE_PRON_AR = re.compile(r"^(?:هو|هي|هذا|هذه|ذلك|تلك)$")
@@ -125,11 +138,34 @@ def _pron_word(w: str) -> Optional[str]:
     return None
 
 
+def _pron_word_loose(w: str) -> Optional[str]:
+    """R-835: كلمة عربية بضمير متصل لأي اسم لا فقط الخاصيات المعروفة
+    (جهوزيته ⇒ جهوزية، حاله ⇒ حال، مشاكله ⇒ مشاكل) — بلا كلمات السؤال/الحروف.
+
+    حارس الأمان: الجذع ≥3 أحرف (يمنع «به/له/فيه») وليس كلمة سؤال/ربط ولو
+    بتبديل الياء ألفًا («عليها» ⇒ علي ⇒ على ⇒ ممنوع)؛ الضمير المستقل
+    (هو/هذا) كلمة وقف أصلًا فلا يلمسها القاعدة."""
+    if not _is_ar(w) or w in _AR_STOP:
+        return None
+    base = w[1:] if w.startswith("و") and len(w) > 4 else w
+    for suf in _AR_PRON_SUFFIX:
+        if base.endswith(suf) and len(base) - len(suf) >= 3:
+            stem = base[: -len(suf)]
+            probe = (stem[2:] if stem.startswith("ال") and len(stem) > 4 else stem)
+            if probe in _AR_STOP or probe.replace("ي", "ى") in _AR_STOP:
+                return None
+            if stem.endswith("ت") and len(stem) > 3:
+                stem = stem[:-1] + "ة"
+            return stem
+    return None
+
+
 def entity_of(question: str) -> str:
     """الكيان المسؤول عنه في سؤال مكتمل: ما يبقى بعد حذف أدوات السؤال وكلمات الخصائص."""
     # R-834: رابط/مستودع GitHub في الرسالة هو الكيان المسؤول عنه حرفيًا — لا يُقصّ
     # بكلمات السؤال («المشروع المرفق <الرابط>» كان يُستخرج منه «معلومات كامله»!)
-    m = re.search(r"github\.com/[\w.\-]+/[\w.\-]+", question) \
+    # R-835: بالمخطط إن وُجد — تبديل الكيان يستبدل الرابط كاملًا لا يترك https:// معلقًا.
+    m = re.search(r"(?:https?://)?github\.com/[\w.\-]+/[\w.\-]+", question) \
         or re.search(r"https?://\S+", question)
     if m:
         return m.group(0).rstrip("؟?!.،,")
@@ -218,7 +254,10 @@ def _resolve_one(text: str, prev_standalone: Optional[str]) -> Dict[str, Any]:
     m = _SWAP_AR.match(body) or _SWAP_EN.match(body)
     if m and len(words) <= 7:
         new_ent = _strip_end(m.group(1))
-        if new_ent and not any(_pron_word(w) for w in new_ent.split()):
+        # R-835: «ماذا تعرف عليها؟» ليست تبديل كيان — كيان جديد لا يحمل ضميرًا
+        # متصلًا (خاصية أو أي اسم أو جارًّا)؛ الضمير إشارة للسابق لا كيان جديد.
+        if new_ent and not any(_pron_word(w) or _pron_word_loose(w)
+                               or w.strip("؟?!.،,") in _AR_PREP_PRON for w in new_ent.split()):
             if ent and ent in prev:
                 res.update(standalone=prev.replace(ent, new_ent, 1), followup=True, kind="entity_swap",
                            entity=new_ent)
@@ -241,6 +280,28 @@ def _resolve_one(text: str, prev_standalone: Optional[str]) -> Dict[str, Any]:
         s = _LEAD_AND_AR.sub("", s).strip()
         res.update(standalone=s, followup=True, kind="pronoun", entity=ent)
         return res
+    # ٣ج) R-835: ضمير متصل بكلمة أي اسم لا خاصية معروفة فقط — «ما مدى جهوزيته
+    # للانتاج؟» بعد نقاش مستودع ظل خامًا (جهوزية ليست في قوائم الخاصيات) فبحث
+    # العالمي عن «production readiness» عامًا وأجاب عن طعام إنتاجي (ثُبت حيًا).
+    # سؤال عربي قصير + كيان سابق ⇒ الضمير المتصل يُستبدل بالكيان كما في ٣.
+    if _is_ar(body) and ent and len(words) <= 8:
+        out, seen = [], False
+        for w in words:
+            prep = _AR_PREP_PRON.get(w.strip("؟?!.،,"))
+            if prep:  # R-835: «عليها/فيها…» ⇒ الجار + الكيان
+                out.append(f"{prep} {ent}")
+                seen = True
+                continue
+            stem = _pron_word_loose(w)
+            if stem:
+                out.append(f"{stem} {ent}")
+                seen = True
+            else:
+                out.append(w)
+        if seen:
+            s = _LEAD_AND_AR.sub("", " ".join(out)).strip()
+            res.update(standalone=s, followup=True, kind="pronoun", entity=ent)
+            return res
     # ٣ب) ضمير فصل مستقل (عربي) — «هل هو جاهز للإنتاج؟»: الهو/هي/هذا/ذلك
     # فصل يشير للكيان السابق، لا «ما هو/من هو» (صيغة سؤال لا إشارة كيان)
     if _is_ar(body) and ent and len(words) <= 12 \
