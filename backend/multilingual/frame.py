@@ -57,6 +57,9 @@ _ATTACHED_PRON_AR: List[Tuple[str, Dict[str, str]]] = [
     ("ها", {"person": "3", "gender": "f", "number": "sg"}),
     ("ه", {"person": "3", "gender": "m", "number": "sg"}),
     ("ك", {"person": "2", "gender": "unknown", "number": "sg"}),
+    # R-838.1: «ني» مفعول المتكلم تُفحص قبل «ي» — وإلا قُطع الفعل
+    # («واعطني» ⇒ «واعطن» كيان مشوه). نفس خصائص المتكلم المفرد.
+    ("ني", {"person": "1", "gender": "unknown", "number": "sg"}),
     ("ي", {"person": "1", "gender": "unknown", "number": "sg"}),
 ]
 
@@ -201,6 +204,11 @@ for _r in _AR_VERB_ROOTS:
 for _r in _AR_VERB_ROOTS:
     for _p in ("ت", "ي", "أ", "ن"):
         _AR_VERBS.add(_p + _r)
+# R-838.1: جذور تنتهي بألف مقصورة — صيغة الأمر بعد نزع «ني»
+# («اعطني» = أمر + مفعول المتكلم، لا اسم «واعطن» مشوه)
+for _r in _AR_VERB_ROOTS:
+    if _r.endswith(("ى", "ي", "ا")) and len(_r) > 3:
+        _AR_VERBS.add(_r[:-1])
 _AR_VERBS |= {"يوجد", "توجد", "يعمل", "تعمل", "أعمل", "نقول", "يقول", "أقول",
               "أستخدم", "تستخدم", "نستخدم", "يستخدم", "أحتاج", "تحتاج", "نحتاج",
               "يحتاج", "يرسل", "ترسل", "نرسل", "يستطيع", "تستطيع", "أستطيع"}
@@ -374,7 +382,10 @@ class SemanticAnalyzer:
             #     (ب) إن كان أول كلمة محتوى بلا فاعل قبلها ⇒ حذف فاعل
             # R-838: «تعجبني» = فعل + مفعول «ني» — الجذر بعد نزع «ني» فعل
             # معروف ⇒ فعل لا اسم (وإلا لَصِقَ الضمير خطأً وقُطِع الفعل)
-            _stem_ni = base[:-2] if base.endswith("ني") else None
+            # R-838.1: «واعطني» = و+فعل أمر+«ني» — تُختبر سابقة العطف
+            # مع الجذر قبل الحكم (وإلا بقيت «واعطن» كيانًا مشوهًا)
+            _verb_cand = base[1:] if base[:1] in ("و", "ف") and len(base) > 3 else base
+            _stem_ni = _verb_cand[:-2] if _verb_cand.endswith("ني") else None
             if base in _AR_VERBS or nb in _normset(_AR_VERBS) or (
                 _stem_ni and (_stem_ni in _AR_VERBS
                               or _sc.norm_for_match(_stem_ni) in _normset(_AR_VERBS))):
