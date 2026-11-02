@@ -524,7 +524,7 @@
     }).catch(function (err) {
       clearInterval(tick); pend.remove();
       var node = bubble({ role: "assistant", content: err.message }, { error: true, retry: function () { node.remove(); send(text); } });
-    }).then(function () { setBusy(false); scrollDown(); input.focus(); });
+    }).then(function () { setBusy(false); scrollDown(); input.focus(); checkStatus(); });  // R-832: تحديث حالة العقل فورًا بعد كل رد — فشل الوصول يظهر في الحال لا بعد 30ث
   }
   function autosize() { input.style.height = "auto"; input.style.height = Math.min(input.scrollHeight, 220) + "px"; }
   input.addEventListener("input", autosize);
