@@ -5,7 +5,7 @@ NexusCore — حاسبة المخاطر
 import logging
 import time
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 logger = logging.getLogger("nexus.decision.risk")
 

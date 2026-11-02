@@ -31,20 +31,18 @@ except ImportError:  # pragma: no cover
 import time
 import threading
 import runtime.threads as threads
-import random
 import base64
-from dataclasses import dataclass, field
-from typing import Dict, Any, Optional, List, Tuple, Set
+from dataclasses import dataclass
+from typing import Dict, Any, Optional, List
 from enum import Enum
-from pathlib import Path
 
 try:
-    from ..core import get_core, EventType, IntegrityStatus
+    from ..core import get_core
     from ..encoding import get_encoder
     from ...config import DATA_DIR, SOVEREIGN_KEY  # LEGACY-ROOT-KEY (read-only): المسارات التاريخية والبصمة فقط
     from .watcher import get_watcher
 except ImportError:
-    from memory.core import get_core, EventType, IntegrityStatus
+    from memory.core import get_core
     from memory.encoding import get_encoder
     from config import DATA_DIR, SOVEREIGN_KEY  # LEGACY-ROOT-KEY (read-only)
     from memory.defense.watcher import get_watcher
@@ -1237,8 +1235,9 @@ class RansomwareDefense:
                 try:
                     encrypted = latest.read_bytes()
                 except OSError as e:
+                    # R-830: إحياء «e» — سبب فشل القراءة جزء من أثر التشخيص
                     logger.exception(
-                        f"R-682 [SECURITY]: failed reading seed file {latest}"
+                        f"R-682 [SECURITY]: failed reading seed file {latest} ({e})"
                     )
                     return None
                 # معرف البذرة من اسم الملف — يتيح الاشتقاق الحتمي للمفتاح

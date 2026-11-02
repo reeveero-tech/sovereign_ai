@@ -12,7 +12,7 @@ import time
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 # R-611: تثبيت المسارات على جذر المستودع — تعمل من أي دليل عمل
 import os as _os

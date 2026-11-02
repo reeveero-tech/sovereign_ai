@@ -22,18 +22,16 @@ import heapq
 import threading
 import runtime.threads as threads
 from collections import deque, defaultdict
-from dataclasses import dataclass, field, asdict
-from typing import Any, Deque, Dict, List, Optional, Tuple, Set, Callable
+from dataclasses import dataclass
+from typing import Any, Deque, Dict, List, Optional, Tuple, Callable
 from enum import Enum
-from datetime import datetime
-import random
 
 try:
-    from ..core import get_core, EventType
+    from ..core import get_core
     from ..views import get_views
     from ..store import get_store
 except ImportError:
-    from memory.core import get_core, EventType
+    from memory.core import get_core
     from memory.views import get_views
     from memory.store import get_store
 

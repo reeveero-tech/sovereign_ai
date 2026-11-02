@@ -22,11 +22,11 @@ import threading
 import runtime.threads as threads
 import random
 import secrets
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Dict, Any, List, Optional
 
 try:
-    from ..memory.core import get_core, EventType
+    from ..memory.core import get_core
     from ..memory.biological.instincts import get_instincts
     from ..memory.biological.drives import get_drives
     from .will import get_sovereign_will
@@ -37,7 +37,7 @@ try:
     from ..consciousness.attention_engine import get_attention_engine
     from ...config import DATA_DIR
 except ImportError:
-    from memory.core import get_core, EventType
+    from memory.core import get_core
     from memory.biological.instincts import get_instincts
     from memory.biological.drives import get_drives
     from .will import get_sovereign_will

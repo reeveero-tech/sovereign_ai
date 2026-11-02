@@ -17,26 +17,23 @@
 
 import json
 from runtime.atomic_json import atomic_write_json  # R-781
-import hashlib
 import time
 import threading
 import runtime.threads as threads
-import math
 import secrets
 import random
 import copy
-from dataclasses import dataclass, field
-from datetime import datetime
-from typing import Dict, Any, List, Optional, Tuple, Set
-from enum import Enum
+from dataclasses import dataclass
+
+from typing import Dict, Any, List, Optional, Tuple
 from collections import defaultdict
 import itertools
 
 try:
-    from ..memory.core import get_core, EventType
+    from ..memory.core import get_core
     from ...config import DATA_DIR
 except ImportError:
-    from memory.core import get_core, EventType
+    from memory.core import get_core
     from config import DATA_DIR
 
 import logging

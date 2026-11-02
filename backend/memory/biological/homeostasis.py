@@ -20,18 +20,14 @@ from runtime.atomic_json import atomic_write_json  # R-781
 import time
 import threading
 import runtime.threads as threads
-import math
-import random
-from dataclasses import dataclass, field
-from datetime import datetime
-from typing import Dict, Any, List, Optional, Tuple, Set
-from enum import Enum
+from dataclasses import dataclass
+from typing import Dict, Any, List, Optional, Tuple
 from collections import deque
 import numpy as np
 
 try:
-    from ..core import get_core, IntegrityStatus
-    from ..store import get_store, MemoryKind
+    from ..core import get_core
+    from ..store import get_store
     from ..dynamic import get_dynamic_memory
     from ..defense.watcher import get_watcher
     from .metabolism import get_metabolism
@@ -41,8 +37,8 @@ try:
     from .forgetting import get_forgetting
     from ...config import DATA_DIR
 except ImportError:
-    from memory.core import get_core, IntegrityStatus
-    from memory.store import get_store, MemoryKind
+    from memory.core import get_core
+    from memory.store import get_store
     from memory.dynamic import get_dynamic_memory
     from memory.defense.watcher import get_watcher
     from memory.biological.metabolism import get_metabolism

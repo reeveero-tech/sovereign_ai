@@ -8,7 +8,7 @@ import json
 import logging
 import time
 from dataclasses import dataclass
-from typing import Any, Dict, Generator, List, Optional
+from typing import Dict, Generator, List
 
 logger = logging.getLogger("nexus.connectors.data")
 

@@ -24,11 +24,10 @@ import random
 import secrets
 from dataclasses import dataclass
 from typing import Dict, Any, List, Optional
-from collections import defaultdict
 
 try:
-    from ..memory.core import get_core, EventType
-    from ..memory.biological.instincts import get_instincts, SacredInstinct
+    from ..memory.core import get_core
+    from ..memory.biological.instincts import get_instincts
     from ..memory.biological.drives import get_drives
     from ..memory.biological.archetypes import get_archetypes
     from ..consciousness.identity_core import get_identity_core
@@ -37,8 +36,8 @@ try:
     from ..consciousness.introspection import get_introspection_engine
     from ...config import DATA_DIR
 except ImportError:
-    from memory.core import get_core, EventType
-    from memory.biological.instincts import get_instincts, SacredInstinct
+    from memory.core import get_core
+    from memory.biological.instincts import get_instincts
     from memory.biological.drives import get_drives
     from memory.biological.archetypes import get_archetypes
     from consciousness.identity_core import get_identity_core

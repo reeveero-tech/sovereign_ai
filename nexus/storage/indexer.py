@@ -7,7 +7,7 @@ import re
 import time
 from collections import defaultdict
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Set
+from typing import Dict, List, Optional, Set
 
 logger = logging.getLogger("nexus.storage.indexer")
 

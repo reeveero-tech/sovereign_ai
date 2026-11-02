@@ -626,7 +626,7 @@ def test_guard_catches_mutual_import_pair():
     """مسبار عدائي (الجولة <2> — اعتراض المراجع بصير): ملفان يستورد أحدهما
     الآخر ولا تصل إليهما أي نقطة دخول — الحارس الحالي يقيس «له مستورِد»
     لا «قابل للوصول من نقطة دخول». الزوج المعزول وحدة ميتة يجب كشفها."""
-    import shutil
+
     probe_a = _REPO_ROOT / "_orphan_probe_pair_a.py"
     probe_b = _REPO_ROOT / "_orphan_probe_pair_b.py"
     probe_a.write_text("import _orphan_probe_pair_b\n", encoding="utf-8")

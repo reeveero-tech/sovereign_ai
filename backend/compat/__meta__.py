@@ -11,7 +11,7 @@
 # القاعدة الثانية: أي وحدة compat جديدة يجب أن تُضاف هنا مع معيار
 # إزالة واضح. الاختبار test_compat_sunset_criteria.py يفشل بدونها.
 
-from datetime import datetime, timezone
+
 from pathlib import Path
 
 # وقت إنشاء طبقة التوافق (أول التزام: 97ea6f1 — 2026-10-14)
@@ -196,7 +196,6 @@ def evaluate_pending_sunset(now: str, lifecycle=None, entries=None,
     الأصل. ساعة محقونة (now) للاختبار القبلي/البعدي.
     """
     from datetime import datetime, timedelta
-    from datetime import timezone as _tz
 
     if lifecycle is None:
         lifecycle = dict(COMPAT_LIFECYCLE)

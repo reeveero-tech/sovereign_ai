@@ -26,7 +26,7 @@ from dataclasses import dataclass
 from typing import Dict, Any, List, Optional
 
 try:
-    from ..memory.core import get_core, EventType
+    from ..memory.core import get_core
     from ..memory.biological.instincts import get_instincts
     from ..memory.biological.drives import get_drives
     from ..memory.biological.archetypes import get_archetypes
@@ -39,7 +39,7 @@ try:
     from .predictive_engine import get_predictive_engine
     from ...config import DATA_DIR
 except ImportError:
-    from memory.core import get_core, EventType
+    from memory.core import get_core
     from memory.biological.instincts import get_instincts
     from memory.biological.drives import get_drives
     from memory.biological.archetypes import get_archetypes

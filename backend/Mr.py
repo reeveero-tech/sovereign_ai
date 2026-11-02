@@ -33,7 +33,7 @@ import sys
 import threading
 import time
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 # جذر المستودع على مسار الاستيراد — لعمل السيناريوهات المعزولة من أي cwd
 _REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))

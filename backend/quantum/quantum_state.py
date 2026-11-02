@@ -27,10 +27,10 @@ from dataclasses import dataclass
 from typing import Dict, Any, List, Optional
 
 try:
-    from ..memory.core import get_core, EventType
+    from ..memory.core import get_core
     from ..config import DATA_DIR
 except ImportError:
-    from memory.core import get_core, EventType
+    from memory.core import get_core
     from config import DATA_DIR
 
 import logging

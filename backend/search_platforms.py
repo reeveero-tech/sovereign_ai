@@ -471,7 +471,7 @@ def instant_currency(codes: List[str], local: Optional[str], lang: str) -> List[
     when = time.strftime("%Y-%m-%d", time.gmtime(upd)) if upd else ""
     fact = ("سعر الصرف الحالي: " + "؛ ".join(parts) + f" (السعر المرجعي ليوم {when}؛ أسعار البنوك والصرافات تختلف قليلًا)."
             if lang == "ar" else "Current exchange rate: " + "; ".join(parts) + f" (reference rate of {when}; bank rates differ slightly).")
-    return [_src("currency", f"ExchangeRate-API — {base}", f"https://www.exchangerate-api.com/docs/free", fact, lang,
+    return [_src("currency", f"ExchangeRate-API — {base}", "https://www.exchangerate-api.com/docs/free", fact, lang,
                  _iso(upd) if upd else None)]
 
 

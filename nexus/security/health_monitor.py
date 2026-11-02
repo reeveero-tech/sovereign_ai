@@ -3,11 +3,9 @@ NexusCore — مراقب صحة النظام
 يراقب موارد النظام ومكونات NexusCore باستمرار.
 """
 import logging
-import os
-import sys
 import time
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Optional
+from typing import Callable, Dict, List
 
 logger = logging.getLogger("nexus.security.health")
 

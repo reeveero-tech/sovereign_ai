@@ -2,7 +2,6 @@
 NexusCore — المحرك الرئيسي
 يتولى تنسيق جميع مكونات المنصة وإدارة دورة حياتها.
 """
-import asyncio
 import logging
 import time
 import uuid

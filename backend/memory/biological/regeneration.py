@@ -23,25 +23,22 @@ import time
 import threading
 import runtime.threads as threads
 import random
-import base64
-from dataclasses import dataclass, field
-from datetime import datetime
-from typing import Dict, Any, List, Optional, Tuple, Set
+
+from dataclasses import dataclass
+from typing import Dict, Any, List, Optional
 from enum import Enum
-from collections import deque
-import math
 
 try:
-    from ..core import get_core, EventType, IntegrityStatus
-    from ..store import get_store, MemoryKind
+    from ..core import get_core
+    from ..store import get_store
     from ..dynamic import get_dynamic_memory
     from ..encoding import get_encoder
     from ..defense.stealth import get_stealth_defense
     from ..defense.polymorphic import get_polymorphic_defense
     from ...config import DATA_DIR
 except ImportError:
-    from memory.core import get_core, EventType, IntegrityStatus
-    from memory.store import get_store, MemoryKind
+    from memory.core import get_core
+    from memory.store import get_store
     from memory.dynamic import get_dynamic_memory
     from memory.encoding import get_encoder
     from memory.defense.stealth import get_stealth_defense
@@ -594,8 +591,7 @@ class MemoryRegeneration:
         
         try:
             # فك النمط الكسيري
-            import zlib
-            import base64
+
             
             # محاولة استعادة البيانات من النمط
             # (هذا يتطلب تكامل مع compress.py)

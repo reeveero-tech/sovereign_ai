@@ -4,8 +4,8 @@ NexusCore — لوحة تحليلات مركزية
 """
 import logging
 import time
-from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from dataclasses import dataclass
+from typing import Any, Dict, List
 
 logger = logging.getLogger("nexus.dashboard")
 

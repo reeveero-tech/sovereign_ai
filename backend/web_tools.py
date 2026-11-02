@@ -15,7 +15,7 @@
 
 import os
 import ipaddress
-import json
+
 import socket
 from html.parser import HTMLParser
 from urllib.parse import urljoin, urlsplit

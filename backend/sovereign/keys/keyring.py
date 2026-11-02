@@ -15,7 +15,7 @@ import secrets
 import stat as statmod
 import tempfile
 import time
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, asdict
 from enum import Enum
 from pathlib import Path
 from typing import Dict, List, Optional

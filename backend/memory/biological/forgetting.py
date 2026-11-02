@@ -24,19 +24,17 @@ import math
 import threading
 import runtime.threads as threads
 import random
-from dataclasses import dataclass, field
-from datetime import datetime
-from typing import Dict, Any, Optional, List, Tuple, Set
+from dataclasses import dataclass
+from typing import Dict, Any, Optional, List
 from enum import Enum
-from collections import deque
 
 try:
-    from ..core import get_core, EventType
+    from ..core import get_core
     from ..dynamic import get_dynamic_memory
     from ..store import get_store
     from ...config import DATA_DIR
 except ImportError:
-    from memory.core import get_core, EventType
+    from memory.core import get_core
     from memory.dynamic import get_dynamic_memory
     from memory.store import get_store
     from config import DATA_DIR

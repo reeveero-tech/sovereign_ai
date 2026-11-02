@@ -12,7 +12,7 @@ import io
 import json
 import re
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, List, Optional, Tuple
 
 FONTS = Path(__file__).resolve().parent / "fonts"
 FORMATS = {"txt": "text/plain", "md": "text/markdown", "html": "text/html",

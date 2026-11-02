@@ -2,8 +2,6 @@
 NexusCore — مدير مفاتيح التشفير
 يولد ويخزن ويدير مفاتيح التشفير بأمان.
 """
-import base64
-import json
 import logging
 import os
 import time

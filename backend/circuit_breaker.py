@@ -24,7 +24,7 @@ import sys
 import threading
 from typing import Optional
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 
 _MODULE_DIR = os.path.dirname(os.path.abspath(__file__))

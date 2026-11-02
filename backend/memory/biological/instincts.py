@@ -23,16 +23,12 @@ import collections
 import time
 import threading
 import runtime.threads as threads
-import math
-import random
-from dataclasses import dataclass, field
-from datetime import datetime
-from typing import Dict, Any, List, Optional, Tuple, Set
+from dataclasses import dataclass
+from typing import Dict, Any, List, Optional
 from enum import Enum
-from collections import defaultdict
 
 try:
-    from ..core import get_core, EventType
+    from ..core import get_core
     from ..store import get_store
     from ..dynamic import get_dynamic_memory
     from ..defense.watcher import get_watcher
@@ -49,7 +45,7 @@ try:
     from .plasticity import get_plasticity
     from ...config import DATA_DIR, SOVEREIGN_KEY  # LEGACY-ROOT-KEY (read-only): بصمة عرض فقط
 except ImportError:
-    from memory.core import get_core, EventType
+    from memory.core import get_core
     from memory.store import get_store
     from memory.dynamic import get_dynamic_memory
     from memory.defense.watcher import get_watcher

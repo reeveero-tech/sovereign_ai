@@ -10,7 +10,7 @@ import logging
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable, Dict, List, Optional, Set
+from typing import Callable, Dict, List, Optional
 
 # R-611: تثبيت المسارات على جذر المستودع — تعمل من أي دليل عمل
 import os as _os

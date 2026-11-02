@@ -23,6 +23,10 @@
 لنفسه (PROTECTED).
 """
 
-from self_develop import (  # noqa: F401 — واجهة الحزمة الموحدة
+from self_develop import (  # R-830: إعادة تصدير موثقة — واجهة الحزمة الموحدة
     SelfDevEngine, get_engine, validate_draft, is_allowed, is_protected,
 )
+
+__all__ = [  # R-830: تصريح إعادة التصدير — كل اسم هنا معرّف ومعاد تصديره عمدًا
+    'SelfDevEngine', 'get_engine', 'validate_draft', 'is_allowed', 'is_protected',
+]

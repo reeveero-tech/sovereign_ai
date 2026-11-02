@@ -2,10 +2,15 @@
 NexusCore — نقطة الدخول الرئيسية
 يُهيئ جميع مكونات المنصة ويسجلها في المحرك الرئيسي.
 """
-import asyncio
 import logging
 import os
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
+
+# R-830: إحياء الاسم النصي «CoreEngine» في توقيع الإرجاع — كان مرجعًا معلقًا
+# بلا استيراد (انحراف pyflakes: undefined name)؛ الربط تحت TYPE_CHECKING يجعل
+# كل سطر يحقق هدفه دون كلفة تشغيلية.
+if TYPE_CHECKING:  # pragma: no cover — تحقق أنواع فقط
+    from nexus.core.engine import CoreEngine
 
 logging.basicConfig(
     level=logging.INFO,
@@ -179,7 +184,6 @@ def initialize_guardian(master_passphrase: Optional[str] = None) -> dict:
     guardian.on("on_emergency", on_emergency)
 
     # بناء baseline أولي إذا لم يكن موجوداً
-    from pathlib import Path
     from guardian.integrity_checker import INTEGRITY_DB
     if not INTEGRITY_DB.exists():
         checker.build_baseline()
@@ -196,9 +200,8 @@ def initialize_guardian(master_passphrase: Optional[str] = None) -> dict:
 
 if __name__ == "__main__":
     # R-611: اجعل `python nexus/main.py` يعمل من أي دليل (كان يفشل بـ ModuleNotFoundError)
-    import os
+    # R-830: os مستورد في رأس الملف — sys يُستورد هنا فقط (لا غير معرّف أعلاه)
     import sys
-
     _repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     if _repo_root not in sys.path:
         sys.path.insert(0, _repo_root)
@@ -207,5 +210,5 @@ if __name__ == "__main__":
     engine  = initialize_nexus()
     systems = initialize_guardian()
     print(f"✅ NexusCore: {len(engine.components)} components")
-    print(f"🛡️ Guardian: ACTIVE")
+    print("🛡️ Guardian: ACTIVE")
     print(engine.get_status())

@@ -18,7 +18,6 @@ for p in [str(_REPO_ROOT), str(_BACKEND_DIR)]:
     if p not in sys.path:
         sys.path.insert(0, p)
 
-import pytest
 
 from backend.sovereign.keys.keyring import KeyRing
 from backend.sovereign.keys.verifier import (

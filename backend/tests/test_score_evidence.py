@@ -195,9 +195,9 @@ def test_sealing_refuses_content_change_between_run_and_seal(tmp_path):
     يُختم التقرير القديم ببصمة جديدة."""
     import subprocess
 
-    from backend.sovereign.score import (_v2_content_fingerprint,
-                                          embed_junit_identity,
-                                          seal_junit_identity)
+    from backend.sovereign.score import _v2_content_fingerprint, seal_junit_identity
+
+
 
     repo = tmp_path / "repo"
     repo.mkdir()

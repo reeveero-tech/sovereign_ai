@@ -16,21 +16,18 @@
 
 import time
 import secrets
-import hashlib
 import threading
 import runtime.threads as threads
 import random
-import json
-from dataclasses import dataclass, field
-from typing import Any, Dict, Optional, List, Tuple, Set
+from dataclasses import dataclass
+from typing import Any, Dict, Optional, List, Set
 from enum import Enum
-from collections import deque
 
 try:
-    from ..core import get_core, EventType
+    from ..core import get_core
     from ..encoding import get_encoder
 except ImportError:
-    from core import get_core, EventType
+    from core import get_core
     from encoding import get_encoder
 
 import logging

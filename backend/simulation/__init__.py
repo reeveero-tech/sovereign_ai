@@ -1,13 +1,17 @@
-from .simulation_core import *
-from .simulation_environment import *
-from .simulation_scheduler import *
-from .simulation_analyzer import *
-from .simulation_controller import *
+# R-830: ربط صريح بدل star imports — كل اسم في __all__ معرّف فعليًا
+# (كان «قد تكون غير معرفة» عبر النجمة بلا تحقق؛ الاستهلاك كله عبر الوحدات الفرعية)
+from . import (
+    simulation_core,
+    simulation_environment,
+    simulation_scheduler,
+    simulation_analyzer,
+    simulation_controller,
+)
 
 __all__ = [
     'simulation_core',
     'simulation_environment',
     'simulation_scheduler',
     'simulation_analyzer',
-    'simulation_controller'
+    'simulation_controller',
 ]

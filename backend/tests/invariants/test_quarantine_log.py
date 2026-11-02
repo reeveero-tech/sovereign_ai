@@ -17,7 +17,6 @@ import sys
 import tempfile
 from pathlib import Path
 
-import pytest
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 _BACKEND_DIR = _REPO_ROOT / "backend"
@@ -64,12 +63,12 @@ def _run_contract_scenario(body: str, data_root: Path):
 
 def test_loyalty_log_module_exists_with_api():
     """backend/loyalty_log.py موجود بواجهته المعلنة (RED: غياب الوحدة)."""
-    from backend.loyalty_log import (  # noqa: F401
-        append_entry,
-        quarantine_log_path,
-        quarantined_components,
-        read_entries,
-    )
+
+
+
+
+
+
 
 
 def test_append_read_roundtrip(monkeypatch):
@@ -115,6 +114,8 @@ def test_append_only_never_truncates(monkeypatch):
     from backend.loyalty_log import append_entry, quarantine_log_path, read_entries
 
     root = _fresh_root(monkeypatch)
+    # R-830: إحياء «root» — الجذر المعزول يجب أن يوجد قبل الإلحاق
+    assert root.exists(), "الجذر المعزول يجب أن يكون موجودًا قبل الإلحاق"
     append_entry("quarantine", "أول سجل", component="quantum")
     first_line = quarantine_log_path().read_text(encoding="utf-8").splitlines()[0]
     size1 = quarantine_log_path().stat().st_size

@@ -5,7 +5,7 @@
 #
 # الاختبار: كل مؤشر أولي قابل للتحقق الخارجي، و الدرجة المُركّبة لها صيغة صريحة.
 
-import json
+
 from pathlib import Path
 
 import pytest
@@ -211,7 +211,7 @@ class TestComposite:
 
     def test_11d_negative_junit_counters_rejected(self, repo_root, tmp_path):
         """R-680f: العدادات السالبة في JUnit → غير صالح (0, 0)."""
-        import xml.etree.ElementTree as ET
+
         xml_file = tmp_path / "bad_negative.xml"
         xml_file.write_text(
             '<?xml version="1.0"?><testsuites>'
@@ -225,7 +225,7 @@ class TestComposite:
 
     def test_11e_report_change_between_calls(self, repo_root, tmp_path):
         """R-680f: تغيير التقرير بين استدعاءين للكائن نفسه يجب أن يُلاحظ."""
-        import xml.etree.ElementTree as ET
+
         xml_file = tmp_path / "changing.xml"
         # تقرير أول: 100/100
         xml_file.write_text(

@@ -12,7 +12,6 @@ import re
 import subprocess
 from pathlib import Path
 
-import pytest
 
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 _AUDIT = _REPO_ROOT / "forensics" / "DELETED_LINES_AUDIT.md"
@@ -1271,5 +1270,109 @@ def test_audit_r696_entry_matches_git():
     actually_deleted = {n for n, (a, d) in numstat.items() if d > 0}
     assert not (actually_deleted - set(justifications)), "حذف بلا مبرر"
     assert not (set(justifications) - actually_deleted), "مبرر بلا حذف فعلي"
+    for name, row in justifications.items():
+        assert "# DELETION-JUSTIFIED" in row, f"مبرر بلا الوسم: {name}"
+
+
+# ---------- R-830 — مدخل صفر الانحرافات (pyflakes 523⇒0) ----------
+
+def _r830_commit_range():
+    """التزام R-830 يثبت برسالته (لا بترتيبه — الالتزامات اللاحقة لا تحمل العبارة)."""
+    proc = subprocess.run(
+        ["git", "log", "--format=%H %P", "--grep=^R-830", "-1", "--no-merges"],
+        capture_output=True, text=True, cwd=str(_REPO_ROOT), check=True,
+    )
+    parts = proc.stdout.strip().split()
+    assert len(parts) >= 2, "التزام R-830 غير موجود في تاريخ git — مدخل التدقيق بلا مرجع"
+    return parts[0], parts[1]
+
+
+def _r830_git_numstat():
+    r830, parent = _r830_commit_range()
+    proc = subprocess.run(
+        ["git", "diff", "--numstat", f"{parent}..{r830}"],
+        capture_output=True, text=True, cwd=str(_REPO_ROOT), check=True,
+    )
+    result = {}
+    for line in proc.stdout.strip().splitlines():
+        a, d, name = line.split("\t")
+        result[name] = (int(a), int(d))
+    return result
+
+
+def _r830_audit_rows():
+    """صفوف مدخل R-830 فقط — القسم ينتهي عند أول عنوان ## لاحق."""
+    src = _AUDIT.read_text(encoding="utf-8")
+    start = src.index("## إضافة R-830")
+    lines = src[start:].splitlines()
+    end_idx = len(lines)
+    for i, line in enumerate(lines[1:], start=1):
+        if line.startswith("## "):
+            end_idx = i
+            break
+    rows = {}
+    for line in lines[:end_idx]:
+        m = _ROW.match(line)
+        if m:
+            rows[m.group(1)] = (int(m.group(2)), int(m.group(3)))
+    return rows
+
+
+def test_audit_r830_matches_git_numstat():
+    """مدخل R-830: الصفوف تطابق git حرفيًا — أي انحراف رقمي أو ملف ناقص/زائد يفشل."""
+    numstat = _r830_git_numstat()
+    audit = _r830_audit_rows()
+    assert audit, "مدخل R-830 في جدول التدقيق غير موجود أو صفر الصفوف"
+    mismatches = []
+    for name, declared in sorted(audit.items()):
+        actual = numstat.get(name)
+        if actual is None:
+            mismatches.append(f"{name}: موجود في التدقيق وليس في git")
+        elif actual != declared:
+            mismatches.append(f"{name}: التدقيق يقول {declared} وgit يقول {actual}")
+    missing = [n for n in numstat if n not in audit]
+    if missing:
+        mismatches.append("ملفات في git بلا صف في التدقيق: " + ", ".join(sorted(missing)))
+    assert not mismatches, "مدخل التدقيق R-830 لا يطابق git:\n  " + "\n  ".join(mismatches)
+
+
+def test_audit_r830_total_matches():
+    """الإجمالي المعلن في مدخل R-830 يطابق مجموع git حرفيًا."""
+    src = _AUDIT.read_text(encoding="utf-8")
+    start = src.index("## إضافة R-830")
+    section = src[start:]
+    m = re.search(r"الإجمالي: ([\d,]+) إضافة / ([\d,]+) حذفًا في (\d+) ملف", section)
+    assert m, "سطر الإجمالي غير موجود في مدخل R-830"
+    numstat = _r830_git_numstat()
+    total_a = sum(v[0] for v in numstat.values())
+    total_d = sum(v[1] for v in numstat.values())
+    assert int(m.group(1).replace(",", "")) == total_a
+    assert int(m.group(2).replace(",", "")) == total_d
+    assert int(m.group(3)) == len(numstat)
+
+
+def test_audit_r830_justifications_cover_all_deletions():
+    """كل ملف فيه حذف له صف مبرر يحمل الوسم # DELETION-JUSTIFIED — ولا مبرر لملف بلا حذف."""
+    src = _AUDIT.read_text(encoding="utf-8")
+    start = src.index("## إضافة R-830")
+    lines = src[start:].splitlines()
+    end_idx = len(lines)
+    for i, line in enumerate(lines[1:], start=1):
+        if line.startswith("## "):
+            end_idx = i
+            break
+    justifications = {}
+    for line in lines[:end_idx]:
+        if "DELETION-JUSTIFIED" in line and line.startswith("| `"):
+            justifications[line.split("`")[1]] = line
+    numstat = _r830_git_numstat()
+    actually_deleted = {n for n, (a, d) in numstat.items() if d > 0}
+    assert actually_deleted, "R-830 بلا حذوفات؟ غير متوقع"
+    assert not (actually_deleted - set(justifications)), (
+        "حذف بلا مبرر: " + ", ".join(sorted(actually_deleted - set(justifications)))
+    )
+    assert not (set(justifications) - actually_deleted), (
+        "مبرر لملف بلا حذف فعلي: " + ", ".join(sorted(set(justifications) - actually_deleted))
+    )
     for name, row in justifications.items():
         assert "# DELETION-JUSTIFIED" in row, f"مبرر بلا الوسم: {name}"

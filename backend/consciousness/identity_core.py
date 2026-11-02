@@ -22,19 +22,16 @@ import secrets
 import time
 import threading
 import runtime.threads as threads
-import math
 import random
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
-from typing import Dict, Any, List, Optional, Tuple, Set
-from enum import Enum
-from collections import defaultdict
+from typing import Dict, Any, List, Optional
 from pathlib import Path
 
 try:
-    from ..memory.core import get_core, EventType, IntegrityStatus
+    from ..memory.core import get_core
     from ..memory.store import get_store
-    from ..memory.biological.instincts import get_instincts, SacredInstinct
+    from ..memory.biological.instincts import get_instincts
     from ..memory.biological.drives import get_drives
     from ..memory.biological.archetypes import get_archetypes
     from ..memory.defense.watcher import get_watcher
@@ -43,9 +40,9 @@ try:
     from .field import get_consciousness_field
     from ...config import DATA_DIR, SOVEREIGN_KEY  # LEGACY-ROOT-KEY (read-only): مسار فك التشفير التاريخي فقط
 except ImportError:
-    from memory.core import get_core, EventType, IntegrityStatus
+    from memory.core import get_core
     from memory.store import get_store
-    from memory.biological.instincts import get_instincts, SacredInstinct
+    from memory.biological.instincts import get_instincts
     from memory.biological.drives import get_drives
     from memory.biological.archetypes import get_archetypes
     from memory.defense.watcher import get_watcher

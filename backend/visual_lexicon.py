@@ -64,7 +64,7 @@ LEX: Dict[str, str] = {
     "صغيرة": "small", "جميل": "beautiful", "جميلة": "beautiful", "قديم": "ancient", "قديمة": "ancient",
     "حديث": "modern", "حديثة": "modern", "مستقبلي": "futuristic", "مستقبلية": "futuristic", "سعيد": "happy",
     "سعيدة": "happy", "حزين": "sad", "مضيء": "glowing", "مضيئة": "glowing", "مغطاة": "covered", "مغطى": "covered",
-    "هادئ": "calm", "هادئة": "calm", "ضخم": "giant", "ضخمة": "giant", "طائر": "flying", "يطير": "flying",
+    "هادئ": "calm", "هادئة": "calm", "ضخم": "giant", "ضخمة": "giant", "يطير": "flying",
     "تطير": "flying", "يلعب": "playing", "تلعب": "playing", "يلعبون": "playing", "يجري": "running",
     "تجري": "running", "يركض": "running", "تركض": "running", "يأكل": "eating", "تأكل": "eating",
     "يقرأ": "reading", "تقرأ": "reading", "يمشي": "walking", "تمشي": "walking", "يسبح": "swimming",

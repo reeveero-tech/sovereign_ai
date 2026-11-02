@@ -305,7 +305,7 @@ class SovereigntyScorer:
             # HISTORY.jsonl سليم (30%)
             history_file = self.repo_root / "data" / "keys" / "HISTORY.jsonl"
             if history_file.exists():
-                import json
+
                 content = history_file.read_text(encoding="utf-8")
                 lines = [l for l in content.split("\n") if l.strip()]
                 valid = all(self._is_valid_json(l) for l in lines)
@@ -1025,7 +1025,6 @@ def _parse_junit_evidence(junit_path: _Path, head: str,
 
     # النطاق: الاختبارات المطلوبة حاضرة — كل واحدة بحالة نظيفة
     case_states = {}
-    import re as _re3
 
     # بادئة هوية التقرير نفسه فقط (تصويب المراجع — الجولة 4): تُنزع البادئة
     # المطابقة لـSHA جذره — تقرير يحمل SHA الحالي لكن أسماء اختباراته

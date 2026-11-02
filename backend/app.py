@@ -24,11 +24,8 @@ import re  # R-824: تمييز الطلبات الإنشائية في مسار �
 import time
 import threading
 import uuid
-import secrets
 from contextlib import asynccontextmanager
-from datetime import datetime
-from typing import Dict, Any, List, Optional, Union
-from enum import Enum
+from typing import Dict, Any, List, Optional
 
 import os
 import shutil
@@ -40,9 +37,9 @@ from fastapi import (
 )
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.gzip import GZipMiddleware
-from fastapi.responses import HTMLResponse, JSONResponse, FileResponse, Response
+from fastapi.responses import HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, ConfigDict, Field, validator
+from pydantic import BaseModel, ConfigDict, Field
 import uvicorn
 
 # مسار مجلد الواجهة الأمامية
@@ -51,7 +48,7 @@ _PROJECT_ROOT = _BACKEND_DIR.parent
 FRONTEND_DIR = _PROJECT_ROOT / "frontend"
 
 # استيراد Orchestrator وجميع المكونات
-from orchestrator import get_orchestrator, SovereignOrchestrator, CycleResult, OrchestratorMode
+from orchestrator import get_orchestrator
 from memory.core import get_core
 from memory.dynamic import get_dynamic_memory
 from memory.store import get_store
@@ -94,7 +91,7 @@ except ImportError:
 from config import CORS_ORIGINS as ALLOWED_ORIGINS
 from config import MAX_USER_MESSAGES_PER_MINUTE
 from rate_limit import SlidingWindowRateLimiter
-from safety import SafetyGuard, ActionType
+from safety import SafetyGuard
 
 chat_rate_limiter = SlidingWindowRateLimiter(MAX_USER_MESSAGES_PER_MINUTE)
 # R-737 (البند ٢.٣): حد السمع بحد المحادثة نفسه لكل IP — الرفع باهظ فلا باب مفتوح
@@ -1615,10 +1612,7 @@ async def compat_status():
     تقرير حالة طبقة التوافق (نمط التين الخانق — المرحلة 4 من ROADMAP_V2).
     يُعيد lifecycle لكل وحدة compat: عدد الاستدعاءات + معيار الإزالة.
     """
-    from backend.compat.__meta__ import (
-        COMPAT_LIFECYCLE, evaluate_pending_sunset, get_lifecycle_summary,
-        load_call_log,
-    )
+    from backend.compat.__meta__ import COMPAT_LIFECYCLE, evaluate_pending_sunset, load_call_log
 
     from datetime import datetime, timezone
     entries = load_call_log()

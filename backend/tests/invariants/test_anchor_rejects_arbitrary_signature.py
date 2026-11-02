@@ -28,13 +28,10 @@ R-664: الحماية — `anchor_batch` يجب أن يتحقق من صحة `sig
 
 import hashlib
 import json
-import os
 import secrets
 import sys
-import tempfile
 from pathlib import Path
 
-import pytest
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 for p in [str(_REPO_ROOT), str(_REPO_ROOT / "backend")]:
@@ -42,7 +39,7 @@ for p in [str(_REPO_ROOT), str(_REPO_ROOT / "backend")]:
         sys.path.insert(0, p)
 
 from backend.sovereign.ledger.anchor import LedgerAnchor as AnchorManager
-from backend.sovereign.keys.keyring import KeyRing, KeyStatus
+from backend.sovereign.keys.keyring import KeyRing
 
 
 class TestAnchorRejectsArbitrarySignature:
