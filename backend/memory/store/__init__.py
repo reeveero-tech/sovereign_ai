@@ -412,6 +412,12 @@ class SolidMemoryStore:
         self._lock = threading.RLock()
         self._cloud_lock = threading.Lock()  # R-721: ترتيب المرايا دون حجب المحلي
         
+        # R-831: عزل فشل مصادقة GCM — سجل يُرفض يوثَّق مرة واحدة لكل عملية
+        # (فيضان السجلات كان يكرر نفس الخطأ عشرات المرات في كل دورة)، ثم
+        # يُتخطى بلا عمل تشفيري متكرر. الأمان مغلق كما هو: السجل المعزول
+        # يُرفض دائمًا ولا يعود كبيانات أبدًا.
+        self._auth_quarantine: Set[str] = set()
+        
         for kind in MemoryKind:
             self._data[kind.value] = {}
             self._load_kind(kind.value)
@@ -441,6 +447,11 @@ class SolidMemoryStore:
             preserve_data: إذا True، يحتفظ بالبيانات ولا يمسحها
         """
         logger.info("🔄 إعادة تهيئة التخزين الصلب...")
+        
+        # R-831: مسح حجر المصادقة — بعد إعادة التهيئة تُعاد محاولة السجلات
+        # وتوثَّق الإخفاقات من جديد (سلوك التوثيق الأصلي لكل عملية تهيئة)
+        with self._lock:
+            self._auth_quarantine.clear()
         
         if not preserve_data:
             # مسح جميع البيانات في الذاكرة
@@ -500,7 +511,7 @@ class SolidMemoryStore:
                     
                     # إعادة بناء فهرس سريع
                     if hasattr(self, 'index'):
-                        payload = self._decrypt_payload(item.encrypted_payload, kind)
+                        payload = self._decrypt_payload(item.encrypted_payload, kind, item_id=item.id)
                         text_content = self._extract_text_content(payload, kind)
                         self.index.add_item(
                             item.id, kind, item.tags,
@@ -596,8 +607,14 @@ class SolidMemoryStore:
             "t": base64.b64encode(tag).decode(),
         })
     
-    def _decrypt_payload(self, encrypted: str, kind: str) -> Dict:
-        """فك تشفير الـ payload — فشل مصادقة GCM = رفض صريح (تلاعب/تلف)."""
+    def _decrypt_payload(self, encrypted: str, kind: str,
+                         item_id: Optional[str] = None) -> Dict:
+        """فك تشفير الـ payload — فشل مصادقة GCM = رفض صريح (تلاعب/تلف).
+
+        R-831: العزل — السجل المرفوض يوثَّق مرة واحدة (item_id يُضاف إلى
+        الحجر)، والمحاولات التالية تُتخطى بلا تكرار الخطأ ولا عمل تشفيري.
+        الرفض نفسه لا يتغير: fail-closed، ولا يعود السجل كبيانات أبدًا.
+        """
         try:
             envelope = json.loads(encrypted)
             if not (isinstance(envelope, dict) and envelope.get("v") == 1
@@ -639,9 +656,19 @@ class SolidMemoryStore:
                     return legacy_payload
                 return {"_error": "حمولة غير قابلة للتفسير"}
             except Exception:
+                # R-831: العزل — الرفض يوثَّق مرة واحدة لكل سجل ثم يُتخطى
+                # (نفس سلوك fail-closed بلا فيضان سجلات عند إعادة القراءة
+                # في كل دورة تشغيل). بلا item_id يبقى التوثيق كما كان.
+                if item_id is not None:
+                    with self._lock:
+                        if item_id in self._auth_quarantine:
+                            return {"_error": "فشل مصادقة — سجل معزول (مرفوض)"}
+                        self._auth_quarantine.add(item_id)
                 logger.error(
                     f"R-682 [SECURITY]: {kind} payload GCM authentication FAILED — "
                     "tampered or corrupted record REJECTED"
+                    + (f" (item={item_id} — معزول حتى إعادة التهيئة)"
+                       if item_id else "")
                 )
                 return {"_error": "فشل مصادقة — تلاعب أو تلف"}
         except (UnicodeDecodeError, json.JSONDecodeError, KeyError, TypeError) as e:
@@ -776,7 +803,7 @@ class SolidMemoryStore:
             self._save_kind(kind)
             
             # فك التشفير
-            payload = self._decrypt_payload(item.encrypted_payload, kind)
+            payload = self._decrypt_payload(item.encrypted_payload, kind, item_id=item.id)
             payload["_metadata"] = {
                 "id": item.id,
                 "importance": item.importance,
@@ -829,7 +856,7 @@ class SolidMemoryStore:
             for item_id in item_ids[:limit]:
                 item = self._data.get(kind, {}).get(item_id)
                 if item and item.importance >= min_importance:
-                    payload = self._decrypt_payload(item.encrypted_payload, kind)
+                    payload = self._decrypt_payload(item.encrypted_payload, kind, item_id=item_id)
                     if payload.get("_error"):
                         # سجل مرفوض (تلاعب/تلف/إرثي) — لا يُعاد كبيانات
                         continue
@@ -1097,7 +1124,7 @@ class SolidMemoryStore:
         
         for kind, items in self._data.items():
             for item in items.values():
-                payload = self._decrypt_payload(item.encrypted_payload, kind)
+                payload = self._decrypt_payload(item.encrypted_payload, kind, item_id=item.id)
                 text_content = self._extract_text_content(payload, kind)
                 new_index.add_item(
                     item.id, kind, item.tags,
