@@ -234,3 +234,86 @@ class TestChatAgentCloudFallback:
         planner = chat_agent.ChatPlanner(history=[], deadline=None,
                                          chat_fn=lambda *a, **k: None)
         assert planner._call("نظام", "رسالة") is None  # الإعلان الصادق كما كان
+
+
+class TestCloudRetryAndBudget:
+    """R-833b: صمود جولة السحابة أمام تقلب المزود المجاني وحد المعدل.
+
+    درسا الإنتاج الحي (Render، 2026-11-02): (١) المزود المجاني يرد أحيانًا
+    بـ402/محتوى فارغ فينجح النداء الثاني — محاولة واحدة إضافية؛ (٢) كل نداء
+    سحابي ينتظر حد المعدل (~45ث لكل IP) فميزانية الحلقة الافتراضية (120ث)
+    تكفي جولتين فقط — الحلقة تتسع للخطوات حين يعلم مسبقًا أن السحابي سيخطط.
+    """
+
+    def test_cloud_retry_once_then_success(self, monkeypatch):
+        """النداء الأول فارغ والثاني يرد ⇒ خطوة صحيحة (محاولة إضافية واحدة)."""
+        import cloud_brain
+        calls = []
+
+        def _chat(system, user, **kw):
+            calls.append(1)
+            if len(calls) == 1:
+                return None  # تقلب المزود: 402/رد فارغ
+            return '{"action": "finish", "answer": "تم"}'
+
+        monkeypatch.setattr(cloud_brain, "enabled", lambda: True)
+        monkeypatch.setattr(cloud_brain, "chat", _chat)
+        step = CloudPlanner().next_step("goal", TOOLS, [])
+        assert step["action"] == "finish" and step["answer"] == "تم"
+        assert len(calls) == 2  # محاولة إضافية واحدة — لا طوفان إعادة
+
+    def test_cloud_retry_exhausted_honest_failure(self, monkeypatch):
+        """النداءان فاشلان ⇒ PlannerError صادق (لا محاولة ثالثة)."""
+        import cloud_brain
+        calls = []
+
+        def _chat(system, user, **kw):
+            calls.append(1)
+            return None
+
+        monkeypatch.setattr(cloud_brain, "enabled", lambda: True)
+        monkeypatch.setattr(cloud_brain, "chat", _chat)
+        with pytest.raises(PlannerError):
+            CloudPlanner().next_step("goal", TOOLS, [])
+        assert len(calls) == 2
+
+    def test_run_goal_budget_scaled_when_latch_open(self, monkeypatch):
+        """مزلاج العقل الأساسي مفتوح (السحابي سيخطط) ⇒ الميزانية تتسع للخطوات."""
+        import agent_loop as loop_mod
+        import ollama_client
+        captured = {}
+
+        class _FakeLoop:
+            def __init__(self, registry, planner, max_steps=0,
+                         max_seconds=0.0, **kw):
+                captured.update(max_steps=max_steps, max_seconds=max_seconds)
+
+            def run(self, goal):
+                return {"run_id": "t", "goal": goal, "status": "completed",
+                        "steps": [], "answer": None}
+
+        monkeypatch.setattr(loop_mod, "AgentLoop", _FakeLoop)
+        monkeypatch.setattr(ollama_client, "_brain_latch_open", lambda: True)
+        loop_mod.run_goal("goal", 4)
+        assert captured["max_steps"] == 4
+        assert captured["max_seconds"] == float(120 + 75 * 4)  # 420ث لا 120ث
+
+    def test_run_goal_budget_default_when_brain_reachable(self, monkeypatch):
+        """العقل الأساسي سليم ⇒ الميزانية الافتراضية كما هي (لا تضخيم)."""
+        import agent_loop as loop_mod
+        import ollama_client
+        captured = {}
+
+        class _FakeLoop:
+            def __init__(self, registry, planner, max_steps=0,
+                         max_seconds=0.0, **kw):
+                captured.update(max_steps=max_steps, max_seconds=max_seconds)
+
+            def run(self, goal):
+                return {"run_id": "t", "goal": goal, "status": "completed",
+                        "steps": [], "answer": None}
+
+        monkeypatch.setattr(loop_mod, "AgentLoop", _FakeLoop)
+        monkeypatch.setattr(ollama_client, "_brain_latch_open", lambda: False)
+        loop_mod.run_goal("goal", 4)
+        assert captured["max_seconds"] == 120.0
