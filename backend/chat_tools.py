@@ -76,6 +76,27 @@ def _fetch_json(url: str) -> Any:
     return json.loads(_fetch(url).get("text") or "null")
 
 
+def _fetch_tree_json(owner: str, repo: str, branch: str) -> Any:
+    """R-836: شجرة git التامة من واجهة GitHub مباشرةً.
+
+    لماذا لا عبر web.fetch؟ شجرة مستودع كبير (InvokeAI: 3.2MB) تقتطعها حرفة
+    القراءة عند سقفها (WEB_FETCH_MAX_BYTES=2MB) فيفشل JSON والعد معًا. هنا نداء
+    واحد مضبوط على api.github.com (لا مدخلات مستخدم في العنوان) بمصادقة مفتاح
+    المالك إن ضُبط (GITHUB_TOKEN — يرفع حد المعدل من 60 إلى 5000/ساعة، مهم من
+    عنوان Render المشترك). الأثر الموقّع باقٍ على مستوى الأداة github.repo نفسها."""
+    import os
+    import urllib.parse
+    import urllib.request
+    headers = {"User-Agent": "sovereign-github-context", "Accept": "application/vnd.github+json"}
+    token = str(os.getenv("GITHUB_TOKEN") or "").strip()
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    url = (f"https://api.github.com/repos/{owner}/{repo}/git/trees/"
+           f"{urllib.parse.quote(str(branch))}?recursive=1")
+    with urllib.request.urlopen(urllib.request.Request(url, headers=headers), timeout=30) as r:
+        return json.loads(r.read().decode("utf-8"))
+
+
 def capabilities_context(caps: Dict[str, Any], tool_names: List[str]) -> str:
     groups: Dict[str, List[str]] = {}
     for c in caps.get("capabilities", []):
@@ -124,6 +145,28 @@ def github_context(owner: str, repo: str) -> str:
         f"النجوم: {meta.get('stargazers_count')} | الحجم: {meta.get('size')}KB | "
         f"أُنشئ: {str(meta.get('created_at'))[:10]} | آخر دفع: {str(meta.get('pushed_at'))[:10]}"
     )
+    # R-836 (من محادثة إنتاج أرسلها المالك: «كم يوجد ملف فيه؟» أُجيب «لا أعرف»
+    # ثم ادّعى العقل أنه لا يستطيع الوصول للإنترنت أصلًا): عدّ ملفات الشجرة كاملة
+    # لا الجذر فقط — شجرة git التامة معلنة عبر واجهة GitHub في نداء واحد، فيصل
+    # الجواب رقمًا حقيقيًا لا اعتذارًا. يُدرج مبكرًا كي لا يقتطعه سقف السياق.
+    try:
+        tree = _fetch_tree_json(owner, repo, branch) or {}
+        entries = [e for e in (tree.get("tree") or []) if isinstance(e, dict)]
+        files = [e for e in entries if e.get("type") == "blob"]
+        dirs = [e for e in entries if e.get("type") == "tree"]
+        note = " (الشجرة مقطوعة — مستودع ضخم، فالعدد حد أدنى)" if tree.get("truncated") else ""
+        parts.append(f"- عدد الملفات في كامل الشجرة: {len(files)} ملفًا في {len(dirs)} مجلدًا{note}")
+        from collections import Counter
+        exts = Counter()
+        for e in files:
+            name = str(e.get("path") or "")
+            ext = name.rsplit(".", 1)[-1].lower() if "." in name.rsplit("/", 1)[-1] else "بلا امتداد"
+            exts[ext] += 1
+        top = "، ".join(f"{e}×{n}" for e, n in exts.most_common(5))
+        if top:
+            parts.append(f"- أكثر الامتدادات: {top}")
+    except Exception as e:  # TOLERATED: يُعلن ولا يُختلق — عدّ الشجرة مكمّل لا ركن
+        parts.append(f"- عدد الملفات: تعذر عدّ الشجرة الكاملة ({str(e)[:80]})")
     try:
         langs = _fetch_json(base + "/languages") or {}
         total = sum(langs.values()) or 1
