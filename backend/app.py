@@ -2904,14 +2904,26 @@ def _chat_agent_mode() -> bool:
 
 def _github_repo_tool(url: str = "", repo: str = "", **_ignored) -> str:
     """R-789: معالج github.repo — يقبل رابطًا كاملًا أو owner/repo.
-    R-789b: يقبل الاسم البديل repo (قياس حي: العقل أرسل {"repo": "owner/name"})."""
+    R-789b: يقبل الاسم البديل repo (قياس حي: العقل أرسل {"repo": "owner/name"}).
+    R-838.2: التعبير السابق غير المثبّت فسّر رابط حساب github.com/perplexityai
+    كـ owner="github.com"/repo="perplexityai" فنادى /repos/github.com/perplexityai
+    فارتمس بـ 404 واستسلم العقل أمام «حلّل كل مستودعات هذا الرابط». الآن:
+    مالك/مستودع ⇒ سياق المستودع؛ مالك وحده (رابطًا أو نصًا) ⇒ سرد مستودعاته."""
     import re as _re
     import chat_tools
-    m = _re.search(r"(?:github\.com/)?([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+?)(?:\.git)?(?:[/?#]|$)",
-                   str(url or repo or "").strip())
-    if not m:
-        raise ValueError("صيغة غير مفهومة — المطلوب رابط github.com/owner/repo أو owner/repo")
-    return chat_tools.github_context(m.group(1), m.group(2))
+    s = str(url or repo or "").strip()
+    m = _re.search(r"(?:https?://)?(?:www\.)?github\.com/([A-Za-z0-9_.-]+)"
+                  r"(?:/([A-Za-z0-9_.-]+?)(?:\.git)?(?:[/?#].*)?)?$", s)
+    if m and m.group(2):
+        return chat_tools.github_context(m.group(1), m.group(2))
+    if m:  # رابط حساب بلا مسار مستودع — ليس خطأ يُعتذر عنه بل طلب سرد صريح
+        return chat_tools.github_account_context(m.group(1))
+    m2 = _re.match(r"^([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+?)(?:\.git)?$", s)
+    if m2:
+        return chat_tools.github_context(m2.group(1), m2.group(2))
+    if _re.match(r"^[A-Za-z0-9_.-]+$", s) and s.lower() != "github.com":
+        return chat_tools.github_account_context(s)
+    raise ValueError("صيغة غير مفهومة — المطلوب رابط github.com/owner/repo أو github.com/owner أو owner/repo")
 
 
 def _register_real_tools() -> None:
@@ -3294,8 +3306,9 @@ def _register_real_tools() -> None:
     registry.register(ToolSpec(
         name="github.repo",
         description="قراءة مستودع GitHub عام: الوصف واللغات وعدد ملفات الشجرة كاملة "
-                    "وامتداداتها (R-836) والملفات الجذرية وآخر الالتزامات وREADME",
-        inputs={"url": "رابط المستودع أو owner/repo"},
+                    "وامتداداتها (R-836) والملفات الجذرية وآخر الالتزامات وREADME — "
+                    "ورابط حساب/مؤسسة بلا مستودع (R-838.2) يُسرد مستودعاته العامة بدل 404",
+        inputs={"url": "رابط المستودع أو owner/repo أو رابط الحساب github.com/owner"},
         outputs="نص بيانات المستودع",
         handler=_github_repo_tool,
     ))

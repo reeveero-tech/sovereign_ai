@@ -26,6 +26,7 @@
 | + | (عودة) فعل+مفعول «ني» لا يُبتر ولا كيان وهمي | `test_verb_with_object_pronoun_never_mangled` | ✅ |
 | + | (عودة) رابط كيان كامل + اتجاه الإحالة (إصلاح انحدار R-834) | `test_url_entity_and_anaphora_direction` | ✅ |
 | + | (عودة R-838.1) طلب واضح بلا غموض لا يولد سؤالًا توضيحيًا وهميًا — الحالة الإنتاجية الحرفية من لوحة المراقبة | `test_no_spurious_clarification_clear_request` | ✅ |
+| + | (عودة R-838.2) رابط حساب GitHub بلا مسار مستودع ⇒ سرد مستودعاته لا 404 — الحالة الإنتاجية الحرفية (`tests/test_r8382_github_account.py`، 7/7) | `test_account_url_lists_repos` + 6 | ✅ |
 
 ## أدلة حية من نقطة النهاية `/chat` (دمج فعلي)
 

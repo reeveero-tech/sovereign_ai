@@ -30,6 +30,9 @@ MAX_URLS = 2
 
 _URL_RE = re.compile(r"https?://[^\s<>\"'()\[\]{}]+", re.IGNORECASE)
 _GH_RE = re.compile(r"^https?://(?:www\.)?github\.com/([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+)", re.IGNORECASE)
+# R-838.2: رابط حساب/مؤسسة بلا مسار مستودع — github.com/perplexityai — كيان قائم
+# بذاته يستحق سرد مستودعاته، لا إسقاطه في page_context العام.
+_GH_ACC_RE = re.compile(r"^https?://(?:www\.)?github\.com/([A-Za-z0-9_.-]+)/?(?:[?#].*)?$", re.IGNORECASE)
 _CAP_RE = re.compile(
     r"(قدرات|قدراتك|تستطيع|تقدر|أدوات|ادوات|أدواتك|ادواتك|من أنت|من انت|عرف بنفسك|عرّف بنفسك|"
     r"ما هو المشروع|ما المشروع|مشروعك|هذا المشروع|ماذا تفعل|وش تقدر|ايش تقدر|إيش تقدر|"
@@ -76,6 +79,27 @@ def _fetch_json(url: str) -> Any:
     return json.loads(_fetch(url).get("text") or "null")
 
 
+def _gh_get(url: str) -> Any:
+    """نداء واجهة GitHub مباشرةً (api.github.com — لا مدخلات مستخدم في العنوان)
+    بمصادقة مفتاح المالك إن ضُبط (GITHUB_TOKEN — يرفع حد المعدل من 60 إلى
+    5000/ساعة، مهم من عنوان Render المشترك). يرفع RuntimeError بنص صادق عند
+    فشل HTTP (مثل 404) فلا يُمرر استسلام غامض للعقل."""
+    import os
+    import urllib.error
+    import urllib.request
+    headers = {"User-Agent": "sovereign-github-context", "Accept": "application/vnd.github+json"}
+    token = str(os.getenv("GITHUB_TOKEN") or "").strip()
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    try:
+        with urllib.request.urlopen(urllib.request.Request(url, headers=headers), timeout=30) as r:
+            return json.loads(r.read().decode("utf-8"))
+    except urllib.error.HTTPError as e:
+        raise RuntimeError(f"نداء GitHub فشل فعليًا: HTTP {e.code}")
+    except Exception as e:  # TOLERATED: يُعلن ولا يُختلق
+        raise RuntimeError(f"نداء GitHub فشل فعليًا: {str(e)[:120]}")
+
+
 def _fetch_tree_json(owner: str, repo: str, branch: str) -> Any:
     """R-836: شجرة git التامة من واجهة GitHub مباشرةً.
 
@@ -84,17 +108,9 @@ def _fetch_tree_json(owner: str, repo: str, branch: str) -> Any:
     واحد مضبوط على api.github.com (لا مدخلات مستخدم في العنوان) بمصادقة مفتاح
     المالك إن ضُبط (GITHUB_TOKEN — يرفع حد المعدل من 60 إلى 5000/ساعة، مهم من
     عنوان Render المشترك). الأثر الموقّع باقٍ على مستوى الأداة github.repo نفسها."""
-    import os
     import urllib.parse
-    import urllib.request
-    headers = {"User-Agent": "sovereign-github-context", "Accept": "application/vnd.github+json"}
-    token = str(os.getenv("GITHUB_TOKEN") or "").strip()
-    if token:
-        headers["Authorization"] = f"Bearer {token}"
-    url = (f"https://api.github.com/repos/{owner}/{repo}/git/trees/"
-           f"{urllib.parse.quote(str(branch))}?recursive=1")
-    with urllib.request.urlopen(urllib.request.Request(url, headers=headers), timeout=30) as r:
-        return json.loads(r.read().decode("utf-8"))
+    return _gh_get(f"https://api.github.com/repos/{owner}/{repo}/git/trees/"
+                  f"{urllib.parse.quote(str(branch))}?recursive=1")
 
 
 def capabilities_context(caps: Dict[str, Any], tool_names: List[str]) -> str:
@@ -202,6 +218,56 @@ def github_context(owner: str, repo: str) -> str:
     return "\n".join(parts)
 
 
+def github_account_context(owner: str, limit: int = 30) -> str:
+    """R-838.2: سياق حساب/مؤسسة GitHub — سرد مستودعاتها العامة.
+
+    من لوحة مراقبة إنتاج أرسلها المالك: «قم بتحليل المشروع واستكشافه واعطني عنه
+    تحليل مفصل https://github.com/perplexityai قم بتحليل كل مستودعات هذا الرابط» —
+    تعبير أداة github.repo غير المثبّت فسّر رابط الحساب كـ owner="github.com"
+    وrepo="perplexityai" فنادت /repos/github.com/perplexityai فارتمست بـ 404
+    واستسلم العقل. الحساب (مستخدمًا كان أو مؤسسة) بلا مسار مستودع ليس خطأ
+    مستخدمًا يُعتذر عنه: هو طلب سردٍ صريح، فتُجلب قائمة مستودعاته العامة
+    (مرتبة بالنجوم، بسقف 200 مُعلن لا خفي) من واجهة GitHub مباشرةً."""
+    owner = str(owner or "").strip()
+    if not owner or owner.lower() in ("github.com", "www.github.com"):
+        raise RuntimeError("اسم حساب GitHub غير مفهوم من المدخل")
+    meta = _gh_get(f"https://api.github.com/users/{owner}")
+    if not isinstance(meta, dict) or not meta.get("login"):
+        raise RuntimeError("الحساب غير موجود أو خاص أو تجاوز حد GitHub")
+    total = int(meta.get("public_repos") or 0)
+    kind = "مؤسسة" if meta.get("type") == "Organization" else "مستخدم"
+    api = (f"https://api.github.com/orgs/{owner}/repos" if kind == "مؤسسة"
+           else f"https://api.github.com/users/{owner}/repos")
+    repos: List[dict] = []
+    page = 1
+    while len(repos) < 200:  # سقف صادق مُعلن — حساب بآلاف المستودعات يُقتطع
+        batch = _gh_get(f"{api}?per_page=100&page={page}&sort=pushed")
+        if not isinstance(batch, list) or not batch:
+            break
+        repos.extend(r for r in batch if isinstance(r, dict))
+        if len(batch) < 100:
+            break
+        page += 1
+    if not repos:
+        raise RuntimeError("تعذر جلب مستودعات الحساب من واجهة GitHub")
+    repos.sort(key=lambda r: int(r.get("stargazers_count") or 0), reverse=True)
+    parts = [f"بيانات حساب GitHub {meta.get('login')} ({kind} — جُلبت الآن من واجهة GitHub العامة):"]
+    parts.append(
+        f"- الاسم: {meta.get('name') or '—'} | الوصف: {meta.get('description') or 'لا وصف'} | "
+        f"المتابعون: {meta.get('followers')} | المستودعات العامة: {total}"
+    )
+    truncated = " (القائمة مقطوعة عند 200)" if len(repos) >= 200 and total > len(repos) else ""
+    shown = repos[:limit]
+    parts.append(f"- المستودعات مرتبة بالنجوم ({len(shown)} من {total}{truncated}):")
+    for r in shown:
+        desc = str(r.get("description") or "").strip()[:90] or "بلا وصف"
+        parts.append(
+            f"  • {r.get('full_name')} — {r.get('language') or '—'} | "
+            f"★{r.get('stargazers_count')} | آخر دفع {str(r.get('pushed_at'))[:10]} | {desc}"
+        )
+    return "\n".join(parts)
+
+
 def page_context(url: str) -> str:
     r = _fetch(url)
     return f"محتوى الصفحة {r.get('url', url)} (العنوان: {r.get('title') or '—'}), جُلب الآن:\n{(r.get('text') or '')[:2500]}"
@@ -287,11 +353,16 @@ def gather(text: str, capabilities_fn: Optional[Callable[[], Dict[str, Any]]] = 
             blocks.append(f"تعذر قراءة جرد القدرات: {str(e)[:120]}")
     for url in extract_urls(text):
         gh = _GH_RE.match(url)
+        gh_acc = None if gh else _GH_ACC_RE.match(url)
         try:
             if gh:
                 owner, repo = gh.group(1), re.sub(r"\.git$", "", gh.group(2))
                 blocks.append(github_context(owner, repo))
                 used.append(f"قراءة GitHub: {owner}/{repo}")
+            elif gh_acc:
+                # R-838.2: رابط حساب بلا مستودع ⇒ سرد مستودعاته لا 404 ولا HTML عام
+                blocks.append(github_account_context(gh_acc.group(1)))
+                used.append(f"سرد مستودعات GitHub: {gh_acc.group(1)}")
             else:
                 blocks.append(page_context(url))
                 used.append(f"قراءة صفحة: {url[:60]}")
