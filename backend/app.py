@@ -3522,9 +3522,13 @@ async def chat(message: ChatMessage, background_tasks: BackgroundTasks):
         # بنفسه ويجيب من نتائجها؛ الجسر الحتمي والقوالب لا يُستعملان في هذا المسار.
         import chat_agent
         owner = bool(message.api_key) and verify_api_key(message.api_key)
-        agent_text = message.text
+        # R-834: المتابعة المحلولة تصل الوكيل كما تصل الجسر والبحث العالمي —
+        # لا يرى الوكيل «هل هو جاهز؟» بلا كيانه فيبحث عن «production ready»
+        # عامًا (ثُبت حيًا في محادثة المستودع) — بل السؤال القائم بذاته.
+        agent_text = (eff_text if resolved.get("followup")
+                      and resolved.get("kind") != "prev_op" else message.text)
         if owner and message.file_ids:
-            agent_text = message.text + await asyncio.to_thread(_attachments_note, message.file_ids)
+            agent_text = agent_text + await asyncio.to_thread(_attachments_note, message.file_ids)
         if owner and message.project_id:
             agent_text = agent_text + await asyncio.to_thread(_project_note, message.project_id)
         # R-810/813 (البند ٢): اختيار النموذج يصل نداء العقل فعليًا (توجيهًا وجوابًا)

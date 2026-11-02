@@ -52,6 +52,8 @@ _EN_PROPS = (
 )
 _AR_PRON_SUFFIX = ("هما", "هم", "هن", "ها", "ه")
 _EN_PRONOUNS = {"it", "its", "they", "their", "them", "there", "he", "she", "his", "her", "this", "that"}
+# R-834: ضمائر فصل مستقلة تشير للكيان السابق («هل هو جاهز؟» — الهو/هي/هذا/ذلك)
+_BARE_PRON_AR = re.compile(r"^(?:هو|هي|هذا|هذه|ذلك|تلك)$")
 
 _MORE = re.compile(
     r"^(?:و\s*)?(?:اشرح|وضح|وضّح|فصل|فصّل|زدني|اعطني|أعطني|عطني|أريد|اريد|ابي|أبي)?\s*"
@@ -125,6 +127,12 @@ def _pron_word(w: str) -> Optional[str]:
 
 def entity_of(question: str) -> str:
     """الكيان المسؤول عنه في سؤال مكتمل: ما يبقى بعد حذف أدوات السؤال وكلمات الخصائص."""
+    # R-834: رابط/مستودع GitHub في الرسالة هو الكيان المسؤول عنه حرفيًا — لا يُقصّ
+    # بكلمات السؤال («المشروع المرفق <الرابط>» كان يُستخرج منه «معلومات كامله»!)
+    m = re.search(r"github\.com/[\w.\-]+/[\w.\-]+", question) \
+        or re.search(r"https?://\S+", question)
+    if m:
+        return m.group(0).rstrip("؟?!.،,")
     try:
         import world_search
         q = world_search.core_question(question)
@@ -233,6 +241,19 @@ def _resolve_one(text: str, prev_standalone: Optional[str]) -> Dict[str, Any]:
         s = _LEAD_AND_AR.sub("", s).strip()
         res.update(standalone=s, followup=True, kind="pronoun", entity=ent)
         return res
+    # ٣ب) ضمير فصل مستقل (عربي) — «هل هو جاهز للإنتاج؟»: الهو/هي/هذا/ذلك
+    # فصل يشير للكيان السابق، لا «ما هو/من هو» (صيغة سؤال لا إشارة كيان)
+    if _is_ar(body) and ent and len(words) <= 12 \
+            and (any(w == "هل" for w in words) or raw.endswith(("؟", "?"))):
+        for i, w in enumerate(words):
+            if not _BARE_PRON_AR.match(w.strip("؟?!.،,")):
+                continue
+            prev_w = words[i - 1].strip("؟?!.،,") if i else ""
+            if prev_w in ("ما", "من", "ماهو", "ماهي"):
+                break
+            s = " ".join(words[:i] + [ent] + words[i + 1:])
+            res.update(standalone=s, followup=True, kind="pronoun", entity=ent)
+            return res
     # ٣ب) ضمائر إنجليزية
     if not _is_ar(body):
         toks = re.findall(r"[\w'\-]+|[^\w\s]", body)

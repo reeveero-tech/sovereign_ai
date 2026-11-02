@@ -409,6 +409,15 @@ def respond(text: str, history: Optional[List[Dict[str, str]]] = None, *,
                              "لا أستطيع فهم الرسالة والإجابة عنها دونه.",
                     "status": "brain_disabled", "tools_used": [], "steps": []}
     budget = float(max_seconds if max_seconds is not None else MAX_SECONDS)
+    # R-834: العقل الأساسي متعذر (مزلاج R-821 مفتوح) والسحابي هو المخطط — كل
+    # نداء ينتظر حد معدل المزود (~45ث) فميزانية 150ث تُستنفد قبل اكتمال الجولة
+    # (ثُبت حيًا: 176ث وbudget_exhausted بعد 3 أدوات في محادثة مستودع) — تتسع.
+    try:
+        import ollama_client
+        if ollama_client._brain_latch_open():
+            budget = max(budget, 75.0 * MAX_STEPS)
+    except Exception:  # TOLERATED: المزلاج خيار صحة لا شرط تشغيل
+        pass
     deadline = time.monotonic() + budget
     lessons = ""
     try:
