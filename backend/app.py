@@ -3293,7 +3293,8 @@ def _register_real_tools() -> None:
     ))
     registry.register(ToolSpec(
         name="github.repo",
-        description="قراءة مستودع GitHub عام: الوصف واللغات والملفات وآخر الالتزامات وREADME",
+        description="قراءة مستودع GitHub عام: الوصف واللغات وعدد ملفات الشجرة كاملة "
+                    "وامتداداتها (R-836) والملفات الجذرية وآخر الالتزامات وREADME",
         inputs={"url": "رابط المستودع أو owner/repo"},
         outputs="نص بيانات المستودع",
         handler=_github_repo_tool,
