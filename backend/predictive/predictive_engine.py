@@ -17,22 +17,16 @@
 
 import json
 from runtime.atomic_json import atomic_write_json  # R-781
-import hashlib
 import time
 import threading
 import runtime.threads as threads
-import math
 import secrets
 import random
-from dataclasses import dataclass, field
-from datetime import datetime, timedelta
-from typing import Dict, Any, List, Optional, Tuple, Set
-from enum import Enum
-from collections import defaultdict
-import numpy as np
+from dataclasses import dataclass
+from typing import Dict, Any, List, Optional
 
 try:
-    from ..memory.core import get_core, EventType
+    from ..memory.core import get_core
     from ..memory.dynamic import get_dynamic_memory
     from ..memory.store import get_store
     from ..memory.biological.instincts import get_instincts
@@ -51,7 +45,7 @@ try:
     from ..sovereign.directives import get_sovereign_directives
     from ...config import DATA_DIR
 except ImportError:
-    from memory.core import get_core, EventType
+    from memory.core import get_core
     from memory.dynamic import get_dynamic_memory
     from memory.store import get_store
     from memory.biological.instincts import get_instincts

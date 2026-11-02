@@ -9,7 +9,7 @@ import json
 import logging
 import os
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Dict, Optional
 
 logger = logging.getLogger("nexus.encryption.comm")

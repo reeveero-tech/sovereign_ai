@@ -24,7 +24,6 @@ from __future__ import annotations
 import hashlib
 import io
 import logging
-import math
 import os
 import re
 import subprocess
@@ -69,7 +68,7 @@ def external_providers() -> List[str]:
 
 
 def capabilities() -> Dict[str, Any]:
-    import media_client
+
     ff = ffmpeg_exe()
     return {"image": True, "video": bool(ff), "ffmpeg": bool(ff),
             "providers": (["self_hosted"] if media_client_configured() else []) + external_providers()

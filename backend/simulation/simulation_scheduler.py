@@ -24,16 +24,15 @@ import random
 import secrets
 from dataclasses import dataclass
 from typing import Dict, Any, List, Optional, Tuple
-from collections import defaultdict
 import heapq
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor
 
 try:
-    from ..memory.core import get_core, EventType
+    from ..memory.core import get_core
     from ..config import DATA_DIR
     from .simulation_core import get_simulation_core
 except ImportError:
-    from memory.core import get_core, EventType
+    from memory.core import get_core
     from config import DATA_DIR
     from .simulation_core import get_simulation_core
 

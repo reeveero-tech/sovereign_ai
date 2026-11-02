@@ -17,7 +17,6 @@ MCP (Model Context Protocol) معيار الصنامة للاتصال بخواد
 
 import json
 import subprocess
-import threading
 
 import logging
 

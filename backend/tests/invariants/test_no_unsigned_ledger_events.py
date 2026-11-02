@@ -307,6 +307,8 @@ def test_unclassified_event_rejected(tmp_path):
     built = build_synthetic_ledger(data_dir / "data")
     ledger_file = built["ledger"]
     anchors_file = built["anchors"]
+    # R-830: إحياء «anchors_file» — بناء المراسي الاصطناعية يجب أن يثبت فعليًا
+    assert anchors_file.exists(), "المراسي الاصطناعية يجب أن تُبنى فعليًا قبل الحقن"
 
     original_lines = [
         l for l in ledger_file.read_text(encoding="utf-8").split("\n") if l.strip()
@@ -792,12 +794,18 @@ def test_real_anchors_full_coverage():
     total_end = 0
     for r in records:
         start, end = r["batch_start"], r["batch_end"]
+        # R-830: إحياء «total_end» — تتبع أعلى نهاية عبر كل المراسي
+        total_end = max(total_end, end)
         count = r["event_count"]
         # event_count يطابق النطاق حرفيًا (بنية سليمة)
         assert count == end - start + 1, (
             f"anchor {r.get('anchor_id')} event_count {count} != range "
             f"[{start},{end}] size {end - start + 1}"
         )
+    # أعلى نهاية عبر كل المراسي = آخر حدث مُرصوص في السجل (لا مرساة خارج السجل)
+    assert total_end == 116909, (
+        f"أعلى batch_end عبر المراسي ({total_end}) يجب أن يطابق آخر حدث (116909)"
+    )
     # التغطية الكاملة v2 موجودة وتطابق النطاق الكامل
     full = [r for r in records if r.get("sig_format") == "v2"
             and r["batch_start"] == 0]

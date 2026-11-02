@@ -19,9 +19,9 @@ import json
 import logging
 import time
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Optional
 
-from .keyring import KeyRing, KeyRecord, KeyStatus
+from .keyring import KeyRing, KeyRecord
 
 logger = logging.getLogger("sovereign.keys.rotation")
 

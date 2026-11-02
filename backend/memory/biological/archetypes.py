@@ -17,21 +17,17 @@
 
 import json
 from runtime.atomic_json import atomic_write_json  # R-781
-import hashlib
 import secrets
 import time
 import threading
 import runtime.threads as threads
 import math
-import random
-from dataclasses import dataclass, field
-from datetime import datetime
-from typing import Dict, Any, List, Optional, Tuple, Set
+from dataclasses import dataclass
+from typing import Dict, Any, List, Optional
 from enum import Enum
-from collections import defaultdict
 
 try:
-    from ..core import get_core, EventType
+    from ..core import get_core
     from ..store import get_store
     from ..dynamic import get_dynamic_memory
     from ..defense.watcher import get_watcher
@@ -44,7 +40,7 @@ try:
     from ..biological.drives import get_drives
     from ...config import DATA_DIR
 except ImportError:
-    from memory.core import get_core, EventType
+    from memory.core import get_core
     from memory.store import get_store
     from memory.dynamic import get_dynamic_memory
     from memory.defense.watcher import get_watcher

@@ -21,22 +21,18 @@ import json
 import math
 import hashlib
 import zlib
-import base64
-import array
-import struct
-from dataclasses import dataclass, field
-from typing import Dict, Any, List, Optional, Tuple, Set, Iterator
-from collections import defaultdict, Counter
-from datetime import datetime
+
+from typing import Dict, Any, List, Optional, Tuple
+from collections import defaultdict
 import threading
 import time
 
 try:
-    from .core import get_core, EventType
-    from .encoding import get_encoder
+    from .core import get_core
+
 except ImportError:
-    from core import get_core, EventType
-    from encoding import get_encoder
+    from core import get_core
+
 
 import logging
 logger = logging.getLogger(__name__)

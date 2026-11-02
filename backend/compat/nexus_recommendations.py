@@ -20,7 +20,6 @@ import logging
 from backend.compat.__meta__ import compat_tracked
 import sys
 from pathlib import Path
-from typing import Optional
 
 logger = logging.getLogger("backend.compat.nexus_recommendations")
 

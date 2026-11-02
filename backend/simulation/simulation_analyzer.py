@@ -27,12 +27,12 @@ from typing import Dict, Any, List, Optional, Tuple
 from collections import defaultdict
 
 try:
-    from ..memory.core import get_core, EventType
+    from ..memory.core import get_core
     from ..config import DATA_DIR
     from .simulation_core import get_simulation_core
     from .simulation_environment import get_simulation_environment_manager
 except ImportError:
-    from memory.core import get_core, EventType
+    from memory.core import get_core
     from config import DATA_DIR
     from .simulation_core import get_simulation_core
     from .simulation_environment import get_simulation_environment_manager

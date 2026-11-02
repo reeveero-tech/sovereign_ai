@@ -23,15 +23,13 @@ import os
 import hashlib
 import hmac
 import zlib
-import base64
 import shutil
 import time
 import threading
 import secrets
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, Any, Optional, List, Iterator, Tuple, BinaryIO
-from dataclasses import dataclass, asdict
+from typing import Dict, Any, Optional, List, Iterator, Tuple
 from enum import Enum
 import logging
 
@@ -1401,6 +1399,8 @@ class SovereignCore:
         - unverifiable_missing_key: أحداث بمفتاح غير معروف (ليس إثبات تلاعب)
         - invalid: أحداث بمفتاح معروف لكن التوقيع لا يطابق (مؤشر تلاعب)
         - legacy_pre_keyring: أحداث تاريخية (بلا key_id)
+        - malformed_fields (اختياري — R-830): أسماء الحقول المفقودة في الأحداث
+          البنيوية المعطوبة (قائمة، تظهر فقط عند وقوع الحالة)
         """
         report = {
             "total": 0,
@@ -1471,8 +1471,10 @@ class SovereignCore:
                     elif status_val == "invalid":
                         report["invalid"] += 1
                 except KeyError as e:
-                    # حقل مفقود في الحدث — حالة بنيوية
+                    # حقل مفقود في الحدث — حالة بنيوية (R-830: إحياء «e» —
+                    # اسم الحقل المفقود يسجل في تفاصيل التقرير بدل أن يُهمل)
                     report["malformed_json"] += 1
+                    report.setdefault("malformed_fields", []).append(str(e.args[0]) if e.args else "unknown")
                 except Exception:
                     # خطأ تنفيذ (ليس مفتاح مفقود)
                     report["execution_errors"] += 1

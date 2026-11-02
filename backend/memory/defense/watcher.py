@@ -16,24 +16,23 @@
 """
 
 import time
-import math
 import threading
 import runtime.threads as threads
 import hashlib
-from dataclasses import dataclass, field
-from typing import Dict, Any, List, Optional, Tuple, Set, Callable
-from collections import deque, defaultdict
+from dataclasses import dataclass
+from typing import Dict, Any, List, Optional, Tuple, Callable
+from collections import deque
 from enum import Enum
-import statistics
+
 
 try:
     from ..core import get_core, IntegrityStatus
-    from ..store import get_store, MemoryKind
+    from ..store import get_store
     from ..dynamic import get_dynamic_memory
     from ..encoding import get_encoder
 except ImportError:
     from core import get_core, IntegrityStatus
-    from store import get_store, MemoryKind
+    from store import get_store
     from dynamic import get_dynamic_memory
     from encoding import get_encoder
 

@@ -280,7 +280,6 @@ def test_proposal_not_applied_and_patch_is_real(tmp_path):
     ملف .diff فعلي يُحفظ في مخزن مخرجات الحارس ويُشار إليه من السجل،
     وأثرها الإصلاحي يُثبت **بالتنفيذ** على نسخة اختبارية فقط: الأصل يفشل
     بالاستيراد والمرقّع يستورد بنجاح."""
-    import difflib
     import subprocess
     import sys as _sys
 

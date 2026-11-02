@@ -3,7 +3,7 @@ NexusCore — موصل REST/GraphQL
 بديل شامل لـ satellite_connector.py — يتصل بأي API خارجي.
 """
 import asyncio
-import json
+
 import logging
 import time
 from dataclasses import dataclass, field

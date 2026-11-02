@@ -23,7 +23,6 @@ import logging
 
 # الجولة الإنشائية 2026-10-16: تسجيل الاستدعاءات (المرحلة 4 — ROADMAP_V2)
 from backend.compat.__meta__ import compat_tracked
-from typing import Optional
 
 logger = logging.getLogger("backend.compat.nexus_router_compat")
 

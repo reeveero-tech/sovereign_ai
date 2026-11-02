@@ -19,16 +19,12 @@ import json
 from runtime.atomic_json import atomic_write_json  # R-781
 import hashlib
 import secrets
-import base64
-import math
 import time
 import threading
 import runtime.threads as threads
-from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Tuple, Union, Set
-from collections import defaultdict
+
+from typing import Any, Dict, Optional, Tuple, Union
 from pathlib import Path
-import numpy as np  # numpy اختياري، يُستخدم فقط للمصفوفات
 
 try:
     from config import DATA_DIR, SOVEREIGN_KEY  # LEGACY-ROOT-KEY (read-only): مسار القراءة التاريخي فقط

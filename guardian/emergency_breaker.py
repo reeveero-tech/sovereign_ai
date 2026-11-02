@@ -17,7 +17,7 @@ import os
 import shutil
 import time
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 from typing import Callable, Dict, List, Optional
@@ -118,7 +118,7 @@ class EmergencyBreaker:
 
         # ── خطوة 5: قفل النظام ──────────────────────────────────────
         reactivation = self._step5_lock_system(incident_id)
-        actions.append(f"رمز إعادة التفعيل جاهز — يتطلب تدخل السيد")
+        actions.append("رمز إعادة التفعيل جاهز — يتطلب تدخل السيد")
 
         # إنشاء حادثة
         incident = EmergencyIncident(
@@ -292,7 +292,7 @@ class EmergencyBreaker:
         code_hash = hashlib.sha256(master_code.encode()).hexdigest()
 
         if code_hash != lock_data.get("reactivation_code_hash"):
-            logger.critical(f"❌ Invalid reactivation code attempt")
+            logger.critical("❌ Invalid reactivation code attempt")
             return {"success": False, "reason": "رمز التفعيل غير صحيح"}
 
         # إلغاء القفل

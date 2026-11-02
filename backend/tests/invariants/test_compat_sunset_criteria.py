@@ -97,6 +97,12 @@ def test_guard_rejects_empty_sunset_criteria():
     """RED (تصويب المراجع — الاعتراض 3): إدخال بمعيار إزالة فارغ يجب أن
     يرفضه الحارس — الكاشف يفحص قيمة المعيار لا وجود المفتاح."""
     lifecycle = _lifecycle_registry()
+    # R-830: إحياء «lifecycle» — السجل الحقيقي نفسه خالٍ من المعايير الفارغة
+    # (فحص العينة الحية لا الوهمية فقط)، ثم الحالة الوهمية الفارغة تُفحص أدناه
+    assert all(
+        str((entry or {}).get("sunset_criteria", "")).strip()
+        for entry in lifecycle.values()
+    ), "COMPAT_LIFECYCLE entries must all carry non-empty sunset criteria"
     empty_entry = {"sunset_criteria": "", "status": "active"}
     criterion = empty_entry.get("sunset_criteria")
     assert not criterion or not str(criterion).strip(), (
@@ -156,7 +162,6 @@ def test_guard_flags_new_compat_without_sunset():
     وحدة compat جديدة بلا SUNSET_CRITERIA تفشل الحارس، وإضافتها تعيد النجاح —
     المسبار يُنفذ في كل تشغيل (سب-بروسس)، فلا يعتمد على تشغيل تاريخي.
     """
-    import shutil
     import subprocess
 
     probe = COMPAT_DIR / "_probe_no_criteria.py"

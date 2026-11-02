@@ -33,19 +33,18 @@ import threading
 import runtime.threads as threads
 import math
 from dataclasses import dataclass, field, asdict
-from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Any, Tuple, Set, Iterator, Union
+from typing import Dict, List, Optional, Any, Tuple, Set, Union
 from enum import Enum
 from collections import defaultdict
 import heapq
 
 try:
-    from ..core import get_core, EventType
+    from ..core import get_core
     from ..encoding import get_encoder
     from ...config import DATA_DIR, SOVEREIGN_KEY  # LEGACY-ROOT-KEY (read-only): مسار فك تشفير الحمولات التاريخية فقط
 except ImportError:
-    from memory.core import get_core, EventType
+    from memory.core import get_core
     from memory.encoding import get_encoder
     from config import DATA_DIR, SOVEREIGN_KEY  # LEGACY-ROOT-KEY (read-only)
 

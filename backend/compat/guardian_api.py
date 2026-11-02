@@ -21,7 +21,6 @@ from backend.compat.__meta__ import compat_tracked
 import sys
 import time
 from pathlib import Path
-from typing import Optional
 
 logger = logging.getLogger("backend.compat.guardian_api")
 
@@ -54,7 +53,7 @@ def guardian_status_snapshot() -> dict:
     """
     try:
         # محاولة استيراد الحارس (اختياري — يفشل بسلام إذا وُجد خلل)
-        from guardian import MasterGuardian, EmergencyBreaker, IntegrityChecker
+
         modules_ok = True
     except Exception as e:
         logger.warning(f"⚠️ Guardian import failed: {e}")

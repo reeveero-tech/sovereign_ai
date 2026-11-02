@@ -444,7 +444,8 @@ def test_collect_only_run_restores_modes(tmp_path):
     (replica / "tests" / "test_clean.py").write_text(_CLEAN_TEST, encoding="utf-8")
     history = replica / "data" / "keys" / "HISTORY.jsonl"
     before_mode = _stat.S_IMODE(_os.stat(history).st_mode)
-    proc_rc = None
+    # R-830 # DELETION-JUSTIFIED: سطر «proc_rc = None» كان متغيرًا وسيطًا ميتًا
+    # لا يُقرأ — التوكيد الفعلي على proc.returncode موجود لاحقًا في الاختبار مباشرة
     import subprocess as _sp
     import sys as _sys
     proc = _sp.run(

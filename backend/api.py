@@ -18,24 +18,27 @@
 - /api/redoc     → توثيق API (ReDoc)
 """
 
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, HTTPException, Header, status
-from fastapi.responses import JSONResponse
+from fastapi import (
+    APIRouter,
+    WebSocket,
+    WebSocketDisconnect,
+    HTTPException,
+    Header,
+)
 from pydantic import BaseModel, ConfigDict
 from typing import Dict, Any, Optional, List
 import hmac
 import json
 import time
 import uuid
-import asyncio
-from datetime import datetime
 
 # استيراد Orchestrator
 try:
-    from orchestrator import get_orchestrator, OrchestratorMode
+    from orchestrator import get_orchestrator
 except ImportError:
     import sys
     sys.path.append('.')
-    from orchestrator import get_orchestrator, OrchestratorMode
+    from orchestrator import get_orchestrator
 
 # مفتاح السيد (لمصادقة مسارات الكتابة — جولة المجلس <1>)
 try:

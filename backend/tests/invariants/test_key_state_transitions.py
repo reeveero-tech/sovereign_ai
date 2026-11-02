@@ -14,7 +14,6 @@
 """
 
 import sys
-import tempfile
 from pathlib import Path
 
 import pytest
@@ -31,11 +30,9 @@ from backend.sovereign.keys.state_machine import (
     ALLOWED_TRANSITIONS,
     transition,
     assert_usable_for_signing,
-    assert_usable_for_verification,
     verification_result_for,
     assert_explicit_state,
     translate_status_to_state,
-    KEYSTATUS_TO_KEYSTATE,
 )
 from backend.sovereign.keys.keyring import KeyStatus
 

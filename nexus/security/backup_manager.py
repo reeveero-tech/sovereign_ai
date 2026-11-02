@@ -3,7 +3,6 @@ NexusCore — مدير النسخ الاحتياطية
 ينشئ ويدير نسخاً احتياطية آمنة من البيانات والكود.
 """
 import hashlib
-import json
 import logging
 import shutil
 import tarfile

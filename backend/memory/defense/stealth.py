@@ -16,30 +16,24 @@
 
 import json
 from runtime.atomic_json import atomic_write_json  # R-781
-import os
 import secrets
 import hashlib
 import time
 import threading
 import runtime.threads as threads
 import random
-import string
-import base64
 from dataclasses import dataclass, field
-from pathlib import Path
-from typing import Dict, Any, Optional, List, Tuple, Set, Callable
+from typing import Dict, Any, Optional, List, Set
 from enum import Enum
-from collections import deque
-import ipaddress
 
 try:
-    from ..core import get_core, EventType
+    from ..core import get_core
     from ..encoding import get_encoder
-    from ...config import DATA_DIR, SOVEREIGN_KEY  # LEGACY-ROOT-KEY (read-only): استيراد تاريخي غير مستخدم مفتاحيًا
+    from ...config import DATA_DIR
 except ImportError:
-    from memory.core import get_core, EventType
+    from memory.core import get_core
     from memory.encoding import get_encoder
-    from config import DATA_DIR, SOVEREIGN_KEY  # LEGACY-ROOT-KEY (read-only): استيراد تاريخي
+    from config import DATA_DIR
 
 import logging
 logger = logging.getLogger(__name__)
@@ -241,15 +235,15 @@ class StealthDefense:
                 return False
             
             # تشويش الحقول
-            for field in fields:
-                if field in payload:
-                    original = payload[field]
+            for fld in fields:
+                if fld in payload:
+                    original = payload[fld]
                     if isinstance(original, str):
-                        payload[field] = self._scramble_string(original)
+                        payload[fld] = self._scramble_string(original)
                     elif isinstance(original, (int, float)):
-                        payload[field] = original + random.randint(-100, 100) / 100
+                        payload[fld] = original + random.randint(-100, 100) / 100
                     elif isinstance(original, dict):
-                        payload[field] = {"scrambled": True, "original_hash": hashlib.md5(str(original).encode()).hexdigest()}
+                        payload[fld] = {"scrambled": True, "original_hash": hashlib.md5(str(original).encode()).hexdigest()}
             
             # تخزين النسخة المشوشة
             scrambled_hash = self.core.store_blob(json.dumps(payload, ensure_ascii=False).encode(), compress=True)

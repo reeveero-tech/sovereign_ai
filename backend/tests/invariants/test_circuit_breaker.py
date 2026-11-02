@@ -134,7 +134,7 @@ def test_quarantine_write_failure_is_not_silent_allow():
     """اعتراض المراجع: فشل كتابة سجل العزل يجب ألا يتحول سماحًا صامتًا —
     المكوّن المعزول يُرفض رغم فشل التوثيق على القرص (الحدث محفوظ في ذاكرة
     العملية كاحتياط مرئي)، وبقية المكونات تستمر (الأمر نصًّا)."""
-    import stat as stat_mod
+
     log = quarantine_log_path()
     blocker = log.parent  # مجلد loyalty
     blocker.mkdir(parents=True, exist_ok=True)
@@ -256,7 +256,7 @@ def test_warm_cache_consults_fallback():
     """اعتراض المراجع: كاش دافئ + إلحاق فشل توثيقه (ذهب للاحتياط) — الطلب
     اللاحق يجب ألا يُخدم من الكاش القديم بلا استشارة الاحتياط (بصمة الكاش
     تشمل نسخة الاحتياط)."""
-    import stat as stat_mod
+
     log = quarantine_log_path()
     log.parent.mkdir(parents=True, exist_ok=True)
     # ١) سجل مقروء + طلب — تسخين الكاش (بلا عزل: الكاش فارغ)
@@ -312,6 +312,8 @@ def test_quarantined_component_not_invoked_inside_cycle():
     صراحةً — الادعاء كله مُثبت لا مفترض."""
     assert append_entry("quarantine", "عزل التنبؤ", component="predictive") is True
     with TestClient(app) as client:
+        # R-830: إحياء «client» — التطبيق يظل مستجيبًا للطلبات والعزل مفروض
+        assert client.get("/health").status_code == 200
         orch = app.state.orchestrator
         assert orch is not None
         pred_calls = {"n": 0}
@@ -424,6 +426,8 @@ def test_cycle_keeps_known_quarantine_on_read_failure():
     assert append_entry("quarantine", "عزل التنبؤ", component="predictive") is True
     log = quarantine_log_path()
     with TestClient(app) as client:
+        # R-830: إحياء «client» — التطبيق يظل مستجيبًا للطلبات والعزل مفروض
+        assert client.get("/health").status_code == 200
         orch = app.state.orchestrator
         pred_calls = {"n": 0}
         cons_calls = {"n": 0}
@@ -445,6 +449,8 @@ def test_cycle_keeps_known_quarantine_on_read_failure():
         try:
             # دورة أولى: العزل مفروض (قراءة ناجحة)
             r1 = orch.run_cycle({"type": "chat", "text": "دورة أولى"})
+            # R-830: إحياء «r1» — الدورة الأولى تكتمل بنجاح قبل تعطيل القراءة
+            assert r1.success is True, "الدورة الأولى يجب أن تكتمل"
             assert pred_calls["n"] == 0 and cons_calls["n"] > 0
             # عطّل قراءة السجل — آخر حالة معروفة يجب أن تبقى مفروضة
             log.chmod(0o000)
@@ -470,6 +476,8 @@ def test_sovereign_quarantine_blocks_cycle_sovereign_layer():
     تعمل والدورة تكتمل."""
     assert append_entry("quarantine", "عزل السيادي", component="sovereign") is True
     with TestClient(app) as client:
+        # R-830: إحياء «client» — التطبيق يظل مستجيبًا للطلبات والعزل مفروض
+        assert client.get("/health").status_code == 200
         orch = app.state.orchestrator
         controller = (orch.sovereign or {}).get("controller")
         assert controller is not None, "بلا متحكم سيادي — الاختبار لا يختبر شيئًا"
@@ -503,6 +511,8 @@ def test_sovereign_quarantine_blocks_evaluation_layer():
     مرحلتي التقييم والقرار تحديدًا كما طلبه المراجع."""
     assert append_entry("quarantine", "عزل السيادي", component="sovereign") is True
     with TestClient(app) as client:
+        # R-830: إحياء «client» — التطبيق يظل مستجيبًا للطلبات والعزل مفروض
+        assert client.get("/health").status_code == 200
         orch = app.state.orchestrator
         controller = (orch.sovereign or {}).get("controller")
         cc_calls = {"n": 0}
@@ -562,6 +572,8 @@ def test_cold_read_failure_is_not_internal_allow():
     assert append_entry("quarantine", "عزل التنبؤ", component="predictive") is True
     log = quarantine_log_path()
     with TestClient(app) as client:
+        # R-830: إحياء «client» — التطبيق يظل مستجيبًا للطلبات والعزل مفروض
+        assert client.get("/health").status_code == 200
         orch = app.state.orchestrator
         # محاكاة منسق بارد: لم تُثبت أي حالة بعد (لا قراءة ناجحة سابقة)
         orch._quarantine_proven = False
@@ -598,6 +610,8 @@ def test_file_deletion_after_proven_keeps_orchestrator_quarantine():
     assert append_entry("quarantine", "عزل التنبؤ", component="predictive") is True
     log = quarantine_log_path()
     with TestClient(app) as client:
+        # R-830: إحياء «client» — التطبيق يظل مستجيبًا للطلبات والعزل مفروض
+        assert client.get("/health").status_code == 200
         orch = app.state.orchestrator
         pred_calls = {"n": 0}
         pred_engine = orch.predictive.get("engine")
@@ -611,6 +625,8 @@ def test_file_deletion_after_proven_keeps_orchestrator_quarantine():
         try:
             # دورة أولى: القراءة ناجحة — العزل مثبت داخل المنسق
             r1 = orch.run_cycle({"type": "chat", "text": "دورة الإثبات"})
+            # R-830: إحياء «r1» — دورة الإثبات تكتمل قبل حذف السجل
+            assert r1.success is True, "دورة الإثبات يجب أن تكتمل"
             assert pred_calls["n"] == 0
             # حذف الملف (غياب = تعذر إثبات، لا فراغ)
             log.unlink()

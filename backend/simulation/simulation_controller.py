@@ -26,14 +26,14 @@ from dataclasses import dataclass
 from typing import Dict, Any, List, Optional
 
 try:
-    from ..memory.core import get_core, EventType
+    from ..memory.core import get_core
     from ..config import DATA_DIR
     from .simulation_core import get_simulation_core
     from .simulation_environment import get_simulation_environment_manager
     from .simulation_scheduler import get_simulation_scheduler
     from .simulation_analyzer import get_simulation_analyzer
 except ImportError:
-    from memory.core import get_core, EventType
+    from memory.core import get_core
     from config import DATA_DIR
     from .simulation_core import get_simulation_core
     from .simulation_environment import get_simulation_environment_manager

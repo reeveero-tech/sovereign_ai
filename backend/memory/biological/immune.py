@@ -23,19 +23,16 @@ import time
 import threading
 import runtime.threads as threads
 import random
-from dataclasses import dataclass, field
-from datetime import datetime
-from typing import Dict, Any, List, Optional, Tuple, Set
+from dataclasses import dataclass
+from typing import Dict, Any, List, Optional, Set
 from enum import Enum
-from collections import deque
-import numpy as np
 
 try:
-    from ..core import get_core, EventType
+    from ..core import get_core
     from ...config import DATA_DIR
     from ..defense.watcher import get_watcher
 except ImportError:
-    from memory.core import get_core, EventType
+    from memory.core import get_core
     from config import DATA_DIR
     from memory.defense.watcher import get_watcher
 

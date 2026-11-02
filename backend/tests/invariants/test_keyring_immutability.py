@@ -170,7 +170,7 @@ def test_keyring_history_immutable():
         "data/keys/HISTORY.jsonl must exist (key history is append-only)"
     )
 
-    import subprocess as _sp
+
 
     current_lines = _history_lines(history_file.read_text(encoding="utf-8"))
 
@@ -622,7 +622,6 @@ def test_no_active_lost_keys_catches_bad_active_pointer(tmp_path):
     بمؤشر نشط يشير إلى مفتاح LOST ثم نطبق منطق الفحصين."""
     keyring = KeyRing()
     # مفتاحان: واحد ACTIVE وواحد LOST — والمؤشر النشط يشير إلى المفقود
-    import time as _time
     rec_active = KeyRecord(
         key_id="k-active", public_key="pub1", private_key="priv1",
         status=KeyStatus.ACTIVE, valid_from="2026-01-01T00:00:00Z",

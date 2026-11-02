@@ -26,7 +26,7 @@ from dataclasses import dataclass
 from typing import Dict, Any, List, Optional
 
 try:
-    from ..memory.core import get_core, EventType
+    from ..memory.core import get_core
     from .quantum_state import get_quantum_state_engine
     from .quantum_transition import get_quantum_transition_engine
     from .quantum_superposition import get_quantum_superposition_engine
@@ -35,7 +35,7 @@ try:
     from ..sovereign.controller import get_sovereign_controller
     from ..config import DATA_DIR
 except ImportError:
-    from memory.core import get_core, EventType
+    from memory.core import get_core
     from .quantum_state import get_quantum_state_engine
     from .quantum_transition import get_quantum_transition_engine
     from .quantum_superposition import get_quantum_superposition_engine

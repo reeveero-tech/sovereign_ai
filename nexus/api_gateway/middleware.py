@@ -5,7 +5,7 @@ Rate limiting + logging للطلبات الواردة.
 import logging
 import time
 from collections import defaultdict
-from typing import Callable, Dict, List
+from typing import Dict, List
 
 logger = logging.getLogger("nexus.api_gateway.middleware")
 

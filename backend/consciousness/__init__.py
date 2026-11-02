@@ -1,9 +1,13 @@
-from .field import *
-from .identity_core import *
-from .self_model import *
-from .awareness import *
-from .attention_engine import *
-from .introspection import *
+# R-830: ربط صريح بدل star imports — كل اسم في __all__ معرّف فعليًا
+# (كان «قد تكون غير معرفة» عبر النجمة بلا تحقق؛ الاستهلاك كله عبر الوحدات الفرعية)
+from . import (
+    field,
+    identity_core,
+    self_model,
+    awareness,
+    attention_engine,
+    introspection,
+)
 
 __all__ = [
     'field',
@@ -11,5 +15,5 @@ __all__ = [
     'self_model',
     'awareness',
     'attention_engine',
-    'introspection'
+    'introspection',
 ]
