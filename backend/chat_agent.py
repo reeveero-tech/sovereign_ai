@@ -54,7 +54,8 @@ _CHAT_SYSTEM = (
     '{"action":"finish","answer":"<الجواب للمالك>"}\n'
     "الجواب بالعربية الفصحى (أو بلغة المالك إن كتب بغيرها)، واضح وموجز، بلا حروف صينية. "
     "لا تقل إنك لا تستطيع الوصول إلى الإنترنت: أداة web.fetch تقرأ أي رابط، وgithub.repo "
-    "تقرأ مستودعات GitHub العامة. إن فشلت أداة فقل ذلك بصدق.\n"
+    "تقرأ مستودعات GitHub العامة (ورابط الحسابات/المؤسسات تُسرد كل مستودعاتها — R-838.2). "
+    "إن فشلت أداة فقل ذلك بصدق.\n"
 )
 
 
@@ -175,16 +176,22 @@ class ChatPlanner:
     accepts_feedback = True
 
     def __init__(self, history: Optional[List[Dict[str, str]]] = None,
-                 deadline: Optional[float] = None, chat_fn=None, lessons: str = "",
+                 deadline: Optional[Any] = None, chat_fn=None, lessons: str = "",
                  model: Optional[str] = None):
         self.history = list(history or [])[-6:]
         # R-790: وقائع تجارب سابقة مشابهة (experience.lessons_text) — العقل يتعلم مما وقع
         self.lessons = lessons or ""
+        # R-838.3: الموعد قد يكون floatًا كما كان، أو استدعاءً حيًا يُقرأ عند كل نداء
+        # (المزلاج قد يفتح داخل الجولة بعد قياس الميزانية، فالموعد يتسع معها)
         self.deadline = deadline
         self._chat = chat_fn
         # R-810/813 (البند ٢): نموذج هذه المحادثة — يصل كل نداء العقل (توجيهًا وجوابًا)؛
         # بلا قيمة يُستخدم النموذج الفعّال العام
         self.model = model
+
+    def _deadline_at(self) -> Optional[Any]:
+        """R-838.3: قيمة الموعد النهائي الآن — استدعاء حي يُقرأ عند كل نداء أو ثابت كما كان."""
+        return self.deadline() if callable(self.deadline) else self.deadline
 
     def _call(self, system: str, user: str, **kw) -> Optional[str]:
         chat = self._chat
@@ -192,8 +199,9 @@ class ChatPlanner:
             import ollama_client
             chat = ollama_client.chat
         timeout = None
-        if self.deadline is not None:
-            timeout = max(5.0, self.deadline - time.monotonic())
+        deadline = self._deadline_at()
+        if deadline is not None:
+            timeout = max(5.0, deadline - time.monotonic())
         # R-810/813: النموذج المختار للمحادثة يمر لكل نداء — لا انفصام بين الاختيار والاستدلال
         if self.model:
             kw.setdefault("model", self.model)
@@ -396,6 +404,7 @@ def respond(text: str, history: Optional[List[Dict[str, str]]] = None, *,
     if registry is None:
         from tool_registry import get_registry
         registry = get_registry()
+    cloud_only = False
     if chat_fn is None and not brain_enabled():
         # R-833: العقل الأساسي معطل إعداديًا لكن السحابي الاحتياطي مفعّل ⇒
         # المحادثة الوكيلة تعمل به (المخطط يعلن هويته) — لا موت بتعذر عقل واحد
@@ -408,28 +417,49 @@ def respond(text: str, history: Optional[List[Dict[str, str]]] = None, *,
             return {"reply": "العقل اللغوي غير مفعّل على هذا الخادم (OLLAMA_ENABLED/OLLAMA_MODEL) — "
                              "لا أستطيع فهم الرسالة والإجابة عنها دونه.",
                     "status": "brain_disabled", "tools_used": [], "steps": []}
+        # R-838.3: هنا السحابي هو المخطط من النداء الأول — توسعة الميزانية
+        # ابتدائية لا انتظار مزلاج لن يُفتح أصلًا (العقل الأساسي معطل إعداديًا)
+        cloud_only = True
     budget = float(max_seconds if max_seconds is not None else MAX_SECONDS)
-    # R-834: العقل الأساسي متعذر (مزلاج R-821 مفتوح) والسحابي هو المخطط — كل
-    # نداء ينتظر حد معدل المزود (~45ث) فميزانية 150ث تُستنفد قبل اكتمال الجولة
-    # (ثُبت حيًا: 176ث وbudget_exhausted بعد 3 أدوات في محادثة مستودع) — تتسع.
-    try:
-        import ollama_client
-        if ollama_client._brain_latch_open():
-            budget = max(budget, 75.0 * MAX_STEPS)
-    except Exception:  # TOLERATED: المزلاج خيار صحة لا شرط تشغيل
-        pass
-    deadline = time.monotonic() + budget
+    # R-838.3: الميزانية الحية — تُقرأ عند كل فحص، لا مرة واحدة قبل الجولة.
+    # علة إنتاج (لوحة 2026-11-03 00:02): أول فشل للعقل الأساسي داخل الجولة يفتح
+    # مزلاج R-821 بعد قياس الميزانية لا قبله، فيخطط العقل السحابي — وكل ندائه
+    # ينتظر حد معدل المزود (~45ث) — بميزانية 150ث فتنفد قبل الجواب (ثُبت حيًا:
+    # 174ث وbudget_exhausted بعد 3 أدوات في طلب تحليل حساب GitHub). الآن: فتح
+    # المزلاج أثناء الجولة يوسّع الميزانية والموعد النهائي معًا لحظيًا،
+    # والتوسعة لاصقة لا تنكمش إن أُغلق المزلاج في منتصف الجولة — الجولة التي
+    # بدأت بطيئة تُمنح نَفَسها كاملًا.
+    _started = time.monotonic()
+    _cloud_floor = {"seconds": 0.0}
+
+    def _budget_now() -> float:
+        if cloud_only:
+            _cloud_floor["seconds"] = max(_cloud_floor["seconds"], 75.0 * MAX_STEPS)
+        else:
+            try:
+                import ollama_client
+                if ollama_client._brain_latch_open():
+                    _cloud_floor["seconds"] = max(_cloud_floor["seconds"], 75.0 * MAX_STEPS)
+            except Exception:  # TOLERATED: المزلاج خيار صحة لا شرط تشغيل
+                pass
+        return max(budget, _cloud_floor["seconds"])
+
+    budget = _budget_now()  # الفحص الابتدائي كما كان (R-834)
+
+    def _deadline_at() -> float:
+        """R-838.3: الموعد النهائي الحي — يتسع مع الميزانية إن فُتح المزلاج داخل الجولة."""
+        return _started + _budget_now()
     lessons = ""
     try:
         import experience
         lessons = experience.lessons_text(text, k=3)
     except Exception:  # TOLERATED: بلا خبرة يعمل الموجّه كما كان
         lessons = ""
-    planner = ChatPlanner(history, deadline=deadline, chat_fn=chat_fn, lessons=lessons,
+    planner = ChatPlanner(history, deadline=_deadline_at, chat_fn=chat_fn, lessons=lessons,
                           model=model)
     names = allowed_tools(registry, owner)
     loop = AgentLoop(registry, planner, max_steps=MAX_STEPS, max_seconds=budget,
-                     allowed_tools=names, caller="chat")
+                     allowed_tools=names, caller="chat", max_seconds_fn=_budget_now)
     res = loop.run(text)
     steps = res.get("steps") or []
     used = [s.get("tool") for s in steps if s.get("tool")]
@@ -439,7 +469,7 @@ def respond(text: str, history: Optional[List[Dict[str, str]]] = None, *,
     answer = (res.get("answer") or "").strip() if res.get("status") == "completed" else ""
     if answer:
         out["reply"] = answer
-    elif steps and time.monotonic() < deadline - 5:
+    elif steps and time.monotonic() < _deadline_at() - 5:
         try:
             final = planner.final_answer(text, steps)
         except Exception:  # TOLERATED: يُعلن أدناه بصدق
@@ -453,7 +483,7 @@ def respond(text: str, history: Optional[List[Dict[str, str]]] = None, *,
     # صادقًا ويبقى الجواب (المراجعة إضافة، لا ركنًا ينهار به المسار).
     if out.get("reply") and out.get("status") in ("completed", "answered_from_results"):
         try:
-            out["reviewer"] = _review_answer(text, steps, out["reply"], deadline,
+            out["reviewer"] = _review_answer(text, steps, out["reply"], _deadline_at(),
                                              chat_fn=chat_fn, model=model)
         except Exception as exc:  # TOLERATED: المراجع إضافة — فشله يُعلن ولا يُسقط الجواب
             out["reviewer"] = {"reviewer": "reviewer_error", "ok": None,

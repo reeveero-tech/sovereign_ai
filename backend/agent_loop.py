@@ -259,11 +259,15 @@ class AgentLoop:
                  cancel: Optional[CancelToken] = None,
                  clock: Callable[[], float] = time.monotonic,
                  caller: str = "agent",
-                 max_invalid_retries: int = 2):
+                 max_invalid_retries: int = 2,
+                 max_seconds_fn: Optional[Callable[[], float]] = None):
         self.registry = registry
         self.planner = planner
         self.max_steps = int(max_steps)
         self.max_seconds = float(max_seconds)
+        # R-838.3: ميزانية حية — استدعاء يُقرأ عند كل فحص، لا ثابت يقاس مرة
+        # واحدة قبل معرفة المخطط الفعلي (علة إنتاج: المزلاج يفتح داخل الجولة)
+        self.max_seconds_fn = max_seconds_fn
         self.max_tool_calls = int(max_tool_calls if max_tool_calls is not None else max_steps)
         self.allowed = set(allowed_tools) if allowed_tools is not None else None
         self.cancel = cancel or CancelToken()
@@ -325,6 +329,7 @@ class AgentLoop:
                          "planner": res["planner"],
                          "budget": {"max_steps": self.max_steps,
                                     "max_seconds": self.max_seconds,
+                                    "max_seconds_live": bool(self.max_seconds_fn),
                                     "max_tool_calls": self.max_tool_calls}})
         except Exception as exc:
             res.update(status="ledger_blocked",
@@ -347,7 +352,9 @@ class AgentLoop:
             if tool_calls >= self.max_tool_calls:
                 status, extra = "budget_exhausted", {"budget": "max_tool_calls"}
                 break
-            if self.clock() - start > self.max_seconds:
+            budget_now = (self.max_seconds_fn() if self.max_seconds_fn
+                          else self.max_seconds)  # R-838.3: حية لا ثابتة
+            if self.clock() - start > budget_now:
                 status, extra = "budget_exhausted", {"budget": "max_seconds"}
                 break
             try:

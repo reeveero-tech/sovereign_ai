@@ -27,6 +27,7 @@
 | + | (عودة) رابط كيان كامل + اتجاه الإحالة (إصلاح انحدار R-834) | `test_url_entity_and_anaphora_direction` | ✅ |
 | + | (عودة R-838.1) طلب واضح بلا غموض لا يولد سؤالًا توضيحيًا وهميًا — الحالة الإنتاجية الحرفية من لوحة المراقبة | `test_no_spurious_clarification_clear_request` | ✅ |
 | + | (عودة R-838.2) رابط حساب GitHub بلا مسار مستودع ⇒ سرد مستودعاته لا 404 — الحالة الإنتاجية الحرفية (`tests/test_r8382_github_account.py`، 7/7) | `test_account_url_lists_repos` + 6 | ✅ |
+| + | (عودة R-838.3) ميزانية حية تتسع حين يفتح مزلاج العقل داخل الجولة — الجولة تكتمل بعد التوسعة منتصفها بينما كانت تُستنفد بصدق (`tests/test_r8383_live_budget.py`، 5/5) | `test_agent_loop_live_budget_completes_after_midrun_growth` + 4 | ✅ |
 
 ## أدلة حية من نقطة النهاية `/chat` (دمج فعلي)
 
