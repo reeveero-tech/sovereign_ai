@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>طبقة تنسيق الوكلاء — R-841</title>
+<style>
+  :root{
+    --bg:#0b0f14; --panel:#121820; --line:#1e2733; --ink:#dbe4ee;
+    --dim:#8aa0b5; --ok:#3ecf8e; --bad:#ef5d6f; --warn:#e8b64c; --key:#4da3ff;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:"Segoe UI",Tahoma,system-ui,sans-serif;
+    background:var(--bg);color:var(--ink)}
+  header{padding:14px 20px;border-bottom:1px solid var(--line);
+    display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+  header h1{font-size:17px;margin:0}
+  header .tag{font-size:11px;color:var(--dim);border:1px solid var(--line);
+    padding:2px 8px;border-radius:10px}
+  main{display:grid;grid-template-columns:360px 1fr;gap:14px;padding:14px;
+    max-width:1200px;margin:auto}
+  @media(max-width:900px){main{grid-template-columns:1fr}}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;
+    padding:14px;margin-bottom:14px}
+  .card h2{font-size:14px;margin:0 0 10px;color:var(--key)}
+  label{display:block;font-size:12px;color:var(--dim);margin:8px 0 4px}
+  input,textarea,select{width:100%;background:#0a0e13;border:1px solid var(--line);
+    color:var(--ink);border-radius:7px;padding:8px;font-size:13px}
+  textarea{resize:vertical;min-height:70px}
+  button{background:#1c4e78;border:0;color:#fff;border-radius:7px;
+    padding:9px 14px;font-size:13px;cursor:pointer;margin-inline-end:6px}
+  button.ghost{background:transparent;border:1px solid var(--line);color:var(--dim)}
+  button.danger{background:#7a2333}
+  button.ok{background:#1d6b4c}
+  .row{display:flex;gap:8px;align-items:center;margin-top:10px;flex-wrap:wrap}
+  .pill{font-size:11px;padding:2px 9px;border-radius:10px;border:1px solid var(--line)}
+  .pill.completed{color:var(--ok)} .pill.failed,.pill.denied,.pill.cancelled{color:var(--bad)}
+  .pill.pending_approval,.pill.needs_clarification,.pill.paused{color:var(--warn)}
+  .step{border:1px solid var(--line);border-radius:8px;padding:9px;margin-bottom:8px}
+  .step .sid{color:var(--dim);font-size:11px}
+  .step .goal{font-size:13px;margin:2px 0}
+  .step .tool{font-size:11px;color:var(--key);direction:ltr;text-align:right}
+  .trace{font-family:monospace;font-size:11px;direction:ltr;text-align:left;
+    white-space:pre-wrap;max-height:260px;overflow:auto;background:#0a0e13;
+    border:1px solid var(--line);border-radius:8px;padding:10px}
+  .ap{border:1px solid var(--warn);border-radius:8px;padding:10px;margin-bottom:8px}
+  .ap .sum{font-size:13px} .ap .imp{font-size:11px;color:var(--dim)}
+  .reply{background:#0e1a14;border:1px solid #1e3a2a;border-radius:8px;
+    padding:10px;font-size:13px;white-space:pre-wrap}
+  .loop-item{padding:7px;border-bottom:1px solid var(--line);cursor:pointer;
+    font-size:12px;display:flex;justify-content:space-between;gap:8px}
+  .loop-item:hover{background:#161e29}
+  .hint{font-size:11px;color:var(--dim);margin-top:6px}
+</style>
+</head>
+<body>
+<header>
+  <h1>طبقة تنسيق الوكلاء</h1>
+  <span class="tag">R-841</span>
+  <span class="tag">خطة ← بوابات ← تنفيذ ← أثر</span>
+  <input id="apikey" type="password" placeholder="مفتاح المالك (SOVEREIGN_KEY)"
+    style="width:240px;margin-inline-start:auto">
+</header>
+<main>
+  <section>
+    <div class="card">
+      <h2>طلب جديد</h2>
+      <label>الطلب (بأي لغة)</label>
+      <textarea id="utterance">حلل مستودع github.com/reeveero-tech/sovereign_ai</textarea>
+      <label>الصلاحيات (لكل سطر)</label>
+      <textarea id="perms" style="min-height:44px">orchestrator:write</textarea>
+      <div class="row">
+        <label style="margin:0"><input type="checkbox" id="dryrun" style="width:auto"> معاينة جافة (لا تنفيذ)</label>
+      </div>
+      <div class="row">
+        <button id="submit">إرسال</button>
+        <button id="cancel" class="danger">إلغاء الحلقة الحالية</button>
+      </div>
+      <div class="hint">الكتابة الحساسة تتوقف على بوابة موافقة قبل أي تنفيذ.</div>
+    </div>
+    <div class="card">
+      <h2>موافقات معلّقة</h2>
+      <div id="approvals"><div class="hint">لا شيء معلّق</div></div>
+    </div>
+    <div class="card">
+      <h2>الحلقات</h2>
+      <div id="loops"></div>
+    </div>
+  </section>
+  <section>
+    <div class="card">
+      <h2>الخطة</h2>
+      <div id="plan"><div class="hint">أرسل طلبًا لرؤية الخطة</div></div>
+    </div>
+    <div class="card">
+      <h2>الرد</h2>
+      <div id="reply" class="reply">—</div>
+    </div>
+    <div class="card">
+      <h2>الأثر (Trace)</h2>
+      <div id="trace" class="trace">لا أثر بعد</div>
+    </div>
+  </section>
+</main>
+<script>
+"use strict";
+let currentLoop = null;
+const $ = (id) => document.getElementById(id);
+const key = () => $("apikey").value.trim();
+
+async function api(path, body) {
+  const r = await fetch("/orchestrator" + path, {
+    method: body === undefined ? "GET" : "POST",
+    headers: {"Content-Type": "application/json"},
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  if (!r.ok) { alert((await r.json().catch(() => ({}))).detail || r.status); return null; }
+  return r.json();
+}
+
+function pill(s) { return `<span class="pill ${s}">${s}</span>`; }
+
+function renderLoop(out) {
+  currentLoop = out.loop_id;
+  const plan = out.plan;
+  if (plan && plan.steps) {
+    $("plan").innerHTML = `<div class="hint">${plan.mode} — ${plan.planning_reason || ""}</div>` +
+      plan.steps.map((s) => {
+        const r = (out.results || []).find((x) => x.step_id === s.step_id);
+        const st = r ? r.status : (out.status === "completed" ? "skipped" : "…");
+        return `<div class="step"><span class="sid">${s.step_id} ${pill(st)}</span>
+          <div class="goal">${s.goal}</div>
+          <div class="tool">${s.tool_id}${r && r.error ? " — " + r.error.message : ""}</div></div>`;
+      }).join("");
+  }
+  $("reply").textContent = out.reply || out.status;
+  if (out.trace) { $("trace").textContent = JSON.stringify(out.trace, null, 1); }
+  loadApprovals(); loadLoops();
+}
+
+async function submit() {
+  const perms = $("perms").value.split("\n").map((x) => x.trim()).filter(Boolean);
+  const out = await api("/loops", {
+    utterance: $("utterance").value.trim(),
+    permissions: perms,
+    dry_run: $("dryrun").checked,
+    api_key: key(),
+  });
+  if (out) renderLoop(out);
+}
+
+async function cancelLoop() {
+  if (!currentLoop) return;
+  const out = await api(`/loops/${currentLoop}/cancel`, {actor: "user", api_key: key()});
+  if (out) renderLoop(out);
+}
+
+async function loadApprovals() {
+  const out = await api("/approvals/pending");
+  if (!out || !out.approvals.length) { $("approvals").innerHTML = "<div class='hint'>لا شيء معلّق</div>"; return; }
+  $("approvals").innerHTML = out.approvals.map((a) => `
+    <div class="ap">
+      <div class="sum">${a.action_summary}</div>
+      <div class="imp">الأثر: ${a.impact_summary}</div>
+      <div class="row">
+        <button class="ok" onclick="decide('${a.approval_id}','approved')">موافقة</button>
+        <button class="ok ghost" onclick="decide('${a.approval_id}','approved',true)">موافقة للجلسة</button>
+        <button class="danger" onclick="decide('${a.approval_id}','rejected')">رفض</button>
+      </div>
+    </div>`).join("");
+}
+
+async function decide(id, decision, sessionScope) {
+  const out = await api("/approvals", {
+    approval_id: id, decision, approved_by: "owner",
+    session_scope: !!sessionScope, api_key: key(),
+  });
+  if (out) renderLoop(out);
+}
+
+async function loadLoops() {
+  const out = await api("/loops");
+  if (!out) return;
+  $("loops").innerHTML = out.loops.slice(-12).reverse().map((l) =>
+    `<div class="loop-item" onclick="show('${l.loop_id}')">
+      <span>${(l.goal || "").slice(0, 34)}</span>${pill(l.status)}</div>`).join("");
+}
+
+async function show(id) {
+  const out = await api(`/loops/${id}`);
+  if (out) { renderLoop(out); const t = await api(`/loops/${id}/trace`); if (t) $("trace").textContent = JSON.stringify(t, null, 1); }
+}
+
+$("submit").onclick = submit;
+$("cancel").onclick = cancelLoop;
+loadApprovals(); loadLoops();
+</script>
+</body>
+</html>

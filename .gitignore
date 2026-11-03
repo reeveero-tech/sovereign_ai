@@ -161,3 +161,8 @@ data/loyalty/
 # بيانات تشغيل حية تُنشأ عند كل تشغيل يدوي (دليل التجربة §٦) — لا مصدر، لا تُلتزم
 data/supervisor/
 data/awareness/
+
+# R-841: حالة حلقات التنسيق (checkpoint) — بيانات تشغيل لا تُصدر
+data/agent_orchestrator/
+data/agent_orchestrator_live/
+data/connector_system/
