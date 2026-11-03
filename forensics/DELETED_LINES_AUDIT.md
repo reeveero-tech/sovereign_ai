@@ -3303,3 +3303,10 @@ numstat لكل ملف مقابل الأب (من git الفعلي — لا صاف
 | `docs/PROJECT_STATE.md` (−1) | **مُبرر # DELETION-JUSTIFIED — أمر المالك R-840:** سطر «آخر تحديث» استُبدل بنسخة R-840 مع حفظ ملخص R-839 — النمط الدائم |
 | `frontend/INVENTORY.md` (−3) | **مُبرر # DELETION-JUSTIFIED — أمر المالك R-840:** سطرا عددي الخلاصة (10→11 و79→80) وعنوان القسم (8→11 وحدة) وسطر `live-health-chart.js` الأخير استُبدلت بنسخ تشمل `connectors-ui.js` — تحديث الجرد الذي يفرضه حارس ١.١ في نفس الالتزام |
 | `frontend/LIVE_BINDINGS.json` (−1) | **مُبرر # DELETION-JUSTIFIED — أمر المالك R-840:** سطر `"tab-evolution"` في مصفوفة tab_ids استُبدل بنفس السطر + `tab-connectors` و`sovereign-section-connectors` — إضافة عنصر لقائمة JSON قائمة، لا حذف عنصر |
+
+## إضافة R-840b (2026-11-03) — إصلاح فشلي CI: سطران مُستبدلان (لا حذف محتوى)
+
+| المحذوف | المبرر |
+|---|---|
+| `backend/tests/test_connector_system.py` (−1) | **مُبرر # DELETION-JUSTIFIED — R-840b:** سطر القيمة الحرفية لرأس PEM الاصطناعي في اختبار Service Account استُبدل بتركيب قطع وقت التشغيل — مبدأ حارس D-032 نفسه (لا قيم حرفية تطابق أنماط الحارس في المصدر) |
+| `tests/test_mic_ui.py` (−1) | **مُبرر # DELETION-JUSTIFIED — R-840b:** سطر تأكيد عدّ الجرد (10→11) استُبدل بنسخة R-840 — تحديث الحارس مع الجرد في نفس الالتزام كما يفرض نظامه |

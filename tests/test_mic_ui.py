@@ -88,4 +88,4 @@ def test_transcript_goes_to_input_not_auto_sent():
 def test_script_loaded_and_inventoried():
     assert "js/modules/stt-input.js" in INDEX, "stt-input.js غير محمّل"
     assert "`stt-input.js`" in INVENTORY, "stt-input.js غير مجرودة"
-    assert "| تستهلك API مباشرة | 10 |" in INVENTORY, "عدّة الجرد لم تُحدَّث (9→10)"
+    assert "| تستهلك API مباشرة | 11 |" in INVENTORY, "عدّة الجرد لم تُحدَّث (10→11 — R-840: connectors-ui.js)"

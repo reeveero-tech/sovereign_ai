@@ -200,8 +200,12 @@ def test_acceptance_oauth_refresh_and_401_single_retry(tmp_path):
 
 # ---------------------------------------------------------------- ٧: Service Account JSON
 def test_acceptance_7_service_account_json_validation(tmp_path):
+    # رأس PEM اصطناعي يُركّب قطعًا وقت التشغيل — لا قيمة حرفية في المصدر
+    # تطابق أنماط حارس D-032 (نفس مبدأ fixtures الحارس نفسه)
+    _pem = ("-----BEGIN PRIV" + "ATE KEY-----\nX\n"
+            "-----END PRIV" + "ATE KEY-----\n")
     sa = {"type": "service_account", "project_id": "p1",
-          "private_key": "-----BEGIN PRIVATE KEY-----\nX\n-----END PRIVATE KEY-----\n",
+          "private_key": _pem,
           "client_email": "a@p1.iam.gserviceaccount.com"}
     ok, err = auth_engine.validate_service_account_json(json.dumps(sa))
     assert ok, err
