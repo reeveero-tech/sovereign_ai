@@ -57,6 +57,18 @@ class RateLimitedError(ExecutionError):
     pass
 
 
+def _scrub(text: str, sensitive: List[str]) -> str:
+    """R-840c (تدقيق): إخفاء أي قيمة سرية من نصوص الأخطاء قبل السجل/الرفع.
+
+    إذا صدّى المزود السر في رسالة خطأ (استثناء نقل يحوي الرابط مثلًا) فلا
+    يجوز أن يصل إلى السجل أو رد API — يُستبدل بـ***.
+    """
+    for s in sensitive:
+        if s and len(s) >= 8:
+            text = text.replace(s, "***")
+    return text
+
+
 @dataclass
 class CircuitBreaker:
     failures: int = 0
@@ -224,9 +236,17 @@ class Executor:
         started = time.time()
         last_exc: Optional[Exception] = None
         refreshed = False
+        sensitive: List[str] = []  # قيم يُحظر ظهورها في الأخطاء (R-840c)
         for attempt in range(max(1, d.retry_max_attempts)):
             try:
                 material = auth_engine.resolve(self.credentials, cred, self._http)
+                # R-840c: اجمع القيم الحساسة فور توفر المادة — للتنقية عند الفشل
+                sensitive = (list(material.headers.values())
+                             + list(material.query_params.values()))
+                try:
+                    sensitive.append(self.credentials.get_secret(cred))
+                except Exception:  # TOLERATED: الخزينة قد ترفض — التنقية بما توفر
+                    pass
                 result = handler(material, dict(inputs), self._http)
                 br.record(True, self.clock())
                 self.credentials.mark_used(cred.id)
@@ -247,7 +267,7 @@ class Executor:
                         continue
                     except auth_engine.RefreshError as rerr:
                         cred.status = "expired"
-                        cred.last_error = str(rerr)[:200]
+                        cred.last_error = _scrub(str(rerr)[:200], sensitive)
                         self.credentials.update(cred)
                         self._log({"ts": self.clock(), "connector": connector_id,
                                    "operation": operation, "actor": actor,
@@ -270,10 +290,12 @@ class Executor:
 
         br.record(False, self.clock())
         # لا تسميم حالة الاعتماد بفشل خادم (5xx) — الأثر في السجل والقاطع فقط
+        # R-840c: نص الخطأ يُنقّى من أي قيمة سرية قبل السجل والرفع
+        safe_msg = _scrub(str(last_exc or "فشل التنفيذ"), sensitive)
         self._log({"ts": self.clock(), "connector": connector_id,
                    "operation": operation, "actor": actor,
-                   "status": "error", "error": str(last_exc or "")[:200]})
-        raise ConnectorExecutionError(str(last_exc or "فشل التنفيذ"))
+                   "status": "error", "error": safe_msg[:200]})
+        raise ConnectorExecutionError(safe_msg[:300])
 
 
 class _Unauthorized(Exception):

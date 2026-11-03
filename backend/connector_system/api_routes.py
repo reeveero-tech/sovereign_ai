@@ -15,6 +15,7 @@ from pydantic import BaseModel, Field
 
 from . import auth_engine, auth_types, execution, runtime_bridge
 from .credentials import CredentialError, CredentialNotFound
+from .policy import PolicyError
 
 router = APIRouter(prefix="/connectors/system")
 
@@ -112,7 +113,7 @@ async def setup(request: SetupRequest):
             set().union(*[set(o.scopes) for o in d.operations.values()
                          if not o.is_write])) or ["connector:read"]
         c = s.credentials.create(
-            connector_id=request.connector, auth_type_id=request.auth_type,
+            connector_id=request.connector, auth_type=request.auth_type,
             owner_scope=request.owner_scope, owner=request.owner,
             scopes=scopes, secret_value=secret_value,
             created_by=request.actor, ttl_s=request.ttl_s)
@@ -123,6 +124,8 @@ async def setup(request: SetupRequest):
         return {"ok": True, "credential": c.public(), "test": {"ok": True}}
     except HTTPException:
         raise
+    except PolicyError as exc:  # R-840c: حظر/موافقة سياسة → 403 صريح لا 500
+        raise HTTPException(status_code=403, detail=str(exc)[:300])
     except CredentialError as exc:
         raise HTTPException(400, detail=str(exc))
     except execution.ExecutionError as exc:
@@ -285,6 +288,8 @@ async def execute_op(request: ExecuteRequest):
                              request.inputs, actor=request.actor,
                              idempotency_key=request.idempotency_key)
         return out
+    except PolicyError as exc:  # R-840c: سياسة المؤسسة → 403 صريح لا 500
+        raise HTTPException(status_code=403, detail=str(exc)[:300])
     except execution.RequiresConnectionError as exc:
         card = runtime_bridge.requirement_card(request.connector, request.operation)
         raise HTTPException(status_code=424, detail={"card": card,
