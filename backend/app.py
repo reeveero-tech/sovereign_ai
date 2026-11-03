@@ -1941,6 +1941,18 @@ except ImportError:  # TOLERATED: نمط الاستيراد المزدوج ال�
 app.include_router(_connector_system_router)  # /connectors/system/*
 
 
+# ============================================================
+# R-841: طبقة تنسيق الوكلاء — الحلقة/الخطة/البوابات/الأثر
+# ============================================================
+try:
+    from agent_orchestrator.api_routes import router as _agent_orch_router
+except ImportError:  # TOLERATED: نمط الاستيراد المزدوج القائم
+    from backend.agent_orchestrator.api_routes import \
+        router as _agent_orch_router
+
+app.include_router(_agent_orch_router)  # /orchestrator/*
+
+
 @app.get("/media/file/{fid}")
 async def media_file(fid: str, sig: str = ""):
     """R-824: عرض وسائط الاستوديو برابط موقّع (HMAC مشتق) — للمحادثة بلا مفتاح المالك في المتصفح."""

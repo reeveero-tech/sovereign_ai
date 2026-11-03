@@ -1,7 +1,7 @@
 # API.md — الواجهات البرمجية
 
 > كل نقاط API في النواة، كما رُصدت في مسح M0 + تحديث M6 (R-608).
-> آخر تحديث: 2026-11-03 (R-840 — نقاط `/connectors/system/*` الستة عشر)
+> آخر تحديث: 2026-11-04 (R-841 — نقاط `/orchestrator/*` الستة عشر)
 > **توثيق حي**: Swagger على `/docs`، ReDoc على `/redoc`، OpenAPI على `/openapi.json` (45 مساراً).
 
 > **حد معلن (R-714):** أجسام الطلبات المضغوطة غير مدعومة — لا يوجد فك ضغط للطلبات. طلب مضغوط فعليًا (اختُبر gzip وdeflate) يُرفض بـ400 (رسالة عامة من محلل الجسم)؛ رأس ترميز غير معروف يُتجاهل وتُفحص البايتات الخام. الموجود ضغط **استجابات** فقط (GZipMiddleware، مستوى 6 — R-502). فك ضغط الطلبات لم يُنفّذ في هذه الجولة — يتطلب تصميمًا أمنيًا واختبارات قبل إضافته (قنابل فك الضغط، حدود حجم قبل المصادقة/تقييد المعدل، ترميزات متسلسلة).
@@ -174,7 +174,33 @@
 ملاحظة أمنية: خزينة الاعتمادات تُخرج المفاتيح فقط — أي سر يُرفض رجوعه في أي
 استجابة أو سجل (محمي باختبار `test_no_secrets_in_logs`).
 
-## 7) سجل التحديثات
+## 7) طبقة تنسيق الوكلاء (backend/agent_orchestrator/api_routes.py) — 16 مساراً (R-841)
+
+بادئة كل المسارات: `/orchestrator`. العقد الكامل في `docs/ORCHESTRATOR.md`.
+القراءات مفتوحة؛ **كل نقطة تغيير تتطلب `api_key`** (بوابة مفتاح المالك — 401).
+
+| الطريقة | المسار | الوصف | المصادقة |
+|---|---|---|---|
+| GET | `/orchestrator/health` | نبض الطبقة (جاهزية المنفذ/السجل) | لا |
+| GET | `/orchestrator/tools` | سجل الأدوات بعقدها (وصف/خطورة/مخطط) | لا |
+| GET | `/orchestrator/schemas` | مخططات العقود 5.1–5.5 | لا |
+| GET | `/orchestrator/ui` | واجهة الطبقة (HTML) | لا |
+| POST | `/orchestrator/loops` | استقبال طلب وقيادة الحلقة (`dry_run` اختياري) | `api_key` |
+| GET | `/orchestrator/loops` | قائمة الحلقات | لا |
+| GET | `/orchestrator/loops/{id}` | حالة حلقة (خطة/نتائج/رد) | لا |
+| GET | `/orchestrator/loops/{id}/trace` | الأثر الكامل (spans/قرارات) | لا |
+| POST | `/orchestrator/loops/{id}/cancel` | إلغاء فوري موثق (ما تم/ما لم يتم) | `api_key` |
+| POST | `/orchestrator/loops/{id}/pause` | إيقاف بشري | `api_key` |
+| POST | `/orchestrator/loops/{id}/resume` | استئناف من الـcheckpoint | `api_key` |
+| POST | `/orchestrator/loops/{id}/plan` | تعديل الخطة بتدخل بشري | `api_key` |
+| POST | `/orchestrator/loops/{id}/rollback` | تراجع/تعويض عن خطوة | `api_key` |
+| GET | `/orchestrator/approvals/pending` | الموافقات المعلقة | لا |
+| POST | `/orchestrator/approvals` | حسم موافقة ثم استئناف الحلقة | `api_key` |
+
+ملاحظة أمنية: الأثر (trace) يُنقّى من أي مفتاح سرّي قبل التسجيل (كناري آلي
+في CI — `test_a26_no_secret_leak_canary`).
+
+## 8) سجل التحديثات
 
 | التاريخ | التغيير | الدفعة |
 |---|---|---|
