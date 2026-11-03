@@ -3139,8 +3139,9 @@ def _register_real_tools() -> None:
 
     registry.register(ToolSpec(
         name="web.search",
-        description=("بحث ويب حي — محرك world (R-825: Bing + أخبار Bing/Google + الفهرس الذاتي + "
-                     "ويكيبيديا…) أو searxng/tavily إن ضُبطا — نتائج مستشهدة بمصادر وتواريخ"),
+        description=("بحث حي متعدد المحركات والمنصات حسب نية السؤال (R-839): Bing + محركات "
+                     "ddgs + YouTube للفيديو وGitHub للكود وأرشيفات محكّمة للعلم وويكيبيديا — "
+                     "دمج موزون يرفع ما تتفق عليه المحركات، نتائج مستشهدة بمصادر وتواريخ"),
         inputs={"query": "سؤال البحث"}, outputs="results[] (title/url/snippet)",
         handler=lambda query: __import__("web_tools").search(query)))
     registry.register(ToolSpec(

@@ -1359,12 +1359,25 @@ def search_results(query: str, max_results: int = 10) -> Dict[str, Any]:
     """نتائج بحث موحدة من كل المزودات (يخدم web.search بالمزود world).
 
     R-825: Bing أولًا (يعمل من السحابة) + الفهرس الذاتي + أخبار Google للأسئلة الآنية، ثم
-    DuckDuckGo/Marginalia/ويكيبيديا. الدمج تبادلي (الأول من كل مزود ثم الثاني…) بلا تكرار.
+    DuckDuckGo/Marginalia/ويكيبيديا.
+    R-839: تقوية الربط بين الطبقات الثلاث — أداة البحث لا تمر بمسار أنحف من محرك
+    البحث الكامل:
+    (١) تحليل نية السؤال (search_platforms.analyze) يضيف المنصات المطابقة للمطلوب
+        (YouTube للفيديو، GitHub/HuggingFace للكود والذكاء الاصطناعي، arXiv/Crossref
+        للأبحاث، كتب/أرشيف/نقاشات…) — لا يعقل أن يبحث سؤال فيديو في صفحات نص فقط.
+    (٢) محركات ddgs (search_agents.metasearch) مزودات مستقلة بقاطع دائرة لكل محرك —
+        طبقة المحركات المتعددة جزء من أداة البحث لا من world.answer وحدها.
+    (٣) الدمج موزون بخوارزمية metasearch2 (fuse): الرابط الذي تتفق عليه محركات عدة
+        يعلو على ما جاء من محرك واحد — لا دمج تبادلي أعمى بعد اليوم.
     """
+    import search_platforms as sp
+    from search_agents import metasearch
     lang = detect_lang(query)
     core = core_question(query)
     q = keyword_query(core, lang)
     fresh = is_fresh(query)
+    tech = is_tech(query)
+    intent = sp.analyze(query, None, lang, fresh, tech)
     deadline = time.monotonic() + _env_float("WORLD_SEARCH_SEARCH_BUDGET_SECONDS", 12.0)
     jobs = [("bing", _p_bing, (q, lang)), ("index", _p_index, (_terms(core, lang), lang, fresh)),
             ("duckduckgo", _p_duckduckgo, (q, lang)), ("marginalia", _p_marginalia, (q, lang)),
@@ -1372,26 +1385,41 @@ def search_results(query: str, max_results: int = 10) -> Dict[str, Any]:
     if fresh:
         jobs.insert(1, ("google-news", _p_google_news, (q, lang)))
         jobs.insert(2, ("bing-news", _p_bing_news, (q, lang)))
-    if is_tech(query):
+    if tech:
         jobs.append(("stackoverflow", _p_stackexchange, (q, lang)))
+    # R-839: محركات ddgs — كل محرك مزود مستقل (قاطع دائرة خاص، حارس مطابقة النتائج)
+    if metasearch.enabled():
+        for eng in metasearch.engines():
+            jobs.append((f"ddgs-{eng}", _p_ddgs(eng), (q, lang)))
+    # R-839: منصات النية — فيديو ⇒ YouTube، كود ⇒ GitHub، أبحاث ⇒ arXiv/Crossref…
+    jobs += sp.platform_jobs(intent, {lang: q}, lang, keyword_query, scholarly_query)
     results, status = _run_parallel(jobs, deadline)
-    lists = [results.get(name) or [] for name, *_ in jobs]
-    merged, seen = [], set()
-    for depth in range(max((len(x) for x in lists), default=0)):
-        for lst in lists:
-            if depth < len(lst):
-                r = lst[depth]
-                if not r.get("url") or r["url"] in seen:
-                    continue
-                seen.add(r["url"])
-                merged.append({"title": r["title"][:200], "url": r["url"][:500],
-                               "snippet": (r.get("snippet") or r.get("text") or "")[:500],
-                               "provider": r.get("provider"), "published": r.get("published"),
-                               "site": r.get("site")})
+    # R-839: دمج fuse الموزون — اتفاق المحركات يرفع الرابط فوق ما جاء من محرك واحد
+    rows: Dict[str, Dict[str, Any]] = {}
+    order = [name for name, *_ in jobs]
+    for name in order:
+        for r in results.get(name) or []:
+            url = r.get("url")
+            if not url or url in rows:
+                continue
+            rows[url] = r
+    fused = metasearch.fuse((name, results.get(name) or []) for name in order)
+    ranked = sorted(fused.items(), key=lambda kv: kv[1]["score"], reverse=True)
+    merged = []
+    for url, m in ranked:
+        r = rows.get(url)
+        if r is None:
+            continue
+        merged.append({"title": str(r.get("title") or "")[:200], "url": str(url)[:500],
+                       "snippet": (r.get("snippet") or r.get("text") or "")[:500],
+                       "provider": r.get("provider"), "published": r.get("published"),
+                       "site": r.get("site"),
+                       "engines": sorted(m["engines"]), "score": round(m["score"], 3)})
     if not merged:
         raise RuntimeError("فشل البحث العالمي — كل المزودات: " + "؛ ".join(f"{k}: {v}" for k, v in status.items()))
     return {"query": query, "provider": "world", "count": min(len(merged), max_results),
-            "results": merged[:max_results], "providers": status, "fresh": fresh}
+            "results": merged[:max_results], "providers": status, "fresh": fresh,
+            "intent_kinds": intent.get("kinds", [])}
 
 
 def answer(question: str, target_lang: Optional[str] = None, budget: Optional[float] = None) -> Dict[str, Any]:

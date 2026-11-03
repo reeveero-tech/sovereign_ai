@@ -29,6 +29,7 @@
 | + | (عودة R-838.2) رابط حساب GitHub بلا مسار مستودع ⇒ سرد مستودعاته لا 404 — الحالة الإنتاجية الحرفية (`tests/test_r8382_github_account.py`، 7/7) | `test_account_url_lists_repos` + 6 | ✅ |
 | + | (عودة R-838.3) ميزانية حية تتسع حين يفتح مزلاج العقل داخل الجولة — الجولة تكتمل بعد التوسعة منتصفها بينما كانت تُستنفد بصدق (`tests/test_r8383_live_budget.py`، 5/5) | `test_agent_loop_live_budget_completes_after_midrun_growth` + 4 | ✅ |
 | + | (عودة R-838.4) أسهم الحوار لا تخطف الضمائر — الحوار الإنتاجي الحرفي كاملًا (رابط ثم «ماهو المشروع؟ ما عمله؟» ثم «منهو منشؤه؟» ثم «قم باستيراده»): صفر توضيح وهمي في الأدوار الخمسة (`tests/test_r8384_anchor_semantics.py`، 8/8) | `test_production_dialogue_no_spurious_clarifications` + 7 | ✅ |
+| + | (عودة R-839) تقوية الربط بين أدوات البحث ومحركاته ووكلائه — web.search يحلل نية السؤال (فيديو⇒YouTube)، يفعل محركات ddgs، ويدمج موزونًا بfuse (اتفاق المحركات يرفع) (`tests/test_r839_search_binding.py`، 6/6) | `test_search_results_binds_intent_to_platforms` + 5 | ✅ |
 
 ## أدلة حية من نقطة النهاية `/chat` (دمج فعلي)
 
