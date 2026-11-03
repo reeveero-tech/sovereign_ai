@@ -475,3 +475,31 @@ body.fx-reduced .liquid-bg::after {
     font-size: 0.85rem;
     line-height: 1.7;
 }
+
+/* ============================================================
+   R-840: نظام الموصلات — كتالوج ومعالج وإدارة
+   ============================================================ */
+.conn-header { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
+.conn-header h3 { margin: 0 8px 0 0; }
+.conn-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
+.conn-card { border: 1px solid rgba(128,128,128,.35); border-radius: 10px; padding: 12px; background: rgba(128,128,128,.06); cursor: pointer; }
+.conn-card-title { font-weight: bold; margin-bottom: 4px; }
+.conn-desc { font-size: .85em; opacity: .85; margin-bottom: 6px; }
+.conn-auths, .conn-ops { font-size: .8em; margin: 4px 0; }
+.conn-tag { display: inline-block; border: 1px solid rgba(128,128,128,.4); border-radius: 6px; padding: 0 6px; margin: 1px; }
+.conn-write { border-color: #e67e22; }
+.conn-btn { background: rgba(52,152,219,.25); border: 1px solid rgba(52,152,219,.6); border-radius: 6px; color: inherit; padding: 4px 10px; cursor: pointer; margin: 2px 2px 0 0; }
+.conn-btn:hover { background: rgba(52,152,219,.45); }
+.conn-danger { border-color: #e74c3c; background: rgba(231,76,60,.2); }
+.conn-table { width: 100%; border-collapse: collapse; margin: 8px 0; font-size: .85em; }
+.conn-table th, .conn-table td { border: 1px solid rgba(128,128,128,.3); padding: 4px 8px; text-align: right; }
+.conn-wizard-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.6); z-index: 9999; display: flex; align-items: center; justify-content: center; }
+.conn-wizard { background: var(--panel-bg, #1b1e27); border-radius: 12px; padding: 20px; width: min(520px, 92vw); max-height: 88vh; overflow-y: auto; }
+.conn-wizard label { display: block; margin: 10px 0 4px; font-size: .85em; }
+.conn-wizard input, .conn-wizard select, .conn-wizard textarea { width: 100%; box-sizing: border-box; padding: 6px; border-radius: 6px; border: 1px solid rgba(128,128,128,.4); background: transparent; color: inherit; }
+.conn-wizard-actions { display: flex; gap: 8px; justify-content: flex-start; margin-top: 14px; }
+.conn-warn { color: #e67e22; font-size: .85em; margin-top: 8px; }
+.conn-scope { display: inline-block; margin: 2px 8px 2px 0; font-size: .85em; }
+.conn-agent-card { border: 1px solid rgba(52,152,219,.5); border-radius: 10px; padding: 12px; margin: 8px 0; background: rgba(52,152,219,.08); }
+.conn-admin-actions { display: flex; gap: 6px; flex-wrap: wrap; margin: 8px 0; align-items: center; }
+.conn-admin-actions input { padding: 4px 8px; border-radius: 6px; border: 1px solid rgba(128,128,128,.4); background: transparent; color: inherit; }

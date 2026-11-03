@@ -1930,6 +1930,17 @@ async def connectors_revoke(request: ConnectorGrantRequest):
     return _connector_owner_op(request, "revoke")
 
 
+# ============================================================
+# R-840: نظام الموصلات الشامل — سجل + اعتماد موحد + كل أنواع المصادقة
+# ============================================================
+try:
+    from connector_system.api_routes import router as _connector_system_router
+except ImportError:  # TOLERATED: نمط الاستيراد المزدوج القائم
+    from backend.connector_system.api_routes import router as _connector_system_router
+
+app.include_router(_connector_system_router)  # /connectors/system/*
+
+
 @app.get("/media/file/{fid}")
 async def media_file(fid: str, sig: str = ""):
     """R-824: عرض وسائط الاستوديو برابط موقّع (HMAC مشتق) — للمحادثة بلا مفتاح المالك في المتصفح."""

@@ -178,6 +178,14 @@
       "writers": [
         "js/modules/live-system-status.js"
       ]
+    },
+    {
+      "element": "connectors-root",
+      "endpoint": "GET /connectors/system/catalog",
+      "field": "connectors",
+      "writers": [
+        "js/modules/connectors-ui.js"
+      ]
     }
   ],
   "client": [
@@ -255,7 +263,9 @@
     "sovereign-section-tools",
     "tab-memory",
     "tab-tools",
-    "tab-evolution"
+    "tab-evolution",
+    "sovereign-section-connectors",
+    "tab-connectors"
   ],
   "unbound": [
     {
@@ -332,6 +342,25 @@
       "pane": "tab-evolution",
       "endpoints": [],
       "modules": []
+    },
+    "connectors": {
+      "pane": "tab-connectors",
+      "endpoints": [
+        "GET /connectors/system/catalog",
+        "GET /connectors/system/auth-types",
+        "GET /connectors/system/state",
+        "GET /connectors/system/logs",
+        "POST /connectors/system/setup",
+        "POST /connectors/system/test",
+        "POST /connectors/system/execute",
+        "POST /connectors/system/rotate",
+        "POST /connectors/system/revoke",
+        "GET /connectors/system/policy",
+        "POST /connectors/system/policy"
+      ],
+      "modules": [
+        "js/modules/connectors-ui.js"
+      ]
     }
   }
 }

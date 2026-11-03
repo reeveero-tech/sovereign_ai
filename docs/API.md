@@ -1,7 +1,7 @@
 # API.md — الواجهات البرمجية
 
 > كل نقاط API في النواة، كما رُصدت في مسح M0 + تحديث M6 (R-608).
-> آخر تحديث: 2026-10-22 (R-715 — عقد بروتوكول WebSocket)
+> آخر تحديث: 2026-11-03 (R-840 — نقاط `/connectors/system/*` الستة عشر)
 > **توثيق حي**: Swagger على `/docs`، ReDoc على `/redoc`، OpenAPI على `/openapi.json` (45 مساراً).
 
 > **حد معلن (R-714):** أجسام الطلبات المضغوطة غير مدعومة — لا يوجد فك ضغط للطلبات. طلب مضغوط فعليًا (اختُبر gzip وdeflate) يُرفض بـ400 (رسالة عامة من محلل الجسم)؛ رأس ترميز غير معروف يُتجاهل وتُفحص البايتات الخام. الموجود ضغط **استجابات** فقط (GZipMiddleware، مستوى 6 — R-502). فك ضغط الطلبات لم يُنفّذ في هذه الجولة — يتطلب تصميمًا أمنيًا واختبارات قبل إضافته (قنابل فك الضغط، حدود حجم قبل المصادقة/تقييد المعدل، ترميزات متسلسلة).
@@ -148,10 +148,37 @@
 
 ---
 
-## 5) سجل التحديثات
+## 6) نظام الموصلات الموحد (backend/connector_system/api_routes.py) — 16 مساراً (R-840)
+
+بادئة كل المسارات: `/connectors/system`. العقد الكامل في `docs/CONNECTOR_SYSTEM.md`.
+
+| الطريقة | المسار | الوصف | المصادقة |
+|---|---|---|---|
+| GET | `/connectors/system/catalog` | كتالوج الموصلات المسجلة + أنواع المصادقة المدعومة لكل موصل | لا |
+| GET | `/connectors/system/auth-types` | أنواع المصادقة الـ30 مع تصنيف الخطر وحقول المعالج | لا |
+| GET | `/connectors/system/state` | حالة كل موصل: مربوط/لا، النطاقات، آخر تدوير | لا |
+| GET | `/connectors/system/logs` | سجل الأحداث (بلا أسرار — السر لا يُسجَّل أبدًا) | لا |
+| POST | `/connectors/system/setup` | ربط اعتماد جديد (PAT/API key/JWT/Service Account/mTLS…) | لا |
+| POST | `/connectors/system/oauth/start` | بدء تدفق OAuth — يُرفض بلا PKCE (إلزامي) | لا |
+| GET | `/connectors/system/oauth/callback` | استقبال رمز التفويض وتبديله | لا |
+| POST | `/connectors/system/test` | اختبار موصل مربوط | لا |
+| POST | `/connectors/system/rotate` | تدوير سر اعتماد | لا |
+| POST | `/connectors/system/revoke` | سحب اعتماد وإيقاف الموصل | لا |
+| POST | `/connectors/system/update-scopes` | تحديث النطاقات المطلوبة | لا |
+| POST | `/connectors/system/execute` | تنفيذ عملية عبر موصل (سياسة + قاطع دائرة + Idempotency-Key) | لا |
+| GET | `/connectors/system/agent-card` | بطاقة «يتطلب اتصالًا» للوكيل (عقد موحد) | لا |
+| GET | `/connectors/system/policy` | سياسة المؤسسة الحالية | لا |
+| POST | `/connectors/system/policy` | تحديث سياسة المؤسسة (حصار أنواع خطرة، require_approval، all_allow) | لا |
+| POST | `/connectors/system/webhooks/{connector_id}` | بوابة Webhook: تحقق HMAC-SHA256 + إزالة تكرار | توقيع HMAC |
+
+ملاحظة أمنية: خزينة الاعتمادات تُخرج المفاتيح فقط — أي سر يُرفض رجوعه في أي
+استجابة أو سجل (محمي باختبار `test_no_secrets_in_logs`).
+
+## 7) سجل التحديثات
 
 | التاريخ | التغيير | الدفعة |
 |---|---|---|
 | 2026-10-12 | توثيق نقاط API من مسح M0 | M0 |
 | 2026-10-13 | R-603: توثيق تقييد معدل `/chat` وحالة المصادقة الفعلية | M6 |
 | 2026-10-14 | R-608: توثيق نقاط `/nexus/*` و`/security/*` وفحص طبقة الأمان | M6 |
+| 2026-11-03 | R-840: توثيق نقاط `/connectors/system/*` الستة عشر (نظام الموصلات الموحد) | R-840 |

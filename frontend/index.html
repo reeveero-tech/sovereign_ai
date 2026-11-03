@@ -459,6 +459,20 @@
 
                     </button>
 
+                    <button
+                        class="
+                            tab
+                            ripple
+                        "
+                        data-tab="connectors"
+                    >
+
+                        <i class="fas fa-plug"></i>
+
+                        الموصلات
+
+                    </button>
+
                 </nav>
 
                 <!-- ========================================= -->
@@ -774,6 +788,17 @@
                         data-live="experimental"
                         data-live-reason="قسم التطور الذاتي لم يُبنَ بعد (القسم ٤) — لا بيانات"
                     ></section>
+                </section>
+
+                <!-- R-840: الموصلات — كتالوج ومعالج إعداد وإدارة وحوكمة -->
+                <section
+                    id="tab-connectors"
+                    class="tab-content"
+                    style="display:none;"
+                >
+                    <section id="sovereign-section-connectors">
+                        <section id="connectors-root"></section>
+                    </section>
                 </section>
 
             </section>
@@ -1274,6 +1299,7 @@
 
     
     <script defer src="js/modules/tools-registry.js"></script>
+    <script defer src="js/modules/connectors-ui.js"></script>
     <script defer src="js/modules/capabilities-panel.js"></script>
 
     <script defer src="js/modules/runtime-dependency-graph.js"></script>
