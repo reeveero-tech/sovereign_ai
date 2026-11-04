@@ -301,6 +301,12 @@ class JobStore:
                                  (limit,)).fetchall()
         return [self._row(r) for r in rows]
 
+    def finished_since(self, status: str, since: float) -> int:
+        """R-846: عدد المهام التي انتهت بحالة معينة منذ لحظة (فحص الجاهزية)."""
+        with self._tx() as c:
+            return c.execute("SELECT COUNT(*) FROM jobs WHERE status=? AND finished_at>=?",
+                             (status, since)).fetchone()[0]
+
     def stats(self) -> Dict[str, Any]:
         now = self.clock()
         with self._tx() as c:

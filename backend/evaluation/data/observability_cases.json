@@ -1,0 +1,192 @@
+{
+ "version": 1,
+ "layer": "R-846 observability",
+ "note": "التوقعات مكتوبة من القاعدة قبل أول تشغيل — مجمّدة ببصمة (suites.py)",
+ "cases": [
+  {
+   "id": "O01",
+   "rule": "كل طلب HTTP يحمل X-Request-ID مولّدًا صالحًا ومختلفًا",
+   "scenario": "request_id_generated",
+   "expect": {
+    "has_header": true,
+    "valid_format": true,
+    "distinct": true
+   }
+  },
+  {
+   "id": "O02",
+   "rule": "معرّف وارد صالح يُحفظ، والمعيب أو الطويل يُستبدل (لا حقن في السجلات)",
+   "scenario": "request_id_propagated",
+   "expect": {
+    "kept": true,
+    "replaced_invalid": true,
+    "replaced_long": true
+   }
+  },
+  {
+   "id": "O03",
+   "rule": "وسم المسار قالب لا قيمة: معرّفان مختلفان ⇒ سلسلة واحدة بلا معرّفات",
+   "scenario": "route_template_label",
+   "expect": {
+    "series": 1,
+    "route": "/items/{item_id}",
+    "ids_in_labels": false
+   }
+  },
+  {
+   "id": "O04",
+   "rule": "مسارات غير موجودة كثيرة ⇒ سلسلة واحدة __unmatched__ (لا انفجار من المسح)",
+   "scenario": "unmatched_single_series",
+   "expect": {
+    "route_series": 1,
+    "route": "__unmatched__"
+   }
+  },
+  {
+   "id": "O05",
+   "rule": "سقف السلاسل لكل مقياس: الزائد يُجمع في __overflow__ ويُعدّ",
+   "scenario": "cardinality_cap",
+   "expect": {
+    "series_le_cap": true,
+    "overflow_counted": true
+   }
+  },
+  {
+   "id": "O06",
+   "rule": "صيغة Prometheus صالحة: الدلاء تراكمية و+Inf = العدد",
+   "scenario": "exposition_valid",
+   "expect": {
+    "parse_ok": true,
+    "buckets_monotonic": true,
+    "inf_equals_count": true
+   }
+  },
+  {
+   "id": "O07",
+   "rule": "/metrics بمصادقة: بلا مفتاح 401، رمز خاطئ 401، المفتاح أو رمز المقاييس 200",
+   "scenario": "metrics_auth",
+   "expect": {
+    "no_key": 401,
+    "wrong_bearer": 401,
+    "key": 200,
+    "bearer": 200,
+    "content_type_ok": true
+   }
+  },
+  {
+   "id": "O08",
+   "rule": "سر في رسالة سجل أو استثناء ⇒ مُنقّى في النص وJSON",
+   "scenario": "log_secret_scrubbed",
+   "expect": {
+    "plain_leak": false,
+    "json_leak": false,
+    "exc_leak": false
+   }
+  },
+  {
+   "id": "O09",
+   "rule": "سجل JSON صالح يحمل request_id وloop_id من السياق",
+   "scenario": "json_log_context",
+   "expect": {
+    "valid_json": true,
+    "request_id": true,
+    "loop_id": true
+   }
+  },
+  {
+   "id": "O10",
+   "rule": "أثر الحلقة ينجو من إعادة التشغيل",
+   "scenario": "trace_survives_restart",
+   "expect": {
+    "before_ok": true,
+    "after_ok": true,
+    "same_spans": true
+   }
+  },
+  {
+   "id": "O11",
+   "rule": "المتتبعات في الذاكرة محدودة، والأثر المُخلى يبقى من القرص",
+   "scenario": "trace_memory_bounded",
+   "expect": {
+    "tracers_le_cap": true,
+    "evicted_trace_ok": true
+   }
+  },
+  {
+   "id": "O12",
+   "rule": "استئناف بعد إعادة التشغيل يكمل الأثر نفسه لا أثرًا جديدًا",
+   "scenario": "trace_resume_keeps_history",
+   "expect": {
+    "loop": "completed",
+    "spans_grew": true,
+    "has_approval_decision": true
+   }
+  },
+  {
+   "id": "O13",
+   "rule": "سر في نص الطلب لا يصل إلى ملف الأثر على القرص",
+   "scenario": "trace_secret_on_disk",
+   "expect": {
+    "leak_on_disk": false,
+    "trace_ok": true
+   }
+  },
+  {
+   "id": "O14",
+   "rule": "عامل طابور متوقع ميت ⇒ الجاهزية failing بسبب",
+   "scenario": "health_dead_worker",
+   "expect": {
+    "status": "failing",
+    "check": "queue.workers",
+    "http": 503
+   }
+  },
+  {
+   "id": "O15",
+   "rule": "طابور شبه ممتلئ ⇒ degraded",
+   "scenario": "health_saturation",
+   "expect": {
+    "status": "degraded",
+    "check": "queue.depth"
+   }
+  },
+  {
+   "id": "O16",
+   "rule": "قناة إشعار معطلة بالمصادقة ⇒ degraded",
+   "scenario": "health_channel_disabled",
+   "expect": {
+    "status": "degraded",
+    "check": "notifications.channels"
+   }
+  },
+  {
+   "id": "O17",
+   "rule": "مراقب الصحة يُشعر المالك مرة واحدة لكل عطل في الساعة",
+   "scenario": "health_watcher_notifies_once",
+   "expect": {
+    "notifications": 1,
+    "event": "health.failing",
+    "after_second_tick": 1
+   }
+  },
+  {
+   "id": "O18",
+   "rule": "حالات الحلقات تُعدّ في المقاييس",
+   "scenario": "loop_metrics",
+   "expect": {
+    "pending_approval": 1,
+    "completed": 1
+   }
+  },
+  {
+   "id": "O19",
+   "rule": "جامع مقاييس معطوب لا يكسر /metrics ويُعدّ",
+   "scenario": "broken_collector",
+   "expect": {
+    "status": 200,
+    "collector_errors": 1,
+    "other_metrics_present": true
+   }
+  }
+ ]
+}

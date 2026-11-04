@@ -31,11 +31,13 @@ from .reflection import reflect, reflect_loop
 from .rollback import RollbackEngine
 from .state import StateStore
 from .tool_registry import ToolRegistry, new_decision
-from .tracing import Tracer
+from .tracing import Tracer, TraceStore
 
 _log = logging.getLogger("agent_orchestrator.runtime")
 
 STATUS_ACTIVE = ("running", "pending_approval", "paused")
+# R-846: سقف الآثار في الذاكرة — الباقي على القرص ويُستعاد عند الطلب
+MAX_TRACERS = 200
 
 
 class OrchestratorSystem:
@@ -59,6 +61,8 @@ class OrchestratorSystem:
         self.hitl = HumanInTheLoop()
         self.state = StateStore(data_dir)
         self.tracers: Dict[str, Tracer] = {}
+        # R-846: الأثر دائم — يبقى بعد إعادة التشغيل ولا يتضخم في الذاكرة
+        self.traces = TraceStore(os.path.join(data_dir, "traces"))
         self.failure = FailureHandler(self.planner)
         self._conn_system = connector_system
         self._conn_executor = connector_executor
@@ -402,6 +406,7 @@ class OrchestratorSystem:
                               f" خطوة ولم يُنفَّذ {len(doc['not_executed'])}")
             tracer.stop_reason("إلغاء من المستخدم")
             self.state.save(state)
+            self._persist_trace(tracer, state["status"])
         return self._view(state)
 
     def _cancel(self, state, tracer) -> Dict[str, Any]:
@@ -469,6 +474,7 @@ class OrchestratorSystem:
             {"step_id": step_id, "ok": out.get("ok", False),
              "action": out.get("action"), "by": actor})
         self.state.save(state)
+        self._persist_trace(tracer, state["status"])
         return out
 
     # ------------------------------------------------------------ العرض
@@ -481,19 +487,50 @@ class OrchestratorSystem:
     def trace(self, loop_id: str) -> Dict[str, Any]:
         with self._lock:
             t = self.tracers.get(loop_id)
-        if t is None:
-            state = self.state.load(loop_id)
+        if t is not None:
+            return t.full()
+        stored = self._load_trace(loop_id)
+        if stored is None:
             return {"ok": False,
                     "error": "لا أثر لهذه الحلقة (منتهية قبل التسجيل)"}
-        return t.full()
+        return stored
+
+    def _load_trace(self, loop_id: str) -> Optional[Dict[str, Any]]:
+        try:
+            return self.traces.load(loop_id)
+        except Exception as exc:  # TOLERATED: ملف أثر تالف = لا أثر، يُسجَّل ولا يكسر العرض
+            _log.error("R-846: تعذرت قراءة أثر الحلقة %s: %s",
+                       str(loop_id)[:8], type(exc).__name__)
+            return None
+
+    def _persist_trace(self, tracer: Tracer, status: str) -> None:
+        """R-846: كتابة الأثر للقرص ثم تقليص الذاكرة — الحلقات المنتهية تُطرد."""
+        try:
+            self.traces.save(tracer.summary())
+        except Exception as exc:  # TOLERATED: فشل كتابة الأثر لا يكسر الحلقة — يُسجَّل ويبقى في الذاكرة
+            _log.error("R-846: تعذر حفظ أثر الحلقة %s: %s",
+                       tracer.loop_id[:8], type(exc).__name__)
+            return
+        with self._lock:
+            if status not in STATUS_ACTIVE:
+                self.tracers.pop(tracer.loop_id, None)
+            while len(self.tracers) > MAX_TRACERS:
+                oldest = next(iter(self.tracers))
+                self.tracers.pop(oldest, None)
 
     def pending_approvals(self) -> List[Dict[str, Any]]:
         return self.approvals.pending()
 
     def _tracer(self, loop_id: str) -> Tracer:
         with self._lock:
-            if loop_id not in self.tracers:
-                self.tracers[loop_id] = Tracer(loop_id)
+            t = self.tracers.get(loop_id)
+            if t is not None:
+                return t
+        stored = self._load_trace(loop_id)
+        with self._lock:
+            if loop_id not in self.tracers:  # R-846: استعادة من القرص قبل البدء من الصفر
+                self.tracers[loop_id] = (Tracer.restore(stored) if stored
+                                         else Tracer(loop_id))
             return self.tracers[loop_id]
 
     def _blocked_by_failed_dep(self, step, results) -> bool:
@@ -514,6 +551,7 @@ class OrchestratorSystem:
             f"loop:{state['loop_id'][:8]}", state["status"])
         out = self._view(state)
         out["trace"] = tracer.summary()
+        self._persist_trace(tracer, state["status"])
         for obs in list(self.observers):
             try:
                 obs(out)

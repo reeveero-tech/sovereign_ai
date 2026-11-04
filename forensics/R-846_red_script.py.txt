@@ -1,0 +1,31 @@
+import os, sys, tempfile, pathlib, logging, io
+sys.path.insert(0, "backend")
+os.environ.setdefault("SOVEREIGN_DISABLE_BACKGROUND_THREADS", "1")
+os.environ.setdefault("SOVEREIGN_KEY", "test_master_key_1234567890abcdef")
+os.environ.setdefault("SOVEREIGN_DATA_ROOT", tempfile.mkdtemp())
+from evaluation import queue_reliability as qr
+env = qr.Env(pathlib.Path(tempfile.mkdtemp()))
+env.o.observers.clear() if hasattr(env.o, "observers") else None
+out = env.o.submit(env_req := __import__("agent_orchestrator.schemas", fromlist=["x"]).new_request(
+    user_id="t", session_id="red", permissions=["orchestrator:write"], utterance="حلل مستودع github.com/acme/webapp"))
+before = env.o.trace(out["loop_id"])
+env.restart()
+after = env.o.trace(out["loop_id"])
+print(f"1) أثر الحلقة قبل إعادة التشغيل: spans={before.get('span_count')} | بعدها: ok={after.get('ok')} «{after.get('error')}»")
+for i in range(300):
+    env.o.submit(__import__("agent_orchestrator.schemas", fromlist=["x"]).new_request(
+        user_id="t", session_id=f"g{i}", permissions=["orchestrator:write"], utterance="حلل مستودع github.com/acme/webapp"))
+print(f"2) متتبعات في الذاكرة بعد 300 حلقة منتهية: {len(env.o.tracers)} (لا سقف)")
+from fastapi.testclient import TestClient
+from app import app
+with TestClient(app) as c:
+    r = c.get("/health")
+    print(f"3) /health={r.json().get('status')} — مفاتيحه: {sorted(r.json().get('components', {}).keys())[:6]}… هل يذكر الطابور/الإشعارات؟",
+          any(k for k in r.json().get('components', {}) if 'queue' in k or 'notif' in k))
+    from job_queue import service as jq
+    print(f"   عمال الطابور الأحياء: {len([w for w in jq.workers_status() if w['alive']])} — ومع ذلك /health={r.json().get('status')}")
+    print("4) X-Request-ID في الاستجابة:", r.headers.get("x-request-id") or "لا يوجد")
+    print("5) /metrics:", c.get("/metrics").status_code)
+buf = io.StringIO(); h = logging.StreamHandler(buf); lg = logging.getLogger("red"); lg.addHandler(h); lg.setLevel(logging.INFO)
+lg.info("فشل الاتصال بالرمز ghp_ABCDEFGHIJKLMNOPQRSTUV123456")
+print("6) سر في رسالة سجل يمر كما هو:", "ghp_ABCDEFGH" in buf.getvalue())

@@ -26,6 +26,7 @@
 | `orchestrator.governance` | حوكمة الميثاق (R-841) | 20 حالة G01–G20 | `eefa20e6…df87` | **1.0** |
 | `queue.reliability` | الطابور (R-844) | 14 حالة Q01–Q14 | `8d8671b5…7574` | **1.0** |
 | `notify.reliability` | الإشعارات (R-845) | 15 حالة N01–N15 | `07a7258f…aa87` | **1.0** |
+| `observability.reliability` | الرصد (R-846) | 19 حالة O01–O19 | `75f26c10…f991` | **1.0** |
 
 - مجموعة الحوكمة (`backend/evaluation/data/governance_cases.json`) تشغّل
   المنسق الحقيقي فوق منفذ R-840 الحقيقي، والشبكة وحدها مزيفة

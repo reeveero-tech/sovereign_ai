@@ -224,6 +224,12 @@ class OutboxStore:
                 "SELECT channel, disabled_reason, disabled_at FROM channel_state")],
         }
 
+    def oldest_pending_at(self) -> Optional[float]:
+        """R-846: زمن إنشاء أقدم إشعار له تسليم معلّق (فحص تراكم الموزع)."""
+        return self._conn().execute(
+            "SELECT MIN(n.created_at) FROM deliveries d JOIN notifications n "
+            "ON n.id=d.notification_id WHERE d.status='pending'").fetchone()[0]
+
     def deliveries_for(self, nid: str) -> List[Dict[str, Any]]:
         return [self._deliv(d) for d in self._conn().execute(
             "SELECT * FROM deliveries WHERE notification_id=?", (nid,))]

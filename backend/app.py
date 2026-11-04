@@ -310,6 +310,13 @@ async def lifespan(app: FastAPI):
     except Exception as exc:  # TOLERATED: بلا ربط يُعلن مصدر المجدول فارغًا فقط
         logger.warning("R-798: تعذر ربط المجدول بالنواة: %s", exc)
     logger.info(f"⏱️ المجدول: {app.state.scheduler.reason}")
+    # R-846 (D-061): الرصد — تنقية السجلات ومراقبو المقاييس قبل أي عامل
+    try:
+        from observability import logs as _obs_logs, service as _obs_service
+        logger.info(f"🔭 {_obs_logs.install_logging()}")
+        logger.info(f"🔭 {_obs_service.install()}")
+    except Exception as _obs_exc:  # TOLERATED: الرصد إضافة؛ فشل ربطه يُعلن ولا يكسر الخادم (/health يبقى)
+        logger.warning("R-846: تعذر ربط الرصد (%s)", type(_obs_exc).__name__)
     # R-845 (D-060): الإشعارات — تُربط قبل عمال الطابور ليلتقط المراقب أول مهمة
     try:
         from notifications import service as _nt_service
@@ -323,6 +330,13 @@ async def lifespan(app: FastAPI):
         logger.info(f"📬 {_jq_service.start_workers()}")
     except Exception as _jq_exc:  # TOLERATED: الطابور إضافة؛ فشل إقلاع عماله يُعلن ولا يكسر الخادم (/queue/drain يبقى)
         logger.warning("R-844: تعذر تشغيل عمال الطابور (%s)", type(_jq_exc).__name__)
+    # R-846: مراقب الجاهزية بعد العمال والموزع (قبلهم لا يُتوقع أن يكونوا أحياء)
+    try:
+        from observability import health as _obs_health, service as _obs_service2
+        _obs_health.mark_started()
+        logger.info(f"🔭 {_obs_service2.start_watcher()}")
+    except Exception as _obsw_exc:  # TOLERATED: المراقب إضافة؛ فشله يُعلن و/observability/health يبقى عند الطلب
+        logger.warning("R-846: تعذر تشغيل مراقب الجاهزية (%s)", type(_obsw_exc).__name__)
     # R-791 (V6 ٦.٩.٤): حلقة الاستقلال — أهداف دائمة يعمل عليها العقل بلا طلب
     try:
         import goals as _goals_mod
@@ -413,6 +427,13 @@ app.add_middleware(
     minimum_size=1024,
     compresslevel=6,
 )
+
+# R-846 (D-061): معرّف الطلب ومقاييس HTTP — الوسيط الأبعد (يقيس كل ما تحته)
+try:
+    from observability.http import install_middleware as _obs_install_middleware
+except ImportError:  # TOLERATED: نمط الاستيراد المزدوج القائم
+    from backend.observability.http import install_middleware as _obs_install_middleware
+_obs_install_middleware(app)
 from api import get_api_router
 app.include_router(get_api_router())
 
@@ -2020,6 +2041,13 @@ except ImportError:  # TOLERATED: نمط الاستيراد المزدوج ال�
     from backend.notifications.api_routes import router as _notifications_router
 
 app.include_router(_notifications_router)  # /notifications/*
+
+# R-846 (D-061): الرصد — /metrics و/observability/*
+try:
+    from observability.api_routes import router as _observability_router
+except ImportError:  # TOLERATED: نمط الاستيراد المزدوج القائم
+    from backend.observability.api_routes import router as _observability_router
+app.include_router(_observability_router)  # /metrics و/observability/*
 
 
 @app.get("/media/file/{fid}")

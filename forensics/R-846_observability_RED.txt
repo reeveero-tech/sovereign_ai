@@ -1,0 +1,10 @@
+R-846 RED — main 37dbd453 قبل الرصد (python3 /tmp/r846/red.py — النص في forensics/R-846_red_script.py.txt)
+ملاحظة صدق: في (3) العمال صفر لأن الخيوط معطلة في بيئة الاختبار؛ الدليل أن /health لا يفحصهم أصلًا لا أنهم ماتوا.
+
+1) أثر الحلقة قبل إعادة التشغيل: spans=1 | بعدها: ok=False «لا أثر لهذه الحلقة (منتهية قبل التسجيل)»
+2) متتبعات في الذاكرة بعد 300 حلقة منتهية: 300 (لا سقف)
+3) /health=healthy — مفاتيحه: ['biological_archetypes', 'biological_drives', 'biological_instincts', 'consciousness_attention', 'consciousness_awareness', 'consciousness_field']… هل يذكر الطابور/الإشعارات؟ False
+   عمال الطابور الأحياء: 0 — ومع ذلك /health=healthy
+4) X-Request-ID في الاستجابة: لا يوجد
+5) /metrics: 404
+6) سر في رسالة سجل يمر كما هو: True

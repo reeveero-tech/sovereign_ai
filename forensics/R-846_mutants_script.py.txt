@@ -1,0 +1,49 @@
+import json, logging, re, sys
+sys.path.insert(0, "backend")
+logging.disable(logging.INFO)
+from evaluation import observability_reliability as o
+from observability import context as cx, health as h, http as oh, logs as lg, metrics as m, redact as rd, api_routes as ap
+from agent_orchestrator import runtime as rt, tracing as tr
+cases = json.load(open("backend/evaluation/data/observability_cases.json"))["cases"]
+import resource, time
+def score(label):
+    t0 = time.time(); r = o.run(cases); print(f"   [{time.time()-t0:.0f}s, maxrss={resource.getrusage(resource.RUSAGE_SELF).ru_maxrss//1024}MB]", flush=True); print(f"{label}: {r['score']} فاشلة={[f['id'] for f in r['failures']]}"); return r
+score("الأصل")
+# ط1: وسم المسار = المسار الفعلي لا القالب
+orig = oh._route_template; oh._route_template = lambda app, scope: scope.get("path", "?"); score("ط1 مسار فعلي في الوسم"); oh._route_template = orig
+# ط2: بلا سقف سلاسل
+c0 = m.MAX_SERIES; m.MAX_SERIES = 10**9; score("ط2 بلا سقف سلاسل"); m.MAX_SERIES = c0
+# ط3: قبول أي معرّف طلب وارد
+a0 = cx.accept_request_id; cx.accept_request_id = lambda inc: inc or "generated-0001"; score("ط3 قبول أي X-Request-ID"); cx.accept_request_id = a0
+# ط4: بلا تنقية سجلات (المصنع والمرشح والصيغة)
+r0 = lg.redact; lg.redact = lambda s: str(s); score("ط4 سجلات بلا تنقية"); lg.redact = r0
+# ط5: رمز Bearer مقبول دائمًا
+b0 = ap.bearer_ok; ap.bearer_ok = lambda a: bool(a); score("ط5 أي Bearer مقبول"); ap.bearer_ok = b0
+# ط6: الأثر لا يُحفظ على القرص
+p0 = rt.OrchestratorSystem._persist_trace; rt.OrchestratorSystem._persist_trace = lambda self, t, s: None; score("ط6 أثر في الذاكرة فقط"); rt.OrchestratorSystem._persist_trace = p0
+# ط7: الاستعادة تبدأ أثرًا جديدًا
+rs0 = tr.Tracer.restore; tr.Tracer.restore = classmethod(lambda cls, s: cls(s["loop_id"])); score("ط7 استعادة بلا تاريخ"); tr.Tracer.restore = rs0
+# ط8: لا تنقية نصية داخل الأثر
+tr0 = tr._redact_text; tr._redact_text = lambda s: s; score("ط8 سر في ملف الأثر"); tr._redact_text = tr0
+# ط9: العامل الميت لا يُحتسب
+q0 = h.check_queue
+def q_nodead(store, workers, expected, now=None):
+    return q0(store, [{**w, "alive": True} for w in workers], expected, now)
+h.check_queue = q_nodead; o.oh.check_queue = q_nodead; score("ط9 تجاهل العامل الميت"); h.check_queue = q0; o.oh.check_queue = q0
+# ط10: عتبة التشبع معطلة
+d0 = h.DEPTH_RATIO; h.DEPTH_RATIO = 2.0; score("ط10 بلا عتبة تشبع"); h.DEPTH_RATIO = d0
+# ط11: الجامع المعطوب يكسر القراءة
+c1 = m.Registry._collect
+def raw_collect(self):
+    out = []
+    for name, fn in list(self._collectors): out.extend(list(fn()))
+    return out
+m.Registry._collect = raw_collect; score("ط11 جامع يكسر /metrics"); m.Registry._collect = c1
+# ط12: مفتاح عدم التكرار يتغير كل دورة
+import itertools; ctr = itertools.count()
+mk0 = h.HealthWatcher.tick
+from notifications import events as ev
+em0 = ev.make
+ev.make = lambda e, k, *a, **kw: em0(e, f"{k}:{next(ctr)}", *a, **kw); score("ط12 إشعار كل دورة"); ev.make = em0
+# ط13: الجاهزية تعيد 200 دائمًا
+f0 = h.FAILING; ap.health.FAILING = "never"; score("ط13 بلا 503"); ap.health.FAILING = f0
