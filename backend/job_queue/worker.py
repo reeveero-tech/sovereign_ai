@@ -46,15 +46,37 @@ def backoff_s(attempt: int) -> float:
 
 class Worker:
     def __init__(self, store: JobStore, registry: Optional[Dict[str, Any]] = None,
-                 worker_id: Optional[str] = None, orchestrator=None):
+                 worker_id: Optional[str] = None, orchestrator=None,
+                 on_finish: Optional[List[Any]] = None):
         self.store = store
+        # R-845: مراقبو انتهاء المهام — قائمة مشتركة (تُقرأ عند كل نداء)
+        self.on_finish = on_finish if on_finish is not None else []
         self.orchestrator = orchestrator  # None ⇒ منسق الخادم المشترك
         self.registry = registry if registry is not None else kinds_mod.KINDS
         self.worker_id = worker_id or f"{socket.gethostname()}:{os.getpid()}:{uuid.uuid4().hex[:6]}"
 
+    def _notify(self, jid: str) -> None:
+        if not self.on_finish:
+            return
+        job = self.store.get(jid)
+        for hook in list(self.on_finish):
+            try:
+                hook(job)
+            except Exception as exc:  # TOLERATED: مراقب معطوب لا يكسر العامل — يُسجَّل
+                _log.error("R-844/R-845: مراقب الانتهاء فشل للمهمة %s: %s",
+                           jid[:8], type(exc).__name__)
+
     def run_once(self) -> Optional[Dict[str, Any]]:
         """استعادة الإيجارات المنتهية ثم مهمة واحدة. يعيد ملخصها أو None."""
-        self.store.recover()
+        out = self._run_once()
+        if out is not None and out.get("status") != "stale":
+            self._notify(out["job_id"])
+        return out
+
+    def _run_once(self) -> Optional[Dict[str, Any]]:
+        for tr in self.store.recover():
+            if tr.get("to") in ("dead", "cancelled"):
+                self._notify(tr["job_id"])
         job = self.store.claim(self.worker_id)
         if job is None:
             return None

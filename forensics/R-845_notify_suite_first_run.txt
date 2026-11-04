@@ -1,0 +1,13 @@
+R-845 — أول تشغيل لمجموعة notify.reliability (التوقعات مكتوبة قبل التشغيل، sha256 07a7258f…aa87 لم يتغير):
+R-845: القناة webhook عُطّلت: webhook: HTTP 401 {}
+R-845: مراقب الحالة فشل للحلقة 54ab1126: RuntimeError
+score 0.9333 14 / 15
+N03 [{"check": "telegram_calls", "want": 1, "got": 2}] {"loop": "needs_owner_review", "event": "review.required", "severity": "critical", "telegram_calls": 2, "token_in_text": false, "delivery": "sent"}
+
+سبب N03: خلل قياس في السيناريو لا في النظام — عدّ كل نداءات Telegram، وطلب الموافقة السابق للانقطاع (شدة high ≥ الحد high) يصل Telegram أيضًا، وهذا صحيح. أُصلح القياس ليعدّ نداءات إشعار المراجعة وحده (telegram_calls)، ويُسجَّل الإجمالي في telegram_total=2 للشفافية. التوقعات لم تُمس. بعده: 1.0 (15/15).
+
+اختبار الأسنان (طفرات متعمدة، /tmp/r845/mutants.py):
+الأصل: 1.0 فاشلة=[]
+ط1 إعادة على 401: 0.9333 فاشلة=['N04']
+ط2 بلا تنقية: 0.9333 فاشلة=['N14']
+ط3 تسريب النص: 0.9333 فاشلة=['N01']

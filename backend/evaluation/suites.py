@@ -73,6 +73,12 @@ def _queue(path: Path) -> Dict[str, Any]:
     return queue_reliability.run(cases)
 
 
+def _notify(path: Path) -> Dict[str, Any]:
+    from . import notify_reliability
+    cases = json.loads(path.read_text(encoding="utf-8"))["cases"]
+    return notify_reliability.run(cases)
+
+
 SUITES: List[Suite] = [
     Suite("planner.dev", "orchestrator/planner",
           "اختيار الأدوات — مجموعة التطوير (50 هدفًا، R-842)",
@@ -96,6 +102,12 @@ SUITES: List[Suite] = [
           _ROOT / "data" / "queue_cases.json",
           "8d8671b5d81dc2533359a947931d97ae0f80181efd0f76cb401362a6e2437574",
           1.0, _queue),
+    Suite("notify.reliability", "notifications",
+          "موثوقية الإشعارات: عدم تكرار، توقيع، أقل بيانات، لا retry على 401، حد الساعة،"
+          " نجاة من الانقطاع، تنقية الأسرار، لا إشعارين لسبب واحد (15 حالة، R-845)",
+          _ROOT / "data" / "notify_cases.json",
+          "07a7258f035ce73761ce0b1c84316defa5496fa5f02831a29d08721a34feaa87",
+          1.0, _notify),
 ]
 
 

@@ -331,3 +331,11 @@ retry/backoff/قاطع الدائرة/Idempotency-Key/تجديد 401 **مورو�
 
 كذلك صار `submit(..., loop_id=None)` يقبل معرّفًا مسبقًا من الطابور، ويرفض
 المعرّف الموجود (ValueError). التفاصيل في docs/QUEUE.md.
+
+## 13) R-845 — مراقبو الحالة
+
+`OrchestratorSystem.observers` قائمة دوال تُستدعى بعرض الحلقة عند كل `_finalize`.
+`_finalize` تمر به كل حالات الانتظار والنهاية: `pending_approval`، و`needs_owner_review`،
+و`needs_clarification`، و`failed`، و`completed`، و`cancelled`. الإشعارات تسجل مراقبها
+عبر `notifications.service.install()` عند الإقلاع. استثناء المراقب يُسجَّل ولا يكسر
+الحلقة. التفاصيل في docs/NOTIFICATIONS.md.

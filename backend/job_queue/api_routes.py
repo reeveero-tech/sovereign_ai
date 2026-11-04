@@ -127,5 +127,5 @@ def cancel_job(job_id: str, x_api_key: Optional[str] = Header(None, alias="X-API
 @router.post("/drain")
 def drain(body: DrainRequest, x_api_key: Optional[str] = Header(None, alias="X-API-Key")):
     _verify_owner(x_api_key)
-    done: List[Dict[str, Any]] = Worker(service.get_store()).drain(body.max_jobs)
+    done: List[Dict[str, Any]] = Worker(service.get_store(), on_finish=service.FINISH_HOOKS).drain(body.max_jobs)
     return {"processed": done, "count": len(done)}

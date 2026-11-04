@@ -1,0 +1,20 @@
+import json, re
+from evaluation import notify_reliability as nr
+from notifications import channels as ch, events as ev, store as st
+cases = json.load(open('evaluation/data/notify_cases.json'))['cases']
+def score(label):
+    r = nr.run(cases); print(f"{label}: {r['score']} فاشلة={[f['id'] for f in r['failures']]}")
+score("الأصل")
+# ط1: 401 يُعامل عابرًا (إعادة عمياء)
+orig = ch._post
+def p401(url, body, headers, channel):
+    try: orig(url, body, headers, channel)
+    except ch.SendError as e:
+        if e.kind == "auth": raise ch.SendError("transient", str(e), e.status)
+        raise
+ch._post = p401; score("ط1 إعادة على 401"); ch._post = orig
+# ط2: لا تنقية للأسرار
+o = ev._SECRETISH; ev._SECRETISH = re.compile(r"(?!x)x"); score("ط2 بلا تنقية"); ev._SECRETISH = o
+# ط3: إرسال body للخارج
+op = ch._external_payload
+ch._external_payload = lambda n: {**op(n), "body": n.get("body", "")}; score("ط3 تسريب النص"); ch._external_payload = op

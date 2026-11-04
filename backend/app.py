@@ -310,6 +310,13 @@ async def lifespan(app: FastAPI):
     except Exception as exc:  # TOLERATED: بلا ربط يُعلن مصدر المجدول فارغًا فقط
         logger.warning("R-798: تعذر ربط المجدول بالنواة: %s", exc)
     logger.info(f"⏱️ المجدول: {app.state.scheduler.reason}")
+    # R-845 (D-060): الإشعارات — تُربط قبل عمال الطابور ليلتقط المراقب أول مهمة
+    try:
+        from notifications import service as _nt_service
+        logger.info(f"🔔 {_nt_service.install()}")
+        logger.info(f"🔔 {_nt_service.start_dispatcher()}")
+    except Exception as _nt_exc:  # TOLERATED: الإشعارات إضافة؛ فشل ربطها يُعلن ولا يكسر الخادم (/notifications/dispatch يبقى)
+        logger.warning("R-845: تعذر ربط الإشعارات (%s)", type(_nt_exc).__name__)
     # R-844 (D-059): عمال الطابور غير المتزامن — الاستعادة أول كل دورة
     try:
         from job_queue import service as _jq_service
@@ -2003,6 +2010,16 @@ except ImportError:  # TOLERATED: نمط الاستيراد المزدوج ال�
     from backend.job_queue.api_routes import router as _job_queue_router
 
 app.include_router(_job_queue_router)  # /queue/*
+
+# ============================================================
+# R-845: الإشعارات — صندوق صادر دائم وقنوات موقعة وموزع بحدود
+# ============================================================
+try:
+    from notifications.api_routes import router as _notifications_router
+except ImportError:  # TOLERATED: نمط الاستيراد المزدوج القائم
+    from backend.notifications.api_routes import router as _notifications_router
+
+app.include_router(_notifications_router)  # /notifications/*
 
 
 @app.get("/media/file/{fid}")

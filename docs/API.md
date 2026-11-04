@@ -223,6 +223,18 @@
 | POST | `/queue/jobs/{id}/cancel` | إلغاء (فوري إن كانت `queued`، مطلوب وتُلغى الحلقة إن كانت `running`) | `X-API-Key` |
 | POST | `/queue/drain` | تصريف يدوي `{max_jobs?}` بسقف 50 | `X-API-Key` |
 
+## 7د) الإشعارات (backend/notifications/api_routes.py) — 7 مسارات (R-845)
+
+| الطريقة | المسار | الوصف | المصادقة |
+|---|---|---|---|
+| GET | `/notifications/channels` | حالة القنوات وسببها وحدها الأدنى وتعطيلها، بلا روابط أو أسرار | لا |
+| GET | `/notifications/stats` | الإشعارات وغير المقروء والتسليمات حسب الحالة والموزع | لا |
+| GET | `/notifications` | الصندوق الداخلي (`unread_only?`، `limit?`) مع التسليمات | `X-API-Key` |
+| POST | `/notifications/test` | إشعار تجريبي + `Idempotency-Key`. 202 جديد، 200 مكرر، 428 بلا مفتاح | `X-API-Key` |
+| POST | `/notifications/dispatch` | تصريف يدوي `{max_items?}` بسقف 50 | `X-API-Key` |
+| POST | `/notifications/{id}/read` | تعليم مقروء، 404 إن لم يوجد | `X-API-Key` |
+| POST | `/notifications/channels/{name}/enable` | رفع تعطيل المصادقة بعد إصلاح الإعداد | `X-API-Key` |
+
 ## 8) سجل التحديثات
 
 | التاريخ | التغيير | الدفعة |
@@ -233,3 +245,4 @@
 | 2026-11-03 | R-840: توثيق نقاط `/connectors/system/*` الستة عشر (نظام الموصلات الموحد) | R-840 |
 | 2026-11-04 | R-843: نقاط `/evaluation/*` و`/skills/evaluate_independent` | R-843 |
 | 2026-11-04 | R-844: نقاط `/queue/*` السبع (الطابور غير المتزامن) | R-844 |
+| 2026-11-04 | R-845: نقاط `/notifications/*` السبع (الإشعارات) | R-845 |
