@@ -235,6 +235,17 @@
 | POST | `/notifications/{id}/read` | تعليم مقروء، 404 إن لم يوجد | `X-API-Key` |
 | POST | `/notifications/channels/{name}/enable` | رفع تعطيل المصادقة بعد إصلاح الإعداد | `X-API-Key` |
 
+## 7هـ) الرصد (backend/observability/api_routes.py) — 3 مسارات (R-846)
+
+| الطريقة | المسار | الوصف | المصادقة |
+|---|---|---|---|
+| GET | `/metrics` | صيغة Prometheus النصية (`text/plain; version=0.0.4`) | `X-API-Key` أو `Authorization: Bearer $SOVEREIGN_METRICS_TOKEN` (≥16 حرفًا) |
+| GET | `/observability/health` | الجاهزية: `{status, checks[], ts}`، و503 عند `failing`. الأسباب بلا مسارات أو أسرار | لا |
+| GET | `/observability/summary` | الجاهزية وحالة المراقب ولقطة JSON للمقاييس | `X-API-Key` |
+
+- كل رد يحمل `X-Request-ID`. الوارد الصالح (`[A-Za-z0-9._-]{8,64}`) يُعاد كما هو، وغير الصالح يُستبدل بمعرّف جديد.
+- `/health` القديمة لم تتغير: فحص حياة لـRender.
+
 ## 8) سجل التحديثات
 
 | التاريخ | التغيير | الدفعة |
@@ -246,3 +257,4 @@
 | 2026-11-04 | R-843: نقاط `/evaluation/*` و`/skills/evaluate_independent` | R-843 |
 | 2026-11-04 | R-844: نقاط `/queue/*` السبع (الطابور غير المتزامن) | R-844 |
 | 2026-11-04 | R-845: نقاط `/notifications/*` السبع (الإشعارات) | R-845 |
+| 2026-11-04 | R-846: `/metrics` و`/observability/health` و`/observability/summary` ورأس `X-Request-ID` (الرصد) | R-846 |

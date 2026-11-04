@@ -24,6 +24,9 @@ EVENTS: Dict[str, tuple] = {
     "job.failed": ("medium", "فشلت مهمة في الطابور"),
     "eval.failed": ("high", "فشل التقييم المستقل تحت الأرضية"),
     "notify.test": ("high", "إشعار تجريبي"),
+    # R-846: الجاهزية — مرة لكل (حالة، فحص، ساعة)
+    "health.failing": ("critical", "الجاهزية: فحص فاشل"),
+    "health.degraded": ("high", "الجاهزية: تدهور"),
 }
 
 _SECRETISH = re.compile(

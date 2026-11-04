@@ -79,6 +79,12 @@ def _notify(path: Path) -> Dict[str, Any]:
     return notify_reliability.run(cases)
 
 
+def _observability(path: Path) -> Dict[str, Any]:
+    from . import observability_reliability
+    cases = json.loads(path.read_text(encoding="utf-8"))["cases"]
+    return observability_reliability.run(cases)
+
+
 SUITES: List[Suite] = [
     Suite("planner.dev", "orchestrator/planner",
           "اختيار الأدوات — مجموعة التطوير (50 هدفًا، R-842)",
@@ -108,6 +114,12 @@ SUITES: List[Suite] = [
           _ROOT / "data" / "notify_cases.json",
           "07a7258f035ce73761ce0b1c84316defa5496fa5f02831a29d08721a34feaa87",
           1.0, _notify),
+    Suite("observability.reliability", "observability",
+          "موثوقية الرصد: معرّف الطلب، وسوم القوالب وسقف السلاسل، صيغة Prometheus، مصادقة"
+          " المقاييس، تنقية السجلات، آثار دائمة محدودة، جاهزية صادقة وإشعار واحد (19 حالة، R-846)",
+          _ROOT / "data" / "observability_cases.json",
+          "75f26c103de7bb81a399d0fe75df5a40d86ab774c0ac7b917377bbae04b4f991",
+          1.0, _observability),
 ]
 
 
