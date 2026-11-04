@@ -28,6 +28,7 @@
 | `notify.reliability` | الإشعارات (R-845) | 15 حالة N01–N15 | `07a7258f…aa87` | **1.0** |
 | `observability.reliability` | الرصد (R-846) | 19 حالة O01–O19 | `75f26c10…f991` | **1.0** |
 | `backup.reliability` | النسخ والاستعادة (R-847) | 23 حالة B01–B23 | `68a89083…851a` | **1.0** |
+| `security.secrets` | حارس الأسرار (R-848) | 26 حالة S01–S26 | `ad1bc6f0…af17` | **1.0** |
 
 - مجموعة الحوكمة (`backend/evaluation/data/governance_cases.json`) تشغّل
   المنسق الحقيقي فوق منفذ R-840 الحقيقي، والشبكة وحدها مزيفة

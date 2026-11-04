@@ -15,7 +15,6 @@ from __future__ import annotations
 
 import logging
 import os
-import re
 import socket
 import threading
 import time
@@ -25,18 +24,21 @@ from typing import Any, Dict, List, Optional
 from . import kinds as kinds_mod
 from .store import JobStore
 
+try:
+    from secret_guard import catalog as _catalog
+except ImportError:  # TOLERATED: نمط الاستيراد المزدوج القائم
+    from backend.secret_guard import catalog as _catalog
+
 _log = logging.getLogger("job_queue.worker")
 
 MAX_DRAIN = 50
 BACKOFF_BASE_S = 2.0
 BACKOFF_CAP_S = 300.0
-_SECRETISH = re.compile(r"(gh[pousr]_[A-Za-z0-9]{8,}|sbp_[A-Za-z0-9]{8,}|rnd_[A-Za-z0-9]{8,}"
-                        r"|sk-[A-Za-z0-9_-]{8,}|Bearer\s+[A-Za-z0-9._-]{8,})")
 
 
 def scrub(text: str) -> str:
-    """لا سر في نص خطأ محفوظ — تنقية أنماط الرموز المعروفة."""
-    return _SECRETISH.sub("***", text or "")[:300]
+    """لا سر في نص خطأ محفوظ — R-848: الكتالوج الموحد (secret_guard.catalog)."""
+    return _catalog.redact(text or "", 300)
 
 
 def backoff_s(attempt: int) -> float:

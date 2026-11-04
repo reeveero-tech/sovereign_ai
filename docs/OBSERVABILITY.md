@@ -154,3 +154,7 @@
 - فحوص جاهزية جديدة في `live_checks`: `backup.freshness` و`backup.offsite` و`backup.restore`. وأي استعادة فاشلة خلال 24س تجعل الجاهزية failing.
 - مقاييس: `backup_last_success_timestamp`، `backup_archives{kind}`، `backup_bytes`، `backup_offsite_configured`، `backup_restore_pending`.
 - التفاصيل docs/BACKUP.md (D-062).
+
+## 12) R-848 — أنماط التنقية انتقلت إلى الكتالوج الموحد
+
+`observability/redact.py` صار واجهة توافقية فوق `secret_guard.catalog`، فأضيفت JWT وAWS وPEM وStripe وGoogle وsb_secret_ والقيمة المقتبسة تحت اسم سري. التفاصيل docs/SECRETS.md (D-063).

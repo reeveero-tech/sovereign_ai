@@ -47,9 +47,11 @@ def test_ci_runs_on_work_branches_so_main_can_require_it():
 
 def test_new_branch_push_checks_every_commit_since_fork_point():
     text = CI.read_text(encoding="utf-8")
-    for gate in ("tools/gate_deletions.py", "tools/gate_docs_sync.py"):
+    # R-848 (D-063): بوابة الأسرار ثالث بوابة بمنطق المدى نفسه
+    for gate in ("tools/gate_deletions.py", "tools/gate_docs_sync.py",
+                 "tools/gate_secrets.py"):
         assert f'python {gate} --range "${{BASE}}" "${{GITHUB_SHA}}"' in text, gate
-    assert text.count('git merge-base origin/main "${GITHUB_SHA}"') == 2
+    assert text.count('git merge-base origin/main "${GITHUB_SHA}"') == 3
 
 
 def test_apply_script_reads_the_single_spec():

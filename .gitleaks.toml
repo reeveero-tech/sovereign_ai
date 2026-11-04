@@ -1,0 +1,33 @@
+# R-848 (D-063): إعداد gitleaks — الدفاع الثاني بعد tools/gate_secrets.py.
+# القواعد الافتراضية كلها + قواعد لمزودي هذا المشروع غير المغطَّين افتراضيًا
+# (أثبت RED أن الافتراضي يفوّت Render وSupabase sbp_ ورمز بوت Telegram).
+# يُشغَّل في CI على مدى الالتزامات الجديدة فقط؛ التاريخ القديم موثق في
+# forensics/R-848_secrets_RED.txt وحادثة D-032.
+title = "sovereign_ai"
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "render-api-key"
+description = "Render API key (rnd_)"
+regex = '''\brnd_[A-Za-z0-9]{20,}\b'''
+keywords = ["rnd_"]
+
+[[rules]]
+id = "supabase-pat"
+description = "Supabase management token (sbp_)"
+regex = '''\bsbp_[A-Za-z0-9]{36,}\b'''
+keywords = ["sbp_"]
+
+[[rules]]
+id = "supabase-secret-key"
+description = "Supabase secret API key (sb_secret_)"
+regex = '''\bsb_secret_[A-Za-z0-9_-]{16,}'''
+keywords = ["sb_secret_"]
+
+[[rules]]
+id = "telegram-bot-token-any"
+description = "Telegram bot token (digits:key) without keyword context"
+regex = '''\b[0-9]{6,12}:AA[A-Za-z0-9_-]{30,}\b|\b[0-9]{8,10}:[A-Za-z0-9_-]{35}\b'''
+keywords = [":"]

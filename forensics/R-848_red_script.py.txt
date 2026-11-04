@@ -1,0 +1,50 @@
+# R-848 RED — يُشغَّل على main 094c2461. كل المواد مولّدة وقت التشغيل (لا قيم حرفية).
+import os, random, string, subprocess, sys, tempfile, importlib, re
+from pathlib import Path
+R = Path(sys.argv[1]).resolve(); sys.path[:0] = [str(R), str(R / "backend"), str(R / "tests")]
+rnd = random.Random(848)
+def a(n, al=string.ascii_letters + string.digits): return "".join(rnd.choice(al) for _ in range(n))
+import base64, json
+def b64u(o): return base64.urlsafe_b64encode(json.dumps(o).encode()).rstrip(b"=").decode()
+FAKE = {
+ "github_pat": "gh" + "p_" + a(36),
+ "github_fine": "github" + "_pat_" + a(22) + "_" + a(59),
+ "render": "rn" + "d_" + a(32),
+ "supabase_pat": "sb" + "p_" + a(40, "0123456789abcdef"),
+ "supabase_service_jwt": b64u({"alg": "HS256", "typ": "JWT"}) + "." + b64u({"iss": "supabase", "role": "service_role"}) + "." + a(43),
+ "supabase_secret_new": "sb" + "_secret_" + a(32),
+ "aws_access_key": "AK" + "IA" + a(16, string.ascii_uppercase + "234567"),
+ "stripe_live": "sk" + "_live_" + a(24),
+ "google_api": "AI" + "za" + a(35),
+ "pem_private": "-----BEGIN " + "PRIVATE KEY-----\n" + a(64) + "\n-----END " + "PRIVATE KEY-----",
+ "telegram_bot": str(rnd.randint(10**8, 10**9)) + ":" + a(35),
+}
+print("== R1: هل يوقف أي فحص قائم في CI التزامًا يحمل هذه الرموز؟")
+with tempfile.TemporaryDirectory() as td:
+    t = Path(td); run = lambda *c: subprocess.run(c, cwd=t, capture_output=True, text=True)
+    run("git", "init", "-q"); run("git", "config", "user.email", "r@x"); run("git", "config", "user.name", "r")
+    (t / "a.txt").write_text("x\n"); run("git", "add", "-A"); run("git", "commit", "-qm", "base")
+    base = run("git", "rev-parse", "HEAD").stdout.strip()
+    (t / "config.py").write_text("".join(f'{k.upper()} = "{v}"\n' for k, v in FAKE.items() if k != "pem_private"))
+    run("git", "add", "-A"); run("git", "commit", "-qm", "leak"); head = run("git", "rev-parse", "HEAD").stdout.strip()
+    g = importlib.import_module("test_no_private_keys_in_commit_history")
+    hits = g._scan_commit(t, head)
+    print("  حارس D-032 (المفاتيح الخاصة فقط):", len(hits), "كشف من", len(FAKE) - 1, "رمز")
+    for tool in ("gate_deletions.py", "gate_docs_sync.py"):
+        p = subprocess.run([sys.executable, str(R / "tools" / tool), "--range", base, head], cwd=t, capture_output=True, text=True)
+        print(f"  {tool}: exit={p.returncode} (لا يفحص الأسرار أصلًا)")
+ci = (R / ".github/workflows/ci.yml").read_text()
+print("  gitleaks/فحص أسرار في ci.yml:", bool(re.search(r"gitleaks|secret[-_ ]scan|gate_secrets", ci, re.I)))
+print("== R2: التنقية وقت التشغيل — ما الذي يتسرب؟")
+from observability.redact import redact
+from notifications.events import scrub as ev_scrub
+from job_queue.worker import scrub as wk_scrub
+from agent_orchestrator.tracing import scrub as tr_scrub
+for k, v in FAKE.items():
+    line = f"upstream error with credential {v} in body"
+    res = {n: (v[:12] in f(line)) for n, f in (("redact", redact), ("events", ev_scrub), ("worker", wk_scrub), ("tracing", tr_scrub))}
+    leaks = [n for n, leaked in res.items() if leaked]
+    print(f"  {k:22s} يتسرب في: {leaks if leaks else '—'}")
+print("== R3: نسخ متعددة من نمط الأسرار")
+for f in ("backend/observability/redact.py", "backend/notifications/events.py", "backend/job_queue/worker.py"):
+    s = (R / f).read_text(); print(f"  {f}: نمط مستقل={'re.compile(' in s and 'sbp_' in s}")

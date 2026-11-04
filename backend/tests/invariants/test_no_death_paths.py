@@ -57,6 +57,7 @@ EXIT_ALLOWED_ENTRY_POINTS = {
     "tools/live_check_models.py",
     "tools/live_check_settings.py",
     "tools/action_log.py",
+    "tools/gate_secrets.py",  # R-848 (D-063): CLI البوابة/الـhook — 0 نظيف، 1 سر، 2 خلل فحص
     "tools/private_ip_guard.py",  # GS-3: CLI للـhook — رمز الخروج 0/1/2 هو عقده مع git
     # R-748 (V5 §١.١): حارس القاعدة الحاكمة — CLI تشغّله بوابة CI
     # (التزام/مدى) وpre-commit (فهرس)؛ رمز الخروج 0/1 هو عقده مع git/CI

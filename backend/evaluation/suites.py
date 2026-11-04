@@ -91,6 +91,12 @@ def _backup(path: Path) -> Dict[str, Any]:
     return backup_reliability.run(cases)
 
 
+def _secrets(path: Path) -> Dict[str, Any]:
+    from . import security_secrets
+    cases = json.loads(path.read_text(encoding="utf-8"))["cases"]
+    return security_secrets.run(cases)
+
+
 SUITES: List[Suite] = [
     Suite("planner.dev", "orchestrator/planner",
           "اختيار الأدوات — مجموعة التطوير (50 هدفًا، R-842)",
@@ -134,6 +140,13 @@ SUITES: List[Suite] = [
           _ROOT / "data" / "backup_cases.json",
           "68a8908385b3bd48625e066bb5b133ee8cce0d078599db291053967bc7cd851a",
           1.0, _backup),
+    Suite("security.secrets", "secret_guard",
+          "حارس الأسرار: كشف صيغ المزودين بطولها الحقيقي، رفض النائب والعشوائي غير السري،"
+          " تنقية موحدة في المنقيات الأربع، بوابة المستودع (إضافة/حذف/رسالة/خط أساس حرفي/"
+          "تعفن/ثنائي)، إعداد gitleaks وربط CI والـhook (26 حالة، R-848)",
+          _ROOT / "data" / "secrets_cases.json",
+          "ad1bc6f0d164d1be3f8d1b88b875fc5e66d173c4d17af546b237ba0ba301af17",
+          1.0, _secrets),
 ]
 
 

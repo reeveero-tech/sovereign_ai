@@ -221,3 +221,15 @@ backend.supervisor_daemon --url http://app:8080` عبر شبكة Compose —
   4. `GET /backups/restore`: `applied`، أو `rolled_back` (عادت الحالة كما كانت)، أو `rollback_failed` (تدخل يدوي: نسخة pre_restore في الفهرس، والملفات المزاحة في `.restore/displaced/`).
 - كارثة: حجم جديد + المفتاح والوجهة نفسهما ⇒ `GET /backups/offsite` ⇒ `POST /backups/offsite/{id}/fetch` ⇒ الخطوات أعلاه.
 - التفاصيل والأسرار docs/BACKUP.md.
+
+## 13) حارس الأسرار (R-848 — D-063)
+
+- تفعيل الـhook مرة لكل استنساخ: `git config core.hooksPath .githooks`. يشغّل `tools/gate_secrets.py --staged`.
+- فحص يدوي:
+  - التزام: `python3 tools/gate_secrets.py <sha>`.
+  - مدى: `--range BASE HEAD`.
+  - الشجرة كلها مقابل خط الأساس: `--tree` (قرابة 30ث).
+- **إن كُشف سر**: دوّره عند المزود أولًا، ثم أزله أو اقرأه من متغير بيئة. لا دفع قسري ولا إعادة كتابة للتاريخ.
+- **مزامنة `third_party/`**: إن حملت كشوفًا فاطبعها بـ`--tree --print-baseline "السبب (R-xxx)"`، وراجع كل إدخال، ثم أضفه في الالتزام نفسه.
+- تحديث gitleaks: غيّر `GITLEAKS_VERSION` و`GITLEAKS_SHA256` معًا في ci.yml، والبصمة من ملف checksums الرسمي للإصدار.
+- التفاصيل docs/SECRETS.md.
