@@ -251,3 +251,38 @@ async def decide_approval(body: ApprovalDecision):
                 state["loop_id"], body.approval_id, body.decision,
                 body.approved_by, body.session_scope)
     raise HTTPException(status_code=404, detail="موافقة غير معلّقة على حلقة")
+
+
+# --------------------------------------------------------------------- R-842: تقييم المخطط
+class PlannerEvalRequest(BaseModel):
+    set: str = Field(default="dev", pattern="^(dev|holdout)$")
+    mode: str = Field(default="brain", pattern="^(keyword|semantic|brain)$")
+    api_key: Optional[str] = Field(default=None, max_length=512)
+
+
+def _planning_eval():
+    from . import planning_eval
+    return planning_eval
+
+
+@router.get("/planner/eval")
+async def planner_eval(set: str = "dev", mode: str = "semantic"):
+    """تقييم حتمي للقراءة فقط: دقة اختيار الأدوات على مجموعة مُعلنة.
+
+    لا تنفيذ ولا استدعاء موصل — المخطط وحده يُقاس. وضع العقل (بطيء
+    ومكلف) لا يتاح هنا؛ يحتاج POST بمفتاح المالك.
+    """
+    if set not in ("dev", "holdout"):
+        raise HTTPException(status_code=422, detail="set يجب أن يكون dev أو holdout")
+    if mode not in ("keyword", "semantic"):
+        raise HTTPException(
+            status_code=422,
+            detail="mode يجب أن يكون keyword أو semantic — وضع العقل عبر POST بمفتاح المالك")
+    return _planning_eval().evaluate(set, mode)
+
+
+@router.post("/planner/eval")
+async def planner_eval_owner(body: PlannerEvalRequest):
+    """تقييم يشمل وضع العقل الحي — مكلف ⇒ بوابة مفتاح المالك."""
+    _verify_owner(body.api_key)
+    return _planning_eval().evaluate(body.set, body.mode)

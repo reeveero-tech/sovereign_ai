@@ -11,19 +11,36 @@ import uuid
 from typing import Any, Dict, List, Optional
 
 from . import schemas
+from .semantic_planner import BrainPlanner, SemanticRanker
 from .tool_registry import ToolDefinition, ToolRegistry, new_decision
 
 
 class Planner:
-    """يبني خطة صالحة المخطط من التمثيل الدلالي للطلب."""
+    """يبني خطة صالحة المخطط من التمثيل الدلالي للطلب.
 
-    def __init__(self, tools: ToolRegistry):
+    R-842: الاختيار عبر BrainPlanner (مرتِّب دلالي حتمي + عقل عند الغموض)؛
+    اختيار R-841 بالكلمات المفتاحية محفوظ في _keyword_candidates خط أساسٍ للتقييم.
+    """
+
+    def __init__(self, tools: ToolRegistry, brain_fn=None,
+                 planner_mode: Optional[str] = None):
         self.tools = tools
+        self.ranker = SemanticRanker(tools)
+        self.selector = BrainPlanner(self.ranker, brain_fn=brain_fn,
+                                     mode=planner_mode)
 
-    # ------------------------------------------------------------ تحليل النية
     def _candidates(self, semantic: Dict[str, Any],
                    trace_ref: str) -> Dict[str, Any]:
-        """اختيار الأدوات المرشحة من الدلالة — مع تبرير وبدائل مرفوضة."""
+        """R-842: اختيار دلالي — نفس شكل الناتج القديم + كائن الاختيار للأثر."""
+        sel = self.selector.select(semantic)
+        return {"candidates": list(sel.tools), "rejected": list(sel.rejected),
+                "intent": (semantic.get("intent") or {}).get("label", "request"),
+                "selection": sel}
+
+    # ------------------------------------------------------------ تحليل النية (R-841)
+    def _keyword_candidates(self, semantic: Dict[str, Any],
+                            trace_ref: str) -> Dict[str, Any]:
+        """اختيار R-841 بالكلمات المفتاحية — خط أساس للتقييم فقط (R-842)."""
         utterance = (semantic.get("utterance") or "").lower()
         entities = semantic.get("entities") or []
         intent = (semantic.get("intent") or {}).get("label", "request")
@@ -142,6 +159,12 @@ class Planner:
                             e.get("surface", "")).isidentifier():
                         inputs["table"] = e["surface"]
                         break
+                if "table" not in inputs:  # R-842: «table X» / «X table» بالإنجليزية
+                    import re as _re
+                    m = _re.search(r"\btable\s+([A-Za-z_]\w*)", text) or \
+                        _re.search(r"\b([A-Za-z_]\w*)\s+table\b", text)
+                    if m and m.group(1).lower() not in ("the", "a", "this", "that", "our"):
+                        inputs["table"] = m.group(1)
                 if "table" not in inputs and "جدول" in text:
                     # الكلمة التالية لـ«جدول» — استخراج نصي صريح لا افتراض
                     parts = text.split("جدول")
@@ -169,6 +192,16 @@ class Planner:
         exploratory = len(sel["candidates"]) == 1 and \
             sel["candidates"][0].access == "read"
         mode = "react" if exploratory else "plan_execute"
+        # R-842: الأداة معروفة لكن مدخلاتها الإلزامية ناقصة ⇒ سؤال توضيحي لا افتراض
+        extracted = {t.tool_id: self._extract_inputs(t, semantic)
+                     for t in sel["candidates"]}
+        missing = {t.tool_id: [k for k in t.input_schema.get("required", [])
+                               if k not in extracted[t.tool_id]]
+                   for t in sel["candidates"]}
+        missing = {k: v for k, v in missing.items() if v}
+        if missing:
+            detail = "؛ ".join(f"{tid}: {', '.join(v)}" for tid, v in missing.items())
+            raise ValueError(f"مدخلات إلزامية ناقصة ({detail}) — حدّدها في طلبك")
         steps: List[Dict[str, Any]] = []
         for i, tool in enumerate(sel["candidates"], 1):
             requires_approval = tool.access in ("write", "admin") \
@@ -177,13 +210,14 @@ class Planner:
                 "step_id": f"s{i}",
                 "goal": tool.description.split("—")[0].strip(),
                 "tool_id": tool.tool_id,
-                "inputs": self._extract_inputs(tool, semantic),
+                "inputs": extracted[tool.tool_id],
                 "depends_on": [f"s{i-1}"] if mode == "plan_execute" and i > 1 else [],
                 "requires_approval": requires_approval,
                 "success_criteria": f"استجابة ناجحة من {tool.connector_id}"
                                     f".{tool.operation}",
                 "fallback": "" if i == len(sel["candidates"]) else f"s{i}",
             })
+        selection = sel.get("selection")
         plan = {
             "plan_id": str(uuid.uuid4()),
             "goal": request["utterance"][:200],
@@ -203,8 +237,11 @@ class Planner:
                 f"{[c.tool_id for c in sel['candidates']]}؛ مرفوضة="
                 f"{sel['rejected']}؛ نمط {mode}"
                 + (" (أداة قراءة واحدة — استكشافي)"
-                   if exploratory else " (تفكيك مركب)")),
+                   if exploratory else " (تفكيك مركب)")
+                + (f"؛ {selection.reason}" if selection is not None else "")),
         }
+        if selection is not None:  # R-842: تفسير الاختيار مرفق بالخطة للأثر
+            plan["selection"] = selection.public()
         schemas.validate(plan, schemas.PLAN_SCHEMA)
         return plan
 

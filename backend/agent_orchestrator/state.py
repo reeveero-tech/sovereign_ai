@@ -12,7 +12,10 @@ import threading
 import time
 from typing import Any, Dict, List, Optional
 
-from backend.runtime.atomic_json import atomic_write_json  # R-781: كتابة ذرية موحدة
+try:  # R-781: كتابة ذرية موحدة — R-842: نمط الاستيراد المزدوج (الإنتاج يعمل من backend/)
+    from runtime.atomic_json import atomic_write_json
+except ImportError:  # TOLERATED: نمط الاستيراد المزدوج القائم (تشغيل الاختبارات من الجذر)
+    from backend.runtime.atomic_json import atomic_write_json
 
 
 class StateStore:

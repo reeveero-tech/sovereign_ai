@@ -1,0 +1,14 @@
+R-842 — أول تشغيل للمجموعة المعزولة (holdout) بعد اكتمال ضبط المرتِّب على مجموعة التطوير.
+لم يُعدَّل المرتِّب ولا السجل بعد هذا التشغيل لأجل المجموعة المعزولة.
+بصمة الملف قبل التنفيذ: 7eaece466afcdde6ed7af4a42a8e9287f50000cb21ff1326edaa6e9f727020ec
+التاريخ: 2026-11-04T00:15:39Z
+
+keyword 0.65 13 / 20 abstain 1.0 precision 0.8333
+  X h04 give me the metadata of the django/django repo exp ['github.repo_read'] got []
+  X h05 قدّم بلاغ مشكلة في acme/mobile بعنوان انهيار عند الإقلاع exp ['github.issue_create'] got []
+  X h08 show the first rows of table sessions exp ['supabase.table_select'] got []
+  X h11 عطني قائمة بخدمات رندر وحالتها exp ['render.services_list'] got []
+  X h13 هل فيه خدمة واقفة في النشر؟ exp ['render.services_list'] got []
+  X h16 راجع المستودع acme/tools وبعدين سجل مشكلة بعنوان تنظيف الكود exp ['github.repo_read', 'github.issue_create'] got ['github.issue_create']
+  X h17 list render services and read the table metrics exp ['render.services_list', 'supabase.table_select'] got ['render.services_list']
+semantic 1.0 20 / 20 abstain 1.0 precision 1.0

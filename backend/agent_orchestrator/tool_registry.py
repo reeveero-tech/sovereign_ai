@@ -7,6 +7,7 @@
 """
 from __future__ import annotations
 
+import re
 import threading
 import uuid
 from dataclasses import dataclass, field
@@ -42,6 +43,9 @@ class ToolDefinition:
     lifecycle: str = "active"        # active|preview|deprecated
     inverse_tool_id: Optional[str] = None  # للتراجع (4.15)
     compensation_hint: str = ""       # تعويض إذا لا عكس متاح
+    # R-842: أنماط كيانات بنيوية (regex على النص المطبع) دليلٌ على الأداة —
+    # بيانات في العقد لا كود في المخطط؛ أداة جديدة تُختار دلاليًا بلا تعديل كود
+    entity_patterns: List[str] = field(default_factory=list)
 
     def public(self) -> Dict[str, Any]:
         return {
@@ -57,6 +61,7 @@ class ToolDefinition:
             "examples": list(self.examples), "lifecycle": self.lifecycle,
             "inverse_tool_id": self.inverse_tool_id,
             "compensation_hint": self.compensation_hint,
+            "entity_patterns": list(self.entity_patterns),
         }
 
 
@@ -82,6 +87,11 @@ class ToolRegistry:
             raise ToolRegistryError(f"{d.tool_id}: لا تسجيل أداة بلا مخططات")
         if d.lifecycle not in ("active", "preview", "deprecated"):
             raise ToolRegistryError(f"{d.tool_id}: حالة دورة حياة غير معروفة")
+        for pat in d.entity_patterns:  # R-842: نمط تالف يُرفض عند التسجيل لا عند الطلب
+            try:
+                re.compile(pat)
+            except re.error as exc:
+                raise ToolRegistryError(f"{d.tool_id}: نمط كيان تالف {pat!r}: {exc}")
         with self._lock:
             self._tools[d.tool_id] = d
         return d
@@ -125,7 +135,14 @@ def seed_registry() -> ToolRegistry:
         estimated_cost=0.001, estimated_time_s=1.5,
         examples=[{"utterance": "حلل مستودع reeveero-tech/sovereign_ai",
                    "inputs": {"owner": "reeveero-tech",
-                              "repo": "sovereign_ai"}}],
+                              "repo": "sovereign_ai"}},
+                  {"utterance": "اعرض معلومات المستودع وهل هو خاص أم عام"},
+                  {"utterance": "ما الفرع الافتراضي لمشروعنا على GitHub (جيت هب)"},
+                  {"utterance": "اقرأ بيانات الريبو ووضعه"},
+                  {"utterance": "show me details of the repository octocat/hello-world"},
+                  {"utterance": "analyze the GitHub repo, its visibility and overview"},
+                  {"utterance": "repository metadata: default branch, private or public"}],
+        entity_patterns=[r"github\.com/", r"(?<![\w/.])[a-z0-9][\w.-]*/[\w.-]+(?![\w/])"],
     ))
     reg.register(ToolDefinition(
         tool_id="github.issue_create", name="فتح مشكلة GitHub",
@@ -145,7 +162,13 @@ def seed_registry() -> ToolRegistry:
         scopes=["repo:write"], idempotent=True,
         estimated_cost=0.01, estimated_time_s=2.0,
         examples=[{"utterance": "افتح مشكلة في مستودع X بعنوان Y",
-                   "inputs": {"owner": "x", "repo": "r", "title": "Y"}}],
+                   "inputs": {"owner": "x", "repo": "r", "title": "Y"}},
+                  {"utterance": "سجل بلاغ خطأ في GitHub"},
+                  {"utterance": "أنشئ تذكرة جديدة في الريبو"},
+                  {"utterance": "create an issue titled login fails"},
+                  {"utterance": "file a bug report ticket on GitHub"},
+                  {"utterance": "ارفع issue عن تعطل الدخول"}],
+        entity_patterns=[r"github\.com/", r"(?<![\w/.])[a-z0-9][\w.-]*/[\w.-]+(?![\w/])"],
         compensation_hint="أغلق المشكلة المفتوحة يدويًا عبر GitHub (لا عكس آلي"
                           " متاح في الموصل الحالي) وسجّل رقمها",
     ))
@@ -165,7 +188,14 @@ def seed_registry() -> ToolRegistry:
         scopes=["db:read"], idempotent=True,
         estimated_cost=0.001, estimated_time_s=1.0,
         examples=[{"utterance": "اعرض لي صفوف جدول users",
-                   "inputs": {"table": "users"}}],
+                   "inputs": {"table": "users"}},
+                  {"utterance": "ما البيانات والسجلات الموجودة في جدول orders"},
+                  {"utterance": "استعلم من قاعدة البيانات سوبابيس"},
+                  {"utterance": "show rows and records from the customers table"},
+                  {"utterance": "query the supabase database table data"}],
+        # اسم جدول صريح كيان بنيوي (كمعرّف خدمة srv-) — لا كلمة مفتاحية
+        entity_patterns=[r"جدول\s+[a-z_]\w*", r"\btable\s+[a-z_]\w*",
+                         r"\b[a-z_]\w*\s+table\b"],
     ))
     reg.register(ToolDefinition(
         tool_id="render.services_list", name="قائمة خدمات Render",
@@ -181,7 +211,12 @@ def seed_registry() -> ToolRegistry:
         scopes=["connector:read"], idempotent=True,
         estimated_cost=0.001, estimated_time_s=1.0,
         examples=[{"utterance": "ما الخدمات المنشورة عندنا على Render؟",
-                   "inputs": {}}],
+                   "inputs": {}},
+                  {"utterance": "اعرض حالة خدمات النشر على رندر"},
+                  {"utterance": "list my Render services"},
+                  {"utterance": "هل الخادم شغال أو واقف"},
+                  {"utterance": "check deployment status of our running web services"}],
+        entity_patterns=[r"\bsrv-[a-z0-9]+"],
     ))
     reg.register(ToolDefinition(
         tool_id="openapi.register_spec", name="تسجيل مواصفة OpenAPI",
@@ -199,7 +234,12 @@ def seed_registry() -> ToolRegistry:
         scopes=["connector:write"], idempotent=False,
         estimated_cost=0.0, estimated_time_s=0.5,
         examples=[{"utterance": "سجّل API المزامنة من مواصفته",
-                   "inputs": {"connector_id": "sync_api", "spec": {}}}],
+                   "inputs": {"connector_id": "sync_api", "spec": {}}},
+                  {"utterance": "أضف موصل جديد من ملف swagger"},
+                  {"utterance": "register an OpenAPI spec for the billing API"},
+                  {"utterance": "اربط واجهة برمجية خارجية عبر مواصفات openapi"},
+                  {"utterance": "import this swagger definition as a connector"}],
+        entity_patterns=[r"(openapi|swagger)"],
     ))
     return reg
 

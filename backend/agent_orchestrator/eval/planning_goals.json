@@ -1,0 +1,397 @@
+{
+ "name": "R-842 dev — المجموعة المرجعية (50 هدفًا؛ مجموعة تطوير يُضبط عليها)",
+ "goals": [
+  {
+   "id": "g01",
+   "utterance": "أعطني نظرة عامة على المستودع torvalds/linux",
+   "expected_tools": [
+    "github.repo_read"
+   ],
+   "category": "repo_read"
+  },
+  {
+   "id": "g02",
+   "utterance": "هل مستودع reeveero-tech/sovereign_ai عام؟",
+   "expected_tools": [
+    "github.repo_read"
+   ],
+   "category": "repo_read"
+  },
+  {
+   "id": "g03",
+   "utterance": "what's the default branch of github.com/acme/webapp",
+   "expected_tools": [
+    "github.repo_read"
+   ],
+   "category": "repo_read"
+  },
+  {
+   "id": "g04",
+   "utterance": "افحص الريبو github.com/acme/api وقل لي إذا كان خاصًا",
+   "expected_tools": [
+    "github.repo_read"
+   ],
+   "category": "repo_read"
+  },
+  {
+   "id": "g05",
+   "utterance": "summarize the repo acme/webapp for me",
+   "expected_tools": [
+    "github.repo_read"
+   ],
+   "category": "repo_read"
+  },
+  {
+   "id": "g06",
+   "utterance": "ابي اعرف تفاصيل مستودعنا في جيت هب",
+   "expected_tools": [
+    "github.repo_read"
+   ],
+   "category": "repo_read"
+  },
+  {
+   "id": "g07",
+   "utterance": "Inspect repository metadata for facebook/react",
+   "expected_tools": [
+    "github.repo_read"
+   ],
+   "category": "repo_read"
+  },
+  {
+   "id": "g08",
+   "utterance": "ايش الفرع الرئيسي في مستودع acme/webapp",
+   "expected_tools": [
+    "github.repo_read"
+   ],
+   "category": "repo_read"
+  },
+  {
+   "id": "g09",
+   "utterance": "تحقق من خصوصية مستودع acme/secret-repo",
+   "expected_tools": [
+    "github.repo_read"
+   ],
+   "category": "repo_read"
+  },
+  {
+   "id": "g10",
+   "utterance": "أبلغ عن خطأ في github.com/acme/webapp: زر الدفع لا يعمل",
+   "expected_tools": [
+    "github.issue_create"
+   ],
+   "category": "issue_create"
+  },
+  {
+   "id": "g11",
+   "utterance": "open a new issue in acme/webapp titled crash on startup",
+   "expected_tools": [
+    "github.issue_create"
+   ],
+   "category": "issue_create"
+  },
+  {
+   "id": "g12",
+   "utterance": "سوّ تذكرة في الريبو acme/webapp عن بطء الصفحة",
+   "expected_tools": [
+    "github.issue_create"
+   ],
+   "category": "issue_create"
+  },
+  {
+   "id": "g13",
+   "utterance": "أضف مشكلة جديدة إلى مستودع acme/api بعنوان فشل المصادقة",
+   "expected_tools": [
+    "github.issue_create"
+   ],
+   "category": "issue_create"
+  },
+  {
+   "id": "g14",
+   "utterance": "report a bug on GitHub repo acme/webapp: images not loading",
+   "expected_tools": [
+    "github.issue_create"
+   ],
+   "category": "issue_create"
+  },
+  {
+   "id": "g15",
+   "utterance": "اكتب issue في acme/webapp يوضح أن التسجيل معطل",
+   "expected_tools": [
+    "github.issue_create"
+   ],
+   "category": "issue_create"
+  },
+  {
+   "id": "g16",
+   "utterance": "create a ticket on github for the broken link",
+   "expected_tools": [
+    "github.issue_create"
+   ],
+   "category": "issue_create"
+  },
+  {
+   "id": "g17",
+   "utterance": "سجّل مشكلة في المستودع بعنوان تحديث الوثائق",
+   "expected_tools": [
+    "github.issue_create"
+   ],
+   "category": "issue_create"
+  },
+  {
+   "id": "g18",
+   "utterance": "وريني آخر السجلات في جدول orders",
+   "expected_tools": [
+    "supabase.table_select"
+   ],
+   "category": "table_select"
+  },
+  {
+   "id": "g19",
+   "utterance": "fetch some rows from the invoices table in supabase",
+   "expected_tools": [
+    "supabase.table_select"
+   ],
+   "category": "table_select"
+  },
+  {
+   "id": "g20",
+   "utterance": "ماذا يحتوي جدول customers في قاعدة البيانات؟",
+   "expected_tools": [
+    "supabase.table_select"
+   ],
+   "category": "table_select"
+  },
+  {
+   "id": "g21",
+   "utterance": "اقرأ عينة من بيانات جدول products",
+   "expected_tools": [
+    "supabase.table_select"
+   ],
+   "category": "table_select"
+  },
+  {
+   "id": "g22",
+   "utterance": "select from the users table",
+   "expected_tools": [
+    "supabase.table_select"
+   ],
+   "category": "table_select"
+  },
+  {
+   "id": "g23",
+   "utterance": "ابغى اشوف محتوى جدول payments",
+   "expected_tools": [
+    "supabase.table_select"
+   ],
+   "category": "table_select"
+  },
+  {
+   "id": "g24",
+   "utterance": "what records are in our supabase table events",
+   "expected_tools": [
+    "supabase.table_select"
+   ],
+   "category": "table_select"
+  },
+  {
+   "id": "g25",
+   "utterance": "استخرج صفوفًا من قاعدة بيانات سوبابيس لجدول logs",
+   "expected_tools": [
+    "supabase.table_select"
+   ],
+   "category": "table_select"
+  },
+  {
+   "id": "g26",
+   "utterance": "هل خدماتنا على Render تعمل الآن؟",
+   "expected_tools": [
+    "render.services_list"
+   ],
+   "category": "services_list"
+  },
+  {
+   "id": "g27",
+   "utterance": "show me all services deployed on render",
+   "expected_tools": [
+    "render.services_list"
+   ],
+   "category": "services_list"
+  },
+  {
+   "id": "g28",
+   "utterance": "وش الخدمات اللي شغالة على رندر",
+   "expected_tools": [
+    "render.services_list"
+   ],
+   "category": "services_list"
+  },
+  {
+   "id": "g29",
+   "utterance": "تحقق من حالة النشر على منصة Render",
+   "expected_tools": [
+    "render.services_list"
+   ],
+   "category": "services_list"
+  },
+  {
+   "id": "g30",
+   "utterance": "list the running web services and their status on Render",
+   "expected_tools": [
+    "render.services_list"
+   ],
+   "category": "services_list"
+  },
+  {
+   "id": "g31",
+   "utterance": "ما حالة الخدمة srv-abc123",
+   "expected_tools": [
+    "render.services_list"
+   ],
+   "category": "services_list"
+  },
+  {
+   "id": "g32",
+   "utterance": "are any of our Render deployments down?",
+   "expected_tools": [
+    "render.services_list"
+   ],
+   "category": "services_list"
+  },
+  {
+   "id": "g33",
+   "utterance": "سجل مواصفة OpenAPI لواجهة الدفع",
+   "expected_tools": [
+    "openapi.register_spec"
+   ],
+   "category": "register_spec"
+  },
+  {
+   "id": "g34",
+   "utterance": "add a connector from this swagger file for the CRM API",
+   "expected_tools": [
+    "openapi.register_spec"
+   ],
+   "category": "register_spec"
+  },
+  {
+   "id": "g35",
+   "utterance": "أريد ربط API خارجي جديد باستخدام ملف المواصفات",
+   "expected_tools": [
+    "openapi.register_spec"
+   ],
+   "category": "register_spec"
+  },
+  {
+   "id": "g36",
+   "utterance": "register the openapi definition of the shipping service",
+   "expected_tools": [
+    "openapi.register_spec"
+   ],
+   "category": "register_spec"
+  },
+  {
+   "id": "g37",
+   "utterance": "استورد مواصفة swagger كموصل عام",
+   "expected_tools": [
+    "openapi.register_spec"
+   ],
+   "category": "register_spec"
+  },
+  {
+   "id": "g38",
+   "utterance": "حلل المستودع acme/webapp ثم افتح مشكلة بعنوان تحسين الأداء",
+   "expected_tools": [
+    "github.repo_read",
+    "github.issue_create"
+   ],
+   "category": "multi"
+  },
+  {
+   "id": "g39",
+   "utterance": "اعرض خدمات Render وصفوف جدول users",
+   "expected_tools": [
+    "render.services_list",
+    "supabase.table_select"
+   ],
+   "category": "multi"
+  },
+  {
+   "id": "g40",
+   "utterance": "check the repo acme/webapp and then list our render services",
+   "expected_tools": [
+    "github.repo_read",
+    "render.services_list"
+   ],
+   "category": "multi"
+  },
+  {
+   "id": "g41",
+   "utterance": "اقرأ جدول orders من قاعدة البيانات ثم افتح issue في acme/webapp عن الطلبات المكررة",
+   "expected_tools": [
+    "supabase.table_select",
+    "github.issue_create"
+   ],
+   "category": "multi"
+  },
+  {
+   "id": "g42",
+   "utterance": "افتح مشكلة في github.com/acme/webapp واعرض خدمات Render",
+   "expected_tools": [
+    "github.issue_create",
+    "render.services_list"
+   ],
+   "category": "multi"
+  },
+  {
+   "id": "g43",
+   "utterance": "inspect repo acme/api, then show rows from the audit table",
+   "expected_tools": [
+    "github.repo_read",
+    "supabase.table_select"
+   ],
+   "category": "multi"
+  },
+  {
+   "id": "g44",
+   "utterance": "احجز لي رحلة إلى دبي الأسبوع القادم",
+   "expected_tools": [],
+   "category": "abstain"
+  },
+  {
+   "id": "g45",
+   "utterance": "ما حالة الطقس في جدة اليوم؟",
+   "expected_tools": [],
+   "category": "abstain"
+  },
+  {
+   "id": "g46",
+   "utterance": "اكتب لي قصيدة عن البحر",
+   "expected_tools": [],
+   "category": "abstain"
+  },
+  {
+   "id": "g47",
+   "utterance": "translate this sentence to French",
+   "expected_tools": [],
+   "category": "abstain"
+  },
+  {
+   "id": "g48",
+   "utterance": "كم سعر الذهب اليوم",
+   "expected_tools": [],
+   "category": "abstain"
+  },
+  {
+   "id": "g49",
+   "utterance": "send an email to my team about the meeting",
+   "expected_tools": [],
+   "category": "abstain"
+  },
+  {
+   "id": "g50",
+   "utterance": "ذكرني بموعد الطبيب غدًا",
+   "expected_tools": [],
+   "category": "abstain"
+  }
+ ]
+}
