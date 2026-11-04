@@ -97,6 +97,12 @@ def _secrets(path: Path) -> Dict[str, Any]:
     return security_secrets.run(cases)
 
 
+def _skills(path: Path) -> Dict[str, Any]:
+    from . import skills_reliability
+    cases = json.loads(path.read_text(encoding="utf-8"))["cases"]
+    return skills_reliability.run(cases)
+
+
 SUITES: List[Suite] = [
     Suite("planner.dev", "orchestrator/planner",
           "اختيار الأدوات — مجموعة التطوير (50 هدفًا، R-842)",
@@ -147,6 +153,13 @@ SUITES: List[Suite] = [
           _ROOT / "data" / "secrets_cases.json",
           "ad1bc6f0d164d1be3f8d1b88b875fc5e66d173c4d17af546b237ba0ba301af17",
           1.0, _secrets),
+    Suite("skills.durability", "skills_durable",
+          "دوام المهارات عبر إعادة النشر: كتابة نافذة لكل تحول، نجاة من محو القرص،"
+          " رفض المزوّر بعيدًا وإصلاح التالف محليًا، رفض مغلق للأسرار، تعافٍ محلي"
+          " عند تعطل المخزن، تراجع وتعارض active وإقلاع ينفذ (15 حالة، R-849)",
+          _ROOT / "data" / "skills_cases.json",
+          "60c52e31db13b24c4a8200acdeb29b65564286b0ca274f5ca3db489db9253761",
+          1.0, _skills),
 ]
 
 

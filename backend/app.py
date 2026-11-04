@@ -1960,6 +1960,23 @@ async def skills_rollback(request: SkillOwnerRequest):
     return _skill_owner_op(request, "rollback")
 
 
+class SkillsSyncRequest(BaseModel):
+    api_key: Optional[str] = Field(None, description="مفتاح API للسيد — غيابه رفض 401")
+
+
+@app.post("/skills/sync")
+async def skills_sync(request: SkillsSyncRequest):
+    """R-849: مزامنة المهارات مع المخزن الدائم — استعادة ثم دفع، بتقرير موثق."""
+    if not verify_api_key(request.api_key or ""):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
+                            detail="مفتاح API غير صحيح")
+    import skills
+    try:
+        return skills.get_library().sync()
+    except skills.SkillError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
 class SkillIndependentEvalRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=64)
     version: str = Field(..., min_length=1, max_length=32)
