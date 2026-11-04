@@ -128,10 +128,13 @@ def s_route_template_label(tmp: Path) -> Dict[str, Any]:
     c = _client(reg)
     c.get("/items/111")
     c.get("/items/222")
-    s = _series(reg, "http_requests_total")
-    text = reg.render()
-    return {"series": len(s), "route": s[0]["route"] if s else None,
-            "ids_in_labels": "111" in text or "222" in text}
+    s = _series(reg, "http_requests_total") + _series(reg, "http_request_duration_seconds")
+    # قيم الوسوم وحدها — البحث في النص كله التقط "111" من أرقام الزمن (مثل 0.00111)
+    # فتذبذبت الحالة في CI (R-846، خلل قياس لا خلل كود)
+    vals = [v for lbl in s for v in lbl.values()]
+    return {"series": len(_series(reg, "http_requests_total")),
+            "route": s[0]["route"] if s else None,
+            "ids_in_labels": any("111" in v or "222" in v for v in vals)}
 
 
 def s_unmatched_single_series(tmp: Path) -> Dict[str, Any]:
