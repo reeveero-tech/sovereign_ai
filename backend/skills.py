@@ -70,6 +70,10 @@ def _lookup(path: str, inputs: Dict[str, Any], history: List[Dict[str, Any]]):
             raise SkillError(f"مرجع خطوة غير متاح: {path}")
         val: Any = history[int(parts[1])].get("result")
         for p in parts[2:]:
+            if p.startswith("$"):              # R-850: مفتاح يختاره مدخل ({{steps.0.x.$name}})
+                if p[1:] not in inputs:
+                    raise SkillError(f"مدخل غير معطى لمفتاح ديناميكي: {p[1:]}")
+                p = str(inputs[p[1:]])
             if not isinstance(val, dict) or p not in val:
                 raise SkillError(f"مفتاح غير موجود في ناتج الخطوة: {path}")
             val = val[p]
@@ -129,6 +133,47 @@ def validate(m: Dict[str, Any]) -> None:
     cases = (m.get("eval") or {}).get("cases") or []
     if not cases:
         raise SkillError("حالات التقييم المرجعية إلزامية")
+    for i, c in enumerate(cases):
+        if not isinstance(c, dict) or ("expect" not in c and not c.get("criteria")):
+            raise SkillError(f"حالة تقييم {i} بلا توقع ولا معايير — لا حكم ممكن")
+        crit = c.get("criteria") or []
+        if crit:
+            # R-850: معايير المؤلف حتمية فقط — المؤلف لا يحكم دلاليًا على نفسه
+            if any((x or {}).get("type") == "semantic" for x in crit):
+                raise SkillError(f"حالة {i}: معيار دلالي في تقييم المؤلف — للمقيّم المستقل وحده")
+            _validate_case_criteria(crit, i)
+
+
+def _judge_mod():
+    try:
+        from evaluation import judge
+    except ImportError:  # TOLERATED: نمط الاستيراد المزدوج القائم
+        from backend.evaluation import judge
+    return judge
+
+
+def _validate_case_criteria(crit, i) -> None:
+    try:
+        _judge_mod().validate_criteria(crit)
+    except _judge_mod().CriterionError as exc:
+        raise SkillError(f"حالة {i}: {exc}") from exc
+
+
+def judge_case(case: Dict[str, Any], res: Dict[str, Any]) -> Dict[str, Any]:
+    """R-850: حكم حالة مؤلف — مساواة حرفية إن وُجد expect + كل معيار حتمي (بمساره)."""
+    row: Dict[str, Any] = {"inputs": case.get("inputs"), "status": res["status"],
+                           "got": res.get("answer")}
+    ok = res["status"] == "completed"
+    if "expect" in case:
+        row["expect"] = case["expect"]
+        ok = ok and res.get("answer") == case["expect"]
+    if case.get("criteria"):
+        checks = [_judge_mod().check_deterministic(c, res.get("answer"))
+                  for c in case["criteria"]]
+        row["criteria"] = checks
+        ok = ok and all(c["pass"] for c in checks)
+    row["pass"] = bool(ok)
+    return row
 
 
 def _audit(op: str, payload: Dict[str, Any]) -> None:
@@ -252,9 +297,7 @@ class SkillLibrary:
         results = []
         for case in m["eval"]["cases"]:
             res = self._execute(m, dict(case.get("inputs") or {}))
-            ok = res["status"] == "completed" and res["answer"] == case.get("expect")
-            results.append({"inputs": case.get("inputs"), "expect": case.get("expect"),
-                            "got": res.get("answer"), "status": res["status"], "pass": ok})
+            results.append(judge_case(case, res))
         passed = sum(r["pass"] for r in results)
         state = "evaluated" if passed == len(results) else "failed_eval"
         _audit("skill.evaluate", {"skill": name, "version": version, "content_hash": h,
@@ -377,6 +420,38 @@ class SkillLibrary:
         tool = self._install_tool(pkg["manifest"])
         return {"skill": name, "active": prev, "tool": tool}
 
+    # ------------------------------------------------------------ الكتالوج (R-850)
+    def catalog(self) -> Dict[str, Any]:
+        """R-850 (٦.٥.١): مهارات حقيقية مؤلفة في المستودع — قراءة فقط.
+
+        الكتالوج لا يفعّل شيئًا: كل مهارة تمر بالدورة كاملة (اقتراح ← تقييم مؤلف
+        ← تقييم مستقل بحالات المالك ← اعتماد المالك). الحالة هنا من المكتبة.
+        """
+        items = []
+        for m in load_catalog():
+            name, ver = m["name"], str(m["version"])
+            p = self._pkg_path(name, ver)
+            state = json.loads(p.read_text(encoding="utf-8")).get("state") if p.exists() \
+                else "not_proposed"
+            items.append({"name": name, "version": ver, "description": m["description"],
+                          "inputs": m.get("inputs") or {}, "permissions": m["permissions"],
+                          "content_hash": content_hash(m), "state": state,
+                          "active": self._active(name).get("active")})
+        return {"skills": items, "count": len(items),
+                "cycle": "propose_catalog ← evaluate_independent (المالك) ← approve (المالك)"}
+
+    def propose_catalog(self, name: str) -> Dict[str, Any]:
+        """اقتراح مهارة من الكتالوج وتقييمها بحالات مؤلفها — المقترح «catalog»
+        فيبقى التقييم المستقل والاعتماد للمالك (لا تقييم ذاتي ولا تفعيل ذاتي)."""
+        m = next((x for x in load_catalog() if x["name"] == name), None)
+        if m is None:
+            raise SkillError(f"مهارة غير موجودة في الكتالوج: {name}")
+        proposed = self.propose(m, actor="catalog")
+        return {**self.evaluate(proposed["skill"], proposed["version"]),
+                "content_hash": proposed["content_hash"],
+                "next": "تقييم مستقل بحالات المالك (POST /skills/evaluate_independent) "
+                        "ثم الاعتماد (POST /skills/approve)"}
+
     def sync(self) -> Dict[str, Any]:
         """R-849: استعادة من المخزن الدائم ثم دفع كل غائب — تقرير موثق."""
         if self.durable is None:
@@ -440,6 +515,22 @@ class SkillLibrary:
 
 
 _LIB: Optional[SkillLibrary] = None
+CATALOG_DIR = Path(__file__).resolve().parent / "skills_catalog"
+
+
+def load_catalog(root: Optional[Path] = None) -> List[Dict[str, Any]]:
+    """R-850: حزم الكتالوج — كل حزمة تُتحقق كأي مقترح (validate) قبل عرضها؛
+    حزمة تالفة أو مكررة الاسم = خطأ صريح لا تخطٍّ صامت."""
+    root = Path(root) if root else CATALOG_DIR
+    out, seen = [], set()
+    for p in sorted(root.glob("*.json")):
+        m = json.loads(p.read_text(encoding="utf-8"))
+        validate(m)
+        if m["name"] != p.stem or m["name"] in seen:
+            raise SkillError(f"اسم الحزمة لا يطابق ملفها أو مكرر: {p.name}")
+        seen.add(m["name"])
+        out.append(m)
+    return out
 
 
 def get_library() -> SkillLibrary:

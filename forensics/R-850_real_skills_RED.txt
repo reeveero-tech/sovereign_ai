@@ -1,0 +1,13 @@
+R-850 — RED (main 616a80dd، 2026-11-05) — بند ٦.٥.١ «أول مهارات حقيقية»
+سكربت: محاكاة مهارة على بيانات حية بسجل أدوات وهمي + فحوص المصدر
+
+RED-1 live correct output, exact-equality eval: failed_eval 0 / 1
+RED-2 author criteria ignored (expect=None compared): failed_eval None
+RED-3 structural criteria unsupported: نوع معيار غير معروف: has_keys
+RED-3b path ignored -> equals on whole output: False
+RED-4 no input-selected key: مفتاح غير موجود في ناتج الخطوة: steps.0.components.$component
+RED-5 ledger read tool registered: False
+RED-6 skills catalog exists: False
+
+الخلاصة: عقد تقييم المؤلف مساواة حرفية فقط ⇒ أي مهارة على بيانات حية تفشل وهي صحيحة؛
+المعايير الحتمية نصية بلا مسار؛ لا أداة قراءة للسجل؛ لا مفتاح يُختار بمدخل؛ لا كتالوج مهارات.

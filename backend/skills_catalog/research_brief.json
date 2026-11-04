@@ -1,0 +1,34 @@
+{
+ "name": "research_brief",
+ "version": "1.0.0",
+ "source": "catalog (R-850) — مؤلفة في المستودع، التفعيل باعتماد المالك",
+ "description": "موجز بحثي: نقاط مستخلصة من بحث عالمي متعدد اللغات والمزودات مع مصادرها — بلا نموذج لغوي",
+ "inputs": {"question": "سؤال البحث بأي لغة", "target_lang": "لغة الجواب (ar/en/...)"},
+ "permissions": ["world.answer"],
+ "steps": [
+  {"tool": "world.answer", "inputs": {"question": "{{question}}", "target_lang": "{{target_lang}}"},
+   "check": {"type": "key_equals", "key": "ok", "value": true}}
+ ],
+ "output": {
+  "question": "{{question}}",
+  "lang": "{{target_lang}}",
+  "points": "{{steps.0.points}}",
+  "sources": "{{steps.0.sources}}",
+  "providers": "{{steps.0.providers}}",
+  "method": "{{steps.0.method}}"
+ },
+ "eval": {"reference": "world.answer (R-823) — نتائج حية ⇒ معايير بنيوية", "cases": [
+  {"inputs": {"question": "ما هي عاصمة اليابان؟", "target_lang": "ar"}, "criteria": [
+   {"id": "shape", "type": "has_keys", "value": ["question", "lang", "points", "sources", "providers", "method"]},
+   {"id": "points", "type": "non_empty", "path": "points"},
+   {"id": "sources", "type": "non_empty", "path": "sources"},
+   {"id": "point_text", "type": "non_empty", "path": "points.0.text"},
+   {"id": "answer", "type": "contains", "path": "points", "value": "طوكيو"}
+  ]},
+  {"inputs": {"question": "What is the boiling point of water at sea level?", "target_lang": "en"}, "criteria": [
+   {"id": "points", "type": "non_empty", "path": "points"},
+   {"id": "list", "type": "is_type", "path": "sources", "value": "list"},
+   {"id": "answer", "type": "regex", "path": "points", "value": "100"}
+  ]}
+ ]}
+}

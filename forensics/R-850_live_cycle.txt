@@ -1,0 +1,17 @@
+R-850 — إثبات حي للدورة الكاملة (2026-11-05) — سجل الأدوات الحقيقي للتطبيق (TestClient + lifespan)
+مكتبة مؤقتة، durable=False، المقترح catalog والمقيّم المستقل/المعتمد owner، بحث ويب حي
+
+== health_report author: evaluated 2 / 2
+  independent: independently_evaluated 2 / 2
+  approved: {'skill': 'health_report', 'active': '1.0.0', 'tool': 'skill.health_report'}
+  run: {"overall": "healthy", "version": "4.0.0", "uptime_seconds": 0.13984942436218262, "component": "memory_store", "component_detail": "<dict 4>", "components": "<dict 23>", "ledger_events": 247, "cloud_disk_enabled": false, "local_disk_state": "ok", "brain": "disabled", "reply_source": "templates"}
+== ledger_digest author: evaluated 2 / 2
+  independent: independently_evaluated 2 / 2
+  approved: {'skill': 'ledger_digest', 'active': '1.0.0', 'tool': 'skill.ledger_digest'}
+  run: {"window": 3, "count": 3, "by_type": "<dict 2>", "newest": "2026-11-04T23:03:15.744500+00:00", "oldest": "2026-11-04T23:03:15.736735+00:00", "chain_linked": true, "chain_links": 2, "recent": "<list 3>", "ledger_total": 277, "experience_chain_intact": true}
+== research_brief author: evaluated 2 / 2
+  independent: independently_evaluated 2 / 2
+  approved: {'skill': 'research_brief', 'active': '1.0.0', 'tool': 'skill.research_brief'}
+  run: {"question": "ما هي عاصمة فرنسا؟", "lang": "ar", "points": "<list 2>", "sources": "<list 2>", "providers": "<dict 17>", "method": "تمييز المطلوب (نوع السؤال والدولة والعملة) ← إجابات مباشرة حية (صرف/ذهب/عملات رقمية/طقس/وقت) ← بحث متعدد المزودات واللغات (Bing وأخبار Bing/Google وويكيبيديا وويكي بيانات والأبحاث المحكّمة وYouTube وGitHub وHuggingFace وStack Exchange وLemmy وOpen Library وBaidu والقرآن الكريم والفهرس الذاتي) ← قراءة المصادر ← تقييم حتمي (صلة BM25 وتغطي�
+  first point: العاصمة (فرنسا): باريس
+== catalog: [('health_report', 'active', '1.0.0'), ('ledger_digest', 'active', '1.0.0'), ('research_brief', 'active', '1.0.0')]

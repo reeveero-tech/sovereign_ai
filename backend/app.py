@@ -1960,6 +1960,37 @@ async def skills_rollback(request: SkillOwnerRequest):
     return _skill_owner_op(request, "rollback")
 
 
+@app.get("/skills/catalog")
+async def skills_catalog():
+    """R-850 (٦.٥.١): كتالوج المهارات الحقيقية — قراءة فقط، بلا أسرار ولا تفعيل."""
+    import skills
+    try:
+        return skills.get_library().catalog()
+    except skills.SkillError as exc:
+        raise HTTPException(status_code=500, detail=f"كتالوج تالف: {exc}")
+
+
+class SkillCatalogProposeRequest(BaseModel):
+    name: str = Field(..., min_length=1, max_length=64)
+    api_key: Optional[str] = Field(None, description="مفتاح API للسيد — غيابه رفض 401")
+
+
+@app.post("/skills/catalog/propose")
+async def skills_catalog_propose(request: SkillCatalogProposeRequest):
+    """R-850: اقتراح مهارة من الكتالوج + تقييم مؤلفها — التفعيل يبقى للمالك."""
+    if not verify_api_key(request.api_key or ""):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
+                            detail="مفتاح API غير صحيح")
+    import skills
+    try:
+        return skills.get_library().propose_catalog(request.name)
+    except skills.SkillError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except RuntimeError as exc:  # السجل لا يوقّع — لا أثر = لا اقتراح
+        raise HTTPException(status_code=503,
+                            detail=f"السجل السيادي لا يوقّع — مرفوض (fail-closed): {exc}")
+
+
 class SkillsSyncRequest(BaseModel):
     api_key: Optional[str] = Field(None, description="مفتاح API للسيد — غيابه رفض 401")
 
@@ -3101,6 +3132,24 @@ def _register_real_tools() -> None:
         outputs="core/dynamic/store/timestamp",
         handler=_memory_stats_payload,
     ))
+
+    def _ledger_recent(limit=10, event_type=None):
+        import ledger_view
+        from memory.core import get_core
+        try:
+            return ledger_view.recent(get_core(), limit, event_type)
+        except ledger_view.LedgerViewError as exc:
+            raise ValueError(str(exc)) from exc
+
+    registry.register(ToolSpec(
+        name="ledger.recent",
+        description="R-850: نافذة قراءة على السجل السيادي — آخر N حدث (نوع/زمن/بادئة بصمة) "
+                    "+ توزيع الأنواع + ترابط السلسلة داخل النافذة؛ بلا حمولة ولا توقيع",
+        inputs={"limit": "عدد الأحداث 1..50 (افتراضي 10)",
+                "event_type": "تصفية بنوع حدث (اختياري)"},
+        outputs="window/count/events[]/by_type/newest/oldest/chain_linked/chain_links",
+        handler=_ledger_recent,
+    ))
     registry.register(ToolSpec(
         name="disk.status",
         description="حالة القرص السحابي Supabase (نفس منطق /disk/status) + القرص المحلي: "
@@ -3172,6 +3221,15 @@ def _register_real_tools() -> None:
                     "يعمل كاملًا حتى مع عقل معطل (المشروع يقوم بكل شيء بنفسه)",
         inputs={},
         outputs="status/executor_findings/reviewer_verdict/duration_ms", handler=_run_self_review_tool))
+    def _skills_catalog():
+        import skills
+        return skills.get_library().catalog()
+
+    registry.register(ToolSpec(
+        name="skills.catalog",
+        description="R-850: كتالوج المهارات الحقيقية (تقرير صحة/تلخيص سجل/موجز بحثي) وحالة كل منها — "
+                    "قراءة فقط؛ الاقتراح والاعتماد للمالك",
+        inputs={}, outputs="skills[]/count/cycle", handler=_skills_catalog))
     registry.register(ToolSpec(
         name="skills.status",
         description="المهارات وإصداراتها وحالاتها + الأدوات المكتشفة «متاحة غير مُتعلمة» (٤.٣)",
