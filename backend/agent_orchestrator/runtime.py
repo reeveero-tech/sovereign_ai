@@ -9,14 +9,17 @@
 """
 from __future__ import annotations
 
+import os
 import threading
+import time
 import uuid
 from typing import Any, Dict, List, Optional
 
 from . import schemas
 from .approval_gate import ApprovalGate
 from .context_manager import ContextManager
-from .execution_engine import ExecutionEngine, StepNeedsApproval
+from .execution_engine import (ExecutionEngine, StepNeedsApproval,
+                               write_idempotency_key)
 from .failure import FailureHandler
 from .governor import Budget, BudgetExceededError, CostGovernor
 from .hitl import HumanInTheLoop
@@ -43,7 +46,9 @@ class OrchestratorSystem:
         from .tool_registry import seed_registry
         self.tools = seed_registry()
         self.policy = PolicyGate(self.tools, org_policy, connector_registry)
-        self.approvals = ApprovalGate()
+        os.makedirs(data_dir, exist_ok=True)
+        # R-844: الموافقات دائمة — حلقة معلّقة تبقى قابلة للحسم بعد إعادة التشغيل
+        self.approvals = ApprovalGate(path=os.path.join(data_dir, "approvals.json"))
         self.planner = Planner(self.tools)
         self.memory = MemoryInterface()
         self.context = ContextManager()
@@ -113,10 +118,18 @@ class OrchestratorSystem:
 
     # ------------------------------------------------------------ الحلقة
     def submit(self, request: Dict[str, Any],
-               semantic: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-        """استقبال طلب بعقد 5.1 وقيادة الحلقة حتى الرد/الانتظار/الإيقاف."""
+               semantic: Optional[Dict[str, Any]] = None,
+               loop_id: Optional[str] = None) -> Dict[str, Any]:
+        """استقبال طلب بعقد 5.1 وقيادة الحلقة حتى الرد/الانتظار/الإيقاف.
+
+        R-844: ``loop_id`` مسبق اختياري (الطابور يسجله في المهمة قبل أي أثر،
+        فاستعادة المهمة بعد انقطاع تستأنف الحلقة نفسها لا حلقة جديدة).
+        """
         schemas.validate(request, schemas.REQUEST_SCHEMA)
-        loop_id = str(uuid.uuid4())
+        if loop_id is None:
+            loop_id = str(uuid.uuid4())
+        elif self.state.load(loop_id) is not None:
+            raise ValueError(f"الحلقة {loop_id} موجودة — استأنفها بـrun لا بـsubmit")
         sem = semantic or self.understand(
             request["utterance"], request["session_id"])
         state = {
@@ -173,6 +186,9 @@ class OrchestratorSystem:
             return {"ok": False, "error": "حلقة غير موجودة"}
         if state["status"] not in STATUS_ACTIVE:
             return self._view(state)
+        tracer0 = self._tracer(loop_id)
+        if state.get("inflight"):
+            return self._recover_inflight(state, tracer0)
         request = state["request"]
         budget = Budget.from_constraints(request["constraints"])
         budget._spent_steps = len([r for r in state["results"]
@@ -247,12 +263,23 @@ class OrchestratorSystem:
                     self.memory.loop_write_step(loop_id, r)
                     self.state.save(state)
                     continue
+                tool = self.tools.get(step["tool_id"])
+                if tool.access in ("write", "admin"):
+                    # R-844: نية قبل الأثر — انقطاع بعدها لا يُعيد الكتابة عمياء
+                    state["inflight"] = {
+                        "step_id": step["step_id"], "tool_id": tool.tool_id,
+                        "access": tool.access, "started_at": time.time(),
+                        "idempotency_key": write_idempotency_key(
+                            loop_id, step["step_id"])}
+                    self.state.save(state)
                 try:
                     r = engine.execute(
                         step, request["permissions"], budget,
                         request["session_id"], actor=request["user_id"],
-                        trace_ref=tracer.trace_ref, tracer=tracer)
+                        trace_ref=tracer.trace_ref, tracer=tracer,
+                        loop_id=loop_id)
                 except StepNeedsApproval as pending_ap:
+                    state.pop("inflight", None)  # لم يقع أثر — بانتظار الموافقة
                     state["status"] = "pending_approval"
                     state["pending_approval"] = {
                         "approval_id": pending_ap.approval["approval_id"],
@@ -268,6 +295,7 @@ class OrchestratorSystem:
                     self.state.save(state)
                     return self._finalize(state, tracer)
                 results.append(r)
+                state.pop("inflight", None)  # النتيجة والنية تُحسمان في checkpoint واحد
                 self.memory.loop_write_step(loop_id, r)
                 self.state.save(state)
 
@@ -296,6 +324,7 @@ class OrchestratorSystem:
                         self.state.save(state)
                         return self._finalize(state, tracer)
         except BudgetExceededError as exc:
+            state.pop("inflight", None)
             state["status"] = "failed"
             state["reply"] = str(exc)
             tracer.stop_reason(str(exc))
@@ -314,6 +343,39 @@ class OrchestratorSystem:
             state["status"] = "completed"
             state["reply"] = _compose_reply(state, results)
         state["budget_spent"] = budget.spent
+        self.state.save(state)
+        return self._finalize(state, tracer)
+
+    # ------------------------------------------------------------ الاستعادة
+    def _recover_inflight(self, state: Dict[str, Any], tracer: Tracer
+                          ) -> Dict[str, Any]:
+        """R-844: انقطاع بين نية الكتابة ونتيجتها — النتيجة مجهولة.
+
+        الكتابة ربما وصلت الطرف البعيد وربما لا. إعادتها قد تكررها، وتجاهلها
+        قد يدّعي ما لم يحدث. القرار الصادق: لا إعادة تلقائية (مرة واحدة على
+        الأكثر) وحالة ``needs_owner_review`` بالمفتاح الحتمي للتحقق.
+        """
+        inf = state.pop("inflight")
+        r = {"step_id": inf["step_id"], "status": "failure", "output": {},
+             "error": {"code": "uncertain_outcome",
+                       "message": f"انقطع التنفيذ أثناء {inf['tool_id']} — قد"
+                                  " تكون الكتابة وقعت على الطرف البعيد",
+                       "action": "owner_review"},
+             "cost": 0.0, "duration_ms": 0, "trace_ref": tracer.trace_ref}
+        schemas.validate(r, schemas.STEP_RESULT_SCHEMA)
+        state["results"].append(r)
+        self.memory.loop_write_step(state["loop_id"], r)
+        state["status"] = "needs_owner_review"
+        state["reply"] = (f"انقطع التنفيذ أثناء كتابة ({inf['tool_id']}) ولا أعرف"
+                          " إن وقعت على الطرف البعيد. لم أُعِدها تلقائيًا كي لا"
+                          " تتكرر. تحقق يدويًا (مفتاح عدم التكرار:"
+                          f" {inf['idempotency_key']}) ثم أعد الطلب إن لم تقع.")
+        tracer.decision(new_decision(
+            inf["step_id"], "escalate", "needs_owner_review",
+            ["إعادة الكتابة تلقائيًا", "افتراض النجاح"],
+            "نتيجة كتابة مجهولة بعد انقطاع — لا إعادة عمياء ولا نجاح مُدّعى",
+            1.0, tracer.trace_ref))
+        tracer.stop_reason("نتيجة كتابة مجهولة بعد انقطاع")
         self.state.save(state)
         return self._finalize(state, tracer)
 

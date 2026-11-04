@@ -67,6 +67,12 @@ def _governance(path: Path) -> Dict[str, Any]:
     return governance.run(cases)
 
 
+def _queue(path: Path) -> Dict[str, Any]:
+    from . import queue_reliability
+    cases = json.loads(path.read_text(encoding="utf-8"))["cases"]
+    return queue_reliability.run(cases)
+
+
 SUITES: List[Suite] = [
     Suite("planner.dev", "orchestrator/planner",
           "اختيار الأدوات — مجموعة التطوير (50 هدفًا، R-842)",
@@ -84,6 +90,12 @@ SUITES: List[Suite] = [
           _ROOT / "data" / "governance_cases.json",
           "eefa20e63705daa5c39af09c55891115b5d8f5a547644fa12cab29b7e7c8df87",
           1.0, _governance),
+    Suite("queue.reliability", "job_queue",
+          "موثوقية الطابور: انقطاع أثناء كتابة/قراءة، عدم تكرار، سياج، ضغط خلفي،"
+          " لا retry أعمى، عزل الموافقات، دوامها بعد إعادة التشغيل (14 حالة، R-844)",
+          _ROOT / "data" / "queue_cases.json",
+          "8d8671b5d81dc2533359a947931d97ae0f80181efd0f76cb401362a6e2437574",
+          1.0, _queue),
 ]
 
 

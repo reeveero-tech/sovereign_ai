@@ -34,6 +34,11 @@ class StepNeedsApproval(Exception):
         self.approval = approval
 
 
+def write_idempotency_key(loop_id: str, step_id: str) -> str:
+    """R-844: مفتاح عدم تكرار حتمي لكتابة خطوة — ثابت عبر الاستئناف وإعادة التشغيل."""
+    return f"orch:{loop_id}:{step_id}"
+
+
 class ExecutionEngine:
     """ينفّذ خطوة واحدة عبر البوابات الثلاث ثم المنفذ الموحد."""
 
@@ -72,9 +77,13 @@ class ExecutionEngine:
 
     def execute(self, step: Dict[str, Any], actor_permissions,
                 budget: Budget, session_id: str, actor: str = "user",
-                trace_ref: str = "", tracer=None
+                trace_ref: str = "", tracer=None, loop_id: str = ""
                 ) -> Dict[str, Any]:
-        """تنفيذ خطوة عبر البوابات — يعيد نتيجة بعقد 5.3."""
+        """تنفيذ خطوة عبر البوابات — يعيد نتيجة بعقد 5.3.
+
+        R-844: ``loop_id`` نطاق الموافقة «مرة واحدة» ومصدر مفتاح عدم التكرار
+        الحتمي (نفس الحلقة + نفس الخطوة ⇒ نفس المفتاح عبر الاستئناف).
+        """
         tool = self.tools.get(step["tool_id"])
         t0 = time.monotonic()
         span_tracer = tracer
@@ -100,11 +109,11 @@ class ExecutionEngine:
         # بوابة ٢: الموافقة (إن لزمت) — معتمدة سلفًا (جلسة أو مرة واحدة)؟
         if pd.requires_approval:
             if not self.approvals.session_granted(session_id, tool.tool_id) \
-                    and not self.approvals.was_approved_for(step["step_id"]):
-                ap = self.approvals.check(session_id, step, tool, actor)
+                    and not self.approvals.was_approved_for(step["step_id"], loop_id):
+                ap = self.approvals.check(session_id, step, tool, actor, loop_id)
                 if ap is not None:
                     raise StepNeedsApproval(ap)
-            self.approvals.consume_for_step(step["step_id"])
+            self.approvals.consume_for_step(step["step_id"], loop_id)
 
         # بوابة ٣: التكلفة — قبل الإنفاق؛ التجاوز يوقف الحلقة بنتيجة موثقة
         try:
@@ -131,7 +140,8 @@ class ExecutionEngine:
         # Idempotency-Key إلزامي لكل عملية كتابة
         ikey = None
         if tool.access in ("write", "admin"):
-            ikey = f"orch:{session_id}:{step['step_id']}:{uuid.uuid4().hex[:8]}"
+            ikey = write_idempotency_key(loop_id, step["step_id"]) if loop_id \
+                else f"orch:{session_id}:{step['step_id']}:{uuid.uuid4().hex[:8]}"
 
         started = time.monotonic()
         try:

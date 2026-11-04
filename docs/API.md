@@ -211,6 +211,18 @@
 | POST | `/evaluation/run` | تشغيل `{suites?: [...], api_key}` وحفظ التقرير ذريًا؛ معرّف مجهول ⇒ 422 | `api_key` |
 | POST | `/skills/evaluate_independent` | تقييم مستقل لمهارة `{name, version, cases, actor?, api_key}` — شرط `approve` (٦.٥.٢) | `api_key` |
 
+## 7ج) الطابور غير المتزامن (backend/job_queue/api_routes.py) — 7 مسارات (R-844)
+
+| الطريقة | المسار | الوصف | المصادقة |
+|---|---|---|---|
+| GET | `/queue/kinds` | أنواع المهام بوصفها وخطرها ومخططها | لا |
+| GET | `/queue/stats` | العدد حسب الحالة، والعمق، والحد، والعمال | لا |
+| POST | `/queue/jobs` | `{kind, payload, priority?}` + ترويسة `Idempotency-Key`. 202 جديد، 200 مكرر (`deduplicated`)، 401، 409 تعارض، 422، 428 بلا مفتاح، 429 ممتلئ + `Retry-After` | `X-API-Key` |
+| GET | `/queue/jobs` | قائمة (`status?`، `limit?`) | `X-API-Key` |
+| GET | `/queue/jobs/{id}` | المهمة وأحداثها، 404 إن لم توجد | `X-API-Key` |
+| POST | `/queue/jobs/{id}/cancel` | إلغاء (فوري إن كانت `queued`، مطلوب وتُلغى الحلقة إن كانت `running`) | `X-API-Key` |
+| POST | `/queue/drain` | تصريف يدوي `{max_jobs?}` بسقف 50 | `X-API-Key` |
+
 ## 8) سجل التحديثات
 
 | التاريخ | التغيير | الدفعة |
@@ -220,3 +232,4 @@
 | 2026-10-14 | R-608: توثيق نقاط `/nexus/*` و`/security/*` وفحص طبقة الأمان | M6 |
 | 2026-11-03 | R-840: توثيق نقاط `/connectors/system/*` الستة عشر (نظام الموصلات الموحد) | R-840 |
 | 2026-11-04 | R-843: نقاط `/evaluation/*` و`/skills/evaluate_independent` | R-843 |
+| 2026-11-04 | R-844: نقاط `/queue/*` السبع (الطابور غير المتزامن) | R-844 |

@@ -1,0 +1,5 @@
+R-844 — أول تشغيل لمجموعة queue.reliability (التوقعات مكتوبة قبل التشغيل):
+0.9286 13 14
+Q10 [{'check': 'stale_accepted', 'want': False, 'got': None}, {'check': 'fresh_accepted', 'want': True, 'got': None}, {'check': 'result_by', 'want': 'new', 'got': None}, {'check': 'stale_logged', 'want': True, 'got': None}] {'error': "TypeError: 'NoneType' object is not subscriptable"}
+
+سبب Q10: خلل في بناء السيناريو لا في النظام — استُعمل نوع evaluation.run (max_attempts=1) فذهبت المهمة dead عند انتهاء الإيجار (سلوك صحيح) فلم يبق ما يُحجز. أُصلح السيناريو باستعمال orchestrator.loop (3 محاولات)؛ التوقعات لم تُمس. بعده: 1.0 (14/14).

@@ -47,7 +47,8 @@ class RollbackEngine:
                        "fallback": ""}
             r = self.engine.execute(rb_step, state["request"]["permissions"],
                                     budget, state["request"]["session_id"],
-                                    actor, trace_ref, tracer)
+                                    actor, trace_ref, tracer,
+                                    loop_id=state.get("loop_id", ""))
             return {"ok": r["status"] == "success",
                     "action": "rollback",
                     "result": r,

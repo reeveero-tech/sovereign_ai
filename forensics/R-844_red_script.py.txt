@@ -1,0 +1,56 @@
+"""R-844 RED: ما يحدث اليوم عند الانقطاع والتزامن — قبل بناء الطابور."""
+import sys, tempfile
+sys.path.insert(0, "backend")
+from evaluation import sandbox_env
+from agent_orchestrator import schemas, runtime
+def restart(o, tmp, transport):
+    """إعادة تشغيل العملية: كل ما في الذاكرة يضيع (منسق جديد + ذاكرة عدم تكرار فارغة)؛
+    القرص والخزينة باقيان."""
+    ex = o._conn_executor; ex._http = transport; ex._idempotency = {}
+    return runtime.OrchestratorSystem(data_dir=o.data_dir, connector_executor=ex,
+                                      org_policy=o.policy.org_policy if hasattr(o.policy, "org_policy") else None,
+                                      connector_registry=ex.registry)
+class Crash(BaseException): pass
+def req(s, title):
+    return schemas.new_request(user_id="eval", session_id=s, permissions=["orchestrator:write"],
+        utterance=f"افتح مشكلة بعنوان {title} في github.com/acme/webapp")
+calls = []
+class T(sandbox_env.Transport):
+    def __init__(s, crash=False): super().__init__(200); s.crash = crash
+    def __call__(s, method, url, **kw):
+        calls.append(method.upper())
+        if s.crash and method.upper() == "POST": raise Crash("انقطاع العملية بعد وصول الكتابة للطرف البعيد")
+        return sandbox_env._Response(200, {"number": 7})
+print("== D1/D2: انقطاع أثناء كتابة معتمدة ثم إعادة تشغيل ==")
+tmp = tempfile.mkdtemp(); o, _ = sandbox_env.build(tmp, transport=T(True))
+out = o.submit(req("s1", "عطل")); lid = out["loop_id"]
+try: o.decide_approval(lid, out["pending_approval"]["approval_id"], "approved", "owner", False)
+except Crash as e: print("انقطاع:", e)
+o2 = restart(o, tmp, T(False))
+import copy; snap = copy.deepcopy(o2.state.load(lid))  # حالة الانقطاع: running بلا نتيجة
+r0 = o2.run(lid)
+try:
+    o2.decide_approval(lid, r0["pending_approval"]["approval_id"], "approved", "owner", False)
+    print("D1: استئناف بعد إعادة التشغيل نجح")
+except KeyError:
+    print("D1 ✗ الاستئناف بعد إعادة التشغيل ينهار: KeyError في ذاكرة الحلقة (داخل العملية فقط)")
+calls.clear()
+o2 = restart(o, tmp, T(False)); o2.state.save(snap)
+o2.memory.loop_new(lid, out["request"])  # تجاوز D1 يدويًا لكشف ما بعده
+r = o2.run(lid)
+print("D2: بعد الاستئناف:", r["status"], "— يطلب موافقة جديدة بلا تنبيه أن الكتابة ربما وقعت")
+r = o2.decide_approval(lid, r["pending_approval"]["approval_id"], "approved", "owner", False)
+print("D2 ✗ المالك يوافق ثانية (لا يعلم):", r["status"], r.get("reply"), [x.get("error") for x in r["results"]], "| كتابات POST على الطرف البعيد (مع الأولى قبل الانقطاع):", 1 + calls.count("POST"))
+print("== D3: موافقة معلقة ثم إعادة تشغيل ==")
+tmp = tempfile.mkdtemp(); o, _ = sandbox_env.build(tmp)
+out = o.submit(req("s2", "معلقة"))
+o3 = restart(o, tmp, T(False))
+r = o3.decide_approval(out["loop_id"], out["pending_approval"]["approval_id"], "approved", "owner", False)
+print("D3 ✗ الموافقة بعد إعادة التشغيل:", r.get("status") or r.get("error"), "— الحلقة يتيمة معلقة للأبد" if not r.get("status") else "")
+print("== D4: حلقتان متزامنتان تنتظران موافقة ==")
+calls.clear(); o, _ = sandbox_env.build(tempfile.mkdtemp(), transport=T(False))
+A = o.submit(req("sa", "أ")); B = o.submit(req("sb", "ب"))
+o.approvals.decide(A["pending_approval"]["approval_id"], "owner", "approved")
+rb = o.run(B["loop_id"])
+print("D4 ✗ موافقة A وحدها ⇒ B:", rb["status"], "| موافقة B نفسها:",
+      o.approvals.get(B["pending_approval"]["approval_id"])["status"], "| كتابات:", calls.count("POST"))
