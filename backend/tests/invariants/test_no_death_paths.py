@@ -69,6 +69,9 @@ EXIT_ALLOWED_ENTRY_POINTS = {
     # R-774 (V6 ٦.١.١): مراقب /health الخارجي — CLI في GitHub Actions؛ رمز الخروج 1
     # عند العطل يجعل التشغيل المجدول أحمر (إشارة ثانية بجانب Issue)
     "tools/uptime_monitor.py",
+    # R-843 (D-058): بوابة التقييم المستقل — CLI تشغّلها CI على كل تغيير؛
+    # رمز الخروج 0/1 (المجموعات المجمّدة فوق أرضيتها ببصمتها أم لا) هو عقدها
+    "tools/gate_eval.py",
 }
 
 BANNED_STRING = "max_tamper_attempts"

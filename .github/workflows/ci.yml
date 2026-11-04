@@ -135,6 +135,13 @@ jobs:
           echo "short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
           git rev-parse HEAD > forensics/.ci_sha.txt
 
+      # R-843: بوابة التقييم المستقل — كل المجموعات المجمّدة (مخطط dev/معزولة +
+      # حوكمة) على كل تغيير: هبوط عن الأرضية أو تغير بيانات عن بصمتها = فشل
+      - name: 'R-843: Independent evaluation gate (frozen suites)'
+        run: |
+          set -euo pipefail
+          python tools/gate_eval.py --json forensics/eval_report.json
+
       - name: Run test suite (tests/ + backend/tests/) with JUnit + SHA
         run: |
           set -euo pipefail

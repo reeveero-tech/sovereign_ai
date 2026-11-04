@@ -284,8 +284,10 @@ class OrchestratorSystem:
                         state["plan"] = handled["plan"]
                         self.state.save(state)
                     elif handled["action"] in ("stop", "deny", "clarify"):
+                        # R-843: «deny» (401/403 بعد التجديد) نهاية صادقة لا «running» معلّقة
                         state["status"] = "failed" \
-                            if handled["action"] == "stop" else state["status"]
+                            if handled["action"] in ("stop", "deny") \
+                            else state["status"]
                         state["reply"] = handled["reason"]
                         if handled["action"] == "clarify":
                             state["status"] = "needs_clarification"
@@ -304,7 +306,8 @@ class OrchestratorSystem:
         loop_ref = reflect_loop(results, state["plan"], budget.spent,
                                 tracer.trace_ref)
         tracer.decision(loop_ref["decision"])
-        if loop_ref["action"] == "deny":
+        if loop_ref["action"] in ("deny", "fail"):
+            # R-843: لا «تم التنفيذ» بلا خطوة ناجحة واحدة — نجاح كاذب ممنوع
             state["status"] = "failed"
             state["reply"] = loop_ref["reason"]
         else:

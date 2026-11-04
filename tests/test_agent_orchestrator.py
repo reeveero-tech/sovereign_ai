@@ -575,8 +575,10 @@ def test_a24_end_to_end_scenarios(tmp_path):
         ("قراءة Supabase", "اعرض صفوف جدول users", (), "completed"),
         ("غموض", "افتح مشكلة", (), "needs_clarification"),
     ]
-    for name, utt, perms, expected in scenarios:
-        o, _, _ = make_env(tmp_path)
+    for i, (name, utt, perms, expected) in enumerate(scenarios):
+        # R-843: مجلد مستقل لكل سيناريو — المشترك جعل خطوة Render تفشل
+        # (اعتمادات سابقة بخزينة جديدة) وكان النجاح الكاذب يخفي ذلك
+        o, _, _ = make_env(tmp_path / f"sc{i}")
         out = submit(o, utt, permissions=perms, session=f"s-{name}")
         assert out["status"] == expected, name
         assert out["trace"]["span_count"] >= 0

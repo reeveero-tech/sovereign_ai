@@ -1919,6 +1919,30 @@ async def skills_rollback(request: SkillOwnerRequest):
     return _skill_owner_op(request, "rollback")
 
 
+class SkillIndependentEvalRequest(BaseModel):
+    name: str = Field(..., min_length=1, max_length=64)
+    version: str = Field(..., min_length=1, max_length=32)
+    cases: List[Dict[str, Any]] = Field(..., min_length=2, max_length=50)
+    api_key: Optional[str] = Field(None, description="مفتاح API للسيد — غيابه رفض 401")
+
+
+@app.post("/skills/evaluate_independent")
+async def skills_evaluate_independent(request: SkillIndependentEvalRequest):
+    """R-843 (٦.٥.٢): تقييم مستقل بحالات المالك لا المؤلف — شرط الاعتماد."""
+    if not verify_api_key(request.api_key or ""):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
+                            detail="مفتاح API غير صحيح")
+    import skills
+    try:
+        return skills.get_library().evaluate_independent(
+            request.name, request.version, request.cases, actor="owner")
+    except skills.SkillError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except RuntimeError as exc:  # السجل لا يوقّع — لا أثر = لا تقييم
+        raise HTTPException(status_code=503,
+                            detail=f"السجل السيادي لا يوقّع — مرفوض (fail-closed): {exc}")
+
+
 @app.post("/connectors/grant")
 async def connectors_grant(request: ConnectorGrantRequest):
     return _connector_owner_op(request, "grant")
@@ -1951,6 +1975,17 @@ except ImportError:  # TOLERATED: نمط الاستيراد المزدوج ال�
         router as _agent_orch_router
 
 app.include_router(_agent_orch_router)  # /orchestrator/*
+
+
+# ============================================================
+# R-843: طبقة التقييم المستقل — مجموعات مجمّدة + حَكَم من عائلة أخرى
+# ============================================================
+try:
+    from evaluation.api_routes import router as _evaluation_router
+except ImportError:  # TOLERATED: نمط الاستيراد المزدوج القائم
+    from backend.evaluation.api_routes import router as _evaluation_router
+
+app.include_router(_evaluation_router)  # /evaluation/*
 
 
 @app.get("/media/file/{fid}")
@@ -3027,7 +3062,8 @@ def _register_real_tools() -> None:
         proposed = lib.propose(manifest, actor="agent")
         return {**lib.evaluate(proposed["skill"], proposed["version"]),
                 "content_hash": proposed["content_hash"],
-                "next": "اعتماد المالك عبر POST /skills/approve (لا تفعيل ذاتي)"}
+                "next": "تقييم مستقل بحالات المالك عبر POST /skills/evaluate_independent "
+                        "(R-843) ثم اعتماده عبر POST /skills/approve (لا تفعيل ذاتي)"}
 
     registry.register(ToolSpec(
         name="skills.install",
