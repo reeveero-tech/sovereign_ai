@@ -1,0 +1,176 @@
+{
+ "version": 1,
+ "layer": "R-845 notifications",
+ "note": "التوقعات مكتوبة من القاعدة قبل أول تشغيل — مجمّدة ببصمة (suites.py)",
+ "cases": [
+  {
+   "id": "N01",
+   "rule": "طلب موافقة ⇒ إشعار واحد وتسليم Webhook واحد موقّع بمفتاح عدم تكرار = معرّف الإشعار، بلا نص الطلب",
+   "scenario": "approval_requested",
+   "expect": {
+    "notifications": 1,
+    "event": "approval.requested",
+    "severity": "high",
+    "webhook_calls": 1,
+    "delivery": "sent",
+    "signature_valid": true,
+    "idempotency_key_is_id": true,
+    "body_sent": false,
+    "utterance_leaked": false
+   }
+  },
+  {
+   "id": "N02",
+   "rule": "الحدث نفسه مرتين ⇒ إشعار واحد وتسليم واحد",
+   "scenario": "dedupe",
+   "expect": {
+    "created": [
+     true,
+     false
+    ],
+    "notifications": 1,
+    "webhook_calls": 1
+   }
+  },
+  {
+   "id": "N03",
+   "rule": "انقطاع أثناء كتابة ⇒ مراجعة المالك بشدة حرجة عبر Telegram، والرمز لا يظهر في نص الرسالة",
+   "scenario": "review_required_telegram",
+   "expect": {
+    "loop": "needs_owner_review",
+    "event": "review.required",
+    "severity": "critical",
+    "telegram_calls": 1,
+    "token_in_text": false,
+    "delivery": "sent"
+   }
+  },
+  {
+   "id": "N04",
+   "rule": "401 من القناة ⇒ لا إعادة، تعطيل القناة، لا طرق ثانٍ حتى يتغير الإعداد",
+   "scenario": "auth_disables_channel",
+   "expect": {
+    "first": "failed",
+    "calls_after_first": 1,
+    "second": "failed",
+    "calls_after_second": 1,
+    "third": "sent",
+    "calls_after_rotate": 2
+   }
+  },
+  {
+   "id": "N05",
+   "rule": "503 عابر ⇒ إعادة بتأخير، لا قبل موعدها، ثم نجاح",
+   "scenario": "transient_then_sent",
+   "expect": {
+    "after_first": "retry",
+    "calls_before_due": 1,
+    "final": "sent",
+    "calls": 2
+   }
+  },
+  {
+   "id": "N06",
+   "rule": "عطل عابر دائم ⇒ 5 محاولات ثم فشل نهائي (لا دوران بلا حد)",
+   "scenario": "transient_exhausted",
+   "expect": {
+    "final": "failed",
+    "calls": 5
+   }
+  },
+  {
+   "id": "N07",
+   "rule": "رابط Webhook بلا https ⇒ القناة غير مضبوطة، لا نداء، والإشعار باقٍ في الصندوق",
+   "scenario": "insecure_webhook_refused",
+   "expect": {
+    "configured": false,
+    "delivery": "skipped",
+    "calls": 0,
+    "inbox": 1
+   }
+  },
+  {
+   "id": "N08",
+   "rule": "شدة تحت الحد ⇒ الصندوق الداخلي فقط؛ خفض الحد للقناة ⇒ يُرسل",
+   "scenario": "severity_filter",
+   "expect": {
+    "default": "skipped",
+    "lowered": "sent",
+    "calls": 1
+   }
+  },
+  {
+   "id": "N09",
+   "rule": "حد الإرسال في الساعة ⇒ الزائد مكبوت لا مُرسَل، والصندوق يحوي الكل",
+   "scenario": "rate_limit",
+   "expect": {
+    "sent": 3,
+    "suppressed": 2,
+    "inbox": 5,
+    "calls": 3
+   }
+  },
+  {
+   "id": "N10",
+   "rule": "انقطاع بعد الإرسال قبل التسجيل ⇒ إعادة بعد الإيجار بنفس Idempotency-Key (أقل مرة واحدة معلنة)",
+   "scenario": "crash_after_send",
+   "expect": {
+    "before_lease": 0,
+    "calls": 2,
+    "same_idempotency_key": true,
+    "final": "sent"
+   }
+  },
+  {
+   "id": "N11",
+   "rule": "مراقب معطوب لا يكسر الحلقة",
+   "scenario": "broken_observer",
+   "expect": {
+    "raised": false,
+    "loop": "pending_approval"
+   }
+  },
+  {
+   "id": "N12",
+   "rule": "مهمة ماتت في الطابور ⇒ إشعار job.dead",
+   "scenario": "job_dead",
+   "expect": {
+    "job": "dead",
+    "events": [
+     "job.dead"
+    ]
+   }
+  },
+  {
+   "id": "N13",
+   "rule": "فشل حلقة عبر الطابور ⇒ إشعار واحد للحلقة لا اثنان",
+   "scenario": "no_double_on_loop_failure",
+   "expect": {
+    "job": "failed",
+    "events": [
+     "loop.failed"
+    ]
+   }
+  },
+  {
+   "id": "N14",
+   "rule": "سر في نص الخطأ ⇒ مُنقّى في الصندوق وفي ما يُرسل",
+   "scenario": "secret_scrubbed",
+   "expect": {
+    "secret_in_inbox": false,
+    "secret_sent": false,
+    "webhook_calls": 1
+   }
+  },
+  {
+   "id": "N15",
+   "rule": "التسليم المعلق ينجو من إعادة التشغيل",
+   "scenario": "survives_restart",
+   "expect": {
+    "pending_before": 1,
+    "final": "sent",
+    "calls": 1
+   }
+  }
+ ]
+}

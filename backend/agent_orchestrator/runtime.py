@@ -9,6 +9,7 @@
 """
 from __future__ import annotations
 
+import logging
 import os
 import threading
 import time
@@ -31,6 +32,8 @@ from .rollback import RollbackEngine
 from .state import StateStore
 from .tool_registry import ToolRegistry, new_decision
 from .tracing import Tracer
+
+_log = logging.getLogger("agent_orchestrator.runtime")
 
 STATUS_ACTIVE = ("running", "pending_approval", "paused")
 
@@ -61,6 +64,9 @@ class OrchestratorSystem:
         self._conn_executor = connector_executor
         self._lock = threading.RLock()
         self._cancel_flags: set = set()
+        # R-845: مراقبو الحالة — تُستدعى بعرض الحلقة عند كل _finalize.
+        # عطل مراقب لا يكسر الحلقة (الإشعار إضافة لا شرط).
+        self.observers: List[Any] = []
 
     # ------------------------------------------------------------ المنفذ
     def _executor(self) -> Any:
@@ -508,6 +514,12 @@ class OrchestratorSystem:
             f"loop:{state['loop_id'][:8]}", state["status"])
         out = self._view(state)
         out["trace"] = tracer.summary()
+        for obs in list(self.observers):
+            try:
+                obs(out)
+            except Exception as exc:  # TOLERATED: مراقب معطوب لا يكسر الحلقة — يُسجَّل
+                _log.error("R-845: مراقب الحالة فشل للحلقة %s: %s",
+                           state.get("loop_id", "?")[:8], type(exc).__name__)
         return out
 
 

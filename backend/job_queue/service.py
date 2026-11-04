@@ -24,6 +24,8 @@ _STORE: Optional[JobStore] = None
 _WORKERS: List[Dict[str, Any]] = []
 _LOCK = threading.Lock()
 MAX_WORKERS = 4
+# R-845: مراقبو انتهاء المهام (الإشعارات تسجل هنا عبر notifications.service.install)
+FINISH_HOOKS: List[Any] = []
 
 
 def _int_env(name: str, default: int, lo: int, hi: int) -> int:
@@ -75,7 +77,7 @@ def start_workers() -> str:
     store = get_store()
     started = 0
     for i in range(n):
-        w = Worker(store)
+        w = Worker(store, on_finish=FINISH_HOOKS)
         stop = threading.Event()
         t = start_managed(lambda w=w, stop=stop: w.loop(stop, poll),
                           name=f"job-queue-{i}", stop_event=stop)

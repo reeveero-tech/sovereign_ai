@@ -1,0 +1,21 @@
+import sys, tempfile, pathlib
+sys.path.insert(0, "backend")
+from evaluation import queue_reliability as qr
+from agent_orchestrator import schemas
+env = qr.Env(pathlib.Path(tempfile.mkdtemp()))
+req = schemas.new_request(user_id="t", session_id="red", permissions=["orchestrator:write"],
+                          utterance="افتح مشكلة بعنوان عطل في github.com/acme/webapp")
+out = env.o.submit(req)
+print("1) الحالة:", out["status"], "| موافقة:", out["pending_approval"]["approval_id"][:8])
+print("   مراقبون للحالة في المنسق:", [a for a in dir(env.o) if "observ" in a or "notif" in a] or "لا يوجد")
+env.t.crash_on = {"POST"}
+try:
+    env.o.decide_approval(out["loop_id"], out["pending_approval"]["approval_id"], "approved", "owner", False)
+except qr.Crash:
+    pass
+env.restart()
+r = env.o.run(out["loop_id"])
+print("2) بعد انقطاع أثناء كتابة:", r["status"], "— نتيجة غير مؤكدة تحتاج المالك")
+import importlib.util
+print("3) حزمة إشعارات:", importlib.util.find_spec("notifications") or "لا يوجد")
+print("الخلاصة: المالك لا يعلم بأي من (1) و(2) إلا إن استطلع /orchestrator أو /queue يدويًا.")

@@ -25,6 +25,7 @@
 | `planner.holdout` | اختيار الأدوات (معزولة R-842) | 20 هدفًا | `7eaece46…20ec` | 0.90 |
 | `orchestrator.governance` | حوكمة الميثاق (R-841) | 20 حالة G01–G20 | `eefa20e6…df87` | **1.0** |
 | `queue.reliability` | الطابور (R-844) | 14 حالة Q01–Q14 | `8d8671b5…7574` | **1.0** |
+| `notify.reliability` | الإشعارات (R-845) | 15 حالة N01–N15 | `07a7258f…aa87` | **1.0** |
 
 - مجموعة الحوكمة (`backend/evaluation/data/governance_cases.json`) تشغّل
   المنسق الحقيقي فوق منفذ R-840 الحقيقي، والشبكة وحدها مزيفة
