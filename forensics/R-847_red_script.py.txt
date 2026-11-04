@@ -1,0 +1,81 @@
+# R-847 RED — على main قبل أي كود
+import os, sys, shutil, sqlite3, tempfile, json, inspect
+sys.path.insert(0, "backend")
+os.environ.setdefault("SOVEREIGN_DISABLE_BACKGROUND_THREADS", "1")
+tmp = tempfile.mkdtemp(prefix="r847-red-")
+print("=" * 70); print("R-847 RED — النسخ الاحتياطي والاستعادة على main"); print("=" * 70)
+
+# 1) لا آلية نسخ للبيانات
+import importlib.util
+print("\n[1] وحدة نسخ احتياطي للبيانات:", "موجودة" if importlib.util.find_spec("backup") else "غير موجودة")
+src = open("guardian/emergency_breaker.py", encoding="utf-8").read()
+i = src.index("def _step3_backup_master_code")
+print("    نسخ الحارس الطارئ (emergency_breaker._step3) ينسخ:")
+print("   ", [l.strip() for l in src[i:i+900].splitlines() if "for item in" in l or "items" in l.lower()][:3])
+
+# 2) نسخ ساذج لـSQLite بوضع WAL يفقد صفوفًا ملتزمة
+from job_queue.store import JobStore
+db = os.path.join(tmp, "queue.sqlite3")
+st = JobStore(db, max_depth=100)
+for i in range(5):
+    st.enqueue("orchestrator.loop", {"utterance": f"u{i}"}, f"k{i}", "owner", 3, 60.0)
+mode = sqlite3.connect(db).execute("PRAGMA journal_mode").fetchone()[0]
+print(f"\n[2] وضع اليومية: {mode}؛ ملفات: {sorted(os.listdir(tmp))}")
+naive = os.path.join(tmp, "naive_copy.sqlite3"); shutil.copy2(db, naive)
+try:
+    n = sqlite3.connect(naive).execute("SELECT COUNT(*) FROM jobs").fetchone()[0]
+except sqlite3.DatabaseError as e:
+    n = f"خطأ: {e}"
+print(f"    الصفوف الملتزمة في الأصل: 5 — في نسخة الملف وحده (cp): {n}")
+print("    ملاحظة صدق: JobStore يفتح اتصالًا لكل معاملة ويغلقه، والإغلاق الأخير يفرغ WAL — فلا فقد هنا.")
+from notifications.store import OutboxStore
+from notifications import events as nev
+ob = os.path.join(tmp, "outbox.sqlite3"); os_ = OutboxStore(ob)
+for i in range(5):
+    os_.emit(nev.make("job.dead", f"k{i}", "s", "x"), [("webhook", "pending", "")])
+nc = os.path.join(tmp, "naive_outbox.sqlite3"); shutil.copy2(ob, nc)
+try:
+    m = sqlite3.connect(nc).execute("SELECT COUNT(*) FROM notifications").fetchone()[0]
+except sqlite3.DatabaseError as e:
+    m = f"خطأ: {e}"
+print(f"    OutboxStore (اتصال مفتوح لكل خيط): ملتزم 5 — في نسخة الملف وحده: {m}؛ حجم -wal="
+      f"{os.path.getsize(ob + '-wal') if os.path.exists(ob + '-wal') else 0} بايت")
+
+# 3) استعادة ملف قاعدة مع بقاء -wal قديم من قاعدة أخرى
+a = os.path.join(tmp, "a"); os.makedirs(a)
+pa = os.path.join(a, "s.sqlite3")
+c = sqlite3.connect(pa); c.execute("PRAGMA journal_mode=WAL"); c.execute("PRAGMA wal_autocheckpoint=0")
+c.execute("CREATE TABLE t(x)"); c.execute("INSERT INTO t VALUES ('قديم')"); c.commit()
+c.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+snap = pa + ".snap"; shutil.copy2(pa, snap)                  # «نسخة احتياطية» نظيفة
+for i in range(50): c.execute("INSERT INTO t VALUES (?)", (f"جديد{i}",))
+c.execute("DELETE FROM t WHERE x='قديم'"); c.commit()        # التغييرات في -wal
+# انقطاع: ملفات مفتوحة، ثم «استعادة» ساذجة للملف الرئيسي وحده
+wal = pa + "-wal"; walbytes = open(wal, "rb").read()
+c.close()  # قد يفرغ WAL عند الإغلاق — نعيد كتابته لمحاكاة الانقطاع
+open(wal, "wb").write(walbytes)
+shutil.copy2(snap, pa)
+try:
+    rows = sqlite3.connect(pa).execute("SELECT COUNT(*), SUM(x='قديم') FROM t").fetchone()
+    print(f"\n[3] بعد استعادة الملف وحده مع -wal باقٍ: الصفوف={rows[0]}، 'قديم' موجود={bool(rows[1])}"
+          f" (المتوقع من النسخة: 1 صف 'قديم')")
+except sqlite3.DatabaseError as e:
+    print(f"\n[3] بعد استعادة الملف وحده مع -wal باقٍ: قاعدة تالفة — {e}")
+
+# 4) الجاهزية لا ترى النسخ الاحتياطي
+from observability import health
+src_h = inspect.getsource(health)
+print("\n[4] فحص 'backup' في /observability/health:", "موجود" if "backup" in src_h else "غير موجود")
+
+# 5) كل الحالة على قرص واحد
+mounts = [l for l in open("fly.toml", encoding="utf-8") if "destination" in l or "source =" in l]
+print("\n[5] أقراص Fly:", [m.strip() for m in mounts], "— لا موقع ثانٍ لأي نسخة")
+stores = sorted(d for d in os.listdir("data") if os.path.isdir(os.path.join("data", d)))
+print(f"    مجلدات الحالة تحت data/: {len(stores)} (منها keys وvault وsovereign وqueue وnotifications وagent_orchestrator)")
+
+# 6) واجهة
+from fastapi.testclient import TestClient
+import app as A
+with TestClient(A.app) as cl:
+    print("\n[6] GET /backups ⇒", cl.get("/backups", headers={"X-API-Key": os.environ.get("SOVEREIGN_KEY", "")}).status_code)
+shutil.rmtree(tmp, ignore_errors=True)

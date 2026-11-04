@@ -15,6 +15,8 @@
 - ``notifications.channels``: قناة معطلة آليًا ⇒ degraded.
 - ``notifications.backlog``: أقدم تسليم معلّق > 600ث ⇒ degraded.
 - ``disk``: حر < 5% ⇒ degraded، < 1% ⇒ failing.
+- ``backup.freshness``/``backup.offsite``/``backup.restore`` (R-847): آخر نسخة ناجحة
+  أقدم من ضعف الفترة أو آخر محاولة فاشلة ⇒ degraded؛ استعادة فشلت ⇒ failing.
 
 ``HealthWatcher.tick()`` يحوّل التدهور إلى إشعار للمالك — مرة واحدة لكل
 (حالة، فحص، ساعة) بمفتاح عدم التكرار، لا سيل تنبيهات.
@@ -146,7 +148,20 @@ def live_checks() -> List[Dict[str, str]]:
     checks += check_notifications(nt.get_store(), nt.dispatcher_status()["running"],
                                   want_disp, ch.all_channels())
     checks += check_disk(data_dir if os.path.isdir(data_dir) else ".")
+    checks += check_backup()
     return checks
+
+
+def check_backup() -> List[Dict[str, str]]:
+    """R-847: حداثة النسخ، والوجهة الخارجية، والاستعادة المعلقة أو الفاشلة."""
+    try:
+        try:
+            from backup import service as bk
+        except ImportError:  # TOLERATED: نمط الاستيراد المزدوج القائم
+            from backend.backup import service as bk
+        return bk.checks()
+    except Exception as exc:  # TOLERATED: حالة نسخ لا تُقرأ ⇒ degraded صريح بنوع الخطأ
+        return [_r("backup.state", DEGRADED, f"حالة النسخ لا تُقرأ ({type(exc).__name__})")]
 
 
 _STATE: Dict[str, Any] = {}

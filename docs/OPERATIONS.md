@@ -209,3 +209,15 @@ backend.supervisor_daemon --url http://app:8080` عبر شبكة Compose —
 أي 256 بت) بمفتاح مشتق `derive_key("signing")`. التحقق يتم بـ
 `hmac.compare_digest`. **التواقيع القديمة بطول 16 حرفًا تُرفض.** أي ملف رد
 موافقة في `sovereign_responses/` يجب أن يحمل التوقيع الجديد.
+
+## 12) النسخ الاحتياطي والاستعادة (R-847 — D-062)
+
+- يدوي: `POST /backups` (Idempotency-Key) أو `python3 -m backup create` داخل الحاوية.
+- تحقق: `POST /backups/{id}/verify` أو `python3 -m backup verify <id>`.
+- الاستعادة:
+  1. `POST /backups/{id}/restore/plan` ومراجعة ما سيتغير وما سيُزاح.
+  2. `POST /backups/{id}/restore` بـ`plan_hash` و`confirm: "RESTORE <id>"` وIdempotency-Key.
+  3. `fly machine restart` (أو إعادة نشر Render) — نقطة الدخول تطبق قبل التطبيق.
+  4. `GET /backups/restore`: `applied`، أو `rolled_back` (عادت الحالة كما كانت)، أو `rollback_failed` (تدخل يدوي: نسخة pre_restore في الفهرس، والملفات المزاحة في `.restore/displaced/`).
+- كارثة: حجم جديد + المفتاح والوجهة نفسهما ⇒ `GET /backups/offsite` ⇒ `POST /backups/offsite/{id}/fetch` ⇒ الخطوات أعلاه.
+- التفاصيل والأسرار docs/BACKUP.md.

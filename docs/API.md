@@ -246,6 +246,22 @@
 - كل رد يحمل `X-Request-ID`. الوارد الصالح (`[A-Za-z0-9._-]{8,64}`) يُعاد كما هو، وغير الصالح يُستبدل بمعرّف جديد.
 - `/health` القديمة لم تتغير: فحص حياة لـRender.
 
+## 7و) النسخ الاحتياطي والاستعادة (backend/backup/api_routes.py) — 9 مسارات (R-847)
+
+كلها تتطلب `X-API-Key`، وكل كتابة تتطلب `Idempotency-Key` (428 بدونه). التفاصيل docs/BACKUP.md.
+
+| الطريقة | المسار | الوصف |
+|---|---|---|
+| GET | `/backups` | الفهرس والحالة (آخر نجاح/فشل/رفع) |
+| POST | `/backups` | يُدرج مهمة `backup.create` في الطابور ⇒ 202 |
+| POST | `/backups/{id}/verify` | تحقق كامل (البصمة والتشفير وكل عضو) |
+| POST | `/backups/{id}/restore/plan` | خطة جافة: added/changed/displaced و`plan_hash` ونص `confirm` |
+| POST | `/backups/{id}/restore` | تجهيز (حساس): `{plan_hash, confirm: "RESTORE <id>", actor}` ⇒ 202، ويُطبق عند الإقلاع التالي |
+| GET | `/backups/restore` | الاستعادة المعلقة وآخر نتيجة |
+| DELETE | `/backups/restore/pending` | إلغاء استعادة مجهزة قبل الإقلاع |
+| GET | `/backups/offsite` | النسخ في الوجهة الخارجية |
+| POST | `/backups/offsite/{id}/fetch` | جلب وتحقق (التعافي من كارثة) |
+
 ## 8) سجل التحديثات
 
 | التاريخ | التغيير | الدفعة |
@@ -258,3 +274,4 @@
 | 2026-11-04 | R-844: نقاط `/queue/*` السبع (الطابور غير المتزامن) | R-844 |
 | 2026-11-04 | R-845: نقاط `/notifications/*` السبع (الإشعارات) | R-845 |
 | 2026-11-04 | R-846: `/metrics` و`/observability/health` و`/observability/summary` ورأس `X-Request-ID` (الرصد) | R-846 |
+| 2026-11-04 | R-847: نقاط `/backups/*` التسع (النسخ الاحتياطي والاستعادة) | R-847 |

@@ -1,0 +1,37 @@
+R-847 RED — main @ a3de84b7 (2026-11-04)
+الأمر: SOVEREIGN_DATA_ROOT=<tmp> python3 forensics/R-847_red_script.py.txt (يُنسخ إلى .py للتشغيل)
+
+======================================================================
+R-847 RED — النسخ الاحتياطي والاستعادة على main
+======================================================================
+
+[1] وحدة نسخ احتياطي للبيانات: غير موجودة
+    نسخ الحارس الطارئ (emergency_breaker._step3) ينسخ:
+    ['for item in ["backend", "frontend", "main.py", "start.sh"]:']
+
+[2] وضع اليومية: wal؛ ملفات: ['queue.sqlite3', 'queue.sqlite3-shm', 'queue.sqlite3-wal']
+    الصفوف الملتزمة في الأصل: 5 — في نسخة الملف وحده (cp): 5
+    ملاحظة صدق: JobStore يفتح اتصالًا لكل معاملة ويغلقه، والإغلاق الأخير يفرغ WAL — فلا فقد هنا.
+    OutboxStore (اتصال مفتوح لكل خيط): ملتزم 5 — في نسخة الملف وحده: خطأ: no such table: notifications؛ حجم -wal=173072 بايت
+
+[3] بعد استعادة الملف وحده مع -wal باقٍ: الصفوف=50، 'قديم' موجود=False (المتوقع من النسخة: 1 صف 'قديم')
+
+[4] فحص 'backup' في /observability/health: غير موجود
+
+[5] أقراص Fly: ["source = 'sovereign_data'", "destination = '/app/data'"] — لا موقع ثانٍ لأي نسخة
+    مجلدات الحالة تحت data/: 35 (منها keys وvault وsovereign وqueue وnotifications وagent_orchestrator)
+
+[6] GET /backups ⇒ 404
+
+الخلاصة:
+  1) لا وحدة نسخ احتياطي للبيانات. نسخ الحارس الطارئ ينسخ الكود فقط
+     (backend/frontend/main.py/start.sh) — لا data/.
+  2) نسخ ملف SQLite وحده: JobStore سليم صدفةً (يغلق اتصاله بعد كل معاملة فتُفرَّغ WAL).
+     أما OutboxStore (اتصال مفتوح لكل خيط) فنسخة الملف وحده **بلا جدول notifications**:
+     الصفوف الملتزمة كلها في -wal (173KB). أي نسخ بـcp/tar للمجلد أثناء التشغيل غير موثوق.
+  3) استعادة ملف القاعدة وحده مع بقاء -wal من الحالة الأحدث: SQLite يعيد تطبيق
+     الـWAL على النسخة ⇒ 50 صفًا و«قديم» محذوف — استعادة صامتة خاطئة لا خطأ ظاهر.
+  4) /observability/health لا تفحص حداثة أي نسخة.
+  5) كل الحالة (35 مجلدًا: keys وvault وsovereign وqueue وnotifications...) على حجم Fly
+     واحد sovereign_data ⇒ /app/data — فقدان الحجم = فقدان كل شيء، لا موقع ثانٍ.
+  6) GET /backups ⇒ 404 — لا واجهة.

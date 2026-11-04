@@ -330,6 +330,13 @@ async def lifespan(app: FastAPI):
         logger.info(f"📬 {_jq_service.start_workers()}")
     except Exception as _jq_exc:  # TOLERATED: الطابور إضافة؛ فشل إقلاع عماله يُعلن ولا يكسر الخادم (/queue/drain يبقى)
         logger.warning("R-844: تعذر تشغيل عمال الطابور (%s)", type(_jq_exc).__name__)
+    # R-847 (D-062): النسخ الاحتياطي — جامع المقاييس ومجدول يُدرج backup.create في الطابور
+    try:
+        from backup import service as _bk_service
+        logger.info(f"💾 {_bk_service.install()}")
+        logger.info(f"💾 {_bk_service.start_scheduler()}")
+    except Exception as _bk_exc:  # TOLERATED: النسخ إضافة؛ فشل ربطه يُعلن ولا يكسر الخادم (POST /backups وفحص backup.freshness يبقيان)
+        logger.warning("R-847: تعذر ربط النسخ الاحتياطي (%s)", type(_bk_exc).__name__)
     # R-846: مراقب الجاهزية بعد العمال والموزع (قبلهم لا يُتوقع أن يكونوا أحياء)
     try:
         from observability import health as _obs_health, service as _obs_service2
@@ -2048,6 +2055,13 @@ try:
 except ImportError:  # TOLERATED: نمط الاستيراد المزدوج القائم
     from backend.observability.api_routes import router as _observability_router
 app.include_router(_observability_router)  # /metrics و/observability/*
+
+# R-847 (D-062): النسخ الاحتياطي والاستعادة — /backups/* (مفتاح المالك)
+try:
+    from backup.api_routes import router as _backup_router
+except ImportError:  # TOLERATED: نمط الاستيراد المزدوج القائم
+    from backend.backup.api_routes import router as _backup_router
+app.include_router(_backup_router)  # /backups/*
 
 
 @app.get("/media/file/{fid}")

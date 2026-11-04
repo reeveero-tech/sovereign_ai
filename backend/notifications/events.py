@@ -27,6 +27,12 @@ EVENTS: Dict[str, tuple] = {
     # R-846: الجاهزية — مرة لكل (حالة، فحص، ساعة)
     "health.failing": ("critical", "الجاهزية: فحص فاشل"),
     "health.degraded": ("high", "الجاهزية: تدهور"),
+    # R-847: النسخ والاستعادة
+    "backup.failed": ("high", "فشل النسخ الاحتياطي"),
+    "backup.offsite_failed": ("high", "تعذر رفع النسخة خارج الخادم"),
+    "restore.staged": ("high", "استعادة مجهزة — تُطبق عند إعادة التشغيل"),
+    "restore.applied": ("high", "طُبقت الاستعادة"),
+    "restore.failed": ("critical", "فشلت الاستعادة — تراجع إلى ما قبلها"),
 }
 
 _SECRETISH = re.compile(
@@ -109,6 +115,8 @@ def from_job(job: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         return make("eval.failed", f"eval.failed:{jid}", jid,
                     f"تقرير التقييم {str(res.get('report_id', ''))[:8]} تحت الأرضية",
                     err, link)
+    if kind == "backup.create":
+        return None  # R-847: الخدمة تُصدر backup.failed بسببه — لا إشعاران لسبب واحد
     if status == "failed" and not job.get("loop_id"):
         return make("job.failed", f"job.failed:{jid}", jid,
                     f"المهمة {jid[:8]} ({kind}) فشلت", err, link)
