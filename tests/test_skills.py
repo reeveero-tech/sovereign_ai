@@ -65,6 +65,14 @@ def _manifest(version="1.0.0", expect=10, perms=("math.add", "math.mul")):
     }
 
 
+def _indep(lib, version="1.0.0", f=lambda a, b: (a + b) * 2):
+    """R-843: تقييم مستقل بحالات المالك (مدخلات غير حالات المؤلف) — شرط الاعتماد."""
+    cases = [{"inputs": {"a": a, "b": b}, "expect": f(a, b)} for a, b in ((5, 1), (-1, 4))]
+    out = lib.evaluate_independent("add_then_double", version, cases, actor="owner")
+    assert out["state"] == "independently_evaluated", out
+    return out
+
+
 def _lib(ctx):
     from skills import SkillLibrary
     reg, _, tmp = ctx
@@ -79,12 +87,14 @@ def test_full_acquisition_cycle(ctx):
     ev = lib.evaluate("add_then_double", "1.0.0")
     assert ev["passed"] == 2 and ev["total"] == 2 and ev["state"] == "evaluated"
     assert "skill.add_then_double" not in {t["name"] for t in reg.list_tools()}
+    _indep(lib)
     lib.approve("add_then_double", "1.0.0", actor="owner")
     assert "skill.add_then_double" in {t["name"] for t in reg.list_tools()}
     out = reg.invoke("skill.add_then_double", caller="owner", inputs={"a": 4, "b": 1})
     assert out["ok"] and out["result"]["output"] == 10
     kinds = [e[1].get("op") for e in fc.events if e[0] == "skill_lifecycle"]
-    assert kinds[:3] == ["skill.propose", "skill.evaluate", "skill.approve"]
+    assert kinds[:4] == ["skill.propose", "skill.evaluate",
+                         "skill.evaluate_independent", "skill.approve"]
 
 
 def test_failed_evaluation_blocks_approval(ctx):
@@ -151,6 +161,7 @@ def test_survives_process_restart_without_relearning(ctx):
     lib = _lib(ctx)
     lib.propose(_manifest(), actor="agent")
     lib.evaluate("add_then_double", "1.0.0")
+    _indep(lib)
     lib.approve("add_then_double", "1.0.0", actor="owner")
     reg2 = ToolRegistry()                                     # «عملية جديدة»
     for t in ("math.add", "math.mul"):
@@ -167,12 +178,14 @@ def test_rollback_to_previous_version(ctx):
     lib = _lib(ctx)
     lib.propose(_manifest(), actor="agent")
     lib.evaluate("add_then_double", "1.0.0")
+    _indep(lib)
     lib.approve("add_then_double", "1.0.0", actor="owner")
     m2 = _manifest(version="2.0.0")
     m2["output"] = "{{steps.0.sum}}"                         # سلوك مختلف
     m2["eval"]["cases"] = [{"inputs": {"a": 2, "b": 3}, "expect": 5}]
     lib.propose(m2, actor="agent")
     lib.evaluate("add_then_double", "2.0.0")
+    _indep(lib, "2.0.0", f=lambda a, b: a + b)
     lib.approve("add_then_double", "2.0.0", actor="owner")
     assert reg.invoke("skill.add_then_double", inputs={"a": 2, "b": 3})["result"]["output"] == 5
     r = lib.rollback("add_then_double", actor="owner")
@@ -186,6 +199,7 @@ def test_approval_fail_closed_without_ledger(ctx):
     lib = _lib(ctx)
     lib.propose(_manifest(), actor="agent")
     lib.evaluate("add_then_double", "1.0.0")
+    _indep(lib)
     fc.fail = True
     with pytest.raises(Exception):
         lib.approve("add_then_double", "1.0.0", actor="owner")
@@ -201,6 +215,7 @@ def test_discovered_tool_is_available_not_learned(ctx):
     m = _manifest(perms=("math.add", "math.mul", "mcp.fake.echo"))
     lib.propose(m, actor="agent")
     lib.evaluate("add_then_double", "1.0.0")
+    _indep(lib)
     lib.approve("add_then_double", "1.0.0", actor="owner")
     disc2 = {d["tool"]: d for d in lib.status()["discovered"]}
     assert disc2["mcp.fake.echo"]["learned"] is True

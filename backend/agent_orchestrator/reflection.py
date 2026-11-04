@@ -61,6 +61,15 @@ def reflect_loop(results: list, plan: Dict[str, Any], budget_spent: Dict,
                 "decision": new_decision("", "reflection", "رفض كامل", [],
                                         "كل الخطوات رُفضت حوكميًا", 1.0,
                                         trace_ref)}
+    failed = [r for r in results if r["status"] == "failure"]
+    if failed and not succeeded:
+        # R-843: كشفه التقييم المستقل — فشل كل الخطوات كان يُعلن «اكتملت»
+        msg = (failed[0].get("error") or {}).get("message") or "فشلت كل الخطوات"
+        return {"action": "fail",
+                "reason": f"لم تنجح أي خطوة ({len(failed)} فشلت): {msg}",
+                "decision": new_decision("", "reflection", "فشل كامل", [],
+                                        "لا خطوة ناجحة — لا رد بنجاح كاذب",
+                                        1.0, trace_ref)}
     if budget_spent.get("steps", 0) >= plan["max_steps"]:
         return {"action": "stop",
                 "reason": "بلغنا حد الخطوات الأقصى",

@@ -1,0 +1,4 @@
+قبل الإصلاح (runtime.py/reflection.py من main 9570b7a3): 0.85 17/20
+ X G12 لا retry أعمى على 401 ونهاية صادقة {'status': 'running', 'tools': ['github.repo_read'], 'calls': 1, 'write_calls': 0} ['status: running ≠ failed']
+ X G13 لا retry أعمى على 403 ونهاية صادقة {'status': 'completed', 'tools': ['github.repo_read'], 'calls': 1, 'write_calls': 0} ['status: completed ≠ failed']
+ X G14 لا نجاح كاذب: فشل كل الخطوات ⇒ failed {'status': 'completed', 'tools': ['github.repo_read'], 'calls': 3, 'write_calls': 0} ['status: completed ≠ failed']

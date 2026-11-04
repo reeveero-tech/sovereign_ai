@@ -18,7 +18,15 @@ output/eval. الخطوات إجراء مركب فوق أدوات مسجلة ب�
 ٤.٣ اكتشاف ≠ اكتساب: أدوات mcp.* المكتشفة تُعلن learned=False حتى تدرجها حزمة
 مهارة مفعّلة في أذوناتها.
 
-حد صادق: «التقييم» هنا مقارنة بحالات مرجعية في الحزمة نفسها (يكتبها المؤلف)؛
+R-843 (٦.٥.٢): التقييم المستقل شرط الاعتماد —
+  evaluate_independent → حالات يكتبها **غير المقترح** (لا تطابق مدخلات حالات
+             المؤلف — حارس تسرب)، تُفحص حتميًا بالتطبيق، والمعايير الدلالية
+             بحَكَم من **عائلة نماذج غير عائلة المنفّذ** (evaluation/judge.py)؛
+             غياب الحَكَم أو انتماؤه لنفس العائلة ⇒ لا نجاح. النجاح =
+             independently_evaluated، وإلا failed_independent_eval.
+  approve   → يشترط independently_evaluated + بصمة المحتوى = المقيمة مستقلًا.
+
+حد صادق (قبل R-843): «التقييم» كان مقارنة بحالات مرجعية في الحزمة نفسها (يكتبها المؤلف)؛
 المقارنة بمرجع خارجي مستقل (٣.٤/R-746) تتطلب العقل الحي. والدوام عبر إعادة
 النشر على Fly يتطلب ١.٤.
 """
@@ -224,12 +232,82 @@ class SkillLibrary:
         return {"skill": name, "version": version, "state": state, "passed": passed,
                 "total": len(results), "results": results}
 
+    def evaluate_independent(self, name: str, version: str,
+                             cases: List[Dict[str, Any]], actor: str,
+                             judge=None) -> Dict[str, Any]:
+        """R-843 (٦.٥.٢): تقييم بحالات المقيّم لا المؤلف + حَكَم مستقل للدلالي."""
+        try:
+            from evaluation.judge import IndependentJudge, validate_criteria, CriterionError
+        except ImportError:  # TOLERATED: نمط الاستيراد المزدوج القائم
+            from backend.evaluation.judge import (IndependentJudge, validate_criteria,
+                                                  CriterionError)
+        pkg = self._load_pkg(name, version)
+        if pkg["state"] not in ("evaluated", "failed_independent_eval"):
+            raise SkillError(f"التقييم المستقل يلي تقييم المؤلف الناجح (الحالة: {pkg['state']})")
+        m = pkg["manifest"]
+        h = content_hash(m)
+        if h != pkg["content_hash"] or h != (pkg.get("eval") or {}).get("content_hash"):
+            raise SkillError("بصمة المحتوى تغيرت بعد تقييم المؤلف — تلاعب")
+        if not actor or actor == pkg.get("proposed_by"):
+            raise SkillError("المقيّم المستقل لا يكون مقترح المهارة نفسه — تقييم ذاتي مرفوض")
+        if not isinstance(cases, list) or len(cases) < 2:
+            raise SkillError("التقييم المستقل يحتاج حالتين على الأقل")
+        author_inputs = {json.dumps(c.get("inputs") or {}, sort_keys=True, ensure_ascii=False)
+                         for c in m["eval"]["cases"]}
+        for i, c in enumerate(cases):
+            if not isinstance(c, dict) or not isinstance(c.get("inputs", {}), dict):
+                raise SkillError(f"حالة {i} ليست كائنًا بمدخلات")
+            if "expect" not in c and not c.get("criteria"):
+                raise SkillError(f"حالة {i} بلا توقع ولا معايير — لا حكم ممكن")
+            key = json.dumps(c.get("inputs") or {}, sort_keys=True, ensure_ascii=False)
+            if key in author_inputs:
+                raise SkillError(f"حالة {i} تطابق مدخلات حالة للمؤلف — تسرب، ليست مستقلة")
+            try:
+                validate_criteria(c.get("criteria") or [])
+            except CriterionError as exc:
+                raise SkillError(f"حالة {i}: {exc}") from exc
+        cases_hash = hashlib.sha256(json.dumps(cases, sort_keys=True, ensure_ascii=False)
+                                    .encode("utf-8")).hexdigest()
+        judge = judge or IndependentJudge()
+        results = []
+        for c in cases:
+            res = self._execute(m, dict(c.get("inputs") or {}))
+            row: Dict[str, Any] = {"inputs": c.get("inputs"), "status": res["status"],
+                                   "got": res.get("answer")}
+            ok = res["status"] == "completed"
+            if "expect" in c:
+                row["expect_pass"] = res.get("answer") == c["expect"]
+                ok = ok and row["expect_pass"]
+            if c.get("criteria"):
+                evidence = [s.get("result") for s in res.get("steps") or []]
+                v = judge.evaluate(f"مهارة {name}: {m['description']}", res.get("answer"),
+                                   evidence, c["criteria"])
+                row["verdict"] = v
+                ok = ok and v["pass"]
+            row["pass"] = bool(ok)
+            results.append(row)
+        passed = sum(r["pass"] for r in results)
+        state = "independently_evaluated" if passed == len(results) else "failed_independent_eval"
+        record = {"content_hash": h, "cases_hash": cases_hash, "evaluator": actor,
+                  "passed": passed, "total": len(results), "results": results,
+                  "judge": judge.public(), "at": time.time()}
+        _audit("skill.evaluate_independent", {
+            "skill": name, "version": version, "content_hash": h, "cases_hash": cases_hash,
+            "passed": passed, "total": len(results), "state": state, "actor": actor,
+            "judge_independent": record["judge"]["independent"]})
+        pkg.update(state=state, independent_eval=record)
+        self._write(self._pkg_path(name, version), pkg)
+        return {"skill": name, "version": version, "state": state, "passed": passed,
+                "total": len(results), "results": results, "judge": record["judge"]}
+
     def approve(self, name: str, version: str, actor: str) -> Dict[str, Any]:
         pkg = self._load_pkg(name, version)
-        if pkg["state"] != "evaluated":
-            raise SkillError(f"لا اعتماد بلا تقييم ناجح (الحالة: {pkg['state']})")
+        if pkg["state"] != "independently_evaluated":
+            raise SkillError("لا اعتماد بلا تقييم مستقل ناجح — R-843 "
+                             f"(الحالة: {pkg['state']})")
         h = content_hash(pkg["manifest"])
-        if h != pkg["content_hash"] or h != (pkg.get("eval") or {}).get("content_hash"):
+        if h != pkg["content_hash"] or h != (pkg.get("eval") or {}).get("content_hash") \
+                or h != (pkg.get("independent_eval") or {}).get("content_hash"):
             raise SkillError("المحتوى تغير بعد التقييم — اعتماد مرفوض")
         _audit("skill.approve", {"skill": name, "version": version, "content_hash": h,
                                  "actor": actor})       # الأثر أولًا: فشله = لا تفعيل
@@ -287,8 +365,11 @@ class SkillLibrary:
                     if f.name == "active.json":
                         continue
                     pkg = json.loads(f.read_text(encoding="utf-8"))
+                    ind = pkg.get("independent_eval")
                     versions.append({"version": pkg["manifest"]["version"],
                                      "state": pkg["state"],
+                                     "independent_eval": None if not ind else
+                                     f"{ind['passed']}/{ind['total']}",
                                      "content_hash": pkg["content_hash"][:16],
                                      "eval": None if not pkg.get("eval") else
                                      f"{pkg['eval']['passed']}/{pkg['eval']['total']}"})
