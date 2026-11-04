@@ -1,0 +1,27 @@
+{
+  "name": "R-842 holdout — مجموعة معزولة (لا ضبط عليها)",
+  "frozen_before_implementation": true,
+  "note": "كُتبت وثُبّتت بصمتها قبل أول تشغيل للمخطط الدلالي؛ أي تعديل يكسر اختبار البصمة عمدًا.",
+  "goals": [
+    {"id": "h01", "utterance": "تفاصيل مستودع vercel/next.js من فضلك", "expected_tools": ["github.repo_read"], "category": "repo_read"},
+    {"id": "h02", "utterance": "is github.com/acme/tools a private repository?", "expected_tools": ["github.repo_read"], "category": "repo_read"},
+    {"id": "h03", "utterance": "وش آخر حالة للريبو acme/mobile", "expected_tools": ["github.repo_read"], "category": "repo_read"},
+    {"id": "h04", "utterance": "give me the metadata of the django/django repo", "expected_tools": ["github.repo_read"], "category": "repo_read"},
+    {"id": "h05", "utterance": "قدّم بلاغ مشكلة في acme/mobile بعنوان انهيار عند الإقلاع", "expected_tools": ["github.issue_create"], "category": "issue_create"},
+    {"id": "h06", "utterance": "please raise a GitHub issue in acme/tools about the outdated README", "expected_tools": ["github.issue_create"], "category": "issue_create"},
+    {"id": "h07", "utterance": "افتح تذكرة في مستودع acme/api حول خطأ 500", "expected_tools": ["github.issue_create"], "category": "issue_create"},
+    {"id": "h08", "utterance": "show the first rows of table sessions", "expected_tools": ["supabase.table_select"], "category": "table_select"},
+    {"id": "h09", "utterance": "طالع لي بيانات جدول subscriptions", "expected_tools": ["supabase.table_select"], "category": "table_select"},
+    {"id": "h10", "utterance": "ما الذي في قاعدة البيانات بجدول feedback؟", "expected_tools": ["supabase.table_select"], "category": "table_select"},
+    {"id": "h11", "utterance": "عطني قائمة بخدمات رندر وحالتها", "expected_tools": ["render.services_list"], "category": "services_list"},
+    {"id": "h12", "utterance": "which services do we have running on Render right now", "expected_tools": ["render.services_list"], "category": "services_list"},
+    {"id": "h13", "utterance": "هل فيه خدمة واقفة في النشر؟", "expected_tools": ["render.services_list"], "category": "services_list"},
+    {"id": "h14", "utterance": "بغيت أسجل API جديد من ملف openapi.json", "expected_tools": ["openapi.register_spec"], "category": "register_spec"},
+    {"id": "h15", "utterance": "turn this swagger spec into a new connector", "expected_tools": ["openapi.register_spec"], "category": "register_spec"},
+    {"id": "h16", "utterance": "راجع المستودع acme/tools وبعدين سجل مشكلة بعنوان تنظيف الكود", "expected_tools": ["github.repo_read", "github.issue_create"], "category": "multi"},
+    {"id": "h17", "utterance": "list render services and read the table metrics", "expected_tools": ["render.services_list", "supabase.table_select"], "category": "multi"},
+    {"id": "h18", "utterance": "شغّل لي أغنية", "expected_tools": [], "category": "abstain"},
+    {"id": "h19", "utterance": "what is the capital of Japan", "expected_tools": [], "category": "abstain"},
+    {"id": "h20", "utterance": "احسب لي ضريبة القيمة المضافة على 500 ريال", "expected_tools": [], "category": "abstain"}
+  ]
+}

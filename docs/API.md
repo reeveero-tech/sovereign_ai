@@ -174,7 +174,7 @@
 ملاحظة أمنية: خزينة الاعتمادات تُخرج المفاتيح فقط — أي سر يُرفض رجوعه في أي
 استجابة أو سجل (محمي باختبار `test_no_secrets_in_logs`).
 
-## 7) طبقة تنسيق الوكلاء (backend/agent_orchestrator/api_routes.py) — 16 مساراً (R-841)
+## 7) طبقة تنسيق الوكلاء (backend/agent_orchestrator/api_routes.py) — 17 مساراً (R-841 + R-842)
 
 بادئة كل المسارات: `/orchestrator`. العقد الكامل في `docs/ORCHESTRATOR.md`.
 القراءات مفتوحة؛ **كل نقطة تغيير تتطلب `api_key`** (بوابة مفتاح المالك — 401).
@@ -196,6 +196,8 @@
 | POST | `/orchestrator/loops/{id}/rollback` | تراجع/تعويض عن خطوة | `api_key` |
 | GET | `/orchestrator/approvals/pending` | الموافقات المعلقة | لا |
 | POST | `/orchestrator/approvals` | حسم موافقة ثم استئناف الحلقة | `api_key` |
+| GET | `/orchestrator/planner/eval?set=dev\|holdout&mode=keyword\|semantic` | **R-842:** تقييم اختيار الأدوات على مجموعة مرجعية (دقة/فئات/امتناع/إخفاقات) — قراءة فقط، لا تنفيذ | لا |
+| POST | `/orchestrator/planner/eval` | **R-842:** التقييم نفسه مع `mode=brain` (العقل الحي — مكلف) `{set, mode, api_key}` | `api_key` |
 
 ملاحظة أمنية: الأثر (trace) يُنقّى من أي مفتاح سرّي قبل التسجيل (كناري آلي
 في CI — `test_a26_no_secret_leak_canary`).

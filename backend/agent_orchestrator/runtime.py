@@ -153,6 +153,15 @@ class OrchestratorSystem:
         tracer.decision(new_decision(
             "", "tool_choice", plan["mode"], [],
             plan["planning_reason"], 1.0, tracer.trace_ref))
+        sel = plan.get("selection")
+        if sel:  # R-842: قرار اختيار الأداة نفسه — المختار والبدائل والثقة
+            alts = [f"{t}={s}" for t, s in sorted(
+                sel["scores"].items(), key=lambda x: -x[1])
+                if t not in sel["chosen"]] + list(sel["rejected"])
+            tracer.decision(new_decision(
+                "", "tool_choice", ",".join(sel["chosen"]) or "none", alts,
+                f"{sel['planner']}: {sel.get('reason') or '-'}",
+                float(sel["confidence"]), tracer.trace_ref))
         self.state.save(state)
         return self.run(loop_id)
 

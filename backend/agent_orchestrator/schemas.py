@@ -174,6 +174,24 @@ PLAN_SCHEMA: Dict[str, Any] = {
         "estimated_time_s": {"type": "number", "minimum": 0},
         "mode": {"type": "string", "enum": ["plan_execute", "react"]},
         "planning_reason": {"type": "string", "minLength": 1},
+        # R-842: تفسير الاختيار الدلالي (اختياري — الخطط القديمة تبقى صالحة)
+        "selection": {
+            "type": "object",
+            "required": ["planner", "chosen", "scores", "rejected", "confidence",
+                         "brain_outcome"],
+            "properties": {
+                "planner": {"type": "string",
+                            "enum": ["semantic", "brain", "semantic_fallback",
+                                     "keyword"]},
+                "chosen": {"type": "array", "items": {"type": "string"}},
+                "scores": {"type": "object"},
+                "rejected": {"type": "array", "items": {"type": "string"}},
+                "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+                "brain_outcome": {"type": "string"},
+                "clauses": {"type": "array", "items": {"type": "string"}},
+                "reason": {"type": "string"},
+            },
+        },
     },
 }
 
