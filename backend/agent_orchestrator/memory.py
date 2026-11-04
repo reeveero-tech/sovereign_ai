@@ -35,13 +35,19 @@ class MemoryInterface:
             m = self._loop.get(loop_id)
             return dict(m) if m else None
 
+    def _loop_entry(self, loop_id: str) -> Dict[str, Any]:
+        """R-844: الذاكرة العاملة داخل العملية — بعد إعادة التشغيل تُنشأ من جديد
+        (الحالة الدائمة في StateStore) بدل KeyError يكسر الاستئناف."""
+        return self._loop.setdefault(
+            loop_id, {"request": None, "steps": [], "decisions": []})
+
     def loop_write_step(self, loop_id: str, record: Dict[str, Any]) -> None:
         with self._lock:
-            self._loop[loop_id]["steps"].append(record)
+            self._loop_entry(loop_id)["steps"].append(record)
 
     def loop_write_decision(self, loop_id: str, record: Dict[str, Any]) -> None:
         with self._lock:
-            self._loop[loop_id]["decisions"].append(record)
+            self._loop_entry(loop_id)["decisions"].append(record)
 
     # ------------------------------------------------------------- الجلسة
     def session_write(self, session_id: str, key: str, value: Any) -> None:

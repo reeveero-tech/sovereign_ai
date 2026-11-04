@@ -1,0 +1,156 @@
+{
+ "version": 1,
+ "layer": "R-844 job_queue",
+ "note": "التوقعات مكتوبة من القاعدة قبل أول تشغيل — مجمّدة ببصمة (suites.py)",
+ "cases": [
+  {
+   "id": "Q01",
+   "rule": "عدم التكرار: المفتاح نفسه بالحمولة نفسها ⇒ مهمة واحدة",
+   "scenario": "idempotent_enqueue",
+   "expect": {
+    "same_job": true,
+    "created": [
+     true,
+     false
+    ],
+    "jobs": 1
+   }
+  },
+  {
+   "id": "Q02",
+   "rule": "المفتاح لا يُعاد استعماله لعمل آخر ⇒ تعارض",
+   "scenario": "key_reuse_conflict",
+   "expect": {
+    "conflict": true,
+    "jobs": 1
+   }
+  },
+  {
+   "id": "Q03",
+   "rule": "الضغط الخلفي: لا قبول بلا حد",
+   "scenario": "backpressure",
+   "expect": {
+    "accepted": 5,
+    "rejected_at": 6
+   },
+   "max_depth": 5
+  },
+  {
+   "id": "Q04",
+   "rule": "قراءة عبر الطابور تكتمل بنداء واحد ومحاولة واحدة",
+   "scenario": "read_completes",
+   "expect": {
+    "job": "succeeded",
+    "loop": "completed",
+    "calls": 1,
+    "writes": 0,
+    "attempts": 1
+   }
+  },
+  {
+   "id": "Q05",
+   "rule": "الطابور لا يتجاوز بوابة الموافقة: الكتابة تنتظر إنسانًا بلا نداء",
+   "scenario": "write_waits_for_human",
+   "expect": {
+    "job": "needs_human",
+    "loop": "pending_approval",
+    "writes": 0,
+    "has_approval": true
+   }
+  },
+  {
+   "id": "Q06",
+   "rule": "موافقة عبر الطابور تنفذ الكتابة مرة واحدة وإعادة إرسالها لا تكررها",
+   "scenario": "approval_once",
+   "expect": {
+    "approval_job": "succeeded",
+    "loop": "completed",
+    "dedup": true,
+    "writes": 1
+   }
+  },
+  {
+   "id": "Q07",
+   "rule": "انقطاع أثناء كتابة ⇒ لا إعادة عمياء: مراجعة المالك وكتابة واحدة فقط",
+   "scenario": "crash_mid_write",
+   "expect": {
+    "after_crash": "running",
+    "job": "needs_human",
+    "loop": "needs_owner_review",
+    "writes": 1,
+    "attempts": 2
+   }
+  },
+  {
+   "id": "Q08",
+   "rule": "انقطاع أثناء قراءة ⇒ الاستعادة تكمل الحلقة نفسها",
+   "scenario": "crash_mid_read",
+   "expect": {
+    "job": "succeeded",
+    "loop": "completed",
+    "attempts": 2,
+    "writes": 0
+   }
+  },
+  {
+   "id": "Q09",
+   "rule": "موافقة حلقة لا تُجيز كتابة حلقة أخرى",
+   "scenario": "cross_loop_isolation",
+   "expect": {
+    "b_loop": "pending_approval",
+    "writes": 1
+   }
+  },
+  {
+   "id": "Q10",
+   "rule": "السياج: عامل قديم انتهى إيجاره لا يكتب فوق نتيجة الأحدث",
+   "scenario": "fencing",
+   "expect": {
+    "stale_accepted": false,
+    "fresh_accepted": true,
+    "result_by": "new",
+    "stale_logged": true
+   }
+  },
+  {
+   "id": "Q11",
+   "rule": "إعادة المحاولة للعابر فقط وبحد؛ غير العابر يفشل بلا إعادة",
+   "scenario": "retry_policy",
+   "expect": {
+    "flaky": "succeeded",
+    "flaky_attempts": 3,
+    "broken": "failed",
+    "broken_attempts": 1
+   }
+  },
+  {
+   "id": "Q12",
+   "rule": "لا retry أعمى على 401: الحلقة الفاشلة حوكميًا لا تُعاد",
+   "scenario": "no_retry_on_401",
+   "expect": {
+    "job": "failed",
+    "attempts": 1,
+    "loop": "failed"
+   }
+  },
+  {
+   "id": "Q13",
+   "rule": "الإلغاء قبل البدء ⇒ لا تنفيذ",
+   "scenario": "cancel_queued",
+   "expect": {
+    "job": "cancelled",
+    "calls": 0
+   }
+  },
+  {
+   "id": "Q14",
+   "rule": "موافقة معلقة تبقى قابلة للحسم بعد إعادة التشغيل",
+   "scenario": "restart_pending_approval",
+   "expect": {
+    "approval_job": "succeeded",
+    "loop": "completed",
+    "writes": 1
+   }
+  }
+ ]
+}

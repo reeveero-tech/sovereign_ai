@@ -310,6 +310,12 @@ async def lifespan(app: FastAPI):
     except Exception as exc:  # TOLERATED: بلا ربط يُعلن مصدر المجدول فارغًا فقط
         logger.warning("R-798: تعذر ربط المجدول بالنواة: %s", exc)
     logger.info(f"⏱️ المجدول: {app.state.scheduler.reason}")
+    # R-844 (D-059): عمال الطابور غير المتزامن — الاستعادة أول كل دورة
+    try:
+        from job_queue import service as _jq_service
+        logger.info(f"📬 {_jq_service.start_workers()}")
+    except Exception as _jq_exc:  # TOLERATED: الطابور إضافة؛ فشل إقلاع عماله يُعلن ولا يكسر الخادم (/queue/drain يبقى)
+        logger.warning("R-844: تعذر تشغيل عمال الطابور (%s)", type(_jq_exc).__name__)
     # R-791 (V6 ٦.٩.٤): حلقة الاستقلال — أهداف دائمة يعمل عليها العقل بلا طلب
     try:
         import goals as _goals_mod
@@ -1986,6 +1992,17 @@ except ImportError:  # TOLERATED: نمط الاستيراد المزدوج ال�
     from backend.evaluation.api_routes import router as _evaluation_router
 
 app.include_router(_evaluation_router)  # /evaluation/*
+
+
+# ============================================================
+# R-844: الطابور غير المتزامن — مهام دائمة بعدم تكرار وإيجار وسياج
+# ============================================================
+try:
+    from job_queue.api_routes import router as _job_queue_router
+except ImportError:  # TOLERATED: نمط الاستيراد المزدوج القائم
+    from backend.job_queue.api_routes import router as _job_queue_router
+
+app.include_router(_job_queue_router)  # /queue/*
 
 
 @app.get("/media/file/{fid}")
