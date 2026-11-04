@@ -12,5 +12,7 @@ command -v "$PY" >/dev/null 2>&1 || PY=python
 # القاعدة الحاكمة: كود في الفهرس بلا الثلاثة الحرفية (الحالة + السجل +
 # الخارطة) يُرفض قبل إنشاء الالتزام
 "$PY" "$ROOT/tools/gate_docs_sync.py" --staged || exit 1
+# R-848 (D-063): لا سر في الفهرس — الكتالوج الموحد نفسه الذي تستعمله CI
+"$PY" "$ROOT/tools/gate_secrets.py" --staged || exit 1
 # حارس العناوين الخاصة (قرار المالك د.٣)
 exec "$PY" "$ROOT/tools/private_ip_guard.py" --staged

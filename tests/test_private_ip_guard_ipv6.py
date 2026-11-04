@@ -118,7 +118,14 @@ def hooked_repo(tmp_path):
     # R-748: سقالة الاختبار (الحارسان والـ hook) ليست كود المشروع — تُستثنى
     # من الفهرس حتى يبقى الملف المُلتزم هو note.txt وحده (لا كود ⇒ بوابة
     # القاعدة الحاكمة تسمح، وحارس العناوين الخاصة هو من يقرر — أصل الاختبار)
-    (repo / ".gitignore").write_text("tools/\n.githooks/\n", encoding="utf-8")
+    # R-848 (D-063): الحارس الثالث في الـ hook — بوابة الأسرار وكتالوجها وخط أساسها
+    shutil.copy2(REPO_ROOT / "tools" / "gate_secrets.py", repo / "tools" / "gate_secrets.py")
+    shutil.copy2(REPO_ROOT / "tools" / "secrets_baseline.json",
+                 repo / "tools" / "secrets_baseline.json")
+    (repo / "backend" / "secret_guard").mkdir(parents=True)
+    shutil.copy2(REPO_ROOT / "backend" / "secret_guard" / "catalog.py",
+                 repo / "backend" / "secret_guard" / "catalog.py")
+    (repo / ".gitignore").write_text("tools/\n.githooks/\nbackend/\n", encoding="utf-8")
     shutil.copy2(HOOK_PATH, repo / ".githooks" / "pre-commit")
     env = dict(os.environ, PYTHON=sys.executable,
                GIT_CONFIG_GLOBAL=os.devnull, GIT_CONFIG_NOSYSTEM="1")

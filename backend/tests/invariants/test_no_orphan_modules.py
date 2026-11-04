@@ -59,6 +59,9 @@ SCRIPT_ENTRY_POINTS = {
     # R-843: بوابة التقييم المستقل — يشغّلها ci.yml كعملية مستقلة على كل تغيير
     # وتستدعيها اختباراتها السلوكية (tests/test_r843_independent_evaluation.py)
     "tools/gate_eval.py",
+    # R-848: بوابة الأسرار — يشغّلها ci.yml و.githooks/pre-commit كعملية مستقلة،
+    # وتستدعيها اختباراتها ومجموعة security.secrets (tests/test_r848_secrets.py)
+    "tools/gate_secrets.py",
     # R-758 (V5 ٥.٣): تقرير قياس الأسطول — CLI يكتب forensics/R-758_SCALE_REPORT.json
     # ويشغّله اختباره السلوكي كعملية مستقلة (tests/test_fleet.py)
     "tools/fleet_scale_report.py",

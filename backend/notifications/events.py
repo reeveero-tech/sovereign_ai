@@ -9,8 +9,12 @@ from __future__ import annotations
 
 import hashlib
 import os
-import re
 from typing import Any, Dict, Optional
+
+try:
+    from secret_guard import catalog as _catalog
+except ImportError:  # TOLERATED: نمط الاستيراد المزدوج القائم
+    from backend.secret_guard import catalog as _catalog
 
 SEVERITIES = ("info", "medium", "high", "critical")
 
@@ -35,15 +39,9 @@ EVENTS: Dict[str, tuple] = {
     "restore.failed": ("critical", "فشلت الاستعادة — تراجع إلى ما قبلها"),
 }
 
-_SECRETISH = re.compile(
-    r"(gh[pousr]_[A-Za-z0-9]{8,}|github_pat_[A-Za-z0-9_]{8,}|sbp_[A-Za-z0-9]{8,}"
-    r"|rnd_[A-Za-z0-9]{8,}|sk-[A-Za-z0-9_-]{8,}|xox[abprs]-[A-Za-z0-9-]{8,}"
-    r"|Bearer\s+[A-Za-z0-9._-]{8,}|\b\d{6,12}:[A-Za-z0-9_-]{30,})")
-
-
 def scrub(text: Any, limit: int = 500) -> str:
-    """لا سر في نص يُحفظ أو يُرسل (يشمل نمط رمز بوت Telegram)."""
-    return _SECRETISH.sub("***", str(text or ""))[:limit]
+    """لا سر في نص يُحفظ أو يُرسل — R-848: الكتالوج الموحد (secret_guard.catalog)."""
+    return _catalog.redact(text or "", limit)
 
 
 def rank(sev: str) -> int:
@@ -61,7 +59,7 @@ def make(event: str, dedupe_key: str, subject: str, summary: str,
         raise ValueError(f"حدث غير معروف: {event}")
     sev, title = EVENTS[event]
     return {"event": event, "severity": sev, "title": title,
-            "dedupe_key": dedupe_key[:200], "subject": subject[:100],
+            "dedupe_key": dedupe_key[:200], "subject": scrub(subject, 100),  # R-848 S17: الموضوع كان بلا تنقية
             "summary": scrub(summary, 200), "body": scrub(body or summary, 500),
             "link": _link(link) if link else ""}
 
