@@ -1,0 +1,41 @@
+{
+ "name": "ledger_digest",
+ "version": "1.0.0",
+ "source": "catalog (R-850) — مؤلفة في المستودع، التفعيل باعتماد المالك",
+ "description": "تلخيص السجل السيادي: آخر N حدث وتوزيع أنواعها وترابط السلسلة + إجمالي السجل وسلامة سلسلة الخبرة",
+ "inputs": {"limit": "عدد الأحداث الأخيرة 1..50"},
+ "permissions": ["ledger.recent", "memory.stats", "experience.stats"],
+ "steps": [
+  {"tool": "ledger.recent", "inputs": {"limit": "{{limit}}"}, "check": {"type": "non_empty"}},
+  {"tool": "memory.stats", "inputs": {}, "check": {"type": "non_empty"}},
+  {"tool": "experience.stats", "inputs": {}, "check": {"type": "non_empty"}}
+ ],
+ "output": {
+  "window": "{{steps.0.window}}",
+  "count": "{{steps.0.count}}",
+  "by_type": "{{steps.0.by_type}}",
+  "newest": "{{steps.0.newest}}",
+  "oldest": "{{steps.0.oldest}}",
+  "chain_linked": "{{steps.0.chain_linked}}",
+  "chain_links": "{{steps.0.chain_links}}",
+  "recent": "{{steps.0.events}}",
+  "ledger_total": "{{steps.1.core.index.total_events}}",
+  "experience_chain_intact": "{{steps.2.chain.intact}}"
+ },
+ "eval": {"reference": "ledger_view.recent (R-850) — نافذة قراءة بلا حمولة", "cases": [
+  {"inputs": {"limit": 5}, "criteria": [
+   {"id": "shape", "type": "has_keys", "value": ["window", "count", "by_type", "newest", "oldest", "chain_linked", "chain_links", "recent", "ledger_total", "experience_chain_intact"]},
+   {"id": "window", "type": "equals", "path": "window", "value": 5},
+   {"id": "count", "type": "is_type", "path": "count", "value": "int"},
+   {"id": "linked", "type": "is_type", "path": "chain_linked", "value": "bool"},
+   {"id": "types", "type": "is_type", "path": "by_type", "value": "dict"},
+   {"id": "nopayload", "type": "not_contains", "path": "recent", "value": "payload"},
+   {"id": "nosig", "type": "not_contains", "path": "recent", "value": "signature"}
+  ]},
+  {"inputs": {"limit": 1}, "criteria": [
+   {"id": "window", "type": "equals", "path": "window", "value": 1},
+   {"id": "cap", "type": "max_len", "path": "recent", "value": 200},
+   {"id": "total", "type": "is_type", "path": "ledger_total", "value": "int"}
+  ]}
+ ]}
+}

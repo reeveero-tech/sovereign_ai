@@ -103,6 +103,12 @@ def _skills(path: Path) -> Dict[str, Any]:
     return skills_reliability.run(cases)
 
 
+def _real_skills(path: Path) -> Dict[str, Any]:
+    from . import real_skills
+    cases = json.loads(path.read_text(encoding="utf-8"))["cases"]
+    return real_skills.run(cases)
+
+
 SUITES: List[Suite] = [
     Suite("planner.dev", "orchestrator/planner",
           "اختيار الأدوات — مجموعة التطوير (50 هدفًا، R-842)",
@@ -160,6 +166,14 @@ SUITES: List[Suite] = [
           _ROOT / "data" / "skills_cases.json",
           "60c52e31db13b24c4a8200acdeb29b65564286b0ca274f5ca3db489db9253761",
           1.0, _skills),
+    Suite("skills.catalog", "skills_catalog",
+          "أول مهارات حقيقية (٦.٥.١): تقرير صحة/تلخيص سجل/موجز بحثي بالدورة كاملة،"
+          " تقييم بنيوي لقيم حية (مسار/نوع/مفاتيح) بدل المساواة الحرفية، رفض الدلالي"
+          " في تقييم المؤلف، نافذة سجل بلا حمولة تكشف الرابط المكسور، لا تفعيل ذاتي"
+          " (18 حالة، R-850)",
+          _ROOT / "data" / "real_skills_cases.json",
+          "bb15856045644baa8c6534ea266ecad33202937cda099ce1d4ea7f5cf5e794ab",
+          1.0, _real_skills),
 ]
 
 

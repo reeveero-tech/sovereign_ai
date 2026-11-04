@@ -1,0 +1,197 @@
+{
+ "version": 1,
+ "layer": "R-850 real skills (٦.٥.١)",
+ "note": "التوقعات مكتوبة من القاعدة قبل أول تشغيل — مجمّدة ببصمة (suites.py)",
+ "cases": [
+  {
+   "id": "RS01",
+   "rule": "الكتالوج ثلاث حزم صالحة مرتبة بأسماء تطابق ملفاتها",
+   "scenario": "catalog_valid",
+   "expect": {
+    "names": [
+     "health_report",
+     "ledger_digest",
+     "research_brief"
+    ],
+    "count": 3
+   }
+  },
+  {
+   "id": "RS02",
+   "rule": "تقرير الصحة يمر بالدورة كاملة ويفصّل المكوّن المختار بمدخل",
+   "scenario": "health_cycle",
+   "expect": {
+    "author": "evaluated",
+    "independent": "independently_evaluated",
+    "active": "1.0.0",
+    "tool": "skill.health_report",
+    "overall": "healthy",
+    "component": "nexus_engine",
+    "detail_status": "healthy"
+   }
+  },
+  {
+   "id": "RS03",
+   "rule": "تلخيص السجل يمر بالدورة كاملة: نافذة 4 أحداث مترابطة (3 روابط) ونوعان",
+   "scenario": "ledger_cycle",
+   "expect": {
+    "author": "evaluated",
+    "independent": "independently_evaluated",
+    "active": "1.0.0",
+    "tool": "skill.ledger_digest",
+    "count": 4,
+    "chain_linked": true,
+    "chain_links": 3,
+    "types": 2
+   }
+  },
+  {
+   "id": "RS04",
+   "rule": "الموجز البحثي يمر بالدورة كاملة ويعيد نقاطًا بلغة الطلب",
+   "scenario": "research_cycle",
+   "expect": {
+    "author": "evaluated",
+    "independent": "independently_evaluated",
+    "active": "1.0.0",
+    "tool": "skill.research_brief",
+    "points": 1,
+    "lang": "ar"
+   }
+  },
+  {
+   "id": "RS05",
+   "rule": "قيمة حية متغيرة: البنيوي ينجح والمساواة الحرفية تفشل وهي صحيحة (ثغرة RED)",
+   "scenario": "live_variance",
+   "expect": {
+    "structural": "evaluated",
+    "exact": "failed_eval"
+   }
+  },
+  {
+   "id": "RS06",
+   "rule": "مكوّن غير موجود يفشل صراحة ولا يُخترع له تفصيل",
+   "scenario": "unknown_component",
+   "expect": {
+    "ok": false,
+    "invented": false
+   }
+  },
+  {
+   "id": "RS07",
+   "rule": "بحث بلا نتائج يُسقط تقييم المؤلف — لا موجز فارغ معتمد",
+   "scenario": "research_no_results",
+   "expect": {
+    "author": "failed_eval"
+   }
+  },
+  {
+   "id": "RS08",
+   "rule": "معيار دلالي في حالات المؤلف مرفوض عند التحقق",
+   "scenario": "semantic_author_rejected",
+   "expect": {
+    "rejected": true
+   }
+  },
+  {
+   "id": "RS09",
+   "rule": "حالة بلا توقع ولا معايير مرفوضة",
+   "scenario": "case_without_judgement",
+   "expect": {
+    "rejected": true
+   }
+  },
+  {
+   "id": "RS10",
+   "rule": "مسار غائب يفشل بسبب معلن missing_path",
+   "scenario": "missing_path_fails",
+   "expect": {
+    "pass": false,
+    "reason": "missing_path"
+   }
+  },
+  {
+   "id": "RS11",
+   "rule": "is_type int يرفض bool وnumber يقبل float وفهارس القوائم تعمل في المسار",
+   "scenario": "bool_not_int",
+   "expect": {
+    "bool_as_int": false,
+    "float_number": true,
+    "list_index": true
+   }
+  },
+  {
+   "id": "RS12",
+   "rule": "الاقتراح من الكتالوج لا يسجل أداة؛ المقترح لا يقيّم نفسه مستقلًا",
+   "scenario": "no_self_activation",
+   "expect": {
+    "state": "evaluated",
+    "registered": false,
+    "self_eval": "rejected"
+   }
+  },
+  {
+   "id": "RS13",
+   "rule": "نافذة السجل: time/type/hash(16) فقط — لا حمولة ولا توقيع ولا blob",
+   "scenario": "ledger_no_payload",
+   "expect": {
+    "keys": [
+     "hash",
+     "time",
+     "type"
+    ],
+    "hash_len": 16,
+    "leak": false
+   }
+  },
+  {
+   "id": "RS14",
+   "rule": "رابط مكسور داخل النافذة يُكشف ويُعد",
+   "scenario": "ledger_broken_link",
+   "expect": {
+    "chain_linked": false,
+    "broken_links": 1
+   }
+  },
+  {
+   "id": "RS15",
+   "rule": "حدود 1..50 (4 مدخلات خاطئة مرفوضة)؛ التصفية تعلن عدم فحص الترابط",
+   "scenario": "ledger_bounds",
+   "expect": {
+    "rejected": 4,
+    "filtered_count": 4,
+    "chain_checked": false,
+    "chain_linked": null
+   }
+  },
+  {
+   "id": "RS16",
+   "rule": "حزمة كتالوج لا يطابق اسمها ملفها مرفوضة صراحة",
+   "scenario": "bad_catalog_rejected",
+   "expect": {
+    "rejected": true
+   }
+  },
+  {
+   "id": "RS17",
+   "rule": "مفتاح ديناميكي بلا مدخل مرفوض ومعه يختار القيمة الصحيحة",
+   "scenario": "dynamic_key_needs_input",
+   "expect": {
+    "missing": "rejected",
+    "picked": 2
+   }
+  },
+  {
+   "id": "RS18",
+   "rule": "حالة الكتالوج من المكتبة: not_proposed ثم active، والبقية لم تُمس",
+   "scenario": "catalog_states",
+   "expect": {
+    "before": "not_proposed",
+    "after": [
+     "active",
+     "1.0.0"
+    ],
+    "others": "not_proposed"
+   }
+  }
+ ]
+}

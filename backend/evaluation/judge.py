@@ -23,7 +23,13 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 
 JudgeFn = Callable[[str, str, Dict[str, Any], float, str], Optional[str]]
 
-DETERMINISTIC = ("equals", "contains", "not_contains", "regex", "max_len")
+DETERMINISTIC = ("equals", "contains", "not_contains", "regex", "max_len",
+                 # R-850: معايير بنيوية لمخرجات حية متغيرة (لا مساواة حرفية)
+                 "has_keys", "non_empty", "is_type")
+_PATH_RE = re.compile(r"^[A-Za-z0-9_\-]{1,64}(\.[A-Za-z0-9_\-]{1,64}){0,11}$")
+_TYPES = {"str": (str,), "int": (int,), "number": (int, float), "bool": (bool,),
+          "list": (list,), "dict": (dict,)}
+_MISSING = object()
 SEMANTIC = "semantic"
 JUDGE_TIMEOUT = float(os.environ.get("EVAL_JUDGE_TIMEOUT", "60") or 60)
 _EVIDENCE_CAP = 4000
@@ -67,14 +73,51 @@ def validate_criteria(criteria: List[Dict[str, Any]]) -> None:
                 re.compile(str(c.get("value", "")))
             except re.error as exc:
                 raise CriterionError(f"تعبير غير صالح في {c['id']}: {exc}") from exc
+        if "path" in c and (kind == SEMANTIC or not _PATH_RE.match(str(c["path"]))):
+            raise CriterionError(f"مسار غير صالح في {c['id']}: {c.get('path')!r}")
+        if kind == "has_keys" and not (isinstance(c.get("value"), list) and c["value"]
+                                       and all(isinstance(k, str) and k for k in c["value"])):
+            raise CriterionError(f"has_keys يحتاج قائمة مفاتيح نصية: {c['id']}")
+        if kind == "is_type" and c.get("value") not in tuple(_TYPES) + ("null",):
+            raise CriterionError(f"نوع غير معروف في {c['id']}: {c.get('value')!r}")
         if kind == SEMANTIC and len(str(c.get("text", ""))) < 8:
             raise CriterionError(f"معيار دلالي بلا نص واضح: {c['id']}")
 
 
+def value_at(output: Any, path: Optional[str]) -> Any:
+    """R-850: قيمة بمسار نقطي (مفاتيح كائنات/فهارس قوائم) — الغياب علامة لا استثناء."""
+    if not path:
+        return output
+    val = output
+    for part in str(path).split("."):
+        if isinstance(val, dict) and part in val:
+            val = val[part]
+        elif isinstance(val, list) and part.isdigit() and int(part) < len(val):
+            val = val[int(part)]
+        else:
+            return _MISSING
+    return val
+
+
 def check_deterministic(c: Dict[str, Any], output: Any) -> Dict[str, Any]:
     kind, val = c["type"], c.get("value")
+    target = value_at(output, c.get("path"))
+    row: Dict[str, Any] = {"id": c["id"], "type": kind, "by": "app"}
+    if c.get("path"):
+        row["path"] = c["path"]
+    if target is _MISSING:                     # مسار غائب ⇒ فشل صريح لا افتراض
+        return {**row, "pass": False, "reason": "missing_path"}
+    output = target
     text = _as_text(output)
-    if kind == "equals":
+    if kind == "has_keys":
+        ok = isinstance(output, dict) and all(k in output for k in val)
+    elif kind == "non_empty":
+        ok = output not in (None, "", [], {})
+    elif kind == "is_type":
+        ok = (output is None if val == "null" else
+              isinstance(output, _TYPES[val])
+              and not (val in ("int", "number") and isinstance(output, bool)))
+    elif kind == "equals":
         ok = output == val
     elif kind == "contains":
         ok = str(val) in text
@@ -84,7 +127,7 @@ def check_deterministic(c: Dict[str, Any], output: Any) -> Dict[str, Any]:
         ok = re.search(str(val), text) is not None
     else:  # max_len
         ok = len(text) <= int(val)
-    return {"id": c["id"], "type": kind, "pass": bool(ok), "by": "app"}
+    return {**row, "pass": bool(ok)}
 
 
 def default_judge_fn(system: str, user: str, schema: Dict[str, Any],

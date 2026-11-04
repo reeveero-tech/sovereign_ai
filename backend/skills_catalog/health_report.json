@@ -1,0 +1,43 @@
+{
+ "name": "health_report",
+ "version": "1.0.0",
+ "source": "catalog (R-850) — مؤلفة في المستودع، التفعيل باعتماد المالك",
+ "description": "تقرير صحة شامل: الحالة العامة والإصدار ومدة التشغيل + تفصيل مكوّن مختار + الذاكرة والقرص والعقل",
+ "inputs": {"component": "اسم المكوّن المطلوب تفصيله (مثل memory_core)"},
+ "permissions": ["health.snapshot", "memory.stats", "disk.status", "brain.status"],
+ "steps": [
+  {"tool": "health.snapshot", "inputs": {}, "check": {"type": "non_empty"}},
+  {"tool": "memory.stats", "inputs": {}, "check": {"type": "non_empty"}},
+  {"tool": "disk.status", "inputs": {}, "check": {"type": "non_empty"}},
+  {"tool": "brain.status", "inputs": {}, "check": {"type": "non_empty"}}
+ ],
+ "output": {
+  "overall": "{{steps.0.status}}",
+  "version": "{{steps.0.version}}",
+  "uptime_seconds": "{{steps.0.uptime_seconds}}",
+  "component": "{{component}}",
+  "component_detail": "{{steps.0.components.$component}}",
+  "components": "{{steps.0.components}}",
+  "ledger_events": "{{steps.1.core.index.total_events}}",
+  "cloud_disk_enabled": "{{steps.2.enabled}}",
+  "local_disk_state": "{{steps.2.local_volume.state}}",
+  "brain": "{{steps.3.brain}}",
+  "reply_source": "{{steps.3.reply_source}}"
+ },
+ "eval": {"reference": "عقد /health (R-729) — قيم حية متغيرة ⇒ معايير بنيوية لا مساواة حرفية", "cases": [
+  {"inputs": {"component": "memory_core"}, "criteria": [
+   {"id": "shape", "type": "has_keys", "value": ["overall", "version", "uptime_seconds", "component", "component_detail", "components", "ledger_events", "cloud_disk_enabled", "local_disk_state", "brain", "reply_source"]},
+   {"id": "overall", "type": "regex", "path": "overall", "value": "^(healthy|degraded)$"},
+   {"id": "focus", "type": "equals", "path": "component", "value": "memory_core"},
+   {"id": "detail", "type": "has_keys", "path": "component_detail", "value": ["status"]},
+   {"id": "uptime", "type": "is_type", "path": "uptime_seconds", "value": "number"},
+   {"id": "events", "type": "is_type", "path": "ledger_events", "value": "int"},
+   {"id": "disk", "type": "is_type", "path": "cloud_disk_enabled", "value": "bool"}
+  ]},
+  {"inputs": {"component": "nexus_engine"}, "criteria": [
+   {"id": "focus", "type": "equals", "path": "component", "value": "nexus_engine"},
+   {"id": "detail", "type": "non_empty", "path": "component_detail.status"},
+   {"id": "comps", "type": "has_keys", "path": "components", "value": ["memory_core", "nexus_engine"]}
+  ]}
+ ]}
+}
