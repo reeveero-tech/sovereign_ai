@@ -1,0 +1,150 @@
+{
+ "version": 1,
+ "layer": "R-849 skills durability",
+ "note": "التوقعات مكتوبة من القاعدة قبل أول تشغيل — مجمّدة ببصمة (suites.py)",
+ "cases": [
+  {
+   "id": "SD01",
+   "rule": "مهارة معتمدة تنجو كاملة من محو القرص المؤقت (إعادة نشر) — العودة من المخزن الدائم عند الإقلاع",
+   "scenario": "wipe_survives",
+   "expect": {
+    "survived": true,
+    "active": "1.0.0"
+   }
+  },
+  {
+   "id": "SD02",
+   "rule": "أول تحول (propose) يظهر في البعيد فورًا — الكتابة النافذة تبدأ من البداية",
+   "scenario": "write_through_propose",
+   "expect": {
+    "pushed": true,
+    "state": "proposed"
+   }
+  },
+  {
+   "id": "SD03",
+   "rule": "نهاية الدورة: البعيد state=active وactive مدفوع — طازج دائمًا",
+   "scenario": "full_cycle_write_through",
+   "expect": {
+    "state": "active",
+    "active": "1.0.0",
+    "versions": 1
+   }
+  },
+  {
+   "id": "SD04",
+   "rule": "حزمة بعيدة مزوّرة (بصمة لا تطابق المحتوى) تُرفض ولا تُكتب محليًا — مع أثر",
+   "scenario": "tampered_remote_refused",
+   "expect": {
+    "refused": true,
+    "not_written": false,
+    "audited": true
+   }
+  },
+  {
+   "id": "SD05",
+   "rule": "حزمة محلية تالفة تُعاد سليمة من البعيد — إصلاح ذاتي بأثر",
+   "scenario": "tampered_local_repaired",
+   "expect": {
+    "repaired": true,
+    "restored_tool": "math.add"
+   }
+  },
+  {
+   "id": "SD06",
+   "rule": "المحلي السليم لا يُستبدل بالبعيد — الاستعادة للغائب والتالف فقط",
+   "scenario": "valid_local_kept",
+   "expect": {
+    "restored": 0,
+    "repaired": 0,
+    "refused": 0
+   }
+  },
+  {
+   "id": "SD07",
+   "rule": "المخزن معطوب: الدورة كاملة محليًا والحالة تعلن الخطأ — لا انهيار ولا وهم دوام",
+   "scenario": "store_down_local_recovery",
+   "expect": {
+    "approved": true,
+    "honest": true,
+    "enabled": true
+   }
+  },
+  {
+   "id": "SD08",
+   "rule": "سر في الحمولة: رفض مغلق للدفع، لا يغادر القرص، والمهارة تعمل محليًا",
+   "scenario": "secret_blocked",
+   "expect": {
+    "nothing_remote": true,
+    "local_works": true,
+    "declared": true
+   }
+  },
+  {
+   "id": "SD09",
+   "rule": "التراجع يحدّث active البعيد — لا رجوع للقديم بعد إعادة نشر",
+   "scenario": "rollback_syncs",
+   "expect": {
+    "remote_active": "1.0.0",
+    "local_active": "1.0.0"
+   }
+  },
+  {
+   "id": "SD10",
+   "rule": "نشر جديد بقرص نظيف: الإصداران يعودان والفعال محفوظ",
+   "scenario": "two_versions_fresh_boot",
+   "expect": {
+    "restored": 3,
+    "files": true,
+    "active": "2.0.0"
+   }
+  },
+  {
+   "id": "SD11",
+   "rule": "active بعيد مختلف والمحلي سليم: المحلي يبقى ثم يُدفع بـ sync",
+   "scenario": "conflict_local_wins",
+   "expect": {
+    "local": "2.0.0",
+    "pushed": "2.0.0"
+   }
+  },
+  {
+   "id": "SD12",
+   "rule": "الصدق: الحالة تعلن اسم المخزن، وبلا دوام تُعلن None",
+   "scenario": "status_declares",
+   "expect": {
+    "backend": "fake-memory",
+    "enabled": true,
+    "plain_honest": false
+   }
+  },
+  {
+   "id": "SD13",
+   "rule": "البعيد مُمحى وsync يعيد بناءه من المحلي بتقرير موثق",
+   "scenario": "sync_pushes_missing",
+   "expect": {
+    "pushed": 2,
+    "restored": true,
+    "recovered": true
+   }
+  },
+  {
+   "id": "SD14",
+   "rule": "إقلاع كامل بقرص نظيف: المهارة مسجلة وتنفذ النتيجة الصحيحة",
+   "scenario": "boot_loads_and_runs",
+   "expect": {
+    "loaded": true,
+    "result": 10
+   }
+  },
+  {
+   "id": "SD15",
+   "rule": "حزمة بعيدة بلا بصمة صالحة تُرفض حتى لو غابت محليًا",
+   "scenario": "hashless_remote_refused",
+   "expect": {
+    "refused": true,
+    "not_restored": false
+   }
+  }
+ ]
+}

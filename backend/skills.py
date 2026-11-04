@@ -26,9 +26,14 @@ R-843 (٦.٥.٢): التقييم المستقل شرط الاعتماد —
              independently_evaluated، وإلا failed_independent_eval.
   approve   → يشترط independently_evaluated + بصمة المحتوى = المقيمة مستقلًا.
 
+R-849 (الطبقة ٨ — المهارات الحقيقية): الدوام — كتابة نافذة للمخزن الدائم
+(skills_durable) فوق كل تحول في الحزمة أو active، واستعادة عند الإقلاع بفحص
+بصمة المحتوى (البعيد المزوّر يُرفض، والمحلي التالف يُعاد من البعيد)،
+وغياب المخزن = إعلان صادق synced=false لا انهيار ولا وهم دوام.
+
 حد صادق (قبل R-843): «التقييم» كان مقارنة بحالات مرجعية في الحزمة نفسها (يكتبها المؤلف)؛
 المقارنة بمرجع خارجي مستقل (٣.٤/R-746) تتطلب العقل الحي. والدوام عبر إعادة
-النشر على Fly يتطلب ١.٤.
+النشر صار حقيقيًا في R-849 (كان الحد الصادق «يتطلب ١.٤» — أُغلق).
 """
 
 from __future__ import annotations
@@ -133,10 +138,39 @@ def _audit(op: str, payload: Dict[str, Any]) -> None:
 
 
 class SkillLibrary:
-    def __init__(self, root, registry, *, max_steps: int = 16):
+    def __init__(self, root, registry, *, max_steps: int = 16, durable=None):
         self.root = Path(root)
         self.registry = registry
         self.max_steps = max_steps
+        # R-849: طبقة الدوام — durable=False يعطل صراحة (اختبارات بلا دوام)،
+        # None = تلقائي من البيئة (make_store — بلا مخزن مضبوط ⇒ بلا دوام معلن)
+        self.durable = None
+        if durable is not False:
+            try:
+                from skills_durable import SkillsDurable
+                if isinstance(durable, SkillsDurable):
+                    self.durable = durable
+                else:
+                    from skills_durable import get_durable
+                    self.durable = get_durable(
+                        self.root, durable if durable is not None else None,
+                        audit=self._durable_audit)
+            except ImportError:  # TOLERATED: نمط الاستيراد المزدوج القائم
+                self.durable = None
+
+    def _durable_audit(self, op: str, payload: Dict[str, Any]) -> None:
+        _audit(op, payload)
+
+    def _push_durable_pkg(self, name: str, version: str,
+                          pkg: Dict[str, Any]) -> None:
+        if self.durable is not None:
+            self.durable.push_pkg(name, str(version), pkg)
+
+    def _push_durable_active(self, name: str) -> None:
+        if self.durable is not None:
+            act = self._active(name)
+            if act.get("active"):
+                self.durable.push_active(name, act)
 
     # ------------------------------------------------------------ تخزين
     def _write(self, path: Path, data: Dict[str, Any]) -> None:
@@ -206,6 +240,7 @@ class SkillLibrary:
         pkg = {"manifest": manifest, "content_hash": h, "state": "proposed",
                "proposed_at": time.time(), "proposed_by": actor, "eval": None}
         self._write(p, pkg)
+        self._push_durable_pkg(name, ver, pkg)      # R-849: كتابة نافذة
         return {"skill": name, "version": ver, "state": "proposed", "content_hash": h}
 
     def evaluate(self, name: str, version: str) -> Dict[str, Any]:
@@ -229,6 +264,7 @@ class SkillLibrary:
                                       "reference": m["eval"].get("reference"),
                                       "at": time.time()})
         self._write(self._pkg_path(name, version), pkg)
+        self._push_durable_pkg(name, version, pkg)  # R-849: كتابة نافذة
         return {"skill": name, "version": version, "state": state, "passed": passed,
                 "total": len(results), "results": results}
 
@@ -297,6 +333,7 @@ class SkillLibrary:
             "judge_independent": record["judge"]["independent"]})
         pkg.update(state=state, independent_eval=record)
         self._write(self._pkg_path(name, version), pkg)
+        self._push_durable_pkg(name, version, pkg)  # R-849: كتابة نافذة
         return {"skill": name, "version": version, "state": state, "passed": passed,
                 "total": len(results), "results": results, "judge": record["judge"]}
 
@@ -318,6 +355,8 @@ class SkillLibrary:
         self._write(self.root / name / "active.json", act)
         pkg.update(state="active", approved_by=actor, approved_at=time.time())
         self._write(self._pkg_path(name, version), pkg)
+        self._push_durable_pkg(name, version, pkg)  # R-849: كتابة نافذة
+        self._push_durable_active(name)             # R-849: active يدوم أيضًا
         tool = self._install_tool(pkg["manifest"])
         return {"skill": name, "active": version, "tool": tool}
 
@@ -334,12 +373,26 @@ class SkillLibrary:
         act["history"].pop()
         act["active"] = prev
         self._write(self.root / name / "active.json", act)
+        self._push_durable_active(name)             # R-849: التراجع يدوم أيضًا
         tool = self._install_tool(pkg["manifest"])
         return {"skill": name, "active": prev, "tool": tool}
 
+    def sync(self) -> Dict[str, Any]:
+        """R-849: استعادة من المخزن الدائم ثم دفع كل غائب — تقرير موثق."""
+        if self.durable is None:
+            return {"backend": None, "error": "no_durable",
+                    "note": "لا طبقة دوام مضبوطة (durable=False أو بلا مخزن)"}
+        return self.durable.sync()
+
     def load_active(self) -> List[str]:
-        """عند الإقلاع: تسجيل المهارات المفعلة من القرص — بصمة تُفحص، لا إعادة تعلم."""
+        """عند الإقلاع: استعادة R-849 من المخزن الدائم إن وجد، ثم التسجيل
+        من القرص — بصمة تُفحص، لا إعادة تعلم."""
         loaded = []
+        if self.durable is not None:
+            try:
+                self.durable.restore()
+            except Exception:  # TOLERATED (R-849): الاستعادة لا تكسر الإقلاع — فشلها معلن في durable.status
+                pass
         if not self.root.exists():
             return loaded
         for d in sorted(p for p in self.root.iterdir() if p.is_dir()):
@@ -382,7 +435,8 @@ class SkillLibrary:
                        "note": "متاحة ومُستخدمة في مهارة مفعلة" if t["name"] in learned_tools
                        else "متاحة غير مُتعلمة (اكتشاف ≠ اكتساب — ٤.٣)"}
                       for t in self.registry.list_tools() if t["name"].startswith("mcp.")]
-        return {"skills": skills, "discovered": discovered}
+        return {"skills": skills, "discovered": discovered,
+                "durable": None if self.durable is None else self.durable.status()}
 
 
 _LIB: Optional[SkillLibrary] = None
