@@ -198,6 +198,29 @@ def _run_eval(ctx: JobContext) -> Outcome:
                    None if rep["pass"] else "مجموعة تحت أرضيتها أو بصمتها تغيرت")
 
 
+# ===================================================================== النسخ (R-847)
+_BACKUP_SCHEMA = {
+    "type": "object", "additionalProperties": False,
+    "properties": {"kind": {"type": "string", "enum": ["manual", "scheduled"]}},
+}
+
+
+def _run_backup(ctx: JobContext) -> Outcome:
+    try:
+        from backup import service as bsvc
+        from backup.snapshot import BackupError
+    except ImportError:  # TOLERATED: نمط الاستيراد المزدوج القائم
+        from backend.backup import service as bsvc
+        from backend.backup.snapshot import BackupError
+    if ctx.cancel_requested():
+        return Outcome("cancelled", error="أُلغيت قبل البدء")
+    try:
+        res = bsvc.run_job(ctx.job["payload"], ctx.job.get("actor") or "queue")
+    except BackupError as exc:  # الفشل سُجل وأُشعر داخل الخدمة (backup.failed)
+        return Outcome("failed", {"reason": exc.reason}, f"فشل النسخ: {exc.reason}")
+    return Outcome("succeeded", res)
+
+
 # ===================================================================== السجل
 _TRANSIENT = (TimeoutError, ConnectionError)
 
@@ -225,6 +248,16 @@ KINDS: Dict[str, JobKind] = {k.name: k for k in (
         risk="low", risk_reason="قراءة فقط في بيئة معزولة بشبكة مزيفة",
         payload_schema=_EVAL_SCHEMA, timeout_s=lambda p: 900.0, max_attempts=1,
         retryable=(), handler=_run_eval),
+    JobKind(
+        name="backup.create",
+        description="نسخة احتياطية متسقة لمجلد البيانات (SQLite عبر واجهة backup، وjsonl"
+                    " حتى آخر سطر كامل)، مشفرة عند ضبط المفتاح، ومتحقق منها بقراءة راجعة،"
+                    " ثم رفع خارجي مشفر إن ضُبطت وجهة (R-847)",
+        risk="medium",
+        risk_reason="يقرأ كل الحالة (بما فيها المفاتيح والخزنة) ويكتب أرشيفًا محليًا؛"
+                    " الرفع الخارجي مشفر فقط ويُرفض صريحًا بلا مفتاح؛ لا يعدّل الحالة الحية",
+        payload_schema=_BACKUP_SCHEMA, timeout_s=lambda p: 1800.0, max_attempts=1,
+        retryable=(), handler=_run_backup),
 )}
 
 

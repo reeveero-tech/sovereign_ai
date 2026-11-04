@@ -148,3 +148,9 @@
 - المقاييس لعملية واحدة. تعدد العمليات يحتاج جامعًا خارجيًا يجمع كل نسخة.
 - لا لوحة عرض مدمجة. `/observability/summary` لقطة JSON، والصيغة النصية جاهزة لأي جامع Prometheus.
 - فحص القرص يقيس مجلد البيانات. لا يقيس الذاكرة ولا وحدة المعالجة.
+
+## 11) R-847 — فحوص النسخ الاحتياطي ومقاييسه
+
+- فحوص جاهزية جديدة في `live_checks`: `backup.freshness` و`backup.offsite` و`backup.restore`. وأي استعادة فاشلة خلال 24س تجعل الجاهزية failing.
+- مقاييس: `backup_last_success_timestamp`، `backup_archives{kind}`، `backup_bytes`، `backup_offsite_configured`، `backup_restore_pending`.
+- التفاصيل docs/BACKUP.md (D-062).

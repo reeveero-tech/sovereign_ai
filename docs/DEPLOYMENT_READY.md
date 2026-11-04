@@ -67,6 +67,14 @@ fly status
 - Docker Compose: `scripts/docker-compose.supervisor.yml`.
 - الحارس لا يملك منفذًا — يراقب التطبيق عبر HTTP فقط.
 
+## ٤-ب) النسخ الاحتياطي (R-847 — D-062)
+
+أسرار تُضبط في Fly/Render فقط، ولا تُلصق في المحادثة أو المستودع:
+- `SOVEREIGN_BACKUP_KEY` (≥ 32 حرفًا عشوائيًا) — **احفظ نسخة منه خارج الخادم**؛ فقدانه يفقد النسخ المشفرة.
+- وجهة خارجية: `SOVEREIGN_BACKUP_SUPABASE_URL` + `SOVEREIGN_BACKUP_SUPABASE_KEY` (service role) + `SOVEREIGN_BACKUP_SUPABASE_BUCKET` (حاوية خاصة)، أو `SOVEREIGN_BACKUP_MIRROR_DIR`.
+- بدونها: النسخ على الحجم نفسه فقط، تحمي من التلف لا من فقدان الحجم.
+- بعد النشر: `GET /backups` يجب أن يُظهر نسخة خلال `SOVEREIGN_BACKUP_INTERVAL_S`، و`/observability/health` يجب أن يُظهر `backup.*` ok.
+
 ## ٥) تحقق ما بعد النشر
 
 - [ ] `fly checks status` — كل الفحوص خضراء (/health).

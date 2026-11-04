@@ -47,12 +47,28 @@ start_supervisor() {
   fi
 }
 
+apply_restore() {
+  # R-847 (D-062): استعادة مجهزة تُطبق هنا قبل التطبيق والحارس (لا اتصال SQLite
+  # مفتوح). الفشل يتراجع داخليًا إلى نسخة ما قبل الاستعادة ويُسجل ويُشعر؛ والإقلاع
+  # يكمل في كل الأحوال حتى يبقى المالك قادرًا على الوصول (بلا set -e هنا).
+  [ -f "${DATA_DIR}/.restore/PENDING.json" ] || return 0
+  R_CMD="cd '${APP_ROOT}/backend' && python3 -m backup apply-pending"
+  if [ "$(id -u)" = "0" ]; then
+    setpriv --reuid="$APP_UID" --regid="$APP_UID" --clear-groups -- \
+      sh -c "$R_CMD" || echo "R-847: تطبيق الاستعادة لم ينجح — انظر .restore/LAST.json" >&2
+  else
+    sh -c "$R_CMD" || echo "R-847: تطبيق الاستعادة لم ينجح — انظر .restore/LAST.json" >&2
+  fi
+}
+
 if [ "$(id -u)" = "0" ]; then
   mkdir -p "$DATA_DIR"
   chown -R "$APP_UID:$APP_UID" "$DATA_DIR"
   chmod 0750 "$DATA_DIR"
+  apply_restore
   start_supervisor
   exec setpriv --reuid="$APP_UID" --regid="$APP_UID" --clear-groups -- "$@"
 fi
+apply_restore
 start_supervisor
 exec "$@"

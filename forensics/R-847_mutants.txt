@@ -1,0 +1,30 @@
+M01 backup/snapshot.py: فشل=['B01'] متوقع=['B01'] ⇒ قُتل
+M02 backup/snapshot.py: فشل=['B02'] متوقع=['B02'] ⇒ قُتل
+M03 backup/snapshot.py: فشل=['B02', 'B03', 'B04', 'B05', 'B07', 'B08', 'B09', 'B10', 'B11', 'B12', 'B13', 'B14', 'B15', 'B16', 'B17', 'B18', 'B19', 'B20', 'B21', 'B23'] متوقع=['B04'] ⇒ قُتل
+M04 backup/snapshot.py: فشل=['B01', 'B04'] متوقع=['B01'] ⇒ قُتل
+M05 backup/snapshot.py: فشل=['B04'] متوقع=['B04'] ⇒ قُتل
+M06 backup/snapshot.py: فشل=['B22'] متوقع=['B22'] ⇒ قُتل
+M07 backup/archive.py: فشل=['B06'] متوقع=['B06'] ⇒ قُتل
+M08 backup/archive.py: فشل=['B06'] متوقع=['B06'] ⇒ قُتل
+M09 backup/archive.py: فشل=['B07'] متوقع=['B07'] ⇒ قُتل
+M10 backup/archive.py: فشل=[] متوقع=[] ⇒ نجا
+M11 backup/offsite.py: فشل=['B08'] متوقع=['B08'] ⇒ قُتل
+M12 backup/offsite.py: فشل=['B09'] متوقع=['B09'] ⇒ قُتل
+M13 backup/offsite.py: فشل=['B10'] متوقع=['B10'] ⇒ قُتل
+M14 backup/offsite.py: فشل=['B11'] متوقع=['B11'] ⇒ قُتل
+M15 backup/catalog.py: فشل=['B12'] متوقع=['B12'] ⇒ قُتل
+M16 backup/catalog.py: فشل=['B23'] متوقع=['B23'] ⇒ قُتل
+M17 backup/restore.py: فشل=['B13'] متوقع=['B13'] ⇒ قُتل
+M18 backup/restore.py: فشل=['B13'] متوقع=['B13'] ⇒ قُتل
+M19 backup/restore.py: فشل=['B14', 'B15', 'B16'] متوقع=['B15'] ⇒ قُتل
+M20 backup/restore.py: فشل=['B14'] متوقع=['B14'] ⇒ قُتل
+M21 backup/restore.py: فشل=['B17', 'B19'] متوقع=['B17', 'B19'] ⇒ قُتل
+M22 backup/restore.py: فشل=['B16'] متوقع=['B16'] ⇒ قُتل
+M23 backup/service.py: فشل=['B17', 'B18'] متوقع=['B17', 'B18', 'B19'] ⇒ قُتل (غير المتوقع)
+M24 backup/service.py: فشل=['B19'] متوقع=['B19'] ⇒ قُتل
+M25 backup/service.py: فشل=['B19'] متوقع=['B19'] ⇒ قُتل
+M26 backup/service.py: فشل=['B22'] متوقع=['B22'] ⇒ قُتل
+M27 backup/service.py: فشل=['B07'] متوقع=['B07'] ⇒ قُتل
+M28 backup/api_routes.py: فشل=['B20'] متوقع=['B20'] ⇒ قُتل
+M29 backup/service.py: فشل=['B09'] متوقع=['B09'] ⇒ قُتل
+M30 backup/service.py: فشل=[] متوقع=[] ⇒ نجا

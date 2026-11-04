@@ -85,6 +85,12 @@ def _observability(path: Path) -> Dict[str, Any]:
     return observability_reliability.run(cases)
 
 
+def _backup(path: Path) -> Dict[str, Any]:
+    from . import backup_reliability
+    cases = json.loads(path.read_text(encoding="utf-8"))["cases"]
+    return backup_reliability.run(cases)
+
+
 SUITES: List[Suite] = [
     Suite("planner.dev", "orchestrator/planner",
           "اختيار الأدوات — مجموعة التطوير (50 هدفًا، R-842)",
@@ -120,6 +126,14 @@ SUITES: List[Suite] = [
           _ROOT / "data" / "observability_cases.json",
           "75f26c103de7bb81a399d0fe75df5a40d86ab774c0ac7b917377bbae04b4f991",
           1.0, _observability),
+    Suite("backup.reliability", "backup",
+          "موثوقية النسخ والاستعادة: لقطة WAL متسقة، ذيل jsonl، بيان وبصمات، استثناءات،"
+          " كشف العبث وtar-slip، تشفير عند السكون، رفع خارجي مشفر بلا إعادة عمياء،"
+          " احتفاظ، استعادة بخطة وتأكيد ونسخة سابقة وتراجع واستئناف، جاهزية، طابور،"
+          " تعافٍ من كارثة، سقف وقفل (23 حالة، R-847)",
+          _ROOT / "data" / "backup_cases.json",
+          "68a8908385b3bd48625e066bb5b133ee8cce0d078599db291053967bc7cd851a",
+          1.0, _backup),
 ]
 
 

@@ -54,6 +54,11 @@ POST /notifications/test ──────────────────�
 | `approval.requested` | عالية | حلقة تنتظر موافقة |
 | `job.dead` | عالية | مهمة استُنفدت محاولاتها |
 | `eval.failed` | عالية | `evaluation.run` تحت الأرضية |
+| `backup.failed` | عالية | فشل إنشاء نسخة أو تحققها الراجع (R-847) |
+| `backup.offsite_failed` | عالية | فشل رفع نسخة إلى الوجهة الخارجية (R-847) |
+| `restore.staged` | عالية | استعادة مجهزة تنتظر إعادة التشغيل (R-847) |
+| `restore.applied` | عالية | طُبقت استعادة عند الإقلاع (R-847) |
+| `restore.failed` | حرجة | فشلت استعادة وحدث تراجع، أو فشل التراجع (R-847) |
 | `notify.test` | عالية | `POST /notifications/test` |
 | `clarification.needed` | متوسطة | الحلقة تحتاج توضيحًا |
 | `loop.failed` | متوسطة | فشلت حلقة |

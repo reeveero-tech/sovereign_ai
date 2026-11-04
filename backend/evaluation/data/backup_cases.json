@@ -1,0 +1,237 @@
+{
+  "version": 1,
+  "layer": "R-847 backup/restore",
+  "note": "التوقعات مكتوبة من القاعدة قبل أول تشغيل — مجمّدة ببصمة (suites.py)",
+  "cases": [
+    {
+      "id": "B01",
+      "rule": "نسخة قاعدة SQLite في وضع WAL باتصال مفتوح تحوي كل الصفوف الملتزمة (لا نسخ للملف وحده)",
+      "scenario": "sqlite_wal_consistent",
+      "expect": {
+        "rows": 5,
+        "integrity": "ok",
+        "wal_in_archive": 0
+      }
+    },
+    {
+      "id": "B02",
+      "rule": "ملف jsonl بسطر أخير ممزق يُؤرشف حتى آخر سطر كامل فقط",
+      "scenario": "jsonl_torn_tail",
+      "expect": {
+        "lines": 3,
+        "all_parse": true,
+        "tail_dropped": true
+      }
+    },
+    {
+      "id": "B03",
+      "rule": "كل ملف في الأرشيف يطابق بصمة sha256 وحجمه في البيان",
+      "scenario": "manifest_hashes",
+      "expect": {
+        "all_match": true,
+        "manifest_first": true,
+        "files_ok": true
+      }
+    },
+    {
+      "id": "B04",
+      "rule": "الاستثناءات: مجلد النسخ نفسه و.restore و-wal/-shm لا تُؤرشف، والرابط الرمزي يُسجَّل متخطى",
+      "scenario": "excludes",
+      "expect": {
+        "self_included": false,
+        "restore_dir_included": false,
+        "symlink_skipped": true
+      }
+    },
+    {
+      "id": "B05",
+      "rule": "تعديل بايت واحد في الأرشيف يُكشف: المشفر بفشل وسم GCM والصريح بعدم تطابق البصمة",
+      "scenario": "tamper_detected",
+      "expect": {
+        "plain_ok": false,
+        "encrypted_ok": false,
+        "untampered_ok": true
+      }
+    },
+    {
+      "id": "B06",
+      "rule": "أرشيف خبيث بعضو '..' أو مسار مطلق أو رابط رمزي يُرفض ولا يُكتب شيء خارج الهدف",
+      "scenario": "path_traversal_rejected",
+      "expect": {
+        "dotdot_rejected": true,
+        "absolute_rejected": true,
+        "symlink_rejected": true,
+        "outside_written": false
+      }
+    },
+    {
+      "id": "B07",
+      "rule": "التشفير عند السكون: لا نص صريح في الأرشيف، والمفتاح الخاطئ يفشل والصحيح ينجح، ولا يُخزن المفتاح",
+      "scenario": "encryption_at_rest",
+      "expect": {
+        "plaintext_found": false,
+        "wrong_key_ok": false,
+        "right_key_ok": true,
+        "key_in_sidecar": false
+      }
+    },
+    {
+      "id": "B08",
+      "rule": "الرفع الخارجي بلا مفتاح تشفير مرفوض (لا نسخ صريحة خارج الخادم)",
+      "scenario": "offsite_requires_encryption",
+      "expect": {
+        "uploaded": false,
+        "refused": true,
+        "remote_objects": 0
+      }
+    },
+    {
+      "id": "B09",
+      "rule": "401/403 من الوجهة الخارجية: محاولة واحدة بلا إعادة عمياء وإشعار عالٍ",
+      "scenario": "offsite_auth_no_blind_retry",
+      "expect": {
+        "attempts": 1,
+        "status": "auth",
+        "notified": true
+      }
+    },
+    {
+      "id": "B10",
+      "rule": "أخطاء عابرة 503 ثم نجاح: إعادة محدودة ثم رفع",
+      "scenario": "offsite_transient_retry",
+      "expect": {
+        "attempts": 3,
+        "uploaded": true
+      }
+    },
+    {
+      "id": "B11",
+      "rule": "رفع النسخة نفسها مرتين ينتج كائنًا واحدًا (تساوي القوة)",
+      "scenario": "offsite_idempotent",
+      "expect": {
+        "remote_objects": 1,
+        "second_status": "exists"
+      }
+    },
+    {
+      "id": "B12",
+      "rule": "الاحتفاظ: 6 نسخ مع KEEP=3 تبقي أحدث 3، ونسخ ما قبل الاستعادة لا تُحسب ولا تُحذف",
+      "scenario": "retention",
+      "expect": {
+        "kept": 3,
+        "newest_kept": true,
+        "pre_restore_kept": true
+      }
+    },
+    {
+      "id": "B13",
+      "rule": "الاستعادة بلا plan_hash صحيح أو بلا تأكيد 'RESTORE <id>' مرفوضة ولا يُجهَّز شيء",
+      "scenario": "restore_requires_plan_and_confirm",
+      "expect": {
+        "wrong_plan": "plan_mismatch",
+        "wrong_confirm": "confirm_mismatch",
+        "staged": false
+      }
+    },
+    {
+      "id": "B14",
+      "rule": "دورة استعادة كاملة: الملفات تعود مطابقة، والملف الزائد يُزاح لا يُحذف، وwal القديم يُزال",
+      "scenario": "restore_roundtrip",
+      "expect": {
+        "equal": true,
+        "extra_displaced": true,
+        "extra_in_place": false,
+        "state": "applied"
+      }
+    },
+    {
+      "id": "B15",
+      "rule": "قاعدة بـ-wal قديم أحدث من النسخة: بعد الاستعادة المحتوى يطابق النسخة لا الـWAL",
+      "scenario": "restore_stale_wal",
+      "expect": {
+        "rows": 1,
+        "value": "قديم"
+      }
+    },
+    {
+      "id": "B16",
+      "rule": "انهيار أثناء التطبيق بعد ملف واحد: التطبيق التالي يكمل ويصل إلى حالة مطابقة",
+      "scenario": "restore_crash_resume",
+      "expect": {
+        "first_state": "applying",
+        "final_state": "applied",
+        "equal": true
+      }
+    },
+    {
+      "id": "B17",
+      "rule": "عدم تطابق بصمة بعد التطبيق يتراجع إلى نسخة ما قبل الاستعادة ويُشعر حرجًا",
+      "scenario": "restore_verify_fail_rollback",
+      "expect": {
+        "state": "rolled_back",
+        "equal_pre": true,
+        "notified": "restore.failed"
+      }
+    },
+    {
+      "id": "B18",
+      "rule": "التجهيز للاستعادة يأخذ نسخة ما قبل الاستعادة أولًا وتكون قابلة للتحقق",
+      "scenario": "pre_restore_snapshot_taken",
+      "expect": {
+        "pre_restore_exists": true,
+        "kind": "pre_restore",
+        "verifies": true
+      }
+    },
+    {
+      "id": "B19",
+      "rule": "الصحة: نسخة أقدم من ضعف الفترة degraded، واستعادة فاشلة failing، والحديثة ok",
+      "scenario": "health_backup",
+      "expect": {
+        "fresh": "ok",
+        "stale": "degraded",
+        "restore_failed": "failing"
+      }
+    },
+    {
+      "id": "B20",
+      "rule": "نوع المهمة backup.create مسجل بوصف وخطر ومخطط، والواجهة ترفض بلا Idempotency-Key وتقبل به",
+      "scenario": "api_job_kind",
+      "expect": {
+        "kind_registered": true,
+        "no_key": 428,
+        "with_key": 202,
+        "no_owner": 401,
+        "backup_created": true
+      }
+    },
+    {
+      "id": "B21",
+      "rule": "تعافٍ من كارثة: مجلد بيانات فارغ، جلب من الخارج، تحقق، تجهيز، تطبيق ⇒ البيانات مطابقة",
+      "scenario": "disaster_recovery",
+      "expect": {
+        "fetched": true,
+        "equal": true
+      }
+    },
+    {
+      "id": "B22",
+      "rule": "تجاوز سقف الحجم يرفض النسخة بسبب ولا يترك أرشيفًا جزئيًا",
+      "scenario": "size_cap",
+      "expect": {
+        "refused": true,
+        "reason": "size_cap",
+        "leftovers": 0
+      }
+    },
+    {
+      "id": "B23",
+      "rule": "نسختان متزامنتان: واحدة تعمل والأخرى ترفض 'busy'",
+      "scenario": "concurrent_lock",
+      "expect": {
+        "created": 1,
+        "busy": 1
+      }
+    }
+  ]
+}

@@ -357,5 +357,7 @@ def test_app_wiring():
     from app import app
     with TestClient(app) as c:
         kinds_ = {k["kind"] for k in c.get("/queue/kinds").json()["kinds"]}
-        assert kinds_ == {"orchestrator.loop", "orchestrator.approval", "evaluation.run"}
+        # R-847 (D-062): أُضيف backup.create — النسخ الاحتياطي يمر بالطابور
+        assert kinds_ == {"orchestrator.loop", "orchestrator.approval", "evaluation.run",
+                          "backup.create"}
         assert c.post("/queue/jobs", json=EVAL).status_code == 401
