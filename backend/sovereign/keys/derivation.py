@@ -18,6 +18,7 @@ import hmac
 #   phoenix_ash      — دورة الفينيق: مفاتيح موت/رماد البيانات
 #   api_auth         — مصادقة API (المفتاح القياسي الجديد؛ الجذر يبقى مقبولًا
 #                     كبيان اعتماد تاريخي legacy — لا يُستخدم لتشفير/توقيع بيانات جديدة)
+#   scoped_tokens    — R-851: توقيع الرموز محدودة النطاق (sct1) — تسريبه لا يكشف api_auth
 PURPOSES = frozenset({
     "signing",
     "encryption",
@@ -25,6 +26,7 @@ PURPOSES = frozenset({
     "phoenix_seed",
     "phoenix_ash",
     "api_auth",
+    "scoped_tokens",   # R-851: توقيع الرموز محدودة النطاق (HMAC) — منفصل عن api_auth
 })
 
 _DERIVED_KEY_LEN = 32  # 256-bit

@@ -727,7 +727,7 @@ def _project_note(project_id: str) -> str:
 @app.get("/ws/settings")
 async def ws_settings(x_sovereign_key: Optional[str] = Header(None)):
     """R-800: كل ما يخص المشروع للوحة الإعدادات — بلا أي قيمة سرية (أسماء المتغيرات المضبوطة فقط)."""
-    if not x_sovereign_key or not verify_api_key(x_sovereign_key):
+    if not x_sovereign_key or not authorize(x_sovereign_key, "read"):
         raise HTTPException(status_code=401, detail="مفتاح المالك مطلوب (X-Sovereign-Key)")
 
     def build():
@@ -1903,7 +1903,7 @@ async def connectors_status():
 
 
 def _connector_owner_op(request: "ConnectorGrantRequest", op: str) -> Dict[str, Any]:
-    if not verify_api_key(request.api_key or ""):
+    if not authorize(request.api_key or "", "connectors"):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
                             detail="مفتاح API غير صحيح")
     import connectors
@@ -1933,7 +1933,7 @@ class SkillOwnerRequest(BaseModel):
 
 
 def _skill_owner_op(request: "SkillOwnerRequest", op: str) -> Dict[str, Any]:
-    if not verify_api_key(request.api_key or ""):
+    if not authorize(request.api_key or "", "skills.approve"):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
                             detail="مفتاح API غير صحيح")
     import skills
@@ -1978,7 +1978,7 @@ class SkillCatalogProposeRequest(BaseModel):
 @app.post("/skills/catalog/propose")
 async def skills_catalog_propose(request: SkillCatalogProposeRequest):
     """R-850: اقتراح مهارة من الكتالوج + تقييم مؤلفها — التفعيل يبقى للمالك."""
-    if not verify_api_key(request.api_key or ""):
+    if not authorize(request.api_key or "", "skills"):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
                             detail="مفتاح API غير صحيح")
     import skills
@@ -1998,7 +1998,7 @@ class SkillsSyncRequest(BaseModel):
 @app.post("/skills/sync")
 async def skills_sync(request: SkillsSyncRequest):
     """R-849: مزامنة المهارات مع المخزن الدائم — استعادة ثم دفع، بتقرير موثق."""
-    if not verify_api_key(request.api_key or ""):
+    if not authorize(request.api_key or "", "skills"):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
                             detail="مفتاح API غير صحيح")
     import skills
@@ -2018,7 +2018,7 @@ class SkillIndependentEvalRequest(BaseModel):
 @app.post("/skills/evaluate_independent")
 async def skills_evaluate_independent(request: SkillIndependentEvalRequest):
     """R-843 (٦.٥.٢): تقييم مستقل بحالات المالك لا المؤلف — شرط الاعتماد."""
-    if not verify_api_key(request.api_key or ""):
+    if not authorize(request.api_key or "", "skills"):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
                             detail="مفتاح API غير صحيح")
     import skills
@@ -2233,7 +2233,7 @@ def _cloud_brain_status():
 @app.get("/brain/models")
 def brain_models(x_sovereign_key: Optional[str] = Header(None)):
     """R-810 (البند ٢): النماذج المتاحة من العقل المُعد فعليًا — اكتشاف حي (المالك فقط)."""
-    if not x_sovereign_key or not verify_api_key(x_sovereign_key):
+    if not x_sovereign_key or not authorize(x_sovereign_key, "read"):
         raise HTTPException(status_code=401, detail="مفتاح المالك مطلوب (X-Sovereign-Key)")
     import ollama_client as _brain_client
 
@@ -2247,7 +2247,7 @@ def brain_settings_get(x_sovereign_key: Optional[str] = Header(None)):
     api_key لا يُعاد أبدًا — منطقية «مضبوط/غير مضبوط» فقط (نمط لا-سر، R-614).
     المصدر يُعلن لكل حقل: runtime (طبقة التشغيل الحية) أو env (إعداد النشر).
     """
-    if not x_sovereign_key or not verify_api_key(x_sovereign_key):
+    if not x_sovereign_key or not authorize(x_sovereign_key, "read"):
         raise HTTPException(status_code=401, detail="مفتاح المالك مطلوب (X-Sovereign-Key)")
     import config as _config
 
@@ -2279,7 +2279,7 @@ async def brain_settings_put(request: Request, x_sovereign_key: Optional[str] = 
     التحقق الصارم قبل الكتابة: البروتوكول أحد اثنين، والعنوان http(s) صالح،
     والنموذج نص غير فارغ — لا تمرير قيمة مشوهة تعطّل العقل الحي.
     """
-    if not x_sovereign_key or not verify_api_key(x_sovereign_key):
+    if not x_sovereign_key or not authorize(x_sovereign_key, "brain.write"):
         raise HTTPException(status_code=401, detail="مفتاح المالك مطلوب (X-Sovereign-Key)")
     try:
         body = await request.json()
@@ -2848,7 +2848,7 @@ async def tools_invoke(request: ToolInvokeRequest):
     """R-729 (البند ٣.١): استدعاء أداة مسجلة — أمر مالك (مفتاح API) وأثر
     إلزامي في السجل السيادي: كل استدعاء يترك حدث TOOL_INVOKED ببصمة
     النتيجة، أو يُرفض كاملًا (fail-closed بنمط R-635 — لا أثر = لا تنفيذ)."""
-    if not verify_api_key(request.api_key or ""):
+    if not authorize(request.api_key or "", "tools"):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="مفتاح API غير صحيح"
@@ -3758,7 +3758,7 @@ async def chat(message: ChatMessage, background_tasks: BackgroundTasks):
         # R-789 (أمر المالك: لا أجوبة مزروعة): العقل يفهم الرسالة ويختار الأدوات الحقيقية
         # بنفسه ويجيب من نتائجها؛ الجسر الحتمي والقوالب لا يُستعملان في هذا المسار.
         import chat_agent
-        owner = bool(message.api_key) and verify_api_key(message.api_key)
+        owner = bool(message.api_key) and authorize(message.api_key, "chat")
         # R-834: المتابعة المحلولة تصل الوكيل كما تصل الجسر والبحث العالمي —
         # لا يرى الوكيل «هل هو جاهز؟» بلا كيانه فيبحث عن «production ready»
         # عامًا (ثُبت حيًا في محادثة المستودع) — بل السؤال القائم بذاته.
@@ -3872,7 +3872,10 @@ def verify_api_key(api_key: str) -> bool:
     """التحقق من صحة مفتاح API للسيد
 
     ⚠️ SECURITY (جولة المجلس <1> — أمين 1.6): مقارنة ثابتة الزمن — لا تسريب توقيت.
-    R-697 (D-033): المفتاح القياسي مشتق (api_auth). الجذر legacy مقبول للقراءة فقط.
+    R-697 (D-033): المفتاح القياسي مشتق (api_auth). الجذر legacy مقبول أيضًا.
+    R-851 (تصويب وصف): الوصف السابق «الجذر مقبول للقراءة فقط» لم يطابق الكود —
+    الجذر يُقبل لكل العمليات كالمفتاح الرئيسي (توافق مع ما يستعمله المالك).
+    يُعلن ذلك في /auth/status. الصلاحيات المحدودة: ``authorize`` + رموز sct1.
     """
     if not api_key:
         return False
@@ -3884,6 +3887,97 @@ def verify_api_key(api_key: str) -> bool:
     ) or hmac.compare_digest(
         key_bytes, str(SOVEREIGN_API_KEY).encode("utf-8")  # LEGACY-ROOT-KEY (read-only)
     )
+
+
+def authorize(api_key: Any, scope: str) -> bool:
+    """R-851 (٦.٧.٢): المفتاح الرئيسي يمر بكل نطاق؛ الرمز المحدود يمر بنطاقه فقط.
+
+    العمليات الإدارية تبقى على ``verify_api_key`` مباشرة — لا نطاق يمنحها.
+    """
+    if verify_api_key(api_key or ""):
+        return True
+    if not isinstance(api_key, str) or not api_key.startswith("sct1."):
+        return False
+    import scoped_tokens
+    try:
+        return bool(scoped_tokens.get_manager().check(api_key, scope)["ok"])
+    except Exception as exc:  # TOLERATED (R-851): فشل التحقق = رفض (fail-closed) لا خطأ خادم
+        logger.warning("R-851 scoped token check failed: %s", type(exc).__name__)
+        return False
+
+
+class TokenIssueRequest(BaseModel):
+    api_key: Optional[str] = Field(None, description="المفتاح الرئيسي — الرموز لا تصدر رموزًا")
+    scopes: List[str] = Field(..., min_length=1, max_length=16)
+    ttl_seconds: int = Field(..., description="العمر بالثواني 60..2592000")
+    label: str = Field("", max_length=64)
+
+
+class TokenRevokeRequest(BaseModel):
+    api_key: Optional[str] = Field(None, description="المفتاح الرئيسي")
+    jti: str = Field(..., min_length=1, max_length=64)
+
+
+def _master_or_401(key: Optional[str]) -> None:
+    if not verify_api_key(key or ""):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
+                            detail="المفتاح الرئيسي مطلوب — الرموز المحدودة لا تدير الرموز")
+
+
+@app.get("/auth/status")
+async def auth_status():
+    """R-851: النطاقات المتاحة والعمليات الإدارية وحالة الإبطال — بلا أسرار."""
+    import scoped_tokens
+    return scoped_tokens.get_manager().status()
+
+
+@app.post("/auth/tokens")
+async def auth_tokens_issue(request: TokenIssueRequest):
+    """R-851: إصدار رمز محدود النطاق والعمر — بالمفتاح الرئيسي وحده؛ يُعرض مرة واحدة."""
+    _master_or_401(request.api_key)
+    import scoped_tokens
+    try:
+        return scoped_tokens.get_manager().issue(request.scopes, request.ttl_seconds,
+                                                 request.label)
+    except scoped_tokens.TokenError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except RuntimeError as exc:  # السجل لا يوقّع — لا أثر = لا رمز
+        raise HTTPException(status_code=503,
+                            detail=f"السجل السيادي لا يوقّع — مرفوض (fail-closed): {exc}")
+
+
+@app.get("/auth/tokens")
+async def auth_tokens_list(x_sovereign_key: Optional[str] = Header(None)):
+    """R-851: الرموز المصدرة (بيانات وصفية بلا أسرار) وحالتها."""
+    _master_or_401(x_sovereign_key)
+    import scoped_tokens
+    return {"tokens": scoped_tokens.get_manager().list()}
+
+
+@app.post("/auth/tokens/revoke")
+async def auth_tokens_revoke(request: TokenRevokeRequest):
+    """R-851: إبطال رمز فورًا — يدوم عبر إعادة النشر عبر المخزن الدائم."""
+    _master_or_401(request.api_key)
+    import scoped_tokens
+    try:
+        return scoped_tokens.get_manager().revoke(request.jti)
+    except scoped_tokens.TokenError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503,
+                            detail=f"السجل السيادي لا يوقّع — مرفوض (fail-closed): {exc}")
+
+
+@app.get("/auth/whoami")
+async def auth_whoami(x_sovereign_key: Optional[str] = Header(None)):
+    """R-851: ما يملكه حامل المفتاح/الرمز — بلا كشف سر."""
+    if verify_api_key(x_sovereign_key or ""):
+        return {"valid": True, "kind": "master", "scopes": "*"}
+    import scoped_tokens
+    res = scoped_tokens.get_manager().introspect(x_sovereign_key)
+    if not res["valid"]:
+        raise HTTPException(status_code=401, detail=f"غير صالح: {res['reason']}")
+    return {**res, "kind": "scoped"}
 
 
 @app.post("/sovereign/command", response_model=SovereignCommandResponse)
@@ -4232,7 +4326,7 @@ async def get_security_log(limit: int = Query(50, ge=1, le=500),
     ⚠️ SECURITY (جولة المجلس <1> — أمين 1.4/بصير BAS-S10/حكيم):
     سجل الأمان يكشف أوامر السيد — يتطلب مفتاح السيد (X-API-Key).
     """
-    if not verify_api_key(x_api_key):
+    if not authorize(x_api_key, "read"):
         raise HTTPException(status_code=401, detail="مفتاح السيد مطلوب لقراءة سجل الأمان")
     log_file = safety_guard.security_log_file
     if not log_file.exists():
@@ -4533,7 +4627,7 @@ async def run_orchestrator_cycle(input_data: Dict[str, Any] = None):
     مفيد للاختبار والتشخيص.
     """
     api_key = input_data.get("api_key") if input_data else None
-    if not api_key or not verify_api_key(api_key):
+    if not api_key or not authorize(api_key, "orchestrator"):
         raise HTTPException(status_code=401, detail="مفتاح API غير صحيح")
     orchestrator = app.state.orchestrator
     result = orchestrator.run_cycle(input_data or {})
@@ -4552,7 +4646,7 @@ async def run_orchestrator_cycle(input_data: Dict[str, Any] = None):
 @app.get("/orchestrator/modules")
 async def orchestrator_module_availability(x_api_key: str = Header(None, alias="X-API-Key")):
     """خريطة الوحدات المتاحة/المعطلة عند تحميل المنسق (R-817)."""
-    if not x_api_key or not verify_api_key(x_api_key):
+    if not x_api_key or not authorize(x_api_key, "read"):
         raise HTTPException(status_code=401, detail="مفتاح API غير صحيح")
     from orchestrator import get_module_availability
     availability = get_module_availability()
