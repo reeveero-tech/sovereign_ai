@@ -45,6 +45,8 @@ RULES: Tuple[Rule, ...] = (
          _r(r"\bgithub_pat_[A-Za-z0-9_]{8,}"), scan_min_len=50),
     Rule("render_api_key", "critical", "مفتاح Render API (rnd_)",
          _r(r"\brnd_[A-Za-z0-9]{8,}"), scan_min_len=24),
+    Rule("sovereign_scoped_token", "critical", "رمز محدود النطاق للمشروع (sct1.) — R-851",
+         _r(r"\bsct1\.[A-Za-z0-9_-]{16,}\.[A-Za-z0-9_-]{16,}"), scan_min_len=80),
     Rule("supabase_pat", "critical", "رمز إدارة Supabase (sbp_)",
          _r(r"\bsbp_[A-Za-z0-9]{8,}"), scan_min_len=40),
     Rule("supabase_secret_key", "critical", "مفتاح Supabase السري الجديد (sb_secret_)",

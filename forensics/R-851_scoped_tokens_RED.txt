@@ -1,0 +1,12 @@
+R-851 — RED (main 5665e6de، 2026-11-06) — بند ٦.٧.٢ «رموز محدودة النطاق»
+سكربت: فحص مواضع المصادقة في backend/app.py + استدعاء verify_api_key بمفتاح مشتق وجذر اختباريين
+
+RED-1 owner-auth sites using the single all-powerful key: 19
+RED-2 any scope parameter in verify_api_key: False
+RED-3 token issuance endpoint exists: False
+RED-4 same key that reads /ws/settings also authorizes /sovereign/reset & /tools/invoke: True
+RED-5 docstring says legacy root is read-only: True | root key accepted by verify_api_key (all ops): True
+RED-6 revocation of a leaked credential without rotating the root: impossible (no token store)
+
+الخلاصة: مفتاح واحد يمنح كل شيء في 19 موضعًا — من قراءة الإعدادات إلى إعادة الضبط وتنفيذ الأدوات؛
+لا نطاق ولا عمر ولا إبطال؛ ووصف verify_api_key يدعي أن الجذر للقراءة فقط بينما الكود يقبله لكل العمليات.

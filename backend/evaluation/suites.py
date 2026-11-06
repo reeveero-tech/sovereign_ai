@@ -109,6 +109,12 @@ def _real_skills(path: Path) -> Dict[str, Any]:
     return real_skills.run(cases)
 
 
+def _auth_tokens(path: Path) -> Dict[str, Any]:
+    from . import auth_tokens
+    cases = json.loads(path.read_text(encoding="utf-8"))["cases"]
+    return auth_tokens.run(cases)
+
+
 SUITES: List[Suite] = [
     Suite("planner.dev", "orchestrator/planner",
           "اختيار الأدوات — مجموعة التطوير (50 هدفًا، R-842)",
@@ -174,6 +180,13 @@ SUITES: List[Suite] = [
           _ROOT / "data" / "real_skills_cases.json",
           "bb15856045644baa8c6534ea266ecad33202937cda099ce1d4ea7f5cf5e794ab",
           1.0, _real_skills),
+    Suite("auth.scoped_tokens", "auth_tokens",
+          "رموز محدودة النطاق (٦.٧.٢): نطاق/عمر/إبطال دائم عبر إعادة النشر، كشف التلاعب"
+          " والمفتاح الأجنبي، الإدارة غير قابلة للتفويض، fail-closed حين تتعذر قائمة"
+          " الإبطال، السر لا يُخزن ولا يُسجل (20 حالة، R-851)",
+          _ROOT / "data" / "auth_tokens_cases.json",
+          "532bd6b480b6fe1a50d2446703d93c7c600cef289f92caf4bf960423e3f780af",
+          1.0, _auth_tokens),
 ]
 
 

@@ -1,0 +1,228 @@
+{
+ "version": 1,
+ "layer": "R-851 scoped tokens (٦.٧.٢)",
+ "note": "التوقعات مكتوبة من القاعدة قبل أول تشغيل — مجمّدة ببصمة (suites.py)",
+ "cases": [
+  {
+   "id": "AT01",
+   "rule": "رمز بنطاق read يمر في read، بصيغة sct1",
+   "scenario": "own_scope",
+   "expect": {
+    "ok": true,
+    "scopes": [
+     "read"
+    ],
+    "prefix": "sct1"
+   }
+  },
+  {
+   "id": "AT02",
+   "rule": "رمز read يُرفض في tools وskills.approve بسبب scope_denied",
+   "scenario": "other_scope",
+   "expect": {
+    "tools": "scope_denied",
+    "skills": "scope_denied"
+   }
+  },
+  {
+   "id": "AT03",
+   "rule": "الرمز يعمل قبل انتهائه ويُرفض عند لحظة الانتهاء",
+   "scenario": "expired",
+   "expect": {
+    "before": true,
+    "after": "expired"
+   }
+  },
+  {
+   "id": "AT04",
+   "rule": "الإبطال فوري؛ إبطال مكرر يُعلن already",
+   "scenario": "revoked",
+   "expect": {
+    "reason": "revoked",
+    "known": true,
+    "again": true
+   }
+  },
+  {
+   "id": "AT05",
+   "rule": "تعديل المطالبات (توسيع النطاقات) يكسر التوقيع",
+   "scenario": "tampered_claims",
+   "expect": {
+    "reason": "bad_signature"
+   }
+  },
+  {
+   "id": "AT06",
+   "rule": "رمز موقّع بمفتاح آخر مرفوض",
+   "scenario": "foreign_key",
+   "expect": {
+    "reason": "bad_signature"
+   }
+  },
+  {
+   "id": "AT07",
+   "rule": "العمليات الإدارية غير قابلة للتفويض: لا فحص ولا إصدار",
+   "scenario": "master_only",
+   "expect": {
+    "admin_check": "scope_not_delegable",
+    "reset_check": "scope_not_delegable",
+    "admin_issue": "rejected"
+   }
+  },
+  {
+   "id": "AT08",
+   "rule": "العمر 60..30 يومًا إلزامي (6 قيم خاطئة مرفوضة والحدان مقبولان)",
+   "scenario": "ttl_bounds",
+   "expect": {
+    "rejected": 6,
+    "edges_ok": [
+     true,
+     true
+    ]
+   }
+  },
+  {
+   "id": "AT09",
+   "rule": "نطاقات فارغة أو مجهولة مرفوضة",
+   "scenario": "empty_scopes",
+   "expect": {
+    "results": [
+     "rejected",
+     "rejected",
+     "rejected"
+    ]
+   }
+  },
+  {
+   "id": "AT10",
+   "rule": "المدخلات المشوهة ترفض بسبب صريح لا استثناء",
+   "scenario": "malformed",
+   "expect": {
+    "reasons": [
+     "not_a_token",
+     "malformed",
+     "not_a_token",
+     "not_a_token",
+     "bad_signature",
+     "not_a_token",
+     "not_a_token"
+    ]
+   }
+  },
+  {
+   "id": "AT11",
+   "rule": "الإبطال يدوم عبر إعادة النشر (قرص محلي جديد + المخزن الدائم)",
+   "scenario": "revocation_durable",
+   "expect": {
+    "durable": true,
+    "before_load": "revoked",
+    "loaded": true,
+    "after_load": "revoked"
+   }
+  },
+  {
+   "id": "AT12",
+   "rule": "مخزن مضبوط لم تُحمّل منه قائمة الإبطال ⇒ رفض كل الرموز، وإعادة محاولة كل 30 ثانية",
+   "scenario": "fail_closed",
+   "expect": {
+    "first_load": false,
+    "down": "revocations_not_loaded",
+    "within_30s": "revocations_not_loaded",
+    "recovered": true
+   }
+  },
+  {
+   "id": "AT13",
+   "rule": "سجل لا يوقّع ⇒ لا رمز ولا قيد",
+   "scenario": "audit_fail",
+   "expect": {
+    "raised": true,
+    "issued": 0
+   }
+  },
+  {
+   "id": "AT14",
+   "rule": "السر لا يُخزن محليًا ولا في المخزن ولا في السجل؛ jti فقط",
+   "scenario": "secret_not_stored",
+   "expect": {
+    "in_local": false,
+    "in_store": false,
+    "in_audit": false,
+    "jti_in_audit": true
+   }
+  },
+  {
+   "id": "AT15",
+   "rule": "كتالوج الأسرار يكشف الرمز ويخفيه",
+   "scenario": "secret_guard",
+   "expect": {
+    "detected": true,
+    "redacted": true
+   }
+  },
+  {
+   "id": "AT16",
+   "rule": "حالة الرموز: نشط/منتهٍ/مبطل",
+   "scenario": "list_states",
+   "expect": {
+    "tokens": {
+     "active": 1,
+     "expired": 1,
+     "revoked": 1
+    }
+   }
+  },
+  {
+   "id": "AT17",
+   "rule": "الاستعلام عن رمز يعيد نطاقاته بلا سر، ويعلن الإبطال",
+   "scenario": "introspect",
+   "expect": {
+    "valid": true,
+    "scopes": [
+     "read",
+     "skills"
+    ],
+    "after_revoke": "revoked"
+   }
+  },
+  {
+   "id": "AT18",
+   "rule": "بلا مخزن دائم: الإبطال يدوم على القرص المحلي عبر إعادة التشغيل",
+   "scenario": "local_restart",
+   "expect": {
+    "reason": "revoked",
+    "loaded": true
+   }
+  },
+  {
+   "id": "AT19",
+   "rule": "نطاق غير معلن في الفحص مرفوض scope_not_delegable",
+   "scenario": "unknown_scope_check",
+   "expect": {
+    "reason": "scope_not_delegable"
+   }
+  },
+  {
+   "id": "AT20",
+   "rule": "كتالوج النطاقات الثمانية والعمليات الإدارية الست وحدود العمر",
+   "scenario": "scope_catalog",
+   "expect": {
+    "scopes": [
+     "brain.write",
+     "chat",
+     "connectors",
+     "orchestrator",
+     "read",
+     "skills",
+     "skills.approve",
+     "tools"
+    ],
+    "master_only_count": 6,
+    "ttl": [
+     60,
+     2592000
+    ]
+   }
+  }
+ ]
+}
