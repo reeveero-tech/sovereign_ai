@@ -1,0 +1,20 @@
+R-853 (D-068) — الدليل الحي للبند ٦.٢.٤ على الإنتاج (https://sovereign-ai-esiq.onrender.com)
+النشر: dep-dbn9t6tg1s2s73fbpl0g (دمج c88b46d7، PR #56). المفتاح قُرئ داخل الذاكرة فقط ولم يُطبع.
+الخطة: skills.catalog → time.wait 30 → time.wait 30 → ledger.recent(limit={{steps.0.result.count}})
+القتل: POST /v1/services/srv-dbiea6bl550s73c0shb0/restart بعد 4 ث من الإنشاء (بعد نقطة تفتيش الخطوة 0)
+
+status {'boot': '9a9b398f75e6', 'active': [], 'scanner': {'state': 'scanning', 'resumed': [], 'since': '2026-11-07T03:46:38Z'}, 'auto_resume': True, 'lease_s': 60, 'heartbeat_s': 15, 'durable': {'backend': 'SupabaseDisk'}}
+unauth POST /tasks -> 401
+create 202 {'task_id': 'b1444cfff41146bc', 'started': True, 'boot': '9a9b398f75e6', 'status': 'pending'}
+pre-kill running steps 1 boots [{'boot': '9a9b398f75e6', 'at': '2026-11-07T03:46:49Z', 'from_step': 0}]
+restart -> 200 at +4s
+final status completed runs 2 after 175s
+boots [{"at": "2026-11-07T03:46:49Z", "boot": "9a9b398f75e6", "from_step": 0}, {"boot": "251b46bbfd86", "at": "2026-11-07T03:49:07Z", "from_step": 2}]
+steps [{"tool": "skills.catalog", "status": null, "boot": "9a9b398f75e6", "at": "2026-11-07T03:46:50Z"}, {"tool": "time.wait", "status": null, "boot": "9a9b398f75e6", "at": "2026-11-07T03:47:22Z"}, {"tool": "time.wait", "status": null, "boot": "251b46bbfd86", "at": "2026-11-07T03:49:38Z"}, {"tool": "ledger.recent", "status": null, "boot": "251b46bbfd86", "at": "2026-11-07T03:49:39Z"}]
+answer اكتملت 4 خطوات متسلسلة: skills.catalog → time.wait → time.wait → ledger.recent
+error None
+lease None
+intents_left n/a
+status-after {'boot': '251b46bbfd86', 'active': [], 'scanner': {'state': 'scanning', 'resumed': ['b1444cfff41146bc'], 'since': '2026-11-07T03:47:44Z'}, 'auto_resume': True, 'lease_s': 60, 'heartbeat_s': 15, 'durable': {'backend': 'SupabaseDisk'}}
+التفسير: الإقلاع الأول 9a9b398f75e6 نفّذ الخطوتين 0-1 ثم أُنهي بإعادة التشغيل؛ الإقلاع الجديد 251b46bbfd86 لم يجد إيجارًا حيًا (انتهى بعد 60 ث بلا نبض) فاستأنف ماسح الإقلاع المهمة من الخطوة 2 تلقائيًا بلا تدخل، وأكملها: runs=2، إقلاعان مميزان، الخطوات 0-1 على الإقلاع الأول و2-3 على الثاني، لا خطأ.
+حدود: intents غير مكشوفة في /tasks/{id} (n/a)؛ خلو النوايا مثبت في حالة SIGKILL بالحزمة tasks.resume. إعادة تشغيل Render تُبقي النسخة القديمة حتى تجهز الجديدة، فالقتل هنا إنهاء منصة لا SIGKILL.
