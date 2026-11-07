@@ -739,6 +739,12 @@ class SovereignCore:
         # R-769: فحص واحد في وقت واحد — المتصلون المتزامنون ينتظرون النتيجة المخزنة
         self._integrity_lock = threading.RLock()
         self._genesis_created = self._load_genesis_status()
+        # R-852 (٦.١.٤): أرشفة انقطعت بعد البيان وقبل إعادة كتابة السجل ⇒ تُستكمل
+        # فقط إن طابقت بايتات المقاطع رأس السجل حرفيًا (retention.recover_pending)
+        try:
+            self._retention().recover_pending(self)
+        except Exception as e:  # TOLERATED (R-852): الاستكمال اختياري؛ التحقق يحكم بصدق
+            logger.warning(f"R-852: تعذر فحص الأرشفة المعلقة: {type(e).__name__}")
         
         logger.info("✅ نواة الذاكرة السيادية جاهزة")
         logger.info(f"   - السجل: {self.log_file}")
@@ -1343,7 +1349,9 @@ class SovereignCore:
             logger.warning("السجل غير موجود")
             return IntegrityStatus.NOT_CHECKED
         
-        prev_hash = "GENESIS"
+        prev_hash = self._chain_origin()  # R-852: أصل السلسلة بعد الأرشفة
+        if prev_hash is None:
+            return IntegrityStatus.CORRUPTED
         event_count = 0
         
         with open(self.log_file, 'r', encoding='utf-8') as f:
@@ -1519,6 +1527,21 @@ class SovereignCore:
                 status = self._verify_walk(verbose, None)
             return status
 
+    @staticmethod
+    def _retention():
+        """R-852: وحدة الاحتفاظ (استيراد نسبي — يعمل بمساري backend.memory وmemory)."""
+        from . import retention
+        return retention
+
+    def _chain_origin(self) -> Optional[str]:
+        """R-852 (٦.١.٤): أصل السلسلة الحية — GENESIS بلا أرشيف، آخر تجزئة مؤرشفة
+        ببيان موقّع صالح، وNone لبيان/مقاطع عبث بها (المستدعي يعلن CORRUPTED)."""
+        try:
+            return self._retention().chain_origin(self)
+        except Exception as e:  # TOLERATED (R-852): تعذر قراءة الأرشيف = لا أصل موثوق (فشل مغلق)
+            logger.error(f"R-852: تعذر تحديد أصل السلسلة: {type(e).__name__}")
+            return None
+
     def _keyring_fingerprint(self) -> str:
         """R-768: بصمة المفاتيح التي يعتمد عليها التحقق (تغيّرها يُبطل نقطة الاستئناف)."""
         parts = [f"root:{self.signing_key is not None}"]
@@ -1552,6 +1575,9 @@ class SovereignCore:
                 return None  # اقتطاع → فحص كامل
             if st["keys"] != self._keyring_fingerprint():
                 return None
+            # R-852: نقطة استئناف بُنيت على أصل آخر (أرشفة/حذف بيان) لا تُستخدم
+            if st.get("origin", "GENESIS") != self._chain_origin():
+                return None
             if self._prefix_sha256(st["offset"]) != st["sha256"]:
                 return None  # تعديل في البادئة → فحص كامل
         except OSError:
@@ -1569,7 +1595,8 @@ class SovereignCore:
             self._integrity_prefix = {
                 "offset": offset, "sha256": self._prefix_sha256(offset), "prev_hash": prev_hash,
                 "count": count, "line_num": line_num, "status": status,
-                "keys": self._keyring_fingerprint()}
+                "keys": self._keyring_fingerprint(),
+                "origin": self._chain_origin() or "INVALID"}  # R-852: موقّعة ضمن الحمولة
         except OSError:
             self._integrity_prefix = None
             return
@@ -1700,7 +1727,13 @@ class SovereignCore:
             logger.warning("السجل غير موجود")
             return IntegrityStatus.NOT_CHECKED
         
-        prev_hash = resume["prev_hash"] if resume else "GENESIS"
+        # R-852 (٦.١.٤): السلسلة تبدأ من أصلها (GENESIS أو آخر حدث مؤرشف ببيان موقّع)
+        _origin = self._chain_origin()
+        if _origin is None:
+            logger.error("❌ R-852: بيان الأرشيف غير صالح (عبث/حذف/توقيع) — لا أصل موثوق للسلسلة")
+            self._integrity_prefix = None
+            return self._remember_integrity(IntegrityStatus.CORRUPTED)
+        prev_hash = resume["prev_hash"] if resume else _origin
         event_count = resume["count"] if resume else 0
         start_offset = resume["offset"] if resume else 0
         line_num = resume["line_num"] if resume else 0

@@ -1,0 +1,221 @@
+{
+ "suite": "ledger.retention",
+ "version": 1,
+ "cases": [
+  {
+   "id": "LR01",
+   "scenario": "archive_keeps_tail",
+   "rule": "ما يزيد عن keep_last يؤرشف بمقاطع حدها 8 والسجل الحي يبقى VERIFIED",
+   "expect": {
+    "ok": true,
+    "archived": 25,
+    "segments": 4,
+    "kept_live": 5,
+    "live_status": "verified"
+   }
+  },
+  {
+   "id": "LR02",
+   "scenario": "reboot_verifies",
+   "rule": "إقلاع جديد بعد الأرشفة يتحقق من أصل السلسلة المؤرشف لا من GENESIS",
+   "expect": {
+    "status": "verified",
+    "live_events": 6
+   }
+  },
+  {
+   "id": "LR03",
+   "scenario": "deep_verify",
+   "rule": "التحقق العميق يعيد حساب تجزئة وتوقيع كل حدث مؤرشف",
+   "expect": {
+    "ok": true,
+    "events_checked": 25
+   }
+  },
+  {
+   "id": "LR04",
+   "scenario": "second_archive_continues",
+   "rule": "أرشفة ثانية تتصل بالأولى: وصلة السلسلة وتسلسل البيان والفهارس المطلقة",
+   "expect": {
+    "ok": true,
+    "links": true,
+    "global_starts": true,
+    "archived_total": 37,
+    "status": "verified"
+   }
+  },
+  {
+   "id": "LR05",
+   "scenario": "manifest_deleted",
+   "rule": "حذف البيان مع بقاء المقاطع = لا أصل موثوق = CORRUPTED",
+   "expect": {
+    "status": "corrupted"
+   }
+  },
+  {
+   "id": "LR06",
+   "scenario": "manifest_edited",
+   "rule": "تعديل حقل في البيان يكسر توقيعه",
+   "expect": {
+    "status": "corrupted",
+    "error": [
+     "seg0_bad_signature"
+    ]
+   }
+  },
+  {
+   "id": "LR07",
+   "scenario": "manifest_foreign_key",
+   "rule": "سجل بيان موقع بمفتاح خارج KeyRing مرفوض",
+   "expect": {
+    "status": "corrupted",
+    "error": [
+     "seg3_bad_signature"
+    ]
+   }
+  },
+  {
+   "id": "LR08",
+   "scenario": "segment_tampered",
+   "rule": "تعديل بايت في مقطع مؤرشف يكشفه بصمة المقطع",
+   "expect": {
+    "status": "corrupted",
+    "error": [
+     "seg1_segment_tampered"
+    ]
+   }
+  },
+  {
+   "id": "LR09",
+   "scenario": "segment_deleted",
+   "rule": "حذف مقطع مؤرشف يكشف",
+   "expect": {
+    "status": "corrupted",
+    "error": [
+     "seg2_segment_missing"
+    ]
+   }
+  },
+  {
+   "id": "LR10",
+   "scenario": "live_head_tampered",
+   "rule": "حذف أول حدث حي بعد الأصل يكسر الوصلة",
+   "expect": {
+    "status": "corrupted"
+   }
+  },
+  {
+   "id": "LR11",
+   "scenario": "refuse_unverified",
+   "rule": "لا أرشفة لسجل حي ليس VERIFIED ولا أثر على القرص",
+   "expect": {
+    "refused": true,
+    "archive_created": false
+   }
+  },
+  {
+   "id": "LR12",
+   "scenario": "refuse_no_signing_key",
+   "rule": "بلا مفتاح توقيع للبيان رفض مغلق والسجل كما هو",
+   "expect": {
+    "refused": true,
+    "archive_created": false,
+    "live_events": 30
+   }
+  },
+  {
+   "id": "LR13",
+   "scenario": "keep_last_bounds",
+   "rule": "keep_last خارج 1..10000000 أو غير صحيح مرفوض، والخطة لا تغير شيئا",
+   "expect": {
+    "rejected": [
+     true,
+     true,
+     true,
+     true
+    ],
+    "would_archive": 20,
+    "dry_run_changed": false
+   }
+  },
+  {
+   "id": "LR14",
+   "scenario": "nothing_to_archive",
+   "rule": "keep_last أكبر من السجل: لا أرشيف ولا بيان ولا تغيير",
+   "expect": {
+    "archived": 0,
+    "manifest": false,
+    "live_events": 10
+   }
+  },
+  {
+   "id": "LR15",
+   "scenario": "pending_recovery",
+   "rule": "انقطاع بعد البيان وقبل إعادة كتابة السجل يستكمل عند الإقلاع بمطابقة حرفية",
+   "expect": {
+    "lines_after_crash": 30,
+    "live_after_boot": 5,
+    "status": "verified"
+   }
+  },
+  {
+   "id": "LR16",
+   "scenario": "anchor_indices_preserved",
+   "rule": "قارئ المراسي يرى الأرشيف ثم الحي فتبقى الفهارس المطلقة والأسطر كما هي",
+   "expect": {
+    "prefix_identical": true,
+    "count_after": 31,
+    "live_only": 6
+   }
+  },
+  {
+   "id": "LR17",
+   "scenario": "durable_mirror",
+   "rule": "المرآة الدائمة تستقبل كل مقطع وتتحقق، وعبث بايت فيها يكشف",
+   "expect": {
+    "pushed": 4,
+    "failed": 0,
+    "verified": true,
+    "tamper_detected": true,
+    "error": "seq1_segment_tampered"
+   }
+  },
+  {
+   "id": "LR18",
+   "scenario": "blobs_retained",
+   "rule": "حمولة الحدث المؤرشف تبقى مقروءة (الأرشفة لا تحذف blobs)",
+   "expect": {
+    "payload": {
+     "n": 0
+    }
+   }
+  },
+  {
+   "id": "LR19",
+   "scenario": "audit_event",
+   "rule": "كل أرشفة تترك حدث ledger.archived موقعا في السجل الحي",
+   "expect": {
+    "type": "ledger.archived",
+    "archived": 25,
+    "segments": 4,
+    "origin_match": true
+   }
+  },
+  {
+   "id": "LR20",
+   "scenario": "status_shape",
+   "rule": "الحالة: لا أرشيف = أصل GENESIS، وبعده المقاطع والعدد، والتشغيل التلقائي معطل صدقا",
+   "expect": {
+    "before": [
+     0,
+     "GENESIS"
+    ],
+    "after_segments": 4,
+    "after_ok": true,
+    "archived_events": 25,
+    "auto": false,
+    "live_events": 6
+   }
+  }
+ ]
+}

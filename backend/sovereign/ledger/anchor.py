@@ -141,10 +141,17 @@ class LedgerAnchor:
 
     def read_ledger_lines(self) -> List[str]:
         """يقرأ كل أسطر اليدجر (بدون معالجة — النص الخام)."""
+        # R-852 (٦.١.٤): فهارس المراسي مطلقة — بعد الأرشفة تسبق أسطرُ الأرشيف
+        # (بايتاتها كما هي) أسطرَ السجل الحي فيبقى كل نطاق وجذره كما وُقّع.
+        try:
+            from backend.memory.retention import iter_archived_lines
+        except ImportError:  # TOLERATED (R-852): نمط الاستيراد المزدوج القائم
+            from memory.retention import iter_archived_lines
+        archived = list(iter_archived_lines(self.ledger_path))
         if not self.ledger_path.exists():
-            return []
+            return archived
         with open(self.ledger_path, "r", encoding="utf-8") as f:
-            return [line.rstrip("\n") for line in f if line.strip()]
+            return archived + [line.rstrip("\n") for line in f if line.strip()]
 
     # ============================================================
     # إنشاء مرساة

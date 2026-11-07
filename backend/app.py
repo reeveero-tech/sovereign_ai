@@ -3150,6 +3150,20 @@ def _register_real_tools() -> None:
         outputs="window/count/events[]/by_type/newest/oldest/chain_linked/chain_links",
         handler=_ledger_recent,
     ))
+    def _ledger_retention():
+        import skills_durable
+        from memory import retention
+        from memory.core import get_core
+        return retention.status(get_core(), skills_durable.make_store())
+
+    registry.register(ToolSpec(
+        name="ledger.retention",
+        description="R-852: حالة احتفاظ السجل — الأحداث الحية والمقاطع المؤرشفة الموقعة "
+                    "وأصل السلسلة وصلاحية البيان (قراءة فقط؛ الأرشفة للمالك عبر API)",
+        inputs={},
+        outputs="live_events/archive{ok,segments,archived_events,origin,epoch,errors}/durable",
+        handler=_ledger_retention,
+    ))
     registry.register(ToolSpec(
         name="disk.status",
         description="حالة القرص السحابي Supabase (نفس منطق /disk/status) + القرص المحلي: "
@@ -3966,6 +3980,54 @@ async def auth_tokens_revoke(request: TokenRevokeRequest):
     except RuntimeError as exc:
         raise HTTPException(status_code=503,
                             detail=f"السجل السيادي لا يوقّع — مرفوض (fail-closed): {exc}")
+
+
+class RetentionArchiveRequest(BaseModel):
+    api_key: Optional[str] = Field(None, description="المفتاح الرئيسي — الأرشفة عملية إدارية")
+    keep_last: int = Field(..., ge=1, le=10_000_000, description="عدد الأحداث الباقية حية")
+    dry_run: bool = Field(False, description="خطة فقط بلا تغيير")
+
+
+def _retention_core():
+    from memory.core import get_core
+    from memory import retention
+    return get_core(), retention
+
+
+@app.get("/ledger/retention")
+def ledger_retention_status():
+    """R-852 (٦.١.٤): حالة الاحتفاظ — السجل الحي والأرشيف الموقّع وأصل السلسلة (تجزئات لا حمولة)."""
+    import skills_durable
+    core, retention = _retention_core()
+    return retention.status(core, skills_durable.make_store())
+
+
+@app.get("/ledger/retention/verify")
+def ledger_retention_verify(deep: bool = Query(False), x_sovereign_key: Optional[str] = Header(None)):
+    """R-852: تحقق كامل بعد الأرشفة (الأرشيف + السجل الحي من أصله)؛ ``deep`` يعيد
+    حساب تجزئة وتوقيع كل حدث مؤرشف، ومعه تحقق المرآة الدائمة. نطاق ``read``."""
+    if not authorize(x_sovereign_key, "read"):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="نطاق read مطلوب")
+    import skills_durable
+    core, retention = _retention_core()
+    out = retention.verify_integrity_full(core, deep=deep)
+    if deep:
+        out["durable"] = retention.verify_durable(core, skills_durable.make_store())
+    return out
+
+
+@app.post("/ledger/retention/archive")
+def ledger_retention_archive(request: RetentionArchiveRequest):
+    """R-852: أرشفة ما يزيد عن آخر ``keep_last`` حدثًا — المفتاح الرئيسي وحده؛
+    يرفض (409) سجلًا ليس VERIFIED أو أرشيفًا غير صالح أو غياب مفتاح توقيع."""
+    _master_or_401(request.api_key)
+    import skills_durable
+    core, retention = _retention_core()
+    try:
+        return retention.archive(core, request.keep_last, dry_run=request.dry_run,
+                                 store=skills_durable.make_store())
+    except retention.RetentionError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
 
 
 @app.get("/auth/whoami")
