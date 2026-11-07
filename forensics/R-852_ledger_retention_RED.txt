@@ -1,0 +1,21 @@
+R-852 — RED قبل التعديل (main 6f904fae) — البند ٦.١.٤ احتفاظ السجل
+السيناريو: نواة معزولة بمفتاح Ed25519، 30 حدثًا، ثم محاولة الاحتفاظ بآخر 10 فقط.
+
+1) before: verified lines 30
+2) no retention module: No module named 'backend.memory.retention'
+3) core has archive api: []
+4) naive prefix drop (10 kept) -> verify: corrupted (chain origin hardcoded GENESIS)
+5) content integrity: corrupted
+6) anchor reader sees 10 lines (global indices of 30 lost)
+
+الاستنتاج:
+- لا آلية احتفاظ إطلاقًا؛ السجل ينمو بلا حد.
+- أصل السلسلة مثبت على GENESIS في _verify_walk و verify_content_integrity، فأي اقتطاع = CORRUPTED.
+- قارئ المراسي (LedgerAnchor.read_ledger_lines) يقرأ السجل الحي فقط، فاقتطاع البادئة يزيح الفهارس المطلقة للمراسي.
+
+بعد الإصلاح (السيناريو نفسه عبر retention.archive):
+- archived 25, segments 4 (حد 8 للاختبار), kept_live 5, live_status verified.
+- إقلاع جديد: verified. التحقق العميق: 25 حدثًا مؤرشفًا أُعيد حساب تجزئتها وتوقيعها.
+- حذف البيان: corrupted. تعديل حقل في البيان: corrupted. تعديل مقطع: corrupted. الاستعادة: verified.
+- قارئ المراسي يرى الأرشيف ثم الحي (33 سطرًا = كل الأسطر).
+- الاقتطاع الساذج بلا بيان ما زال corrupted (صحيح — ليس أرشفة).

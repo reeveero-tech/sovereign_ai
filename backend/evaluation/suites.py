@@ -115,6 +115,12 @@ def _auth_tokens(path: Path) -> Dict[str, Any]:
     return auth_tokens.run(cases)
 
 
+def _ledger_retention(path: Path) -> Dict[str, Any]:
+    from . import ledger_retention
+    cases = json.loads(path.read_text(encoding="utf-8"))["cases"]
+    return ledger_retention.run(cases)
+
+
 SUITES: List[Suite] = [
     Suite("planner.dev", "orchestrator/planner",
           "اختيار الأدوات — مجموعة التطوير (50 هدفًا، R-842)",
@@ -187,6 +193,14 @@ SUITES: List[Suite] = [
           _ROOT / "data" / "auth_tokens_cases.json",
           "532bd6b480b6fe1a50d2446703d93c7c600cef289f92caf4bf960423e3f780af",
           1.0, _auth_tokens),
+    Suite("ledger.retention", "ledger_retention",
+          "احتفاظ السجل (٦.١.٤): أرشفة البادئة المتحقق منها بمقاطع موقّعة متسلسلة دون كسر"
+          " السلسلة، تحقق كامل بعد الأرشفة وبعد الإقلاع، كشف حذف/تعديل/تزوير البيان والمقاطع،"
+          " رفض مغلق لسجل غير VERIFIED أو بلا مفتاح، استكمال الانقطاع، فهارس المراسي، مرآة"
+          " دائمة (20 حالة، R-852)",
+          _ROOT / "data" / "ledger_retention_cases.json",
+          "ab0adf3f847503f49797aeebabc9591ad99935b4a8aef4e5be9e1cd298f5b209",
+          1.0, _ledger_retention),
 ]
 
 
