@@ -1,0 +1,19 @@
+R-853 — RED قبل التعديل (main 71acd8d9) — البند ٦.٢.٤ مهام متعددة الخطوات تستأنف بعد القتل
+السيناريو (/tmp/r853/red.py): مشغل دائم بمخطط scripted من 3 أدوات (الثانية تشير لناتج الأولى)، سجل سيادي مزيف.
+
+1) store methods: ['load', 'save'] | durable mirror: False
+2) new instance (fresh disk = Render restart): KeyError — task lost
+3) two concurrent runs of same task -> tool calls: ['a', 'a', '$steps.0.result.tag', '$steps.0.result.tag', 'c', 'c'] (duplicates = no lease)
+4) chaining: step1 received tag = $steps.0.result.tag (literal, no reference resolution)
+5) orphan auto-resume api: [] -> orphaned 'running' task waits forever
+6) tasks HTTP endpoints: [] | tasks.start planner: brain only, synchronous
+
+الاستنتاج:
+- نقاط التفتيش (R-754) على القرص المحلي فقط؛ قرص Render يُمحى عند إعادة التشغيل/النشر فتضيع المهمة.
+- لا إيجار: تشغيلان متزامنان لمهمة واحدة نفذا كل أداة مرتين.
+- لا تسلسل بيانات بين الخطوات: المرجع يصل نصًا حرفيًا.
+- لا أحد يستأنف المهمة اليتيمة بعد القتل؛ الاستئناف يدوي فقط ولا سرد للمهام.
+- لا نقطة HTTP للمهام؛ tasks.start متزامن داخل الطلب وبالعقل الحي فقط.
+
+بعد الإصلاح: المجموعة المجمّدة tasks.resume 19/19، منها real_process_kill: عملية فرعية تُقتل بـSIGKILL أثناء الخطوة الثالثة،
+ثم عملية جديدة بقرص محلي فارغ يستأنف ماسحها المهمة من المخزن الدائم: calls a,a,d (كل منجز مرة)، runs=2، إقلاعان، لا نوايا معلقة.

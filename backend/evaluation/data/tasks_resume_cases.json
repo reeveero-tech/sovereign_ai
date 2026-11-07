@@ -1,0 +1,259 @@
+{
+ "suite": "tasks.resume",
+ "version": 1,
+ "cases": [
+  {
+   "id": "TR01",
+   "scenario": "chain_resolves",
+   "rule": "ثلاث أدوات متسلسلة: المرجع $steps.N.path يمرر القيمة والقالب {{...}} نصها",
+   "expect": {
+    "status": "completed",
+    "steps": 3,
+    "step1_inputs": {
+     "tag": "a",
+     "n": "1"
+    },
+    "calls": [
+     "a",
+     "a",
+     "c"
+    ]
+   }
+  },
+  {
+   "id": "TR02",
+   "scenario": "validation_rejects",
+   "rule": "الخطة تُفحص عند الإنشاء: مرجع لاحق، أداة مجهولة أو محظورة، فارغة، أطول من 16، مدخلات غير كائن — ولا يُحفظ شيء",
+   "expect": {
+    "results": {
+     "future_ref": "rejected",
+     "unknown_tool": "rejected",
+     "forbidden": "rejected",
+     "empty": "rejected",
+     "too_long": "rejected",
+     "inputs_not_object": "rejected"
+    },
+    "remote_tasks": 0
+   }
+  },
+  {
+   "id": "TR03",
+   "scenario": "missing_path_honest",
+   "rule": "مسار غير موجود وقت التشغيل = planner_failed صادق ولا تنفيذ للخطوة",
+   "expect": {
+    "status": "planner_failed",
+    "calls": [
+     "a"
+    ]
+   }
+  },
+  {
+   "id": "TR04",
+   "scenario": "fresh_disk_restores",
+   "rule": "بعد القتل يرى قرص جديد المهمة من المخزن الدائم بنقطتها ونيتها المعلقة ويخزنها محليا",
+   "expect": {
+    "status": "running",
+    "done_steps": 2,
+    "pending_intents": [
+     "2"
+    ],
+    "local_cached": true
+   }
+  },
+  {
+   "id": "TR05",
+   "scenario": "resume_after_kill",
+   "rule": "الاستئناف بعد القتل يكمل من نقطة التفتيش: المنجز لا يُعاد، النية الداخلية المعلقة تُعاد مرة",
+   "expect": {
+    "status": "completed",
+    "resumed": true,
+    "runs": 2,
+    "calls": [
+     "a",
+     "a",
+     "c",
+     "c"
+    ],
+    "step_boots": [
+     "old",
+     "old",
+     "bootB"
+    ],
+    "pending_intents": []
+   }
+  },
+  {
+   "id": "TR06",
+   "scenario": "concurrent_single_execution",
+   "rule": "ثلاثة تشغيلات متزامنة لمهمة واحدة: واحد ينفذ والبقية already_running",
+   "expect": {
+    "calls": [
+     "x"
+    ],
+    "already_running": 2,
+    "completed": 1
+   }
+  },
+  {
+   "id": "TR07",
+   "scenario": "live_lease_elsewhere",
+   "rule": "إيجار حي من إقلاع آخر يمنع التشغيل والماسح لا يلتقطها",
+   "expect": {
+    "leased_elsewhere": true,
+    "orphans_started": [],
+    "calls": [
+     "a",
+     "a",
+     "c"
+    ]
+   }
+  },
+  {
+   "id": "TR08",
+   "scenario": "scanner_resumes_orphan",
+   "rule": "ماسح الإقلاع يستأنف المهمة اليتيمة بإيجار منته حتى الاكتمال",
+   "expect": {
+    "scanner_resumed": true,
+    "status": "completed",
+    "calls": [
+     "a",
+     "a",
+     "c",
+     "c"
+    ]
+   }
+  },
+  {
+   "id": "TR09",
+   "scenario": "scanner_skips_non_auto_and_terminal",
+   "rule": "الماسح لا يمس مهمة بلا auto_resume ولا مهمة منتهية",
+   "expect": {
+    "started": [],
+    "manual_status": "running",
+    "done_status": "completed"
+   }
+  },
+  {
+   "id": "TR10",
+   "scenario": "push_failure_fail_closed",
+   "rule": "رفض المخزن الدائم لنقطة التفتيش = checkpoint_failed بلا تنفيذ أي أداة",
+   "expect": {
+    "status": "checkpoint_failed",
+    "calls": []
+   }
+  },
+  {
+   "id": "TR11",
+   "scenario": "secret_never_pushed",
+   "rule": "هدف يحوي نمط سر يُرفض ولا يصل للمخزن",
+   "expect": {
+    "refused": true,
+    "pushed": false
+   }
+  },
+  {
+   "id": "TR12",
+   "scenario": "newest_rev_wins",
+   "rule": "قرص بنسخة قديمة يأخذ نسخة المخزن الأحدث rev",
+   "expect": {
+    "status": "completed",
+    "steps": 3,
+    "rev_gt_1": true
+   }
+  },
+  {
+   "id": "TR13",
+   "scenario": "external_not_repeated",
+   "rule": "فعل خارجي بلا مفتاح منع تكرار معلق بعد القتل لا يُعاد: needs_owner_review",
+   "expect": {
+    "status": "needs_owner_review",
+    "calls": [
+     "a",
+     "send:hi"
+    ]
+   }
+  },
+  {
+   "id": "TR14",
+   "scenario": "heartbeat_renews",
+   "rule": "النبض يجدد الإيجار أثناء خطوة طويلة ويُزال عند الانتهاء",
+   "expect": {
+    "renewed": true,
+    "final_status": "completed",
+    "final_lease": null
+   }
+  },
+  {
+   "id": "TR15",
+   "scenario": "progress_reports_boots",
+   "rule": "التقدم يعرض الإقلاعات ونقطة بدء كل منها والمخطط والجواب",
+   "expect": {
+    "boots": [
+     [
+      "old",
+      0
+     ],
+     [
+      "bootB",
+      2
+     ]
+    ],
+    "planner": "chain",
+    "answer_has_chain": true
+   }
+  },
+  {
+   "id": "TR16",
+   "scenario": "start_async_dedup",
+   "rule": "التشغيل في الخلفية يعود فورا والتكرار مرفوض حتى الاكتمال",
+   "expect": {
+    "first_started": true,
+    "returned_fast": true,
+    "second": "already_running",
+    "status": "completed"
+   }
+  },
+  {
+   "id": "TR17",
+   "scenario": "auto_resume_flag",
+   "rule": "SOVEREIGN_TASKS_AUTO_RESUME=0 يعطل و=1 يفعل، ومعطل افتراضيا تحت الاختبار",
+   "expect": {
+    "off": false,
+    "on": true,
+    "default_under_pytest": false
+   }
+  },
+  {
+   "id": "TR18",
+   "scenario": "terminal_idempotent",
+   "rule": "مهمة منتهية لا تعاد عند استدعاء التشغيل مجددا",
+   "expect": {
+    "already_terminal": true,
+    "calls": 3
+   }
+  },
+  {
+   "id": "TR19",
+   "scenario": "real_process_kill",
+   "rule": "قتل حقيقي SIGKILL لعملية أثناء الخطوة الثالثة، ثم عملية جديدة بقرص فارغ يستأنفها ماسحها بعد انتهاء الإيجار: أربع خطوات، كل منجز مرة واحدة، إقلاعان",
+   "expect": {
+    "killed_signal": true,
+    "calls_at_kill": [
+     "a",
+     "a"
+    ],
+    "child_b_rc": 0,
+    "status": "completed",
+    "calls_final": [
+     "a",
+     "a",
+     "d"
+    ],
+    "runs": 2,
+    "distinct_boots": 2,
+    "boot_split": true,
+    "intents_left": 0
+   }
+  }
+ ]
+}

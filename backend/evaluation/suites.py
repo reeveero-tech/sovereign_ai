@@ -121,6 +121,12 @@ def _ledger_retention(path: Path) -> Dict[str, Any]:
     return ledger_retention.run(cases)
 
 
+def _tasks_resume(path: Path) -> Dict[str, Any]:
+    from . import tasks_resume
+    cases = json.loads(path.read_text(encoding="utf-8"))["cases"]
+    return tasks_resume.run(cases)
+
+
 SUITES: List[Suite] = [
     Suite("planner.dev", "orchestrator/planner",
           "اختيار الأدوات — مجموعة التطوير (50 هدفًا، R-842)",
@@ -201,6 +207,14 @@ SUITES: List[Suite] = [
           _ROOT / "data" / "ledger_retention_cases.json",
           "ab0adf3f847503f49797aeebabc9591ad99935b4a8aef4e5be9e1cd298f5b209",
           1.0, _ledger_retention),
+    Suite("tasks.resume", "durable_tasks",
+          "مهام متعددة الخطوات تستأنف بعد القتل (٦.٢.٤): سلسلة أدوات بمراجع لنواتج سابقة،"
+          " نقطة تفتيش دائمة قبل كل خطوة تالية، إيجار ونبض يمنعان التشغيل المزدوج، ماسح"
+          " إقلاع للمهام اليتيمة، فشل مغلق عند رفض المخزن، فعل خارجي لا يُعاد، وقتل SIGKILL"
+          " حقيقي لعملية ثم استئناف بقرص فارغ (19 حالة، R-853)",
+          _ROOT / "data" / "tasks_resume_cases.json",
+          "24c2b93d34a348ba5e8f5eff1044fef2ff8d0e82ee8d7ceb9ba99f46ffbe2024",
+          1.0, _tasks_resume),
 ]
 
 

@@ -324,6 +324,12 @@ async def lifespan(app: FastAPI):
         logger.info(f"🔔 {_nt_service.start_dispatcher()}")
     except Exception as _nt_exc:  # TOLERATED: الإشعارات إضافة؛ فشل ربطها يُعلن ولا يكسر الخادم (/notifications/dispatch يبقى)
         logger.warning("R-845: تعذر ربط الإشعارات (%s)", type(_nt_exc).__name__)
+    # R-853 (D-068): ماسح الإقلاع — يستأنف المهام اليتيمة (قُتلت عمليتها) من المخزن الدائم
+    try:
+        import durable_tasks as _dt
+        logger.info(f"🧭 R-853: ماسح المهام {_dt.start_boot_scanner()}")
+    except Exception as _dt_exc:  # TOLERATED: الاستئناف التلقائي إضافة؛ فشله يُعلن (/tasks/status) ولا يكسر الخادم
+        logger.warning("R-853: تعذر بدء ماسح المهام (%s)", type(_dt_exc).__name__)
     # R-844 (D-059): عمال الطابور غير المتزامن — الاستعادة أول كل دورة
     try:
         from job_queue import service as _jq_service
@@ -3271,6 +3277,28 @@ def _register_real_tools() -> None:
         description="تقدم مهمة من نقاط التفتيش على القرص حرفيًا (R-754 — ٣.٣)",
         inputs={"task_id": "معرف المهمة"}, outputs="status/done_steps/steps[]/pending_intents",
         handler=lambda task_id: __import__("durable_tasks").get_runner().progress(task_id)))
+    # R-853 (٦.٢.٤): انتظار محدود — خطوة حقيقية بلا أثر خارجي (نافذة قتل للدليل الحي)
+    def _time_wait(seconds="1"):
+        try:
+            sec = int(str(seconds).strip())
+        except ValueError:
+            raise ValueError("seconds عدد صحيح 1..30")
+        if not 1 <= sec <= 30:
+            raise ValueError("seconds عدد صحيح 1..30")
+        t0 = time.time()
+        time.sleep(sec)
+        return {"waited_s": sec, "elapsed_s": round(time.time() - t0, 2)}
+
+    registry.register(ToolSpec(
+        name="time.wait",
+        description="R-853: انتظار محدود 1..30 ثانية بلا أثر خارجي (خطوة مهلة في المهام الدائمة)",
+        inputs={"seconds": "عدد الثواني 1..30"}, outputs="waited_s/elapsed_s",
+        handler=_time_wait))
+    registry.register(ToolSpec(
+        name="tasks.list",
+        description="R-853: المهام الدائمة (محليًا + المخزن الدائم) بحالتها وعدد خطواتها وإقلاعاتها",
+        inputs={}, outputs="tasks[]",
+        handler=lambda: {"tasks": _tasks_summary()}))
     # R-758 (V5 §٥): أسطول — عمال بأدوار وأهداف جزئية بسقف تزامن مُعلن
     registry.register(ToolSpec(
         name="fleet.spawn",
@@ -3980,6 +4008,81 @@ async def auth_tokens_revoke(request: TokenRevokeRequest):
     except RuntimeError as exc:
         raise HTTPException(status_code=503,
                             detail=f"السجل السيادي لا يوقّع — مرفوض (fail-closed): {exc}")
+
+
+def _tasks_summary(limit: int = 50):
+    import durable_tasks
+    out = []
+    for t in durable_tasks.get_runner().store.list()[:limit]:
+        out.append({"task_id": t.get("id"), "goal": (t.get("goal") or "")[:200],
+                    "status": t.get("status"), "done_steps": len(t.get("steps") or []),
+                    "runs": t.get("runs", 0), "boots": len(t.get("boots") or []),
+                    "planner": (t.get("planner") or {}).get("kind"),
+                    "updated_at": t.get("updated_at")})
+    return out
+
+
+class TaskCreateRequest(BaseModel):
+    goal: str = Field(..., min_length=1, max_length=2000)
+    plan: Optional[List[Dict[str, Any]]] = Field(
+        None, description="خطوات chain: [{tool, inputs, check?}] بمراجع $steps.N.path — بدونها العقل الحي")
+    auto_resume: bool = Field(True, description="يستأنفه ماسح الإقلاع بعد القتل")
+
+
+@app.get("/tasks/status")
+def tasks_status():
+    """R-853 (٦.٢.٤): هوية الإقلاع، المهام الجارية، حالة ماسح الاستئناف، المخزن الدائم."""
+    import durable_tasks
+    return durable_tasks.status()
+
+
+@app.post("/tasks", status_code=202)
+def tasks_create(request: TaskCreateRequest, x_sovereign_key: Optional[str] = Header(None)):
+    """R-853: إنشاء مهمة دائمة وتشغيلها في الخلفية (نطاق tools). نقطة تفتيش دائمة بعد كل خطوة."""
+    if not authorize(x_sovereign_key, "tools"):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="نطاق tools مطلوب")
+    import durable_tasks
+    runner = durable_tasks.get_runner()
+    planner = ({"kind": "chain", "steps": request.plan} if request.plan is not None
+               else {"kind": "brain"})
+    try:
+        tid = runner.create(request.goal, planner, auto_resume=request.auto_resume)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    except durable_tasks.DurableWriteError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+    return {**runner.start_async(tid), "status": "pending"}
+
+
+@app.get("/tasks")
+def tasks_list(x_sovereign_key: Optional[str] = Header(None)):
+    if not authorize(x_sovereign_key, "read"):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="نطاق read مطلوب")
+    return {"tasks": _tasks_summary()}
+
+
+@app.get("/tasks/{task_id}")
+def tasks_get(task_id: str, x_sovereign_key: Optional[str] = Header(None)):
+    if not authorize(x_sovereign_key, "read"):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="نطاق read مطلوب")
+    import durable_tasks
+    try:
+        return durable_tasks.get_runner().progress(task_id)
+    except (KeyError, ValueError):
+        raise HTTPException(status_code=404, detail="مهمة غير موجودة")
+
+
+@app.post("/tasks/{task_id}/resume", status_code=202)
+def tasks_resume(task_id: str, x_sovereign_key: Optional[str] = Header(None)):
+    if not authorize(x_sovereign_key, "tools"):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="نطاق tools مطلوب")
+    import durable_tasks
+    runner = durable_tasks.get_runner()
+    try:
+        runner.store.load(task_id)
+    except (KeyError, ValueError):
+        raise HTTPException(status_code=404, detail="مهمة غير موجودة")
+    return runner.start_async(task_id)
 
 
 class RetentionArchiveRequest(BaseModel):
